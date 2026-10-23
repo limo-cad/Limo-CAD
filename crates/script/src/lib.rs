@@ -6,10 +6,15 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     time::Instant,
 };
+mod evaluation;
 mod includes;
+pub use evaluation::EvaluationLimits;
+use evaluation::{CallbackHost, Evaluation, ExecutionHost};
 mod manufacturing;
 mod project;
 pub use project::{ProjectReplayHost, ProjectScript};
+#[cfg(test)]
+mod bounded_tests;
 mod source_navigation;
 pub use includes::{
     flatten_includes, has_unresolved_includes, parse_with_includes, resolve_include_path,
@@ -314,20 +319,18 @@ impl Script {
     }
 }
 
-fn store_named_views<F>(
+fn store_named_views(
     script: &Script,
     bindings: &Bindings,
-    host: &mut F,
+    evaluation: &mut Evaluation<'_>,
     steps_completed: usize,
-) -> Result<(), String>
-where
-    F: FnMut(&str, Value, RunProgress) -> Result<Value, String>,
-{
+) -> Result<(), String> {
     let Some(views) = script.document.get("views") else {
         return Ok(());
     };
-    let mut resolved = resolve(views, bindings)?;
+    let mut resolved = resolve_with(views, bindings, evaluation, 0)?;
     for view in resolved.as_array_mut().into_iter().flatten() {
+        evaluation.visit(0)?;
         if let Some(ids) = view
             .get_mut("visible_body_ids")
             .and_then(Value::as_array_mut)
@@ -337,26 +340,23 @@ where
         }
     }
     validate_named_views(&resolved, false)?;
-    let mut response = host(
+    evaluation.charge(8, 2048)?;
+    let mut request = json!({
+        "action": "execute", "group": "document/appearance",
+        "operation": "set_named_views", "arguments": {}
+    });
+    request["arguments"]["views"] = resolved;
+    let response = evaluation.call(
         "cad_interface",
-        json!({
-            "action": "execute",
-            "group": "document/appearance",
-            "operation": "set_named_views",
-            "arguments": { "views": resolved }
-        }),
+        request,
         RunProgress {
             steps_completed,
             step_count: script.document["steps"].as_array().map_or(0, Vec::len),
         },
+        true,
     )?;
-    if let Some(text) = response.as_str() {
-        if let Ok(parsed) = serde_json::from_str(text) {
-            response = parsed;
-        }
-    }
     if response["status"] == "failed" {
-        return Err(format!("{response}"));
+        return Err(evaluation.diagnostic("Named views rejected", || format!("{response}")));
     }
     Ok(())
 }
@@ -890,15 +890,6 @@ fn edit_distance(a: &str, b: &str) -> usize {
     previous[b.len()]
 }
 
-fn pointer<'a>(value: &'a Value, path: &str) -> Result<&'a Value, String> {
-    if path.is_empty() {
-        Ok(value)
-    } else {
-        value
-            .pointer(path)
-            .ok_or_else(|| format!("Missing result path {path}"))
-    }
-}
 fn equal(a: &Value, b: &Value) -> bool {
     match (a, b) {
         (Value::Number(a), Value::Number(b)) => {
@@ -919,42 +910,112 @@ fn equal(a: &Value, b: &Value) -> bool {
         _ => a == b,
     }
 }
-fn matches(value: &Value, predicate: &Value, bindings: &Bindings) -> Result<bool, String> {
+
+fn equal_with(
+    a: &Value,
+    b: &Value,
+    evaluation: &mut Evaluation<'_>,
+    depth: usize,
+) -> Result<bool, String> {
+    evaluation.visit(depth)?;
+    match (a, b) {
+        (Value::Array(a), Value::Array(b)) => {
+            if a.len() != b.len() {
+                return Ok(false);
+            }
+            for (a, b) in a.iter().zip(b) {
+                if !equal_with(a, b, evaluation, depth + 1)? {
+                    return Ok(false);
+                }
+            }
+            Ok(true)
+        }
+        (Value::Object(a), Value::Object(b)) => {
+            if a.len() != b.len() {
+                return Ok(false);
+            }
+            for (key, a) in a {
+                evaluation.text_work(key.len())?;
+                let Some(b) = b.get(key) else {
+                    return Ok(false);
+                };
+                if !equal_with(a, b, evaluation, depth + 1)? {
+                    return Ok(false);
+                }
+            }
+            Ok(true)
+        }
+        (Value::String(a), Value::String(b)) => {
+            if a.len() != b.len() {
+                return Ok(false);
+            }
+            // Check between bounded chunks, including when comparing large refs.
+            for (a, b) in a.as_bytes().chunks(4096).zip(b.as_bytes().chunks(4096)) {
+                evaluation.visit(depth)?;
+                if a != b {
+                    return Ok(false);
+                }
+            }
+            Ok(true)
+        }
+        _ => Ok(equal(a, b)),
+    }
+}
+fn matches_with(
+    value: &Value,
+    predicate: &Value,
+    bindings: &Bindings,
+    evaluation: &mut Evaluation<'_>,
+    depth: usize,
+) -> Result<bool, String> {
+    evaluation.visit(depth)?;
     let object = predicate
         .as_object()
         .ok_or("Selector where must be an object")?;
     for (path, expected) in object {
+        evaluation.visit(depth)?;
         let yes = match path.as_str() {
             "$and" | "$or" => {
                 let terms = expected.as_array().ok_or("and/or requires an array")?;
-                let results = terms
-                    .iter()
-                    .map(|p| matches(value, p, bindings))
-                    .collect::<Result<Vec<_>, _>>()?;
-                if path == "$and" {
-                    results.into_iter().all(|b| b)
-                } else {
-                    results.into_iter().any(|b| b)
+                let mut result = path == "$and";
+                for term in terms {
+                    let yes = matches_with(value, term, bindings, evaluation, depth + 1)?;
+                    if path == "$and" {
+                        result &= yes;
+                    } else {
+                        result |= yes;
+                    }
                 }
+                result
             }
             "$every" => {
-                let array = pointer(
-                    value,
-                    expected["path"].as_str().ok_or("every needs a path")?,
-                )?
-                .as_array()
-                .ok_or("every path must be an array")?;
-                !array.is_empty()
-                    && array
-                        .iter()
-                        .map(|v| matches(v, &expected["where"], bindings))
-                        .collect::<Result<Vec<_>, _>>()?
-                        .into_iter()
-                        .all(|b| b)
+                let array = evaluation
+                    .pointer(
+                        value,
+                        expected["path"].as_str().ok_or("every needs a path")?,
+                    )?
+                    .as_array()
+                    .ok_or("every path must be an array")?;
+                let mut result = !array.is_empty();
+                for value in array {
+                    result &=
+                        matches_with(value, &expected["where"], bindings, evaluation, depth + 1)?;
+                }
+                result
             }
-            _ => value.pointer(path).is_some_and(|actual| {
-                resolve(expected, bindings).is_ok_and(|expected| equal(actual, &expected))
-            }),
+            _ => {
+                // Missing paths still mean no match; evaluation/cancellation
+                // errors must never be converted into false in bounded mode.
+                if let Some(actual) = evaluation.lookup(value, path)? {
+                    match resolve_with(expected, bindings, evaluation, depth + 1) {
+                        Ok(expected) => equal_with(actual, &expected, evaluation, depth + 1)?,
+                        Err(error) if evaluation.bounded() => return Err(error),
+                        Err(_) => false,
+                    }
+                } else {
+                    false
+                }
+            }
         };
         if !yes {
             return Ok(false);
@@ -963,77 +1024,110 @@ fn matches(value: &Value, predicate: &Value, bindings: &Bindings) -> Result<bool
     Ok(true)
 }
 
+// Used by legacy diagnostics and tests; execution always passes its run context.
 fn resolve(expression: &Value, bindings: &Bindings) -> Result<Value, String> {
+    let mut host = CallbackHost(
+        |_: &str, _: Value, _: RunProgress| unreachable!(),
+        || Ok(()),
+    );
+    resolve_with(
+        expression,
+        bindings,
+        &mut Evaluation::new(&mut host, None)?,
+        0,
+    )
+}
+fn resolve_with(
+    expression: &Value,
+    bindings: &Bindings,
+    evaluation: &mut Evaluation<'_>,
+    depth: usize,
+) -> Result<Value, String> {
+    evaluation.visit(depth)?;
     match expression {
-        Value::Array(values) => values.iter().map(|v| resolve(v, bindings)).collect(),
+        Value::Array(values) => {
+            evaluation.node(expression, depth)?;
+            let mut result = Vec::new();
+            for value in values {
+                result.push(resolve_with(value, bindings, evaluation, depth + 1)?);
+            }
+            Ok(Value::Array(result))
+        }
         Value::Object(object) => {
             if let Some(name) = object.get("$ref") {
                 let name = name.as_str().ok_or("ref must name a prior result")?;
-                let value = bindings
-                    .get(name)
-                    .ok_or_else(|| format!("Unknown result reference {name}"))?;
-                return Ok(pointer(
+                evaluation.text_work(name.len())?;
+                let value = bindings.get(name).ok_or_else(|| {
+                    evaluation.diagnostic("Unknown result reference", || {
+                        format!("Unknown result reference {name}")
+                    })
+                })?;
+                let value = evaluation.pointer(
                     value,
                     object.get("pointer").and_then(Value::as_str).unwrap_or(""),
-                )?
-                .clone());
+                )?;
+                return evaluation.cloned(value, depth);
             }
             if let Some(select) = object.get("$select") {
-                let source = resolve(&select["from"], bindings)?;
-                let array = pointer(&source, select["path"].as_str().unwrap_or(""))?
+                let source = resolve_with(&select["from"], bindings, evaluation, depth + 1)?;
+                let array = evaluation
+                    .pointer(&source, select["path"].as_str().unwrap_or(""))?
                     .as_array()
                     .ok_or("select needs an array")?;
                 let mut found = Vec::new();
                 for value in array {
+                    evaluation.visit(depth)?;
                     if select
                         .get("where")
-                        .map(|p| matches(value, p, bindings))
+                        .map(|p| matches_with(value, p, bindings, evaluation, depth + 1))
                         .transpose()?
                         .unwrap_or(true)
                     {
+                        evaluation.charge(0, 4 * std::mem::size_of::<&Value>())?;
                         found.push(value);
                     }
                 }
                 let path = select["pointer"].as_str().unwrap_or("");
                 let take = select["take"].as_str().unwrap_or("one");
                 if take == "all" {
-                    return found
-                        .into_iter()
-                        .map(|v| pointer(v, path).cloned())
-                        .collect();
+                    evaluation.node(&Value::Null, depth)?;
+                    let mut result = Vec::new();
+                    for value in found {
+                        let value = evaluation.pointer(value, path)?;
+                        result.push(evaluation.cloned(value, depth + 1)?);
+                    }
+                    return Ok(Value::Array(result));
                 }
+                let no_match = || {
+                    evaluation.diagnostic("Selector matched no geometry", || {
+                        selector_no_match(select, array, bindings)
+                    })
+                };
                 let value = match take {
                     "one" if found.len() == 1 => found[0],
-                    "first" => *found
-                        .first()
-                        .ok_or_else(|| selector_no_match(select, array, bindings))?,
-                    "last" => *found
-                        .last()
-                        .ok_or_else(|| selector_no_match(select, array, bindings))?,
-                    "one" if found.is_empty() => {
-                        return Err(selector_no_match(select, array, bindings))
-                    }
-                    "one" => {
-                        return Err(format!(
-                            "Selector expected exactly one match, found {}. Candidates: {}. Add a where test on a field that separates them (for a face, for example /plane/origin/2).",
-                            found.len(),
-                            candidate_digest(&found)
-                        ))
-                    }
-                    _ => return Err(format!("Unknown selector take {take}")),
+                    "first" => *found.first().ok_or_else(no_match)?,
+                    "last" => *found.last().ok_or_else(no_match)?,
+                    "one" if found.is_empty() => return Err(no_match()),
+                    "one" => return Err(evaluation.diagnostic("Selector expected exactly one match", || format!(
+                        "Selector expected exactly one match, found {}. Candidates: {}. Add a where test on a field that separates them (for a face, for example /plane/origin/2).",
+                        found.len(), candidate_digest(&found)
+                    ))),
+                    _ => return Err(evaluation.diagnostic("Unknown selector take", || format!("Unknown selector take {take}"))),
                 };
-                return Ok(pointer(value, path)?.clone());
+                let value = evaluation.pointer(value, path)?;
+                return evaluation.cloned(value, depth);
             }
             if let Some(count) = object.get("$count") {
-                let value = resolve(count, bindings)?;
+                let value = resolve_with(count, bindings, evaluation, depth + 1)?;
+                evaluation.node(&Value::Null, depth)?;
                 return Ok(json!(value
                     .as_array()
                     .ok_or("count requires an array")?
                     .len()));
             }
             if let Some(project) = object.get("$project") {
-                let point = resolve(&project["point"], bindings)?;
-                let basis = resolve(&project["basis"], bindings)?;
+                let point = resolve_with(&project["point"], bindings, evaluation, depth + 1)?;
+                let basis = resolve_with(&project["basis"], bindings, evaluation, depth + 1)?;
                 let vector = |value: &Value| -> Result<[f64; 3], String> {
                     if let Some(a) = value.as_array() {
                         if a.len() == 3 {
@@ -1059,15 +1153,20 @@ fn resolve(expression: &Value, bindings: &Bindings) -> Result<Value, String> {
                         .map(|i| (point[i] - origin[i]) * axis[i])
                         .sum::<f64>()
                 };
+                evaluation.visit(depth + 1)?;
+                evaluation.charge(3, 5 * 128 + 2)?;
                 return Ok(json!({"x":dot(u),"y":dot(v)}));
             }
-            object
-                .iter()
-                .map(|(k, v)| Ok((k.clone(), resolve(v, bindings)?)))
-                .collect::<Result<Map<_, _>, String>>()
-                .map(Value::Object)
+            evaluation.node(expression, depth)?;
+            let mut result = Map::new();
+            for (key, value) in object {
+                evaluation.key(key)?;
+                let value = resolve_with(value, bindings, evaluation, depth + 1)?;
+                result.insert(key.clone(), value);
+            }
+            Ok(Value::Object(result))
         }
-        _ => Ok(expression.clone()),
+        _ => evaluation.cloned(expression, depth),
     }
 }
 
@@ -1095,20 +1194,58 @@ where
     if script.document["version"] != 1 {
         return Err("Project-backed scripts require the project baseline runner".into());
     }
-    run_steps(script, host, options)
+    run_steps(script, &mut CallbackHost(host, || Ok(())), options, None)
 }
 
-fn run_steps<F>(script: &Script, mut host: F, options: RunOptions) -> Result<Value, String>
+/// Run the shared v1 interpreter with allocation/work limits and cooperative
+/// cancellation. Trusted authoring entry points retain their existing behavior.
+pub fn run_bounded<F, C>(
+    script: &Script,
+    host: F,
+    options: RunOptions,
+    limits: EvaluationLimits,
+    check: C,
+) -> Result<Value, String>
 where
     F: FnMut(&str, Value, RunProgress) -> Result<Value, String>,
+    C: FnMut() -> Result<(), String>,
 {
+    if script.document["version"] != 1 {
+        return Err("Project-backed scripts require the project baseline runner".into());
+    }
+    run_steps(
+        script,
+        &mut CallbackHost(host, check),
+        options,
+        Some(limits),
+    )
+}
+
+fn run_steps(
+    script: &Script,
+    host: &mut dyn ExecutionHost,
+    options: RunOptions,
+    limits: Option<EvaluationLimits>,
+) -> Result<Value, String> {
+    let mut evaluation = Evaluation::new(host, limits)?;
+    evaluation.checkpoint()?;
+    evaluation.account(&script.document, 0)?;
+    // The legacy manufacturing gate has its own potentially quadratic scans.
+    // It remains available to trusted authoring, outside bounded evaluation.
+    if evaluation.bounded() && !script.document["verification"].is_null() {
+        return Err(
+            "Bounded evaluation does not support the manufacturing verification gate".into(),
+        );
+    }
     script.validate_options(options)?;
     let started = Instant::now();
     let mut bindings = Bindings::new();
     let mut completed = 0;
     let mut checks = 0;
     let mut uses = BTreeMap::new();
-    references(&script.document, &mut uses);
+    if !evaluation.bounded() {
+        references(&script.document, &mut uses);
+    }
     for (checking, steps) in [
         (false, script.document["steps"].as_array()),
         (true, script.document["checks"].as_array()),
@@ -1117,6 +1254,12 @@ where
             continue;
         }
         for (index, step) in steps.into_iter().flatten().enumerate() {
+            evaluation.visit(0)?;
+            if let Some(id) = step.get("id").and_then(Value::as_str) {
+                evaluation.key(id)?;
+            } else {
+                evaluation.charge(0, 160)?;
+            }
             let id = step_id(step, checking, index)?;
             let progress = RunProgress {
                 steps_completed: completed,
@@ -1125,66 +1268,73 @@ where
             let result = (|| -> Result<(), String> {
                 if let Some(values) = step.get("let") {
                     for (name, expression) in values.as_object().ok_or("let requires an object")? {
-                        let value = resolve(expression, &bindings)?;
+                        evaluation.key(name)?;
+                        let value = resolve_with(expression, &bindings, &mut evaluation, 0)?;
                         if bindings.insert(name.clone(), value).is_some() {
                             return Err(format!("Duplicate binding {name}"));
                         }
                     }
                 } else if let Some(expression) = step.get("assert") {
-                    let actual = resolve(expression, &bindings)?;
-                    let expected = resolve(&step["equals"], &bindings)?;
-                    if !equal(&actual, &expected) {
-                        return Err(format!(
-                            "Assertion failed: actual {actual}, expected {expected}"
-                        ));
+                    let actual = resolve_with(expression, &bindings, &mut evaluation, 0)?;
+                    let expected = resolve_with(&step["equals"], &bindings, &mut evaluation, 0)?;
+                    if !equal_with(&actual, &expected, &mut evaluation, 0)? {
+                        return Err(evaluation.diagnostic("Assertion failed", || {
+                            format!("Assertion failed: actual {actual}, expected {expected}")
+                        }));
                     }
                 } else if let Some(call) = step.get("call") {
-                    let arguments = resolve(&call["arguments"], &bindings)?;
-                    let mut result = host(
-                        "cad_interface",
-                        json!({"action":"execute","group":call["group"],"operation":call["operation"],"arguments":arguments}),
-                        progress,
-                    )?;
-                    if let Some(text) = result.as_str() {
-                        if let Ok(parsed) = serde_json::from_str(text) {
-                            result = parsed;
-                        }
-                    }
+                    let arguments =
+                        resolve_with(&call["arguments"], &bindings, &mut evaluation, 0)?;
+                    evaluation.charge(5, 2048)?;
+                    evaluation.account(&call["group"], 0)?;
+                    evaluation.account(&call["operation"], 0)?;
+                    let mut request = json!({"action":"execute","group":call["group"],"operation":call["operation"]});
+                    request["arguments"] = arguments;
+                    let result = evaluation.call("cad_interface", request, progress, true)?;
                     if result["status"] == "failed" {
-                        return Err(format!("Operation rejected: {result}"));
+                        return Err(evaluation.diagnostic("Operation rejected", || {
+                            format!("Operation rejected: {result}")
+                        }));
                     }
                     if result
                         .pointer("/scene/errors")
                         .and_then(Value::as_array)
                         .is_some_and(|errors| !errors.is_empty())
                     {
-                        return Err(format!(
-                            "Geometry operation failed: {}",
-                            result["scene"]["errors"]
-                        ));
+                        return Err(evaluation.diagnostic("Geometry operation failed", || {
+                            format!("Geometry operation failed: {}", result["scene"]["errors"])
+                        }));
                     }
                     if let Some(expect) = step.get("expect") {
-                        if !matches(&result, expect, &bindings)? {
-                            return Err(format!("Result did not satisfy {expect}"));
+                        if !matches_with(&result, expect, &bindings, &mut evaluation, 0)? {
+                            return Err(evaluation
+                                .diagnostic("Result did not satisfy expectation", || {
+                                    format!("Result did not satisfy {expect}")
+                                }));
                         }
                     }
                     if let Some(bind) = step.get("bind") {
                         for (name, path) in bind.as_object().ok_or("bind requires an object")? {
-                            let value = pointer(
+                            evaluation.key(name)?;
+                            let value = evaluation.pointer(
                                 &result,
                                 path.as_str().ok_or("bind value must be a JSON pointer")?,
-                            )?
-                            .clone();
+                            )?;
+                            let value = evaluation.cloned(value, 0)?;
                             if bindings.insert(name.clone(), value).is_some() {
                                 return Err(format!("Duplicate binding {name}"));
                             }
                         }
                     }
+                    evaluation.key(&id)?;
                     if bindings.insert(id.clone(), result).is_some() {
                         return Err(format!("Duplicate step id {id}"));
                     }
                 } else if options.presentation {
-                    let mut request = step.as_object().ok_or("Step must be an object")?.clone();
+                    let Value::Object(mut request) = evaluation.cloned(step, 0)? else {
+                        return Err("Step must be an object".into());
+                    };
+                    evaluation.charge(6, 2048)?;
                     request.remove("id");
                     if let Some(note) = request.remove("note") {
                         request.insert("action".into(), json!("presentation"));
@@ -1195,18 +1345,26 @@ where
                     } else {
                         request.insert("action".into(), json!("view"));
                     }
-                    let response = host(
-                        "cad_interface",
-                        resolve(&Value::Object(request), &bindings)?,
-                        progress,
-                    )?;
+                    let request =
+                        resolve_with(&Value::Object(request), &bindings, &mut evaluation, 0)?;
+                    let response = evaluation.call("cad_interface", request, progress, false)?;
                     if response["status"] == "failed" {
-                        return Err(format!("Presentation failed: {response}"));
+                        return Err(evaluation.diagnostic("Presentation failed", || {
+                            format!("Presentation failed: {response}")
+                        }));
                     }
                 }
                 Ok(())
             })();
             result.map_err(|error| {
+                if evaluation.bounded() {
+                    return format!(
+                        "Script stopped at {} {} ({} completed): {error}",
+                        if checking { "check" } else { "step" },
+                        index + 1,
+                        completed + checks
+                    );
+                }
                 format!(
                     "Script '{}' stopped at {id} ({} completed): {error}",
                     script.document["name"],
@@ -1219,34 +1377,46 @@ where
                 completed += 1;
             }
 
-            let mut consumed = BTreeMap::new();
-            references(step, &mut consumed);
-            for (name, count) in consumed {
-                if let Some(remaining) = uses.get_mut(&name) {
-                    *remaining = remaining.saturating_sub(count);
+            evaluation.checkpoint()?;
+            if !evaluation.bounded() {
+                let mut consumed = BTreeMap::new();
+                references(step, &mut consumed);
+                for (name, count) in consumed {
+                    if let Some(remaining) = uses.get_mut(&name) {
+                        *remaining = remaining.saturating_sub(count);
+                    }
                 }
+                bindings.retain(|name, _| uses.get(name).copied().unwrap_or(0) > 0);
             }
-            bindings.retain(|name, _| uses.get(name).copied().unwrap_or(0) > 0);
         }
     }
+    evaluation.checkpoint()?;
     let exports = script
         .document
         .get("exports")
-        .map(|e| resolve(e, &bindings))
+        .map(|e| resolve_with(e, &bindings, &mut evaluation, 0))
         .transpose()?
         .unwrap_or(json!({}));
     if options.validate && script.document["verification"] == "garden-bench" {
         manufacturing::bench(&exports)?;
     }
-    store_named_views(script, &bindings, &mut host, completed).map_err(|error| {
+    store_named_views(script, &bindings, &mut evaluation, completed).map_err(|error| {
+        if evaluation.bounded() {
+            return format!("Could not store named views: {error}");
+        }
         format!(
             "Script '{}' could not store named views: {error}",
             script.document["name"]
         )
     })?;
-    Ok(
-        json!({"name":script.document["name"],"steps_completed":completed,"checks_completed":checks,"elapsed_ms":started.elapsed().as_millis(),"exports":exports}),
-    )
+    evaluation.checkpoint()?;
+    evaluation.charge(6, 2048)?;
+    evaluation.account(&script.document["name"], 0)?;
+    let mut report = json!({"name":script.document["name"],"steps_completed":completed,"checks_completed":checks,"elapsed_ms":started.elapsed().as_millis()});
+    // Move the already charged export. json!({"exports": exports}) would
+    // serialize through a borrow and silently allocate a second copy.
+    report["exports"] = exports;
+    Ok(report)
 }
 
 #[cfg(test)]

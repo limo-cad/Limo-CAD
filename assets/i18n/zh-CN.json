@@ -1,5 +1,14 @@
 {
   "projectReplay": {
+    "previewAssemblyNotices": "装配提示：{count}。请在新设计中运行以查看详情。",
+    "previewOpen": "预览项目",
+    "previewTitle": "项目预览",
+    "previewBaseline": "初始项目",
+    "previewFinal": "脚本运行后",
+    "previewScope": "仅显示几何和装配，不显示其他项目内容。",
+    "previewPreparing": "正在准备独立的项目预览...",
+    "previewCancelled": "预览准备已取消",
+    "previewTimedOut": "预览准备超时",
     "needsRepair": "源码需要修复；运行前请验证。",
     "filter": "Limo CAD 项目回放 (.limo.replay.cbor)",
     "savePath": "请将项目回放保存到绝对 .limo.replay.cbor 路径",
