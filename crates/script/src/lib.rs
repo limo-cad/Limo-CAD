@@ -15,6 +15,8 @@ mod project;
 pub use project::{ProjectReplayHost, ProjectScript};
 #[cfg(test)]
 mod bounded_tests;
+#[cfg(test)]
+mod reference_diagnostic_tests;
 mod source_navigation;
 pub use includes::{
     flatten_includes, has_unresolved_includes, parse_with_includes, resolve_include_path,
@@ -853,39 +855,51 @@ fn selector_no_match(select: &Value, array: &[Value], bindings: &Bindings) -> St
     )
 }
 
-/// Earlier result names an agent probably meant: a shared prefix or an edit
-/// distance of at most two.
+/// Optional typo hints must stay cheap even before evaluation/cancellation starts.
+/// Long names remain valid; only fuzzy suggestions have byte and search limits.
 fn similar_names(name: &str, available: &BTreeSet<String>) -> Vec<String> {
-    let mut similar: Vec<String> = available
+    const MAX_NAME_BYTES: usize = 128;
+    const MAX_CANDIDATES: usize = 32;
+    if name.len() > MAX_NAME_BYTES {
+        return Vec::new();
+    }
+    available
         .iter()
+        .take(MAX_CANDIDATES)
         .filter(|candidate| {
-            let prefix = name.len().min(candidate.len()).min(6);
-            (prefix >= 4 && candidate[..prefix] == name[..prefix])
+            if candidate.len() > MAX_NAME_BYTES {
+                return false;
+            }
+            let common = name
+                .chars()
+                .zip(candidate.chars())
+                .take(6)
+                .take_while(|(a, b)| a == b)
+                .count();
+            common >= 4
                 || candidate.starts_with(name)
                 || name.starts_with(candidate.as_str())
                 || edit_distance(name, candidate) <= 2
         })
+        .take(3)
         .cloned()
-        .collect();
-    similar.truncate(3);
-    similar
+        .collect()
 }
 
 fn edit_distance(a: &str, b: &str) -> usize {
     let a: Vec<char> = a.chars().collect();
     let b: Vec<char> = b.chars().collect();
     let mut previous: Vec<usize> = (0..=b.len()).collect();
+    let mut current = vec![0; b.len() + 1];
     for (i, ca) in a.iter().enumerate() {
-        let mut current = vec![i + 1];
+        current[0] = i + 1;
         for (j, cb) in b.iter().enumerate() {
             let cost = usize::from(ca != cb);
-            current.push(
-                (previous[j] + cost)
-                    .min(previous[j + 1] + 1)
-                    .min(current[j] + 1),
-            );
+            current[j + 1] = (previous[j] + cost)
+                .min(previous[j + 1] + 1)
+                .min(current[j] + 1);
         }
-        previous = current;
+        std::mem::swap(&mut previous, &mut current);
     }
     previous[b.len()]
 }
