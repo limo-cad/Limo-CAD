@@ -388,3 +388,173 @@ fn clean_sketch_requires_matching_saved_domain_intent() {
         );
     }
 }
+
+fn replay_archive(fixture: &Fixture) -> ProjectArchive {
+    let snapshot = fixture.engine.project_snapshot().unwrap();
+    let mut archive = ProjectArchive::new(snapshot.model_json().to_owned(), metadata()).unwrap();
+    archive
+        .set_intent("intent/replay-future.cbor", Some(vec![0, 255, 7, 42]))
+        .unwrap();
+    archive
+}
+
+#[test]
+fn replay_baseline_stays_dirty_and_pathless_until_save_as() {
+    let _lock = crate::session_bridge::tests::TEST_LOCK.lock().unwrap();
+    let fixture = Fixture::new();
+    let mut workspace = DocumentWorkspace::default();
+    let initial = observe(&mut workspace, &fixture);
+    let archive = replay_archive(&fixture);
+    let retained = archive.encode().unwrap();
+    let (loaded, handoff) = workspace
+        .load_replay_baseline_guarded(&fixture.bridge, &fixture.engine, &initial, archive, || {
+            Ok(())
+        })
+        .unwrap();
+    assert_eq!(handoff.previous(), &initial);
+    assert_eq!(handoff.successor().owner, loaded.context);
+    assert_eq!(handoff.successor().revision, loaded.engine_revision);
+    assert_ne!(loaded.context, initial.owner);
+    assert_eq!(loaded.value["replay_baseline_loaded"], true);
+    assert!(loaded.value.get("opened").is_none());
+    let receipt = observe(&mut workspace, &fixture);
+    let tab = &workspace.tabs[0];
+    assert!(tab.path.is_none());
+    assert!(tab.saved.is_none());
+    assert_eq!(
+        tab.archive
+            .as_ref()
+            .unwrap()
+            .lock()
+            .unwrap()
+            .encode()
+            .unwrap(),
+        retained
+    );
+    assert!(
+        workspace
+            .summaries(&fixture.bridge, &receipt.owner)
+            .unwrap()[0]
+            .dirty
+    );
+    assert_eq!(
+        fixture.engine.project_snapshot().unwrap().intents()[0].payload,
+        [0, 255, 7, 42]
+    );
+    let destination = path("replay-baseline-save-as.limo");
+    let prepared = workspace
+        .prepare_save_guarded(
+            &fixture.bridge,
+            &fixture.engine,
+            &receipt,
+            (destination.clone(), false),
+            metadata(),
+            || Ok(()),
+        )
+        .unwrap();
+    workspace
+        .complete_save(&fixture.bridge, prepared.write())
+        .unwrap();
+    assert_eq!(workspace.tabs[0].path.as_ref(), Some(&destination));
+    let saved = ProjectArchive::decode(fs::read(&destination).unwrap()).unwrap();
+    assert_eq!(
+        saved.snapshot().unwrap().intents(),
+        fixture.engine.project_snapshot().unwrap().intents()
+    );
+    assert!(
+        !workspace
+            .summaries(&fixture.bridge, &receipt.owner)
+            .unwrap()[0]
+            .dirty
+    );
+}
+
+#[test]
+fn rejected_replay_preserves_owner_file_state_and_model() {
+    let _lock = crate::session_bridge::tests::TEST_LOCK.lock().unwrap();
+    for case in [
+        "cancelled",
+        "invalid-domain",
+        "saving",
+        "dirty",
+        "saved-nonblank",
+    ] {
+        let fixture = Fixture::new();
+        let mut workspace = DocumentWorkspace::default();
+        let initial = observe(&mut workspace, &fixture);
+        let mut archive = replay_archive(&fixture);
+        if case == "invalid-domain" {
+            archive
+                .set_intent("intent/thermal-studies.cbor", Some(vec![0xff]))
+                .unwrap();
+        }
+        if case == "dirty" {
+            fixture.rename(&initial.owner, "Unsaved name").unwrap();
+        }
+        if case == "saved-nonblank" {
+            fixture
+                .bridge
+                .apply_native_mutation(
+                    &fixture.engine,
+                    &initial.owner,
+                    "drawing_create_sheet",
+                    &json!({"name":"Retained","format":"a4","orientation":"landscape"}),
+                    || Ok(()),
+                )
+                .unwrap();
+        }
+        let receipt = observe(&mut workspace, &fixture);
+        let mut pending = None;
+        if case == "saving" || case == "saved-nonblank" {
+            let save = workspace
+                .prepare_save_guarded(
+                    &fixture.bridge,
+                    &fixture.engine,
+                    &receipt,
+                    (path(&format!("replay-rejected-{case}.limo")), false),
+                    metadata(),
+                    || Ok(()),
+                )
+                .unwrap();
+            if case == "saving" {
+                pending = Some(save);
+            } else {
+                workspace
+                    .complete_save(&fixture.bridge, save.write())
+                    .unwrap();
+            }
+        }
+        let before = fixture.engine.project_snapshot().unwrap();
+        let prior_path = workspace.tabs[0].path.clone();
+        let prior_saved = workspace.tabs[0].saved.clone();
+        let prior_archive = workspace.tabs[0].archive.clone();
+        assert!(
+            workspace
+                .load_replay_baseline_guarded(
+                    &fixture.bridge,
+                    &fixture.engine,
+                    &receipt,
+                    archive,
+                    || {
+                        if case == "cancelled" {
+                            Err("cancelled".into())
+                        } else {
+                            Ok(())
+                        }
+                    }
+                )
+                .is_err(),
+            "{case}"
+        );
+        assert_eq!(observe(&mut workspace, &fixture), receipt, "{case}");
+        assert_eq!(fixture.engine.project_snapshot().unwrap(), before, "{case}");
+        assert_eq!(workspace.tabs[0].path, prior_path);
+        assert_eq!(workspace.tabs[0].saved, prior_saved);
+        match (&workspace.tabs[0].archive, prior_archive) {
+            (Some(actual), Some(prior)) => assert!(Arc::ptr_eq(actual, &prior)),
+            (None, None) => {}
+            _ => panic!("archive changed on rejection: {case}"),
+        }
+        drop(pending);
+    }
+}

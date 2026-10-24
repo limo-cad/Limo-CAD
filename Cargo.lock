@@ -876,6 +876,7 @@ dependencies = [
  "ciborium",
  "serde",
  "serde_json",
+ "sha2",
  "zip",
 ]
 
@@ -2439,6 +2440,7 @@ dependencies = [
  "flate2",
  "limo-cad-core",
  "limo-cad-export",
+ "limo-cad-project-file",
  "limo-cad-recipes",
  "limo-cad-session-storage",
  "regex",

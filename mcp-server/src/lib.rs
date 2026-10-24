@@ -33,12 +33,19 @@ mod print_height_tools;
 mod print_intent_tools;
 mod print_modifier_tools;
 mod prompts;
+mod replay;
 mod script_export;
 mod session;
 mod stdio;
 mod summary;
 
 pub use control_admission::{NativeControlAdmission, NATIVE_CONTROL_ADMISSION_MAX_BYTES};
+pub use interface::read_authored_script;
+pub use limo_cad_script::MAX_SCRIPT_BYTES;
+pub use replay::{
+    inspect_project_replay_source, prepare_project_replay, prepare_project_replay_source,
+    run_prepared_project_replay, PreparedProjectReplay,
+};
 pub use session::control_owner_error;
 pub use stdio::{
     desktop_mcp_presence, prepare_desktop_stdio, run_desktop_stdio, run_stdio,
@@ -260,6 +267,7 @@ struct CadServer {
     /// can acknowledge without changing it; avoid replaying identical geometry.
     loaded_snapshot_json: Option<String>,
     loaded_snapshot_intents: Vec<limo_cad_project_file::SnapshotIntent>,
+    loaded_publication: Option<limo_cad_project_file::PublicationReceipt>,
     /// A completed UI transition whose snapshot could not be loaded. Model
     /// commands remain blocked until an explicit attach/refresh succeeds.
     failed_attachment: Option<AttachmentFailure>,
@@ -316,6 +324,7 @@ impl CadServer {
             attached_generation: None,
             loaded_snapshot_json: None,
             loaded_snapshot_intents: Vec::new(),
+            loaded_publication: None,
             failed_attachment: None,
             pending_recompute_transaction: None,
             tool_trace: Vec::new(),
@@ -834,6 +843,7 @@ impl CadServer {
                 self.attached_generation = None;
                 self.loaded_snapshot_json = None;
                 self.loaded_snapshot_intents.clear();
+                self.loaded_publication = None;
                 self.live_snapshot_dirty = false;
                 if let Some(binding) = &mut self.desktop_binding {
                     binding.initial_selection_pending = false;
@@ -963,30 +973,46 @@ impl CadServer {
             }
         }
         self.script_running = true;
-        let mut result = limo_cad_script::run_with_progress(
+        let result = limo_cad_script::run_with_progress(
             &script,
-            |name, arguments, progress| {
-                self.script_progress = Some(progress);
-                let is_note =
-                    arguments["action"] == "presentation" && arguments["command"] == "note";
-                let result = self.call_tool(name, arguments)?;
-                if name == "cad_interface"
-                    && result
-                        .get("status")
-                        .is_some_and(|status| status != "applied")
-                {
-                    return Err(format!("Interface operation failed: {result}"));
-                }
-                if is_note {
-                    self.wait_for_script_presentation(&result)?;
-                }
-                Ok(result)
-            },
+            |name, arguments, progress| self.dispatch_script_call(name, arguments, progress),
             options,
         );
-        self.script_running = false;
+        self.finish_script_run(&script, Some(source), step_count, detail_full, result)
+    }
+
+    fn dispatch_script_call(
+        &mut self,
+        name: &str,
+        arguments: Value,
+        progress: limo_cad_script::RunProgress,
+    ) -> Result<Value, String> {
+        self.script_progress = Some(progress);
+        let is_note = arguments["action"] == "presentation" && arguments["command"] == "note";
+        let result = self.call_tool(name, arguments)?;
+        if name == "cad_interface"
+            && result
+                .get("status")
+                .is_some_and(|status| status != "applied")
+        {
+            return Err(format!("Interface operation failed: {result}"));
+        }
+        if is_note {
+            self.wait_for_script_presentation(&result)?;
+        }
+        Ok(result)
+    }
+
+    fn finish_script_run(
+        &mut self,
+        script: &limo_cad_script::Script,
+        source: Option<String>,
+        step_count: Value,
+        detail_full: bool,
+        mut result: Result<Value, String>,
+    ) -> Result<Value, String> {
         self.script_progress = None;
-        if self.live_snapshot_dirty {
+        if self.live_snapshot_dirty && self.failed_attachment.is_none() {
             if let Err(error) = self.refresh_read_only_snapshot() {
                 if result.is_ok() {
                     result = Err(error);
@@ -1014,9 +1040,10 @@ impl CadServer {
         }
         if result.is_ok() {
             self.last_script_mutations = self.modeling_mutations;
-            self.last_script_source = Some(source);
+            self.last_script_source = source;
         }
 
+        self.script_running = false;
         result.map(|mut report| {
             let scene = self.manager.solid_scene_ref();
             let definitions = self.manager.hole_definitions();
@@ -1713,7 +1740,22 @@ impl CadServer {
         session_id: &str,
         skip_unchanged: bool,
     ) -> Result<bool, String> {
-        let composite = session::read_composite_publication(session_id)?;
+        self.load_snapshot_model_checked(session_id, skip_unchanged, None)
+    }
+
+    fn load_snapshot_model_checked(
+        &mut self,
+        session_id: &str,
+        skip_unchanged: bool,
+        expected: Option<&limo_cad_project_file::PublicationReceipt>,
+    ) -> Result<bool, String> {
+        let composite = match expected {
+            Some(receipt) if receipt.session_id == session_id => {
+                Some(session::read_replay_publication(receipt)?)
+            }
+            Some(_) => return Err("Replay publication route differs from its successor".into()),
+            None => session::read_composite_publication(session_id)?,
+        };
         let publication_generation = composite
             .as_ref()
             .map(|value| value.receipt().engine_revision)
@@ -1729,6 +1771,7 @@ impl CadServer {
             && self.loaded_snapshot_json.as_deref() == Some(model_json.as_str())
             && self.loaded_snapshot_intents == intents
         {
+            self.loaded_publication = composite.as_ref().map(|value| value.receipt().clone());
             self.attached_generation = publication_generation;
             self.live_snapshot_dirty = false;
             return Ok(false);
@@ -1772,6 +1815,12 @@ impl CadServer {
                 ));
             }
         };
+        if let Some(expected) = expected {
+            if let Err(error) = session::require_current_replay_publication(expected) {
+                self.manager.cancel_solid_recompute(transaction_id);
+                return Err(error);
+            }
+        }
         self.manager
             .commit_solid_with_verified_supports(
                 CommitKernelRequest {
@@ -1783,6 +1832,7 @@ impl CadServer {
             .map_err(|e| e.to_string())?;
 
         self.seed_script_baseline(baseline);
+        self.loaded_publication = composite.as_ref().map(|value| value.receipt().clone());
         self.loaded_snapshot_json = Some(model_json);
         self.loaded_snapshot_intents = intents.to_vec();
         self.attached_generation = publication_generation;

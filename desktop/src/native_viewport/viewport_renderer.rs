@@ -403,7 +403,9 @@ fn setup_interface_canvas(mut commands: Commands, mut surface: ResMut<HostSurfac
             NativeOverlayCamera,
             IsDefaultUiCamera,
             Camera2d,
-            VIEWPORT_MSAA,
+            // UI draws into the unsampled target. A later MSAA camera would
+            // resolve its stale sampled contents over this shared CAD image.
+            Msaa::Off,
             BoxShadowSamples(6),
             RenderLayers::none(),
             Camera {

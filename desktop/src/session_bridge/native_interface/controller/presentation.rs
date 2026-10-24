@@ -1,6 +1,7 @@
 //! Native adapter for the existing live script runner's presentation protocol.
 //! Captions and permits are UI state; the shared inbox remains the only model
-//! dispatcher, and document ownership never follows a replaced design.
+//! dispatcher. Replacement resets playback unless the guarded replay baseline
+//! supplies its private, exact-successor handoff.
 use super::*;
 use bevy::input::ButtonState;
 use serde::{Deserialize, Serialize};
@@ -117,6 +118,25 @@ impl Default for Playback {
     }
 }
 impl Playback {
+    fn transfer_replay_owner(
+        &mut self,
+        previous: &DocumentContext,
+        successor: &DocumentContext,
+    ) -> Result<(), String> {
+        if self.owner.as_ref() != Some(previous)
+            || !self.state.active
+            || self.state.finished
+            || previous.window_id != successor.window_id
+            || previous.document_id != successor.document_id
+            || successor.epoch <= previous.epoch
+        {
+            return Err("Replay playback no longer belongs to the admitted baseline".into());
+        }
+        // Preserve Stop, Pause, timing, step credits and captions, including
+        // input received while the baseline worker was committing.
+        self.owner = Some(successor.clone());
+        Ok(())
+    }
     fn observe(&mut self, owner: &DocumentContext, now: Instant) {
         if self.owner.as_ref() == Some(owner) {
             return;
@@ -320,6 +340,53 @@ pub(super) fn gate(world: &mut World, owner: &DocumentContext) -> Gate {
     } else {
         Gate::Waiting
     }
+}
+
+/// Check before queueing the baseline; never create or retarget playback here.
+pub(super) fn replay_readiness(world: &mut World, owner: &DocumentContext) -> Result<Gate, String> {
+    let playback = world
+        .get_resource::<Playback>()
+        .ok_or("Replay playback is not configured")?;
+    if playback.owner.as_ref() != Some(owner) || !playback.state.active || playback.state.finished {
+        return Err("Replay playback no longer belongs to the admitted document".into());
+    }
+    Ok(gate(world, owner))
+}
+
+pub(super) fn require_replay_ready(
+    world: &mut World,
+    owner: &DocumentContext,
+) -> Result<(), String> {
+    match replay_readiness(world, owner)? {
+        Gate::Ready => Ok(()),
+        Gate::Waiting => Err("Replay is paused or waiting before its baseline".into()),
+        Gate::Stopped => Err("Replay was stopped before its baseline".into()),
+    }
+}
+
+/// UI completion must call this before ordinary replacement observation. The
+/// private handoff comes from workspace adoption; serialized owner claims cannot
+/// authorize transfer. The callback updates related UI ownership in the same fence.
+pub(super) fn adopt_replay_owner(
+    world: &mut World,
+    services: &NativeServices,
+    handoff: &super::super::workspace::ReplayBaselineHandoff,
+    adopted: impl FnOnce(&mut World),
+) -> Result<(), String> {
+    let successor = handoff.successor();
+    services
+        .bridge
+        .with_native_document_receipt(&services.engine, &successor.owner, |revision| {
+            if revision != successor.revision {
+                return Err("The replay baseline changed before acknowledgement".into());
+            }
+            world
+                .get_resource_mut::<Playback>()
+                .ok_or("Replay playback is no longer available")?
+                .transfer_replay_owner(&handoff.previous().owner, &successor.owner)?;
+            adopted(world);
+            Ok(())
+        })
 }
 
 pub(super) fn observe(world: &mut World, owner: &DocumentContext) {

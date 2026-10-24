@@ -20,6 +20,7 @@ serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true, features = ["float_roundtrip", "raw_value"] }
 serde_yaml_ng = "0.10.0"
 limo-cad-core = { path = "../crates/core" }
+limo-cad-project-file = { path = "../crates/project-file" }
 limo-cad-recipes = { path = "../crates/recipes" }
 regex.workspace = true
 semver.workspace = true
