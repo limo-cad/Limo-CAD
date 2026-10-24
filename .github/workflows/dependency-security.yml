@@ -54,6 +54,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - uses: ./.github/actions/setup-rust
+      - name: Check reviewed advisory exceptions
+        run: cargo xtask advisory-exceptions
       - uses: ./.github/actions/setup-grype
       - name: Find signed SBOMs on the latest published release
         id: release
@@ -97,9 +100,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          cargo xtask advisory-exceptions
           failed=0
           for sbom in security-reports/release/*.sbom.cdx.json; do
-            if ! grype "sbom:$sbom" --fail-on high --output json > "$sbom.grype.json"; then
+            cargo xtask advisory-exceptions
+            if ! grype "sbom:$sbom" --fail-on high --output json --config .github/grype/exceptions.yaml > "$sbom.grype.json"; then
               echo "::error::Release advisory scan failed; inspect $sbom.grype.json."
               failed=1
             fi

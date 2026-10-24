@@ -841,7 +841,19 @@ jobs:
             exit 1
           fi
           codesign --verify --deep --strict "$app"
-          xcrun stapler validate "$app"
+          # Exit 68 is Apple's ticket service dropping the connection; retry only that.
+          for attempt in 1 2 3 4; do
+            status=0
+            xcrun stapler validate "$app" || status=$?
+            if [[ "$status" -eq 0 ]]; then break; fi
+            if [[ "$status" -ne 68 || "$attempt" -eq 4 ]]; then
+              echo "stapler validate failed (exit $status, attempt $attempt)." >&2
+              exit "$status"
+            fi
+            delay=$((5 << (attempt - 1)))
+            echo "Apple ticket service unavailable; retrying stapler validate in $delay seconds." >&2
+            sleep "$delay"
+          done
           spctl --assess --type execute --verbose=4 "$app"
 
       - name: Verify packaged architecture and launch
@@ -1009,11 +1021,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          cargo xtask advisory-exceptions
           failed=0
           checked=0
           while IFS= read -r sbom; do
             report="security-reports/$(basename "$sbom").grype.json"
-            if grype "sbom:$sbom" --fail-on high --output json > "$report"; then
+            cargo xtask advisory-exceptions
+            if grype "sbom:$sbom" --fail-on high --output json --config .github/grype/exceptions.yaml > "$report"; then
               echo "Advisories: $(basename "$sbom") passed the high/critical gate"
             else
               echo "::error::Release advisory scan failed; inspect $report."
