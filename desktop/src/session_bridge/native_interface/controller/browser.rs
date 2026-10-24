@@ -356,7 +356,7 @@ pub(crate) fn reduce(
                         &services.engine,
                         &receipt.owner,
                         Some(receipt.revision),
-                        "project_set_visibility",
+                        NativeMutation::Command("project_set_visibility"),
                         || {
                             let node = action_node(&services.engine, id)?;
                             visibility_arguments(&services.engine, &node)

@@ -2236,6 +2236,7 @@
         "cad_set_document_name",
         "cad_project_model",
         "cad_load_project_model",
+        "cad_load_project_snapshot",
         "cad_new_project"
       ]
     },

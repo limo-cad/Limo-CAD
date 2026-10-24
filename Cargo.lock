@@ -831,7 +831,9 @@ dependencies = [
  "limo-cad-cam",
  "limo-cad-core",
  "limo-cad-export",
+ "limo-cad-fem",
  "limo-cad-occt",
+ "limo-cad-project-file",
  "limo-cad-sketch",
  "limo-cad-solid",
  "serde",
@@ -870,6 +872,8 @@ dependencies = [
 name = "limo-cad-project-file"
 version = "0.3.0-rc.3"
 dependencies = [
+ "base64 0.23.1",
+ "ciborium",
  "serde",
  "serde_json",
  "zip",
@@ -891,6 +895,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "limo-cad-session-publication"
+version = "0.3.0-rc.2"
+dependencies = [
+ "ciborium",
+ "limo-cad-project-file",
+ "limo-cad-session-storage",
+ "serde",
+]
+
+[[package]]
 name = "limo-cad-session-storage"
 version = "0.3.0-rc.3"
 dependencies = [
@@ -904,6 +918,8 @@ dependencies = [
  "limo-cad-assembly",
  "limo-cad-cam",
  "limo-cad-core",
+ "limo-cad-fem",
+ "limo-cad-project-file",
  "limo-cad-solid",
  "serde",
  "serde_json",

@@ -8,9 +8,12 @@ repository.workspace = true
 publish = false
 
 [dependencies]
+base64.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 zip = { workspace = true, features = ["deflate"] }
 
 [dev-dependencies]
 zip = { workspace = true, features = ["unreserved"] }
+[dependencies.ciborium]
+version = "=0.2.2"

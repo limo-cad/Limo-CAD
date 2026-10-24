@@ -3,7 +3,7 @@
 
 use super::{check_owner, context, NativeMutationResult};
 use crate::{
-    session_bridge::{engine_text, parse_engine_envelope, SessionBridgeState},
+    session_bridge::{parse_engine_envelope, SessionBridgeState},
     state::AppState,
 };
 use limo_cad_interface::DocumentContext;
@@ -169,12 +169,14 @@ mod sketch_cleanliness;
 pub(crate) use retention::MemoryPressure;
 
 impl DocumentWorkspace {
-    pub(crate) fn observe(
+    /// Prepare the first real owner without exposing a tab before its initial
+    /// publication succeeds. Retain that publication obligation across retries.
+    pub(super) fn prepare_owner(
         &mut self,
         bridge: &SessionBridgeState,
         engine: &AppState,
         window: &str,
-    ) -> Result<DocumentReceipt, String> {
+    ) -> Result<DocumentContext, String> {
         if self.tabs.is_empty()
             && engine.active_project_session_id() == crate::state::BOOTSTRAP_SESSION_ID
         {
@@ -184,11 +186,19 @@ impl DocumentWorkspace {
                 engine.bind_project_session(&id)
             }))?;
         }
-        let owner = bridge.native_document_context(window, engine)?;
+        bridge.native_document_context(window, engine)
+    }
+
+    pub(crate) fn observe(
+        &mut self,
+        bridge: &SessionBridgeState,
+        engine: &AppState,
+        window: &str,
+    ) -> Result<DocumentReceipt, String> {
+        let owner = self.prepare_owner(bridge, engine, window)?;
         if self.initial_publication_pending {
-            // Rebinding retains the startup session, but its published metadata
-            // still names the bootstrap document. Publish the real owner before
-            // exposing the first tab; retain this obligation if storage fails.
+            // Publish the real owner's metadata before exposing the first tab;
+            // retain this obligation if any publication step fails.
             bridge.publish_native_document(engine, &owner, "solid")?;
             self.initial_publication_pending = false;
         }
@@ -356,7 +366,7 @@ impl DocumentWorkspace {
         if tab.saving.upgrade().is_some() {
             return Err("This document already has a save in progress".into());
         }
-        let model = {
+        let snapshot = {
             let publishers = bridge
                 .publishers
                 .lock()
@@ -371,22 +381,26 @@ impl DocumentWorkspace {
                 return Err("The document changed before Save was prepared".into());
             }
             validate()?;
-            engine_text(
-                parse_engine_envelope(engine.engine_call("project_export_model", ""))?,
-                "Save requires a completed project model",
-            )?
+            engine.project_snapshot()?
         };
         let bytes = if let Some(archive) = &tab.archive {
             let mut archive = archive
                 .lock()
                 .map_err(|_| "Project archive lock poisoned")?;
-            archive
-                .update_model(model, metadata)
+            let candidate = archive
+                .with_snapshot(&snapshot, metadata)
                 .map_err(|error| error.to_string())?;
-            archive.encode().map_err(|error| error.to_string())?
+            let bytes = candidate.encode().map_err(|error| error.to_string())?;
+            *archive = candidate;
+            bytes
         } else {
-            let archive =
-                ProjectArchive::new(model, metadata).map_err(|error| error.to_string())?;
+            let mut archive = ProjectArchive::new(snapshot.model_json().to_owned(), metadata)
+                .map_err(|error| error.to_string())?;
+            for intent in snapshot.intents() {
+                archive
+                    .set_intent(&intent.name, Some(intent.payload.clone()))
+                    .map_err(|error| error.to_string())?;
+            }
             let bytes = archive.encode().map_err(|error| error.to_string())?;
             tab.archive = Some(Arc::new(Mutex::new(archive)));
             bytes
@@ -466,12 +480,12 @@ impl DocumentWorkspace {
             limo_cad_project_file::read_binary_file(&path).map_err(|error| error.to_string())?,
         )
         .map_err(|error| error.to_string())?;
-        let mut result = bridge.apply_native_mutation_at(
+        let snapshot = archive.snapshot().map_err(|error| error.to_string())?;
+        let mut result = bridge.apply_native_snapshot_at(
             engine,
             &expected.owner,
             expected.revision,
-            "cad_load_project_model",
-            &json!({"model_json":archive.model_json()}),
+            &snapshot,
             validate,
         )?;
         self.observe(bridge, engine, &expected.owner.window_id)?;
