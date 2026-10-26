@@ -635,7 +635,11 @@ fn activation_and_discard_accessible_names_match_the_localized_captions() {
                     native_viewport::localization::translate(ui.app.world(), key).to_owned();
                 let entity = ui.entity(&label);
                 assert_eq!(
-                    ui.app.world().get::<InterfaceCaption>(entity).unwrap().0,
+                    ui.app
+                        .world()
+                        .get::<interface_shell::InterfaceCaption>(entity)
+                        .unwrap()
+                        .0,
                     label
                 );
             }
