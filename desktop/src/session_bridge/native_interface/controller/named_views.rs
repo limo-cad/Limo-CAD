@@ -50,6 +50,7 @@ pub(crate) enum Command {
 struct State {
     owner: Option<DocumentContext>,
     revision: Option<u64>,
+    refresh_pending: bool,
     generation: u64,
     visible: bool,
     views: Vec<NamedViewConfigurationDto>,
@@ -78,7 +79,29 @@ struct PreviewOrigin {
 struct PendingRecall {
     owner: DocumentContext,
     name: String,
+    control: Option<(limo_cad_interface::ControlKey, u64)>,
     response: Value,
+}
+
+#[derive(Resource)]
+struct AppliedRecall {
+    owner: DocumentContext,
+    name: String,
+    revision: u64,
+    camera: native_viewport::ViewportCamera,
+}
+
+/// The native pointer continuation can arrive before the worker finishes.
+/// Check only retained control identity here; busy input must not query CAD.
+pub(super) fn coalesces_native_double_click(world: &World, action: &NativeInterfaceAction) -> bool {
+    matches!(action.control.input, ControlInput::DoubleClick)
+        && worker::busy(world)
+        && world
+            .get_resource::<PendingRecall>()
+            .is_some_and(|pending| {
+                pending.owner == action.context
+                    && pending.control == Some((action.control.key, action.control.binding()))
+            })
 }
 
 pub(crate) fn active(world: &World) -> bool {
@@ -368,6 +391,7 @@ fn select(state: &mut State, view: NamedViewConfigurationDto, saved: bool) {
     state.placement_dirty = false;
     state.report = None;
     state.error = None;
+    state.refresh_pending = false;
     state.scroll = 0;
     state.generation = state.generation.saturating_add(1);
 }
@@ -415,6 +439,28 @@ pub(crate) fn activate(
         );
     }
     ensure_switchable(world, owner)?;
+    let (document, camera, _, _) = native_viewport::interface_view(world);
+    let applied_revision = world
+        .get_resource::<AppliedRecall>()
+        .filter(|applied| {
+            &applied.owner == owner
+                && applied.name == name
+                && document == owner.document_id
+                && applied.camera == camera
+        })
+        .map(|applied| applied.revision);
+    if let Some(applied_revision) = applied_revision {
+        let unchanged = bridge.with_native_document_receipt(engine, owner, |revision| {
+            if revision != applied_revision {
+                return Ok(false);
+            }
+            refresh_recalled_editor(world, engine, owner, revision, name)?;
+            Ok(true)
+        })?;
+        if unchanged {
+            return Ok(json!({"already_active":true}));
+        }
+    }
     let name = name.to_owned();
     let editor = world
         .get_resource::<State>()
@@ -422,6 +468,9 @@ pub(crate) fn activate(
         .map(|state| (state.generation, state.draft.clone()));
     let pending_owner = owner.clone();
     let pending_name = name.clone();
+    let control = world
+        .get_resource::<worker::ActiveControl>()
+        .map(|action| (action.0.control.key, action.0.control.binding()));
     let response = worker::enqueue_operation(
         world,
         receipt.owner,
@@ -456,20 +505,17 @@ pub(crate) fn activate(
                         if revision != recalled_revision {
                             return Ok(());
                         }
-                        // The editor can have been hidden since its last paint;
-                        // its cached list is not the recalled engine revision.
-                        let views = read_views(&services.engine)?;
-                        let mut state = world.resource_mut::<State>();
-                        if let Some(view) =
-                            views.views.iter().find(|view| view.name == name).cloned()
-                        {
-                            select(&mut state, view, true);
-                        }
-                        state.views = views.views;
-                        state.revision = Some(revision);
-                        Ok(())
+                        refresh_recalled_editor(world, &services.engine, &owner, revision, &name)
                     },
                 )?;
+            }
+            if value["render_error"].is_null() && value["publication_error"].is_null() {
+                world.insert_resource(AppliedRecall {
+                    owner,
+                    name,
+                    revision: recalled_revision,
+                    camera: native_viewport::interface_view(world).1,
+                });
             }
             Ok(value)
         },
@@ -477,9 +523,35 @@ pub(crate) fn activate(
     world.insert_resource(PendingRecall {
         owner: pending_owner,
         name: pending_name,
+        control,
         response: response.clone(),
     });
     Ok(response)
+}
+
+/// Caller holds the matching document receipt. Hidden editors need the fresh
+/// list too, but no editor is opened and no dirty draft is replaced.
+fn refresh_recalled_editor(
+    world: &mut World,
+    engine: &AppState,
+    owner: &DocumentContext,
+    revision: u64,
+    name: &str,
+) -> Result<(), String> {
+    if world
+        .get_resource::<State>()
+        .is_none_or(|state| state.owner.as_ref() != Some(owner) || has_unsaved_changes(state))
+    {
+        return Ok(());
+    }
+    let views = read_views(engine)?;
+    let mut state = world.resource_mut::<State>();
+    if let Some(view) = views.views.iter().find(|view| view.name == name).cloned() {
+        select(&mut state, view, true);
+    }
+    state.views = views.views;
+    state.revision = Some(revision);
+    Ok(())
 }
 
 pub(crate) fn open(
@@ -1067,19 +1139,31 @@ fn reduce_inner(
         arguments,
         move |world, services, result| {
             if let Ok(result) = &result {
+                let stored = saved_name.as_ref().and_then(|name| {
+                    serde_json::from_value::<NamedViewsDto>(result.value.clone())
+                        .ok()?
+                        .views
+                        .into_iter()
+                        .find(|view| &view.name == name)
+                });
                 if let Some(mut state) = world.get_resource_mut::<State>().filter(|state| {
                     state.owner.as_ref() == Some(&result.context) && state.generation == generation
                 }) {
                     if let Some(name) = saved_name {
-                        if let Some(draft) = submitted_draft {
+                        if let (Some(draft), Some(stored)) = (submitted_draft, stored) {
                             if state.draft.as_ref() == Some(&draft) && !state.placement_dirty {
-                                select(&mut state, draft, true);
+                                select(&mut state, stored, true);
                             } else {
                                 // A successful save acknowledges the submitted
                                 // baseline, not edits made while it was pending.
+                                if let Some(current) = state.draft.as_mut() {
+                                    if current.id == draft.id {
+                                        current.id = stored.id;
+                                    }
+                                }
                                 state.selected = Some(name);
-                                state.original = Some(draft.clone());
-                                state.draft_baseline = Some(draft);
+                                state.original = Some(stored.clone());
+                                state.draft_baseline = Some(stored);
                             }
                         }
                     }
@@ -1229,6 +1313,7 @@ pub(super) fn synchronize(
             state.preview_origin = None;
             state.owner = Some(owner.clone());
             state.revision = None;
+            state.refresh_pending = false;
         }
         if !state.visible || print_intent::active(world) {
             return Ok(());
@@ -1236,8 +1321,11 @@ pub(super) fn synchronize(
         let receipt = services
             .bridge
             .native_document_receipt(&services.engine, owner)?;
-        if state.revision != Some(receipt.revision) {
+        if state.revision != Some(receipt.revision)
+            || (state.refresh_pending && !has_unsaved_changes(&state))
+        {
             let views = read_views(&services.engine)?;
+            state.refresh_pending = state.selected.is_some() && has_unsaved_changes(&state);
             if let Some(name) = state
                 .selected
                 .clone()

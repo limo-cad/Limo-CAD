@@ -289,11 +289,19 @@ fn an_in_flight_double_click_recalls_once_without_a_second_pending_operation() {
             .unwrap();
         let first = ui.invoke(&saved.name, ControlInput::Click).unwrap();
         assert_eq!(first["mutation_pending"], true);
+        let continuation = ui.action(&saved.name, ControlInput::DoubleClick);
+        assert!(coalesces_native_double_click(ui.app.world(), &continuation));
         let second = ui.invoke(&saved.name, ControlInput::DoubleClick).unwrap();
         assert_eq!(second["mutation_id"], first["mutation_id"]);
         ui.drain();
         assert!(!worker::busy(ui.app.world()));
         assert!(!ui.app.world().contains_resource::<PendingRecall>());
+        ui.paint(1360., 860.);
+        assert_eq!(
+            ui.invoke(&saved.name, ControlInput::DoubleClick).unwrap()["already_active"],
+            true
+        );
+        assert!(!worker::busy(ui.app.world()));
         assert_eq!(
             fixture
                 .bridge
@@ -396,7 +404,10 @@ fn reopening_a_clean_editor_uses_the_active_engine_view() {
         open(ui.app.world_mut(), &fixture.engine, &ui.owner, None).unwrap();
         let state = ui.app.world().resource::<State>();
         assert_eq!(state.selected.as_deref(), Some(second.name.as_str()));
-        assert_eq!(state.draft.as_ref(), Some(&second));
+        assert_eq!(
+            state.draft.as_ref(),
+            Some(&stored_view(&fixture, &second.name))
+        );
         assert!(!has_unsaved_changes(state));
     });
 }
@@ -506,62 +517,84 @@ fn recall_completion_refreshes_a_hidden_editors_stale_view_list() {
         let state = ui.app.world().resource::<State>();
         assert!(!state.visible);
         assert_eq!(state.selected.as_deref(), Some(added.name.as_str()));
-        assert_eq!(state.draft.as_ref(), Some(&added));
+        assert_eq!(
+            state.draft.as_ref(),
+            Some(&stored_view(&fixture, &added.name))
+        );
         assert_eq!(state.views, read_views(&fixture.engine).unwrap().views);
     });
 }
 
 #[test]
-fn discard_reconciles_external_updates_and_deletions_after_preserving_a_dirty_draft() {
+fn clean_drafts_reconcile_external_changes_after_discard_or_manually_reverting_edits() {
     crate::session_bridge::tests::with_isolated_session_test(|| {
         for operation in ["upsert_named_view", "delete_named_view"] {
-            let fixture = Fixture::new();
-            let saved = solid_and_view(&fixture);
-            let mut ui = ViewControls::new(&fixture);
-            open(
-                ui.app.world_mut(),
-                &fixture.engine,
-                &ui.owner,
-                Some(&saved.name),
-            )
-            .unwrap();
-            ui.paint(1360., 860.);
-            edit(
-                ui.app.world_mut(),
-                &fixture.engine,
-                Field::Name,
-                "Keep my edit",
-                UnitSystem::Mm,
-            )
-            .unwrap();
-            let draft = ui.app.world().resource::<State>().draft.clone();
-            let mut updated = saved.clone();
-            updated.camera.position[0] += 25.;
-            let arguments = if operation == "upsert_named_view" {
-                serde_json::to_value(&updated).unwrap()
-            } else {
-                json!({"name":saved.name})
-            };
-            fixture
-                .bridge
-                .apply_native_mutation(&fixture.engine, &ui.owner, operation, &arguments, || Ok(()))
+            for discard in [true, false] {
+                let fixture = Fixture::new();
+                let saved = solid_and_view(&fixture);
+                let mut ui = ViewControls::new(&fixture);
+                open(
+                    ui.app.world_mut(),
+                    &fixture.engine,
+                    &ui.owner,
+                    Some(&saved.name),
+                )
                 .unwrap();
-            ui.paint(1360., 860.);
-            assert_eq!(ui.app.world().resource::<State>().draft, draft);
-            ui.invoke("Discard edits", ControlInput::Click).unwrap();
-            ui.paint(1360., 860.);
-            let state = ui.app.world().resource::<State>();
-            assert!(state.visible);
-            assert!(!has_unsaved_changes(state));
-            if operation == "upsert_named_view" {
-                assert_eq!(state.selected.as_deref(), Some(updated.name.as_str()));
-                assert_eq!(state.draft.as_ref(), Some(&updated));
-                assert_eq!(state.original.as_ref(), Some(&updated));
-            } else {
-                assert!(state.selected.is_none());
-                assert!(state.draft.is_none());
-                assert!(state.draft_baseline.is_none());
-                assert!(saved_action_error(state, &Command::Recall).is_some());
+                ui.paint(1360., 860.);
+                edit(
+                    ui.app.world_mut(),
+                    &fixture.engine,
+                    Field::Name,
+                    "Keep my edit",
+                    UnitSystem::Mm,
+                )
+                .unwrap();
+                let draft = ui.app.world().resource::<State>().draft.clone();
+                let mut updated = saved.clone();
+                updated.camera.position[0] += 25.;
+                let arguments = if operation == "upsert_named_view" {
+                    serde_json::to_value(&updated).unwrap()
+                } else {
+                    json!({"name":saved.name})
+                };
+                fixture
+                    .bridge
+                    .apply_native_mutation(
+                        &fixture.engine,
+                        &ui.owner,
+                        operation,
+                        &arguments,
+                        || Ok(()),
+                    )
+                    .unwrap();
+                ui.paint(1360., 860.);
+                assert_eq!(ui.app.world().resource::<State>().draft, draft);
+                if discard {
+                    ui.invoke("Discard edits", ControlInput::Click).unwrap();
+                } else {
+                    edit(
+                        ui.app.world_mut(),
+                        &fixture.engine,
+                        Field::Name,
+                        &saved.name,
+                        UnitSystem::Mm,
+                    )
+                    .unwrap();
+                }
+                ui.paint(1360., 860.);
+                let state = ui.app.world().resource::<State>();
+                assert!(state.visible);
+                assert!(!has_unsaved_changes(state));
+                if operation == "upsert_named_view" {
+                    assert_eq!(state.selected.as_deref(), Some(updated.name.as_str()));
+                    assert_eq!(state.draft.as_ref(), Some(&updated));
+                    assert_eq!(state.original.as_ref(), Some(&updated));
+                } else {
+                    assert!(state.selected.is_none());
+                    assert!(state.draft.is_none());
+                    assert!(state.draft_baseline.is_none());
+                    assert!(saved_action_error(state, &Command::Recall).is_some());
+                }
             }
         }
     });
@@ -584,7 +617,36 @@ fn successful_save_acknowledges_only_the_submitted_draft() {
         ui.app.world_mut().resource_mut::<State>().scroll = usize::MAX;
         ui.paint(1360., 860.);
         ui.invoke("Save view", ControlInput::Click).unwrap();
+        edit(
+            ui.app.world_mut(),
+            &fixture.engine,
+            Field::PrintLayout,
+            "true",
+            UnitSystem::Mm,
+        )
+        .unwrap();
         ui.drain();
+        ui.paint(1360., 860.);
+        let expected = stored_view(&fixture, "Saved draft");
+        assert_eq!(
+            ui.app
+                .world()
+                .resource::<State>()
+                .draft
+                .as_ref()
+                .unwrap()
+                .id,
+            expected.id
+        );
+        assert!(has_unsaved_changes(ui.app.world().resource::<State>()));
+        edit(
+            ui.app.world_mut(),
+            &fixture.engine,
+            Field::PrintLayout,
+            "false",
+            UnitSystem::Mm,
+        )
+        .unwrap();
         ui.paint(1360., 860.);
         assert!(!has_unsaved_changes(ui.app.world().resource::<State>()));
         edit(
@@ -1106,6 +1168,15 @@ fn view() -> NamedViewConfigurationDto {
     }
 }
 
+fn stored_view(fixture: &Fixture, name: &str) -> NamedViewConfigurationDto {
+    read_views(&fixture.engine)
+        .unwrap()
+        .views
+        .into_iter()
+        .find(|view| view.name == name)
+        .unwrap()
+}
+
 fn solid_and_view(fixture: &Fixture) -> NamedViewConfigurationDto {
     for (operation, arguments) in [
         (
@@ -1154,12 +1225,7 @@ fn solid_and_view(fixture: &Fixture) -> NamedViewConfigurationDto {
             || Ok(()),
         )
         .unwrap();
-    read_views(&fixture.engine)
-        .unwrap()
-        .views
-        .into_iter()
-        .find(|view| view.name == saved.name)
-        .unwrap()
+    stored_view(fixture, &saved.name)
 }
 
 #[test]

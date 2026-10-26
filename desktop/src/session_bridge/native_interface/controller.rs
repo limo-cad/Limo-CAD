@@ -606,6 +606,9 @@ fn update_inner(
         }
         let mut accepted = true;
         for action in std::mem::take(&mut event.actions) {
+            if named_views::coalesces_native_double_click(world, &action) {
+                continue;
+            }
             if worker::busy(world) {
                 state.status = "Modeling is in progress; later input was not applied".into();
                 accepted = false;
