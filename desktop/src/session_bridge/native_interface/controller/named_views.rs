@@ -89,6 +89,9 @@ struct AppliedRecall {
     name: String,
     revision: u64,
     camera: native_viewport::ViewportCamera,
+    hidden_body_ids: Vec<u64>,
+    body_poses: Arc<Vec<limo_cad_sketch::BodyPoseDto>>,
+    instance_body_poses: Arc<Vec<limo_cad_sketch::InstanceBodyPoseDto>>,
 }
 
 /// The native pointer continuation can arrive before the worker finishes.
@@ -439,7 +442,7 @@ pub(crate) fn activate(
         );
     }
     ensure_switchable(world, owner)?;
-    let (document, camera, _, _) = native_viewport::interface_view(world);
+    let (document, camera, presentation, _) = native_viewport::interface_view(world);
     let applied_revision = world
         .get_resource::<AppliedRecall>()
         .filter(|applied| {
@@ -447,6 +450,11 @@ pub(crate) fn activate(
                 && applied.name == name
                 && document == owner.document_id
                 && applied.camera == camera
+                // CAM and presentation tools can change these without an
+                // engine revision or camera change.
+                && applied.hidden_body_ids == presentation.hidden_body_ids
+                && applied.body_poses == presentation.body_poses
+                && applied.instance_body_poses == presentation.instance_body_poses
         })
         .map(|applied| applied.revision);
     if let Some(applied_revision) = applied_revision {
@@ -510,12 +518,17 @@ pub(crate) fn activate(
                 )?;
             }
             if value["render_error"].is_null() && value["publication_error"].is_null() {
-                world.insert_resource(AppliedRecall {
+                let (_, camera, presentation, _) = native_viewport::interface_view(world);
+                let applied = AppliedRecall {
                     owner,
                     name,
                     revision: recalled_revision,
-                    camera: native_viewport::interface_view(world).1,
-                });
+                    camera,
+                    hidden_body_ids: presentation.hidden_body_ids.clone(),
+                    body_poses: presentation.body_poses.clone(),
+                    instance_body_poses: presentation.instance_body_poses.clone(),
+                };
+                world.insert_resource(applied);
             }
             Ok(value)
         },
@@ -1160,6 +1173,14 @@ fn reduce_inner(
                                     if current.id == draft.id {
                                         current.id = stored.id.clone();
                                     }
+                                    // Match the engine's canonical ordering
+                                    // without replacing edits made during Save.
+                                    current.visible_body_ids.sort_unstable();
+                                    current.visible_body_ids.dedup();
+                                    current.part_offsets.sort_by_key(|offset| offset.body_id);
+                                    current
+                                        .occurrence_offsets
+                                        .sort_by_key(|offset| offset.occurrence_id.0);
                                 }
                                 state.selected = Some(name);
                                 state.original = Some(stored.clone());

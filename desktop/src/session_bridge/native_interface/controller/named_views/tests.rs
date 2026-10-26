@@ -320,6 +320,75 @@ fn an_in_flight_double_click_recalls_once_without_a_second_pending_operation() {
 }
 
 #[test]
+fn completed_recalls_restore_native_visibility_and_placement_changes() {
+    crate::session_bridge::tests::with_isolated_session_test(|| {
+        let fixture = Fixture::new();
+        let saved = solid_and_view(&fixture);
+        let mut ui = ViewControls::new(&fixture);
+        open(
+            ui.app.world_mut(),
+            &fixture.engine,
+            &ui.owner,
+            Some(&saved.name),
+        )
+        .unwrap();
+        ui.invoke(&saved.name, ControlInput::Click).unwrap();
+        ui.drain();
+        let (_, camera, expected, _) = native_viewport::interface_view_snapshot(ui.app.world());
+        for change in 0..3 {
+            let revision = fixture
+                .bridge
+                .native_document_receipt(&fixture.engine, &ui.owner)
+                .unwrap()
+                .revision;
+            let mut changed = expected.clone();
+            match change {
+                // CAM's stock view hides target bodies in the native
+                // presentation while retaining the engine revision and camera.
+                0 => changed.hidden_body_ids.push(saved.visible_body_ids[0]),
+                1 => Arc::make_mut(&mut changed.body_poses)[0].translation[0] += 40.,
+                2 => {
+                    let occurrence = &mut Arc::make_mut(&mut changed.instance_body_poses)[0];
+                    occurrence.translation[0] += 40.;
+                    occurrence.visible = false;
+                }
+                _ => unreachable!(),
+            }
+            native_viewport::apply_interface_view(
+                ui.app.world_mut(),
+                &ui.owner.document_id,
+                None,
+                Some(changed),
+            )
+            .unwrap();
+            ui.paint(1360., 860.);
+            assert_eq!(native_viewport::interface_view(ui.app.world()).1, camera);
+            assert_eq!(
+                fixture
+                    .bridge
+                    .native_document_receipt(&fixture.engine, &ui.owner)
+                    .unwrap()
+                    .revision,
+                revision
+            );
+            assert_eq!(
+                ui.invoke(&saved.name, ControlInput::Click).unwrap()["mutation_pending"],
+                true,
+                "Presentation changes must invalidate the completed recall"
+            );
+            ui.drain();
+            let (_, actual_camera, actual, _) = native_viewport::interface_view(ui.app.world());
+            assert_eq!(actual_camera, camera);
+            assert_eq!(actual.hidden_body_ids, expected.hidden_body_ids);
+            assert_eq!(actual.body_poses, expected.body_poses);
+            assert_eq!(actual.instance_body_poses, expected.instance_body_poses);
+            assert!(active(ui.app.world()));
+            assert!(!has_unsaved_changes(ui.app.world().resource::<State>()));
+        }
+    });
+}
+
+#[test]
 fn reopening_and_creating_clean_unsaved_views_recaptures_the_current_camera() {
     crate::session_bridge::tests::with_isolated_session_test(|| {
         let fixture = Fixture::new();
@@ -606,6 +675,17 @@ fn clean_drafts_reconcile_external_changes_after_discard_or_manually_reverting_e
 fn successful_save_acknowledges_only_the_submitted_draft() {
     crate::session_bridge::tests::with_isolated_session_test(|| {
         let fixture = Fixture::new();
+        solid_and_view(&fixture);
+        fixture
+            .bridge
+            .apply_native_mutation(
+                &fixture.engine,
+                &fixture.owner(),
+                "solid_extrude",
+                &json!({"sketch_name":"Sketch1","profile_indices":[0],"operation":"new_body","extent":{"type":"distance","distance":4.}}),
+                || Ok(()),
+            )
+            .unwrap();
         let mut ui = ViewControls::new(&fixture);
         open(ui.app.world_mut(), &fixture.engine, &ui.owner, None).unwrap();
         edit(
@@ -616,6 +696,44 @@ fn successful_save_acknowledges_only_the_submitted_draft() {
             UnitSystem::Mm,
         )
         .unwrap();
+        let bodies = ui
+            .app
+            .world()
+            .resource::<State>()
+            .draft
+            .as_ref()
+            .unwrap()
+            .visible_body_ids
+            .clone();
+        assert_eq!(bodies.len(), 2);
+        edit(
+            ui.app.world_mut(),
+            &fixture.engine,
+            Field::Target,
+            &format!("body:{}", bodies[0]),
+            UnitSystem::Mm,
+        )
+        .unwrap();
+        for value in ["false", "true"] {
+            edit(
+                ui.app.world_mut(),
+                &fixture.engine,
+                Field::VisibleBody,
+                value,
+                UnitSystem::Mm,
+            )
+            .unwrap();
+        }
+        assert_eq!(
+            ui.app
+                .world()
+                .resource::<State>()
+                .draft
+                .as_ref()
+                .unwrap()
+                .visible_body_ids,
+            vec![bodies[1], bodies[0]]
+        );
         ui.app.world_mut().resource_mut::<State>().scroll = usize::MAX;
         ui.paint(1360., 860.);
         ui.invoke("Save view", ControlInput::Click).unwrap();
@@ -676,7 +794,7 @@ fn successful_save_acknowledges_only_the_submitted_draft() {
         assert!(has_unsaved_changes(state));
         assert!(!state.draft.as_ref().unwrap().print_layout);
         assert!(state.draft_baseline.as_ref().unwrap().print_layout);
-        assert!(read_views(&fixture.engine).unwrap().views[0].print_layout);
+        assert!(stored_view(&fixture, "Saved draft").print_layout);
     });
 }
 
