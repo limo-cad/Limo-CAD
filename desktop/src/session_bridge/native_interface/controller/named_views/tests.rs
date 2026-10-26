@@ -50,10 +50,12 @@ impl ViewControls {
             camera,
         };
         result.paint(1360., 860.);
-        result
-            .invoke("Expand Named Views", ControlInput::Click)
-            .unwrap();
-        result.paint(1360., 860.);
+        if !read_views(&fixture.engine).unwrap().views.is_empty() {
+            result
+                .invoke("Expand Named Views", ControlInput::Click)
+                .unwrap();
+            result.paint(1360., 860.);
+        }
         result
     }
 
