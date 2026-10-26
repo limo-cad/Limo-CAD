@@ -210,16 +210,16 @@ pub(super) fn paint(
         50,
     )?;
     let dirty = has_unsaved_changes(state);
-    let mut activate = InterfaceControl::button("document/views", "Recall saved view");
+    let caption = native_viewport::localization::translate(world, "namedViews.activate");
+    let mut activate = InterfaceControl::button("document/views", caption);
     activate.disabled = worker::busy(world)
         || dirty
         || presentation_locked(world)
         || saved_action_error(state, &Command::Recall).is_some();
-    let caption = native_viewport::localization::translate(world, "namedViews.activate");
     let activate = state.widgets.button(
         world,
         camera,
-        "named-view-Recall saved view",
+        "named-view-activate",
         activate,
         Some(caption),
         NativeCommand::NamedView(state.generation, Command::Recall),
@@ -229,9 +229,9 @@ pub(super) fn paint(
     )?;
     interface_shell::control_colors(world, activate, theme.accent, theme.panel);
     if dirty {
-        let mut discard = InterfaceControl::button("document/views", "Discard named-view edits");
-        discard.disabled = worker::busy(world);
         let caption = native_viewport::localization::translate(world, "namedViews.discard");
+        let mut discard = InterfaceControl::button("document/views", caption);
+        discard.disabled = worker::busy(world);
         state.widgets.button(
             world,
             camera,

@@ -175,6 +175,14 @@ fn native_named_view_copy_shapes_without_missing_glyphs() {
             let key = format!("namedViews.{key}");
             let text = locale::translate(locale, &key).replace("{name}", "Front");
             assert_ne!(text, key, "Missing saved-view translation");
+            if locale != crate::app_preferences::Locale::En {
+                assert_ne!(
+                    text,
+                    locale::translate(crate::app_preferences::Locale::En, &key)
+                        .replace("{name}", "Front"),
+                    "Saved-view copy must not silently fall back to English: {locale:?} {key}"
+                );
+            }
             for weight in [FontWeight::NORMAL, FontWeight::SEMIBOLD] {
                 let font = ViewportUiTheme::from_palette(&default()).text(&assets, 12., weight);
                 let glyphs = shape(&mut app, &text, font);

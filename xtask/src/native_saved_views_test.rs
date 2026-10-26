@@ -165,7 +165,7 @@ fn exercise(c: &mut Client, out: &Path, config: &Path) -> Result<Value> {
     assert_camera(c, &overview)?;
     let first = ui(c, json!({"action":"inspect"}))?;
     ensure!(
-        controls(&first).any(|v| v["label"] == "Recall saved view" && v["disabled"] == false),
+        controls(&first).any(|v| v["label"] == "Activate view" && v["disabled"] == false),
         "Activation is missing from the first editor page"
     );
     capture(c, out, "04-edit-separate")?;
@@ -189,18 +189,23 @@ fn exercise(c: &mut Client, out: &Path, config: &Path) -> Result<Value> {
         "Draft name was lost after rejected activation"
     );
     capture(c, out, "05-edits-preserved")?;
-    control(c, "Discard named-view edits", None)?;
+    control(c, "Discard edits", None)?;
     browser_select(c, "Named Views", "Front")?;
     assert_camera(c, &front)?;
     capture(c, out, "06-front-after-discard")?;
 
     minimum_window(c)?;
     let mut locales = Vec::new();
-    for (locale, scale, edit) in [
-        ("en", 1., "Edit saved view Front"),
-        ("es", 1., "Editar vista guardada Front"),
-        ("de", 1.75, "Gespeicherte Ansicht Front bearbeiten"),
-        ("zh-CN", 1.75, "编辑已保存的视图 Front"),
+    for (locale, scale, edit, discard) in [
+        ("en", 1., "Edit saved view Front", "Discard edits"),
+        ("es", 1., "Editar vista guardada Front", "Descartar cambios"),
+        (
+            "de",
+            1.75,
+            "Gespeicherte Ansicht Front bearbeiten",
+            "Änderungen verwerfen",
+        ),
+        ("zh-CN", 1.75, "编辑已保存的视图 Front", "放弃更改"),
     ] {
         preferences(config, locale, scale)?;
         let deadline = Instant::now() + Duration::from_secs(10);
@@ -238,7 +243,7 @@ fn exercise(c: &mut Client, out: &Path, config: &Path) -> Result<Value> {
                 && u32::from_be_bytes(png[20..24].try_into()?) == 760,
             "Native capture does not cover the supported 1200x760 minimum window"
         );
-        control(c, "Discard named-view edits", None)?;
+        control(c, discard, None)?;
         locales.push(json!({"locale":locale,"ui_scale":scale}));
     }
     ensure!(

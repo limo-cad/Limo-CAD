@@ -266,6 +266,11 @@ pub(crate) fn reduce(
     match command {
         BrowserCommand::Select(_) => {
             if node.kind == Kind::NamedView {
+                // Pointer delivery already sent Click before DoubleClick.
+                // Do not enqueue the same recall twice or report a busy error.
+                if matches!(input, ControlInput::DoubleClick) {
+                    return Ok(json!({"node_id":id}));
+                }
                 let result = named_views::activate(
                     world,
                     engine,

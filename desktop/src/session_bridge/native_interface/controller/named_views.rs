@@ -89,34 +89,40 @@ pub(crate) fn cancel(
             owner: owner.clone(),
             revision,
         };
-        let mut state = world
-            .get_resource_mut::<State>()
-            .ok_or("Open Named Views")?;
-        if state.owner.as_ref() != Some(owner) {
-            return Err("The named view belongs to a different document".into());
-        }
-        let origin = state
-            .preview_origin
-            .take()
-            .filter(|origin| origin.receipt == receipt);
+        let restored = restore_preview(world, &receipt)?;
+        let mut state = world.resource_mut::<State>();
         state.visible = false;
-        state.previewing = false;
         state.draft = state.original.clone();
         state.draft_baseline = state.original.clone();
         state.placement_dirty = false;
         state.placement = None;
         state.error = None;
-        let restored = origin.is_some();
-        if let Some(origin) = origin {
-            native_viewport::apply_interface_view(
-                world,
-                &owner.document_id,
-                Some(origin.camera),
-                Some(origin.presentation),
-            )?;
-        }
         Ok(json!({"cancelled":true,"preview_restored":restored}))
     })
+}
+
+fn restore_preview(world: &mut World, receipt: &DocumentReceipt) -> Result<bool, String> {
+    let mut state = world
+        .get_resource_mut::<State>()
+        .ok_or("Open Named Views")?;
+    if state.owner.as_ref() != Some(&receipt.owner) {
+        return Err("The named view belongs to a different document".into());
+    }
+    let origin = state
+        .preview_origin
+        .take()
+        .filter(|origin| origin.receipt == *receipt);
+    state.previewing = false;
+    let restored = origin.is_some();
+    if let Some(origin) = origin {
+        native_viewport::apply_interface_view(
+            world,
+            &receipt.owner.document_id,
+            Some(origin.camera),
+            Some(origin.presentation),
+        )?;
+    }
+    Ok(restored)
 }
 
 pub(crate) fn presentation_locked(world: &World) -> bool {
@@ -364,12 +370,13 @@ fn has_unsaved_changes(state: &State) -> bool {
 }
 
 fn ensure_switchable(world: &mut World, owner: &DocumentContext) -> Result<(), String> {
-    let message =
-        native_viewport::localization::translate(world, "namedViews.finishEdits").to_owned();
-    if let Some(mut state) = world
-        .get_resource_mut::<State>()
-        .filter(|state| state.owner.as_ref() == Some(owner) && has_unsaved_changes(state))
+    if world
+        .get_resource::<State>()
+        .is_some_and(|state| state.owner.as_ref() == Some(owner) && has_unsaved_changes(state))
     {
+        let message =
+            native_viewport::localization::translate(world, "namedViews.finishEdits").to_owned();
+        let mut state = world.resource_mut::<State>();
         state.visible = true;
         state.error = Some(message.clone());
         return Err(message);
@@ -394,6 +401,10 @@ pub(crate) fn activate(
     }
     ensure_switchable(world, owner)?;
     let name = name.to_owned();
+    let editor = world
+        .get_resource::<State>()
+        .filter(|state| state.owner.as_ref() == Some(owner))
+        .map(|state| (state.generation, state.draft.clone()));
     worker::enqueue_operation(
         world,
         receipt.owner,
@@ -403,6 +414,7 @@ pub(crate) fn activate(
         move |world, services, result| {
             let result = result?;
             let owner = result.context.clone();
+            let recalled_revision = result.engine_revision;
             let value = finish_mutation(
                 &services.engine,
                 &services.bridge,
@@ -410,15 +422,36 @@ pub(crate) fn activate(
                 "recall_named_view",
                 result,
             );
-            if value["render_error"].is_null() {
-                if let Some(mut state) = world
-                    .get_resource_mut::<State>()
-                    .filter(|state| state.owner.as_ref() == Some(&owner))
-                {
-                    if let Some(view) = state.views.iter().find(|view| view.name == name).cloned() {
-                        select(&mut state, view, true);
-                    }
-                }
+            if value["render_error"].is_null()
+                && world.get_resource::<State>().is_some_and(|state| {
+                    state.owner.as_ref() == Some(&owner)
+                        && editor.as_ref().is_some_and(|(generation, draft)| {
+                            state.generation == *generation && state.draft == *draft
+                        })
+                        && !has_unsaved_changes(state)
+                })
+            {
+                services.bridge.with_native_document_receipt(
+                    &services.engine,
+                    &owner,
+                    |revision| {
+                        if revision != recalled_revision {
+                            return Ok(());
+                        }
+                        // The editor can have been hidden since its last paint;
+                        // its cached list is not the recalled engine revision.
+                        let views = read_views(&services.engine)?;
+                        let mut state = world.resource_mut::<State>();
+                        if let Some(view) =
+                            views.views.iter().find(|view| view.name == name).cloned()
+                        {
+                            select(&mut state, view, true);
+                        }
+                        state.views = views.views;
+                        state.revision = Some(revision);
+                        Ok(())
+                    },
+                )?;
             }
             Ok(value)
         },
@@ -446,9 +479,8 @@ pub(crate) fn open(
     if let Some(mut state) = world.get_resource_mut::<State>().filter(|state| {
         state.owner.as_ref() == Some(owner)
             && state.draft.is_some()
-            && (name.is_none()
-                || name == state.selected.as_deref()
-                || (name == Some("") && state.selected.is_none()))
+            && has_unsaved_changes(state)
+            && (name.is_none() || name == state.selected.as_deref())
     }) {
         state.visible = true;
         return Ok(json!({"named_views_visible":true}));
@@ -824,15 +856,23 @@ fn reduce_inner(
             return open(world, engine, &action.context, Some(""));
         }
         Command::Discard => {
-            let baseline = world.resource::<State>().draft_baseline.clone();
-            let saved = world.resource::<State>().selected.is_some();
-            cancel(world, engine, bridge, &action.context)?;
-            let mut state = world.resource_mut::<State>();
-            if let Some(view) = baseline {
-                select(&mut state, view, saved);
-            }
-            state.visible = true;
-            return Ok(json!({"discarded":true}));
+            return bridge.with_native_document_receipt(engine, &action.context, |revision| {
+                let baseline = world
+                    .resource::<State>()
+                    .draft_baseline
+                    .clone()
+                    .ok_or("Create a named view")?;
+                let saved = world.resource::<State>().selected.is_some();
+                restore_preview(
+                    world,
+                    &DocumentReceipt {
+                        owner: action.context.clone(),
+                        revision,
+                    },
+                )?;
+                select(&mut world.resource_mut::<State>(), baseline, saved);
+                Ok(json!({"discarded":true}))
+            });
         }
         Command::Recall => {
             let name = state.selected.clone().ok_or("Select a saved view")?;
@@ -990,6 +1030,7 @@ fn reduce_inner(
         "rename_named_view" => arguments["new_name"].as_str().map(str::to_string),
         _ => None,
     };
+    let submitted_draft = world.resource::<State>().draft.clone();
     worker::enqueue_operation(
         world,
         receipt.owner,
@@ -997,10 +1038,22 @@ fn reduce_inner(
         operation.into(),
         arguments,
         move |world, services, result| {
-            if result.is_ok() {
-                if let Some(mut state) = world.get_resource_mut::<State>() {
+            if let Ok(result) = &result {
+                if let Some(mut state) = world.get_resource_mut::<State>().filter(|state| {
+                    state.owner.as_ref() == Some(&result.context) && state.generation == generation
+                }) {
                     if let Some(name) = saved_name {
-                        state.selected = Some(name);
+                        if let Some(draft) = submitted_draft {
+                            if state.draft.as_ref() == Some(&draft) && !state.placement_dirty {
+                                select(&mut state, draft, true);
+                            } else {
+                                // A successful save acknowledges the submitted
+                                // baseline, not edits made while it was pending.
+                                state.selected = Some(name);
+                                state.original = Some(draft.clone());
+                                state.draft_baseline = Some(draft);
+                            }
+                        }
                     }
                     if operation == "delete_named_view" {
                         state.selected = None;
@@ -1157,7 +1210,11 @@ pub(super) fn synchronize(
             .native_document_receipt(&services.engine, owner)?;
         if state.revision != Some(receipt.revision) {
             let views = read_views(&services.engine)?;
-            if let Some(name) = state.selected.clone() {
+            if let Some(name) = state
+                .selected
+                .clone()
+                .filter(|_| !has_unsaved_changes(&state))
+            {
                 if let Some(view) = views.views.iter().find(|v| v.name == name).cloned() {
                     if state.original.as_ref() != Some(&view) {
                         select(&mut state, view, true);
