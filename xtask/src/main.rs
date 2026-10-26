@@ -122,6 +122,7 @@ fn run() -> Result<()> {
         "verify-linux-recipe-handler" => package::verify_recipe_handler(args),
         "version" => release_tooling::version::run(args),
         "check-release-tag" => release_tooling::tag::run(args),
+        "advisory-exceptions" => release_tooling::advisory_exceptions::run(args),
         "run-script" => replay::run(args),
         "cad-call" => replay::call(args),
         "verify-package-mcp" => package_mcp::run(args),
@@ -181,6 +182,8 @@ Commands:
                 --sync updates carriers without changing historical release notes.
   check-release-tag TAG SHA
                 Require a v<VERSION> tag on a commit already merged into main.
+  advisory-exceptions
+                Fail unless every grype ignore rule equals one unexpired reviewed scope.
   package       Build and audit the host desktop package entirely through Rust.
                 Use --help for prerequisites and optional Windows target selection.
   verify-linux-recipe-handler

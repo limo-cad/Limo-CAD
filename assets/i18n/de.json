@@ -6,6 +6,17 @@
     "finishEdits": "Speichere oder verwirf deine Änderungen, bevor du die Ansicht wechselst.",
     "finishOperation": "Beende den aktuellen Vorgang, bevor du eine gespeicherte Ansicht aktivierst."
   },
+  "projectReplay": {
+    "needsRepair": "Quelltext korrigieren; vor dem Start validieren.",
+    "filter": "Limo CAD Projektwiedergabe (.limo.replay.cbor)",
+    "savePath": "Projektwiedergabe unter einem absoluten .limo.replay.cbor-Pfad speichern",
+    "openPath": "Projektwiedergabe von einem absoluten Pfad öffnen",
+    "saved": "Projektwiedergabe mit erhaltenem Ausgangsprojekt gespeichert. Vor dem Start validieren.",
+    "changed": "Das Skript wurde vor dem vorbereiteten Start geändert",
+    "handoff": "Die Übergabe des vorbereiteten Skripts ist nicht verfügbar",
+    "retired": "Die Übergabe der Skriptvorbereitung wurde beendet",
+    "validSource": "Der Quelltext ist gültig. Der Start verwendet diesen Quelltext und das erhaltene Ausgangsprojekt; die Validierung speichert keine Änderungen."
+  },
   "runtimeActivity": {
     "title": "Aktivität",
     "current": "In Bearbeitung",

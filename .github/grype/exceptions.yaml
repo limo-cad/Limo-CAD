@@ -1,0 +1,50 @@
+# Release advisory exceptions for grype. `cargo xtask advisory-exceptions`
+# runs before every scan that loads this file and fails unless each rule
+# equals one unexpired entry in reviews.yaml (advisory, package name, version,
+# type and location) and has a row in docs/security/dependencies.md. No other
+# grype option or rule field is accepted here.
+ignore:
+  - vulnerability: CVE-2026-85091
+    reason: >-
+      Each Windows package build verifies that only freetype.dll and
+      libpng16.dll import zlib 1.3.2, by name and with no gz* functions
+      (cargo xtask package windows). This temporary decision
+      covers only the listed builds. See docs/security/dependencies.md.
+    package:
+      name: zlib
+      version: 1.3.2
+      type: binary
+      location: "**/Limo-CAD-0.3.0-rc.2-windows-x64/z.dll"
+  - vulnerability: CVE-2026-85091
+    reason: >-
+      Each Windows package build verifies that only freetype.dll and
+      libpng16.dll import zlib 1.3.2, by name and with no gz* functions
+      (cargo xtask package windows). This temporary decision
+      covers only the listed builds. See docs/security/dependencies.md.
+    package:
+      name: zlib
+      version: 1.3.2
+      type: binary
+      location: "**/Limo-CAD-0.3.0-rc.2-windows-arm64/z.dll"
+  - vulnerability: CVE-2026-85091
+    reason: >-
+      Each Windows package build verifies that only freetype.dll and
+      libpng16.dll import zlib 1.3.2, by name and with no gz* functions
+      (cargo xtask package windows). This temporary decision
+      covers only the listed builds. See docs/security/dependencies.md.
+    package:
+      name: zlib
+      version: 1.3.2
+      type: binary
+      location: "**/Limo-CAD-0.3.0-rc.3-windows-x64/z.dll"
+  - vulnerability: CVE-2026-85091
+    reason: >-
+      Each Windows package build verifies that only freetype.dll and
+      libpng16.dll import zlib 1.3.2, by name and with no gz* functions
+      (cargo xtask package windows). This temporary decision
+      covers only the listed builds. See docs/security/dependencies.md.
+    package:
+      name: zlib
+      version: 1.3.2
+      type: binary
+      location: "**/Limo-CAD-0.3.0-rc.3-windows-arm64/z.dll"

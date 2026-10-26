@@ -2,6 +2,7 @@
 //! history cursor, evaluated document, visibility, or assembly ownership.
 use super::*;
 use limo_cad_core::FeatureKind;
+use limo_cad_project_file::ProjectSnapshot;
 use serde_json::{json, Value};
 
 pub(super) struct SketchHistoryView {
@@ -45,17 +46,20 @@ pub(super) fn prepare(
     else {
         return Ok(None);
     };
-    let model = source
+    let snapshot = source
         .manager
-        .export_project_model()
+        .export_project_snapshot()
         .map_err(|error| error.to_string())?;
-    let mut model: Value = serde_json::from_str(&model).map_err(|error| error.to_string())?;
+    let mut model: Value =
+        serde_json::from_str(snapshot.model_json()).map_err(|error| error.to_string())?;
     model["document"]["history"]["rollback_index"] = json!(index);
+    let snapshot = ProjectSnapshot::new(model.to_string(), snapshot.intents().to_vec())
+        .map_err(|error| error.to_string())?;
     let stage = NativeEngineHost::new();
     if session_id != BOOTSTRAP_SESSION_ID {
         value(stage.bind_project_session(session_id))?;
     }
-    value(stage.project_load(&json!(model.to_string()).to_string()))?;
+    value(stage.project_load_snapshot(&snapshot))?;
     let frame = stage.viewport_frame();
     Ok(Some(SketchHistoryView {
         name: name.into(),

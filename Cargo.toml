@@ -11,6 +11,7 @@ members = [
     "crates/cam",
     "crates/sketch",
     "crates/session-storage",
+    "crates/session-publication",
     "crates/solid",
     "crates/occt",
     "crates/native-engine",
@@ -26,7 +27,7 @@ members = [
 
 [workspace.package]
 repository = "https://github.com/limo-cad/Limo-CAD"
-version = "0.3.0-rc.1"
+version = "0.3.0-rc.3"
 edition = "2021"
 
 [workspace.dependencies]

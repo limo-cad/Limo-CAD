@@ -21,11 +21,12 @@ pub struct SaveMetadata<'a> {
 /// The JSON model remains authoritative and opaque to this container layer.
 /// Keep the opened container to preserve ancillary images, recipes and future
 /// extension entries on native re-save without inflating/recompressing them.
+#[derive(Clone)]
 pub struct ProjectArchive {
     manifest: Value,
     model_json: String,
-    original: Option<Vec<u8>>,
-    attachments: BTreeMap<String, Option<Vec<u8>>>,
+    original: Option<std::sync::Arc<[u8]>>,
+    attachments: BTreeMap<String, Option<std::sync::Arc<[u8]>>>,
 }
 
 #[derive(Deserialize)]
@@ -44,6 +45,69 @@ impl ProjectArchive {
         };
         archive.update_model(model_json, metadata)?;
         Ok(archive)
+    }
+
+    /// Capture model text and every retained domain intent together. Other
+    /// ancillary archive entries remain with this container, not history.
+    pub fn snapshot(&self) -> Result<crate::ProjectSnapshot, ProjectFileError> {
+        let mut names = std::collections::BTreeSet::new();
+        if let Some(original) = &self.original {
+            let mut source = ZipArchive::new(Cursor::new(original))
+                .map_err(|e| failed("could not read snapshot intents", e))?;
+            for index in 0..source.len() {
+                let entry = source
+                    .by_index_raw(index)
+                    .map_err(|e| failed("could not read snapshot entry", e))?;
+                let name = entry
+                    .name()
+                    .map_err(|e| failed("invalid snapshot entry name", e))?;
+                if name.starts_with("intent/") && !entry.is_dir() {
+                    names.insert(name.into_owned());
+                }
+            }
+        }
+        names.extend(self.attachments.keys().cloned());
+        let mut intents = Vec::new();
+        let mut remaining = crate::MAX_SNAPSHOT_BYTES
+            .checked_sub(self.model_json.len())
+            .ok_or_else(|| error("snapshot model exceeds size limit"))?;
+        for name in names {
+            let limit = remaining
+                .checked_sub(name.len())
+                .ok_or_else(|| error("snapshot intents exceed size limit"))?;
+            if let Some(payload) = self.read_intent(&name, limit)? {
+                remaining = limit - payload.len();
+                if intents.len() >= 64 {
+                    return Err(error("too many snapshot intents"));
+                }
+                intents.push(crate::SnapshotIntent { name, payload });
+            }
+        }
+        crate::ProjectSnapshot::from_archive(self.model_json.clone(), intents)
+    }
+
+    /// Build a complete replacement candidate. The original stays unchanged if
+    /// any preparation fails. The caller validates domain semantics and adopts
+    /// this candidate only with its successful live project transaction.
+    pub fn with_snapshot(
+        &self,
+        snapshot: &crate::ProjectSnapshot,
+        metadata: SaveMetadata<'_>,
+    ) -> Result<Self, ProjectFileError> {
+        let prior = self.snapshot()?;
+        let mut candidate = self.clone();
+        candidate.update_model(snapshot.model_json().to_owned(), metadata)?;
+        // Snapshot restoration preserves original text, including its newline.
+        candidate.model_json = snapshot.model_json().to_owned();
+        for previous in prior.intents() {
+            if !snapshot.intents().iter().any(|i| i.name == previous.name) {
+                candidate.set_intent(&previous.name, None)?;
+            }
+        }
+        for intent in snapshot.intents() {
+            candidate.set_intent(&intent.name, Some(intent.payload.clone()))?;
+        }
+        Ok(candidate)
     }
 
     pub fn manifest(&self) -> &Value {
@@ -145,7 +209,7 @@ impl ProjectArchive {
         Ok(Self {
             manifest,
             model_json,
-            original: Some(bytes),
+            original: Some(bytes.into()),
             attachments: BTreeMap::new(),
         })
     }
@@ -163,7 +227,7 @@ impl ProjectArchive {
             if staged.as_ref().is_some_and(|b| b.len() as u64 > limit) {
                 return Err(error("project intent exceeds caller limit"));
             }
-            return Ok(staged.clone());
+            return Ok(staged.as_ref().map(|b| b.to_vec()));
         }
         let Some(original) = &self.original else {
             return Ok(None);
@@ -212,7 +276,8 @@ impl ProjectArchive {
         if total > MAX_EXPANDED_BYTES {
             return Err(error("staged project intents exceed size limit"));
         }
-        self.attachments.insert(name.to_owned(), bytes);
+        self.attachments
+            .insert(name.to_owned(), bytes.map(Into::into));
         Ok(())
     }
 
@@ -338,7 +403,7 @@ impl ProjectArchive {
     }
 }
 
-fn validate_intent_name(name: &str) -> Result<(), ProjectFileError> {
+pub(crate) fn validate_intent_name(name: &str) -> Result<(), ProjectFileError> {
     if !name.starts_with("intent/")
         || name.len() > 256
         || name

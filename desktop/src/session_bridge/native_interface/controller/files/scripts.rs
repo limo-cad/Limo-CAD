@@ -1,6 +1,8 @@
 //! File loading inspects source only. An explicit run creates a retained blank
 //! tab and hands frozen, expanded source to the existing live script runner.
 use super::*;
+mod artifact;
+use artifact::Artifact;
 mod catalog;
 mod chapters;
 mod dialog;
@@ -22,12 +24,14 @@ pub(super) use preview::{
     paint as paint_preview, Action as PreviewAction,
 };
 
+#[derive(Clone)]
 pub(super) struct Loaded {
+    artifact: Artifact,
     pub path: Option<PathBuf>,
     example: Option<&'static catalog::Example>,
     pub name: String,
-    pub steps: u64,
-    pub checks: u64,
+    /// None means the authored draft has never passed shared validation.
+    pub counts: Option<(u64, u64)>,
     pub maximum: usize,
     inspection: Value,
 }
@@ -37,6 +41,9 @@ impl Loaded {
     }
     fn authored(&self) -> &str {
         self.inspection["authored_source"].as_str().unwrap()
+    }
+    fn source_diagnostic(&self) -> Option<&str> {
+        self.inspection["source_validation_error"].as_str()
     }
 }
 
@@ -114,10 +121,10 @@ impl State {
         self.library.open = false;
         self.source = loaded.authored().to_owned();
         self.baseline = self.source.clone();
+        self.validated = loaded.counts.is_some() && loaded.source_diagnostic().is_none();
+        self.status = loaded.source_diagnostic().map(str::to_owned);
         self.loaded = Some(Arc::new(loaded));
-        self.validated = true;
         self.source_error = None;
-        self.status = None;
         Ok(())
     }
     pub(super) fn selected(&self, generation: u64) -> Result<Arc<Loaded>, String> {
@@ -131,6 +138,9 @@ impl State {
             .loaded
             .clone()
             .ok_or("Open a script before running it")?;
+        if loaded.counts.is_none() || loaded.source_diagnostic().is_some() {
+            return Err("Validate the current script source before running it".into());
+        }
         if loaded.authored() != self.source || self.source_path != loaded.path {
             return Err("Script source or include directory changed; Validate again".into());
         }
@@ -139,9 +149,14 @@ impl State {
 }
 
 fn inspect(path: PathBuf) -> Result<Loaded, String> {
-    let text_path = path.to_str().ok_or("Script path must be valid Unicode")?;
-    let inspection = limo_cad_mcp::inspect_script(json!({"path":text_path}))?;
-    inspected(Some(path), inspection)
+    if path
+        .to_str()
+        .is_some_and(|path| path.ends_with(artifact::PACKAGE_SUFFIX))
+    {
+        return artifact::inspect_package(path);
+    }
+    let source = limo_cad_mcp::read_authored_script(&path)?;
+    Artifact::Text.inspect_or_repair(path, &source)
 }
 
 fn inspected(path: Option<PathBuf>, inspection: Value) -> Result<Loaded, String> {
@@ -166,17 +181,20 @@ fn inspected(path: Option<PathBuf>, inspection: Value) -> Result<Loaded, String>
         .and_then(|value| usize::try_from(value).ok())
         .ok_or("Script size limit is missing")?;
     Ok(Loaded {
+        artifact: Artifact::Text,
         path,
         example: None,
         name,
-        steps,
-        checks,
+        counts: Some((steps, checks)),
         maximum,
         inspection,
     })
 }
 
 fn available(world: &World) -> Result<(), String> {
+    if worker::busy(world) {
+        return Err("Wait for the current operation to finish".into());
+    }
     let files = world.resource::<Files>();
     if files.lesson.is_some() {
         return Err("Stop the running script or wait for it to finish".into());
@@ -221,7 +239,11 @@ pub(super) fn choose(
         world,
         rfd::FileDialog::new()
             .set_title("Open Limo CAD script")
-            .add_filter("Limo CAD command script (.limo.jsonc)", &["jsonc"]),
+            .add_filter("Limo CAD command script (.limo.jsonc)", &["jsonc"])
+            .add_filter(
+                crate::native_viewport::localization::translate(world, "projectReplay.filter"),
+                &["cbor"],
+            ),
     )?;
     let (send, receive) = mpsc::channel();
     let wake = handle.clone();
@@ -312,9 +334,11 @@ pub(super) fn poll(world: &mut World) {
             })
         });
     if let Some(result) = result {
+        let locale = crate::native_viewport::localization::locale(world);
         let mut files = world.resource_mut::<Files>();
         files.script.loading = None;
         if let Err(error) = result.and_then(|loaded| files.script.accept(loaded)) {
+            let error = artifact::message(locale, &error);
             files.script.status = Some(format!("Script not loaded: {error}"));
         }
     }
@@ -356,30 +380,65 @@ pub(super) fn run(
     remember_view(world, &receipt.owner);
     let workspace = world.resource::<Files>().workspace.clone();
     let wake = handle.clone();
+    let preparation = Arc::clone(&loaded);
+    let (send, receive) = mpsc::sync_channel(1);
     worker::enqueue_transaction(
         world,
         "script_new_document".into(),
-        move |services, guard| new_document(services, &workspace, &receipt, || guard.validate()),
+        move |services, guard| {
+            guard.validate()?;
+            let prepared = preparation
+                .artifact
+                .prepare(preparation.source(), options.mode() == "present")?;
+            guard.validate()?;
+            // Transfer exactly this prepared snapshot. No package file is reopened
+            // after creating the tab or while waiting for baseline acknowledgement.
+            send.send(prepared)
+                .map_err(|_| "Script preparation handoff retired")?;
+            new_document(services, &workspace, &receipt, || guard.validate())
+        },
         move |world, services, result| {
-            let result = result?;
+            let locale = crate::native_viewport::localization::locale(world);
+            let result = result.map_err(|error| artifact::message(locale, &error))?;
             let owner = result.context.clone();
             let mut output =
                 finish_document_transition(world, services, "script_new_document", result);
             if output["render_error"].is_string() {
                 return Ok(output);
             }
-            match lessons::start_source_with_options(
-                world,
-                &wake,
-                (services, &owner),
-                &loaded.name,
-                loaded.source().to_owned(),
-                (options.mode(), options.speed()),
-            ) {
+            let launch = (|| {
+                let selected = world.resource::<Files>().script.selected(generation)?;
+                if !Arc::ptr_eq(&selected, &loaded) {
+                    return Err("Script changed before its prepared run started".into());
+                }
+                let prepared = receive
+                    .try_recv()
+                    .map_err(|_| "Prepared script handoff is unavailable")?;
+                match prepared {
+                    Some(prepared) => lessons::replay::launch::start_prepared(
+                        world,
+                        &wake,
+                        services,
+                        &owner,
+                        prepared,
+                        options.speed(),
+                    ),
+                    None => lessons::start_source_with_options(
+                        world,
+                        &wake,
+                        (services, &owner),
+                        &loaded.name,
+                        loaded.source().to_owned(),
+                        (options.mode(), options.speed()),
+                    ),
+                }
+            })();
+            match launch {
                 Ok(()) => {
                     output["script_started"] = json!({"name":loaded.name,"path":loaded.path});
                 }
                 Err(error) => {
+                    let error = artifact::message(locale, &error);
                     world.resource_mut::<Files>().script.status =
                         Some(format!("Script not started: {error}"));
                     output["script_error"] = json!(error);

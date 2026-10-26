@@ -63,7 +63,7 @@ impl CadServer {
             serde_json::from_value(written["report"].clone()).map_err(|e| e.to_string())?;
         let model = self
             .manager
-            .export_project_model()
+            .project_model_projection()
             .map_err(|e| e.to_string())?;
         request
             .project
@@ -119,7 +119,7 @@ impl CadServer {
             .ok_or("Current CAD document has no persistent print identity")?;
         let model = self
             .manager
-            .export_project_model()
+            .project_model_projection()
             .map_err(|e| e.to_string())?;
         let mut report = local_slicer_service().poll_owned(
             request.job_id,

@@ -268,3 +268,47 @@ fn sketch_history_placement_tracks_live_visibility_and_assembly_without_replacin
         ));
     }
 }
+
+#[test]
+fn sketch_history_view_preserves_known_and_opaque_domain_intent() {
+    use limo_cad_project_file::SnapshotIntent;
+
+    let host = NativeEngineHost::new();
+    sketch(&host, 4.);
+    feature(&host, false, "Sketch1");
+    let original = host.project_snapshot().unwrap();
+    let snapshot = ProjectSnapshot::new(
+        original.model_json().to_owned(),
+        vec![
+            SnapshotIntent {
+                name: limo_cad_fem::THERMAL_STUDY_ENTRY.into(),
+                payload: limo_cad_fem::ThermalStudyDocument::default()
+                    .encode_cbor()
+                    .unwrap(),
+            },
+            SnapshotIntent {
+                name: "intent/future-domain.cbor".into(),
+                payload: vec![0, 255, 7, 42],
+            },
+        ],
+    )
+    .unwrap();
+    value(host.project_load_snapshot(&snapshot)).unwrap();
+    let original = host.project_snapshot().unwrap();
+    let position = host.document_history_position();
+    let model_only: Value =
+        serde_json::from_str(&host.engine_call("project_export_model", "")).unwrap();
+    assert_eq!(model_only["ok"], false);
+
+    call(&host, "edit_sketch", json!("Sketch1"));
+    let frame = host.viewport_frame();
+    assert!(frame.document.scene.bodies.is_empty());
+    assert_eq!(
+        frame.document.active_sketch.as_ref().unwrap().name,
+        "Sketch1"
+    );
+    assert_eq!(host.document_history_position(), position);
+    value(host.engine_call("end_sketch", "")).unwrap();
+    value(host.solid_recompute()).unwrap();
+    assert_eq!(host.project_snapshot().unwrap(), original);
+}

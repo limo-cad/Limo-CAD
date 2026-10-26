@@ -26,6 +26,8 @@ mod centers_tests;
 mod cloud;
 #[cfg(test)]
 mod cloud_tests;
+mod dxf_dimensions;
+mod dxf_handles;
 mod font;
 mod graphics;
 mod hole;
@@ -89,6 +91,7 @@ pub enum PaperPrimitive {
 type Primitive = PaperPrimitive;
 const TEXT_MASK: &str = "TEXT_MASK";
 struct Paper {
+    dimensions: Vec<dxf_dimensions::Dimension>,
     size: P,
     items: Vec<Primitive>,
 }
@@ -420,6 +423,7 @@ pub fn export_sheet_with_units(
         .ok_or("Drawing sheet does not exist")?;
     limo_cad_sketch::drawing_topology::validate_drawing_sheet_topology(sheet, scene)?;
     let mut paper = Paper {
+        dimensions: Vec::new(),
         size: sheet_size(sheet),
         items: Vec::new(),
     };
@@ -579,7 +583,18 @@ pub fn export_sheet_with_units(
                 | DrawingAnnotationDto::OrdinateDimension { .. }
         ) {
             let batch = series::draw(sheet, &projections, annotation, units, &mut graphics_budget)?;
-            graphics_budget.append(&mut paper.items, batch)?;
+            let offset = paper.items.len();
+            graphics_budget.append(&mut paper.items, batch.items)?;
+            paper
+                .dimensions
+                .try_reserve(batch.dimensions.len())
+                .map_err(|_| "Cannot allocate dimension metadata")?;
+            paper
+                .dimensions
+                .extend(batch.dimensions.into_iter().map(|mut dimension| {
+                    dimension.range = dimension.range.start + offset..dimension.range.end + offset;
+                    dimension
+                }));
         } else if advanced::supports(annotation) {
             let weld = matches!(annotation, DrawingAnnotationDto::WeldSymbol { .. });
             let batch =
@@ -592,9 +607,8 @@ pub fn export_sheet_with_units(
             draw_annotation(&mut paper, sheet, &projections, annotation, units)?;
         }
     }
-    if !sheet.bom.is_empty() {
+    if let Some(origin) = sheet.bom_table_position {
         let start = paper.items.len();
-        let origin = sheet.bom_table_position.unwrap_or([14., 18.]);
         paper.text(
             origin,
             "ITEM   PART / DESCRIPTION   QTY   MATERIAL / PROCESS",
@@ -1443,6 +1457,16 @@ fn draw_annotation(
                      [b[0] + normal[0] * offset, b[1] + normal[1] * offset])
                 }
             };
+            let semantic = dxf_dimensions::Dimension::resolve(
+                &crate::drawing_presentation::geometry::Linear { first: a, second: b, start: c, end: d, value },
+                if *mode == DrawingLinearDimensionMode::Aligned {
+                    dxf_dimensions::LinearMode::Aligned
+                } else {
+                    dxf_dimensions::LinearMode::Rotated
+                },
+                presentation, *precision, units, (prefix, suffix), style,
+            );
+            let start = paper.items.len();
             paper.line(vec![a, c], "EXTENSION", &style.extension);
             paper.line(vec![b, d], "EXTENSION", &style.extension);
             paper.line(vec![c, d], "DIMENSION", &style.dimension);
@@ -1459,6 +1483,10 @@ fn draw_annotation(
                 dimension_text(value, *precision, prefix, suffix, presentation, units), presentation, style,
                 Some(angle),
             );
+            if let Some(mut dimension) = semantic {
+                dimension.range = start..paper.items.len();
+                paper.dimensions.push(dimension);
+            }
         }
         DrawingAnnotationDto::RadialDimension {
             view_id, feature, mode, leader_angle_deg, offset, prefix, suffix, precision, presentation, ..
@@ -1476,6 +1504,15 @@ fn draw_annotation(
             let direction = [angle.cos(), -angle.sin()];
             let edge = [center[0] + radius * direction[0], center[1] + radius * direction[1]];
             let label = [center[0] + (radius + offset) * direction[0], center[1] + (radius + offset) * direction[1]];
+            let diameter = matches!(mode, DrawingRadialDimensionMode::Diameter);
+            let opposite = if diameter { [2. * center[0] - edge[0], 2. * center[1] - edge[1]] } else { center };
+            let semantic = dxf_dimensions::Dimension::radial(
+                &crate::drawing_presentation::geometry::Linear {
+                    first: opposite, second: edge, start: opposite, end: edge,
+                    value: circle.radius * if diameter { 2. } else { 1. },
+                }, diameter, presentation, *precision, units, (prefix, suffix), style,
+            );
+            let start = paper.items.len();
             paper.line(vec![edge, label], "DIMENSION", &style.dimension);
             arrow(paper, edge, label, style);
             let (value, symbol) = match mode {
@@ -1487,6 +1524,10 @@ fn draw_annotation(
                 dimension_text(value, *precision, &format!("{prefix}{symbol}"), suffix, presentation, units),
                 presentation, style, None,
             );
+            if let Some(mut dimension) = semantic {
+                dimension.range = start..paper.items.len();
+                paper.dimensions.push(dimension);
+            }
         }
         DrawingAnnotationDto::AngularDimension {
             view_id, vertex, first, second, radius, prefix, suffix, precision, presentation, ..
@@ -1509,6 +1550,13 @@ fn draw_annotation(
                 let angle = start + sweep * index as f64 / 48.;
                 [origin[0] + radius * angle.cos(), origin[1] + radius * angle.sin()]
             }).collect::<Vec<_>>();
+            let semantic = dxf_dimensions::Dimension::angular(
+                &crate::drawing_presentation::geometry::Angular {
+                    vertex: origin, first, second, points: vec![points[24]],
+                    text: points[24], value: sweep.abs().to_degrees(),
+                }, presentation, *precision, prefix, suffix, style,
+            );
+            let start = paper.items.len();
             paper.line(vec![origin, points[0]], "EXTENSION", &style.extension);
             paper.line(vec![origin, points[48]], "EXTENSION", &style.extension);
             let middle = points[24];
@@ -1524,6 +1572,10 @@ fn draw_annotation(
                 },
                 presentation, style, None,
             );
+            if let Some(mut dimension) = semantic {
+                dimension.range = start..paper.items.len();
+                paper.dimensions.push(dimension);
+            }
         }
         _ => return Err(format!(
             "Native sheet export does not yet support annotation {}; use the interactive drawing export for this sheet",
@@ -1671,9 +1723,19 @@ fn dxf(p: &Paper, font_family: &str) -> Result<String, String> {
     }
     let layer_table_handle = styles.len() + 4;
     let style_table_handle = layer_table_handle + layers.len() + 1;
+    let mut handles = dxf_handles::Handles::new(style_table_handle + 4);
+    let block_table = handles.next();
+    let model_space = handles.next();
+    let paper_space = handles.next();
+    let dimensions: Vec<_> = p
+        .dimensions
+        .iter()
+        .filter(|dimension| dimension.preserves_measurement(p.size[1]))
+        .map(|dimension| (dimension, handles.next(), handles.next()))
+        .collect();
+    let dimension_table = (!dimensions.is_empty()).then(|| handles.next());
     let mut s = format!(
-        "0\nSECTION\n2\nHEADER\n9\n$ACADVER\n1\nAC1021\n9\n$INSUNITS\n70\n4\n9\n$HANDSEED\n5\n{:X}\n0\nENDSEC\n0\nSECTION\n2\nTABLES\n0\nTABLE\n2\nLTYPE\n5\n2\n330\n0\n100\nAcDbSymbolTable\n70\n{}\n",
-        style_table_handle + 4,
+        "0\nSECTION\n2\nTABLES\n0\nTABLE\n2\nLTYPE\n5\n2\n330\n0\n100\nAcDbSymbolTable\n70\n{}\n",
         styles.len() + 1,
     );
     s.push_str("0\nLTYPE\n5\n3\n330\n2\n100\nAcDbSymbolTableRecord\n100\nAcDbLinetypeTableRecord\n2\nCONTINUOUS\n70\n0\n3\nSolid line\n72\n65\n73\n0\n40\n0\n");
@@ -1707,8 +1769,83 @@ fn dxf(p: &Paper, font_family: &str) -> Result<String, String> {
     }
     s.push_str("0\nENDTAB\n");
     font::tables(&mut s, style_table_handle, &font_family);
+    writeln!(
+        s,
+        "0\nTABLE\n2\nBLOCK_RECORD\n5\n{block_table:X}\n330\n0\n100\nAcDbSymbolTable\n70\n{}",
+        dimensions.len() + 2
+    )
+    .unwrap();
+    for (name, handle) in [("*Model_Space", model_space), ("*Paper_Space", paper_space)] {
+        writeln!(s, "0\nBLOCK_RECORD\n5\n{handle:X}\n330\n{block_table:X}\n100\nAcDbSymbolTableRecord\n100\nAcDbBlockTableRecord\n2\n{name}\n70\n4\n280\n1\n281\n0").unwrap();
+    }
+    for (index, (_, _, handle)) in dimensions.iter().enumerate() {
+        writeln!(s, "0\nBLOCK_RECORD\n5\n{handle:X}\n330\n{block_table:X}\n100\nAcDbSymbolTableRecord\n100\nAcDbBlockTableRecord\n2\n*D{index}\n70\n4\n280\n1\n281\n0").unwrap();
+    }
+    s.push_str("0\nENDTAB\n");
+    if let Some(table) = dimension_table {
+        writeln!(s, "0\nTABLE\n2\nDIMSTYLE\n5\n{table:X}\n330\n0\n100\nAcDbSymbolTable\n100\nAcDbDimStyleTable\n70\n{}", dimensions.len()).unwrap();
+        for (index, (dimension, style, _)) in dimensions.iter().enumerate() {
+            dimension.style(&mut s, index, table, *style, style_table_handle + 1);
+        }
+        s.push_str("0\nENDTAB\n");
+    }
+    s.push_str("0\nENDSEC\n0\nSECTION\n2\nBLOCKS\n");
+    handles.empty_space(&mut s, "*Model_Space", model_space);
+    handles.empty_space(&mut s, "*Paper_Space", paper_space);
+    for (index, (dimension, _, owner)) in dimensions.iter().enumerate() {
+        handles.entity(&mut s, "BLOCK", *owner, "0");
+        writeln!(
+            s,
+            "100\nAcDbBlockBegin\n2\n*D{index}\n70\n1\n10\n0\n20\n0\n30\n0\n3\n*D{index}\n1\n"
+        )
+        .unwrap();
+        dxf_items(
+            &mut s,
+            &p.items[dimension.range.clone()],
+            p.size[1],
+            &font_family,
+            &mut handles,
+            *owner,
+        )?;
+        handles.entity(&mut s, "ENDBLK", *owner, "0");
+        s.push_str("100\nAcDbBlockEnd\n");
+    }
     s.push_str("0\nENDSEC\n0\nSECTION\n2\nENTITIES\n");
-    for item in &p.items {
+    let mut cursor = 0;
+    for (index, (dimension, _, _)) in dimensions.iter().enumerate() {
+        dxf_items(
+            &mut s,
+            &p.items[cursor..dimension.range.start],
+            p.size[1],
+            &font_family,
+            &mut handles,
+            model_space,
+        )?;
+        dimension.entity(&mut s, index, p, &mut handles, model_space);
+        cursor = dimension.range.end;
+    }
+    dxf_items(
+        &mut s,
+        &p.items[cursor..],
+        p.size[1],
+        &font_family,
+        &mut handles,
+        model_space,
+    )?;
+    s.push_str("0\nENDSEC\n");
+    s.push_str("0\nEOF\n");
+    Ok(format!("0\nSECTION\n2\nHEADER\n9\n$ACADVER\n1\nAC1021\n9\n$INSUNITS\n70\n4\n9\n$HANDSEED\n5\n{:X}\n0\nENDSEC\n{s}", handles.seed()))
+}
+
+fn dxf_items(
+    s: &mut String,
+    items: &[Primitive],
+    sheet_height: f64,
+    font_family: &str,
+    handles: &mut dxf_handles::Handles,
+    owner: usize,
+) -> Result<(), String> {
+    for item in items {
         match item {
             Primitive::Line {
                 points,
@@ -1717,19 +1854,37 @@ fn dxf(p: &Paper, font_family: &str) -> Result<String, String> {
                 width,
             } => {
                 if points.len() > 2 && !dash.is_empty() {
+                    handles.entity(s, "LWPOLYLINE", owner, layer);
                     writeln!(
                         s,
-                        "0\nLWPOLYLINE\n100\nAcDbEntity\n8\n{layer}\n6\nNBS_{layer}\n370\n{}\n100\nAcDbPolyline\n90\n{}\n70\n128",
-                        dxf_lineweight(*width), points.len()
-                    ).unwrap();
+                        "6\nNBS_{layer}\n370\n{}\n100\nAcDbPolyline\n90\n{}\n70\n128",
+                        dxf_lineweight(*width),
+                        points.len()
+                    )
+                    .unwrap();
                     for point in points {
-                        writeln!(s, "10\n{:.5}\n20\n{:.5}", point[0], p.size[1] - point[1])
+                        writeln!(s, "10\n{:.5}\n20\n{:.5}", point[0], sheet_height - point[1])
                             .unwrap();
                     }
                     continue;
                 }
                 for pair in points.windows(2) {
-                    writeln!(s,"0\nLINE\n8\n{layer}\n6\n{}\n370\n{}\n10\n{:.5}\n20\n{:.5}\n11\n{:.5}\n21\n{:.5}",if dash.is_empty(){"CONTINUOUS".into()}else{format!("NBS_{layer}")},dxf_lineweight(*width),pair[0][0],p.size[1]-pair[0][1],pair[1][0],p.size[1]-pair[1][1]).unwrap();
+                    handles.entity(s, "LINE", owner, layer);
+                    writeln!(
+                        s,
+                        "6\n{}\n370\n{}\n100\nAcDbLine\n10\n{:.5}\n20\n{:.5}\n11\n{:.5}\n21\n{:.5}",
+                        if dash.is_empty() {
+                            "CONTINUOUS".into()
+                        } else {
+                            format!("NBS_{layer}")
+                        },
+                        dxf_lineweight(*width),
+                        pair[0][0],
+                        sheet_height - pair[0][1],
+                        pair[1][0],
+                        sheet_height - pair[1][1]
+                    )
+                    .unwrap();
                 }
             }
             Primitive::Text {
@@ -1742,8 +1897,8 @@ fn dxf(p: &Paper, font_family: &str) -> Result<String, String> {
                 fitted_width,
             } => {
                 text_outlines::write_text(
-                    &mut s,
-                    p.size[1],
+                    s,
+                    sheet_height,
                     *point,
                     value,
                     *height,
@@ -1751,14 +1906,17 @@ fn dxf(p: &Paper, font_family: &str) -> Result<String, String> {
                     *rotation_deg,
                     *fitted_width,
                     layer,
-                    &font_family,
+                    font_family,
+                    handles,
+                    owner,
                 )?;
             }
             Primitive::Triangle { points, layer } => {
-                writeln!(s, "0\nSOLID\n8\n{layer}").unwrap();
+                handles.entity(s, "SOLID", owner, layer);
                 if *layer == TEXT_MASK {
                     s.push_str("420\n16777215\n");
                 }
+                s.push_str("100\nAcDbTrace\n");
                 for (index, point) in [points[0], points[1], points[2], points[2]]
                     .iter()
                     .enumerate()
@@ -1769,16 +1927,14 @@ fn dxf(p: &Paper, font_family: &str) -> Result<String, String> {
                         10 + index,
                         point[0],
                         20 + index,
-                        p.size[1] - point[1]
+                        sheet_height - point[1]
                     )
                     .unwrap();
                 }
             }
         }
     }
-    s.push_str("0\nENDSEC\n");
-    s.push_str("0\nEOF\n");
-    Ok(s)
+    Ok(())
 }
 
 #[cfg(test)]
@@ -1799,6 +1955,7 @@ mod tests {
         };
         for dashed in [false, true] {
             let mut paper = Paper {
+                dimensions: Vec::new(),
                 size: [297., 210.],
                 items: vec![],
             };
@@ -2080,6 +2237,7 @@ mod tests {
     #[test]
     fn centered_basic_dimension_frame_follows_vertical_text() {
         let mut paper = Paper {
+            dimensions: Vec::new(),
             size: [297., 210.],
             items: Vec::new(),
         };
@@ -2211,6 +2369,7 @@ mod tests {
         assert!(content.contains(">20.00 mm</text>"));
         assert!(!content.contains("[20.00 mm]"));
         let mut paper = Paper {
+            dimensions: Vec::new(),
             size: [297., 210.],
             items: Vec::new(),
         };
@@ -2307,6 +2466,7 @@ mod tests {
                     sheet.tolerance_note = serde_json::from_value(tolerance.clone()).unwrap();
                 }
                 let mut paper = Paper {
+                    dimensions: Vec::new(),
                     size: [420., 297.],
                     items: Vec::new(),
                 };
@@ -2376,7 +2536,7 @@ mod tests {
                 assert!(svg.contains("textLength="));
                 assert!(svg.contains("lengthAdjust=\"spacingAndGlyphs\""));
                 let dxf = exported(DrawingExportFormat::Dxf);
-                assert!(dxf.contains("72\n5\n73\n0\n11\n"));
+                assert!(dxf.contains("72\n5\n11\n") && dxf.contains("100\nAcDbText\n73\n0\n"));
                 for item in &paper.items {
                     if let Primitive::Text { value, .. } = item {
                         assert!(svg.contains(&format!(">{}</text>", xml(value))));
@@ -2415,6 +2575,7 @@ mod tests {
         ]))
         .unwrap();
         let mut p = Paper {
+            dimensions: Vec::new(),
             size: [297., 210.],
             items: Vec::new(),
         };
@@ -2440,6 +2601,7 @@ mod tests {
         projection.section[0].points.pop();
         assert!(hatch_section(
             &mut Paper {
+                dimensions: Vec::new(),
                 size: [297., 210.],
                 items: Vec::new()
             },
@@ -2484,7 +2646,7 @@ mod tests {
         assert_eq!(svg.matches("text-anchor=\"middle\">A-A</text>").count(), 2);
         assert!(!svg.contains("999.00000"));
         let dxf = export(DrawingExportFormat::Dxf, &doc, &projection).unwrap();
-        assert_eq!(dxf.matches("0\nSOLID\n8\nCUTTING_PLANE\n").count(), 2);
+        assert_eq!(dxf.matches("8\nCUTTING_PLANE\n100\nAcDbTrace\n").count(), 2);
         assert!(dxf.contains(
             "10\n76.00000\n20\n140.00000\n11\n75.08800\n21\n137.60000\n12\n76.91200\n22\n137.60000"
         ));
@@ -2520,6 +2682,7 @@ mod tests {
             doc.sheets[0].views.push(child);
         }
         let mut paper = Paper {
+            dimensions: Vec::new(),
             size: [297., 210.],
             items: vec![],
         };

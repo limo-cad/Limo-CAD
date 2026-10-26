@@ -3,7 +3,7 @@
 
 use super::{check_owner, context, NativeMutationResult};
 use crate::{
-    session_bridge::{engine_text, parse_engine_envelope, SessionBridgeState},
+    session_bridge::{parse_engine_envelope, SessionBridgeState},
     state::AppState,
 };
 use limo_cad_interface::DocumentContext;
@@ -19,6 +19,21 @@ use std::{
 pub(crate) struct DocumentReceipt {
     pub owner: DocumentContext,
     pub revision: u64,
+}
+
+/// In-process evidence produced only after guarded baseline commit and archive
+/// adoption. Never construct this from a transport response or active-tab lookup.
+pub(crate) struct ReplayBaselineHandoff {
+    previous: DocumentReceipt,
+    successor: DocumentReceipt,
+}
+impl ReplayBaselineHandoff {
+    pub(crate) fn previous(&self) -> &DocumentReceipt {
+        &self.previous
+    }
+    pub(crate) fn successor(&self) -> &DocumentReceipt {
+        &self.successor
+    }
 }
 
 struct Tab {
@@ -169,12 +184,14 @@ mod sketch_cleanliness;
 pub(crate) use retention::MemoryPressure;
 
 impl DocumentWorkspace {
-    pub(crate) fn observe(
+    /// Prepare the first real owner without exposing a tab before its initial
+    /// publication succeeds. Retain that publication obligation across retries.
+    pub(super) fn prepare_owner(
         &mut self,
         bridge: &SessionBridgeState,
         engine: &AppState,
         window: &str,
-    ) -> Result<DocumentReceipt, String> {
+    ) -> Result<DocumentContext, String> {
         if self.tabs.is_empty()
             && engine.active_project_session_id() == crate::state::BOOTSTRAP_SESSION_ID
         {
@@ -184,11 +201,19 @@ impl DocumentWorkspace {
                 engine.bind_project_session(&id)
             }))?;
         }
-        let owner = bridge.native_document_context(window, engine)?;
+        bridge.native_document_context(window, engine)
+    }
+
+    pub(crate) fn observe(
+        &mut self,
+        bridge: &SessionBridgeState,
+        engine: &AppState,
+        window: &str,
+    ) -> Result<DocumentReceipt, String> {
+        let owner = self.prepare_owner(bridge, engine, window)?;
         if self.initial_publication_pending {
-            // Rebinding retains the startup session, but its published metadata
-            // still names the bootstrap document. Publish the real owner before
-            // exposing the first tab; retain this obligation if storage fails.
+            // Publish the real owner's metadata before exposing the first tab;
+            // retain this obligation if any publication step fails.
             bridge.publish_native_document(engine, &owner, "solid")?;
             self.initial_publication_pending = false;
         }
@@ -356,7 +381,7 @@ impl DocumentWorkspace {
         if tab.saving.upgrade().is_some() {
             return Err("This document already has a save in progress".into());
         }
-        let model = {
+        let snapshot = {
             let publishers = bridge
                 .publishers
                 .lock()
@@ -371,22 +396,26 @@ impl DocumentWorkspace {
                 return Err("The document changed before Save was prepared".into());
             }
             validate()?;
-            engine_text(
-                parse_engine_envelope(engine.engine_call("project_export_model", ""))?,
-                "Save requires a completed project model",
-            )?
+            engine.project_snapshot()?
         };
         let bytes = if let Some(archive) = &tab.archive {
             let mut archive = archive
                 .lock()
                 .map_err(|_| "Project archive lock poisoned")?;
-            archive
-                .update_model(model, metadata)
+            let candidate = archive
+                .with_snapshot(&snapshot, metadata)
                 .map_err(|error| error.to_string())?;
-            archive.encode().map_err(|error| error.to_string())?
+            let bytes = candidate.encode().map_err(|error| error.to_string())?;
+            *archive = candidate;
+            bytes
         } else {
-            let archive =
-                ProjectArchive::new(model, metadata).map_err(|error| error.to_string())?;
+            let mut archive = ProjectArchive::new(snapshot.model_json().to_owned(), metadata)
+                .map_err(|error| error.to_string())?;
+            for intent in snapshot.intents() {
+                archive
+                    .set_intent(&intent.name, Some(intent.payload.clone()))
+                    .map_err(|error| error.to_string())?;
+            }
             let bytes = archive.encode().map_err(|error| error.to_string())?;
             tab.archive = Some(Arc::new(Mutex::new(archive)));
             bytes
@@ -466,12 +495,77 @@ impl DocumentWorkspace {
             limo_cad_project_file::read_binary_file(&path).map_err(|error| error.to_string())?,
         )
         .map_err(|error| error.to_string())?;
-        let mut result = bridge.apply_native_mutation_at(
+        let mut result = self.adopt_archive_guarded(bridge, engine, expected, archive, validate)?;
+        let tab = self
+            .tabs
+            .iter_mut()
+            .find(|tab| tab.owner == result.context)
+            .ok_or("Opened document is unavailable")?;
+        tab.path = Some(path);
+        tab.saved = Some(DocumentReceipt {
+            owner: result.context.clone(),
+            revision: result.engine_revision,
+        });
+        result.value["opened"] = json!(true);
+        Ok(result)
+    }
+
+    /// Load a replay baseline into a clean blank document. The archive is kept
+    /// for later Save As, but replay does not acquire a project save path or
+    /// clean receipt. Playback ownership transfer belongs to the caller.
+    pub(crate) fn load_replay_baseline_guarded(
+        &mut self,
+        bridge: &SessionBridgeState,
+        engine: &AppState,
+        expected: &DocumentReceipt,
+        archive: ProjectArchive,
+        validate: impl FnOnce() -> Result<(), String>,
+    ) -> Result<(NativeMutationResult, ReplayBaselineHandoff), String> {
+        let tab = self
+            .tabs
+            .iter()
+            .find(|tab| tab.owner == expected.owner)
+            .ok_or("The document tab was removed or replaced")?;
+        if tab.saving.upgrade().is_some() {
+            return Err("Wait for this document's save before loading a replay baseline".into());
+        }
+        if tab.saved.as_ref() != Some(expected) {
+            return Err("Replay requires a clean blank document".into());
+        }
+        let mut result = self.adopt_archive_guarded(bridge, engine, expected, archive, || {
+            // apply_native_snapshot_at holds the owner/revision fence while
+            // invoking this callback; blankness cannot be checked earlier.
+            validate()?;
+            if !engine.is_blank_for_script() {
+                return Err("Replay requires a clean blank document".into());
+            }
+            Ok(())
+        })?;
+        result.value["replay_baseline_loaded"] = json!(true);
+        let handoff = ReplayBaselineHandoff {
+            previous: expected.clone(),
+            successor: DocumentReceipt {
+                owner: result.context.clone(),
+                revision: result.engine_revision,
+            },
+        };
+        Ok((result, handoff))
+    }
+
+    fn adopt_archive_guarded(
+        &mut self,
+        bridge: &SessionBridgeState,
+        engine: &AppState,
+        expected: &DocumentReceipt,
+        archive: ProjectArchive,
+        validate: impl FnOnce() -> Result<(), String>,
+    ) -> Result<NativeMutationResult, String> {
+        let snapshot = archive.snapshot().map_err(|error| error.to_string())?;
+        let mut result = bridge.apply_native_snapshot_at(
             engine,
             &expected.owner,
             expected.revision,
-            "cad_load_project_model",
-            &json!({"model_json":archive.model_json()}),
+            &snapshot,
             validate,
         )?;
         self.observe(bridge, engine, &expected.owner.window_id)?;
@@ -479,14 +573,11 @@ impl DocumentWorkspace {
             .tabs
             .iter_mut()
             .find(|tab| tab.owner == result.context)
-            .ok_or("Opened document is unavailable")?;
-        tab.path = Some(path);
+            .ok_or("Loaded document is unavailable")?;
         tab.archive = Some(Arc::new(Mutex::new(archive)));
-        tab.saved = Some(DocumentReceipt {
-            owner: result.context.clone(),
-            revision: result.engine_revision,
-        });
-        // File Open acknowledges a document transition. The renderer reads
+        tab.path = None;
+        tab.saved = None;
+        // Archive adoption acknowledges a document transition. The renderer reads
         // its prepared native scene separately; returning the load operation's
         // tessellated scene here duplicates it in the MCP completion envelope
         // and can make a successful large-project open exceed transport caps.
@@ -507,7 +598,7 @@ impl DocumentWorkspace {
                 Some(json!({"body_id":body["id"],"warnings":warnings}))
             })
             .collect();
-        result.value = json!({"opened":true,"body_count":body_count,
+        result.value = json!({"body_count":body_count,
             "errors":errors,"display_warnings":display_warnings});
         Ok(result)
     }

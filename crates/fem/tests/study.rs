@@ -502,3 +502,43 @@ fn thermal_project_file_roundtrip_uses_existing_atomic_boundary() {
         .is_none());
     assert_eq!(std::fs::read_dir(directory.path()).unwrap().count(), 1);
 }
+
+#[test]
+fn composite_snapshot_restores_thermal_and_model_as_one_pair() {
+    use limo_cad_project_file::{ProjectSnapshot, SaveMetadata};
+    let mut archive = project();
+    let original = saved_document();
+    original.store_in_project(&mut archive).unwrap();
+    let snapshot = archive.snapshot().unwrap();
+    let encoded = snapshot.encode_cbor().unwrap();
+    cddl_cat::validate_cbor_bytes(
+        "project-snapshot",
+        include_str!("../../../docs/project-snapshot.cddl").trim_start_matches('\u{feff}'),
+        &encoded,
+    )
+    .unwrap();
+    let decoded = ProjectSnapshot::decode_cbor(&encoded).unwrap();
+    let mut changed = original.clone();
+    changed.studies[0].name = "Changed thermal study".into();
+    changed.store_in_project(&mut archive).unwrap();
+    archive.update_model(r#"{"format":"limo-cad-project","schema_version":15,"document":{"name":"Changed geometry"}}"#.into(),SaveMetadata{application_version:"test",saved_at:"later"}).unwrap();
+    let candidate = archive
+        .with_snapshot(
+            &decoded,
+            SaveMetadata {
+                application_version: "test",
+                saved_at: "restore",
+            },
+        )
+        .unwrap();
+    assert_eq!(candidate.model_json(), snapshot.model_json());
+    assert_eq!(
+        ThermalStudyDocument::from_project(&candidate).unwrap(),
+        original
+    );
+    assert_eq!(
+        ThermalStudyDocument::from_project(&archive).unwrap(),
+        changed
+    );
+    assert_ne!(archive.model_json(), candidate.model_json());
+}

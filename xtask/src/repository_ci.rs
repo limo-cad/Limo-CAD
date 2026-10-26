@@ -27,7 +27,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
         "desktop-changes" => return crate::desktop_changes::run(args),
         "native-ignored-test" => {
             let suite = args.next().context(
-                "missing native ignored suite (fonts, named-view-copy, sketch-visual, grid-redraw or sketch-commit)",
+                "missing native ignored suite (fonts, named-view-copy, sketch-visual, grid-redraw, sketch-commit or composition)",
             )?;
             ensure!(
                 args.next().is_none(),
@@ -145,8 +145,12 @@ fn native_ignored_suite(suite: &str) -> Result<(&'static str, &'static [&'static
             "committed_sketch_primitives_render_without_a_followup_pointer_frame",
             &["committed_sketch_primitives_render_without_a_followup_pointer_frame"],
         )),
+        "composition" => Ok((
+            "native_ui_renders_and_updates_before_3d_compilation_and_composites_owned_frames",
+            &["native_ui_renders_and_updates_before_3d_compilation_and_composites_owned_frames"],
+        )),
         _ => bail!(
-            "unknown native ignored suite; use fonts, named-view-copy, sketch-visual, grid-redraw or sketch-commit"
+            "unknown native ignored suite; use fonts, named-view-copy, sketch-visual, grid-redraw, sketch-commit or composition"
         ),
     }
 }
@@ -345,6 +349,7 @@ mod tests {
             "sketch-visual",
             "grid-redraw",
             "sketch-commit",
+            "composition",
         ] {
             let (filter, expected) = native_ignored_suite(suite).unwrap();
             let inventory = expected

@@ -1,6 +1,6 @@
 [package]
 name = "limo-cad-mcp"
-version = "0.3.0-rc.1"
+version = "0.3.0-rc.3"
 edition = "2021"
 description = "Headless MCP stdio server for Limo CAD sketch and solid tools"
 license = "LGPL-2.1-or-later"
@@ -24,6 +24,8 @@ native-computer-control = [
 ]
 
 [dependencies]
+limo-cad-project-file = { path = "../crates/project-file" }
+limo-cad-session-publication = { path = "../crates/session-publication" }
 limo-cad-session-storage = { path = "../crates/session-storage" }
 limo-cad-build-info = { path = "../crates/build-info" }
 limo-cad-interface = { path = "../crates/interface" }
@@ -54,5 +56,5 @@ windows-sys = { version = "0.61.2", features = ["Win32_System_Pipes"] }
 
 [dev-dependencies]
 limo-cad-export = { path = "../crates/export", features = ["test-utils"] }
-jsonschema = { version = "0.58.6", default-features = false }
+jsonschema = { version = "0.59.0", default-features = false }
 zip = { version = "9.0.3", default-features = false, features = ["deflate"] }
