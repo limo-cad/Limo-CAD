@@ -231,6 +231,7 @@ fn browser_names_activate_saved_views_by_pointer_and_keyboard_without_opening_th
         let geometry = fixture.engine.viewport_frame();
         for input in [
             ControlInput::Click,
+            ControlInput::DoubleClick,
             ControlInput::Key(limo_cad_interface::KeyChord::plain("Enter")),
             ControlInput::Key(limo_cad_interface::KeyChord::plain("Space")),
         ] {
@@ -277,7 +278,7 @@ fn browser_names_activate_saved_views_by_pointer_and_keyboard_without_opening_th
 }
 
 #[test]
-fn a_double_click_recalls_once_without_a_second_pending_operation() {
+fn an_in_flight_double_click_recalls_once_without_a_second_pending_operation() {
     crate::session_bridge::tests::with_isolated_session_test(|| {
         let fixture = Fixture::new();
         let saved = solid_and_view(&fixture);
@@ -286,15 +287,13 @@ fn a_double_click_recalls_once_without_a_second_pending_operation() {
             .bridge
             .native_document_receipt(&fixture.engine, &ui.owner)
             .unwrap();
-        assert_eq!(
-            ui.invoke(&saved.name, ControlInput::Click).unwrap()["mutation_pending"],
-            true
-        );
-        ui.invoke(&saved.name, ControlInput::DoubleClick).unwrap();
+        let first = ui.invoke(&saved.name, ControlInput::Click).unwrap();
+        assert_eq!(first["mutation_pending"], true);
+        let second = ui.invoke(&saved.name, ControlInput::DoubleClick).unwrap();
+        assert_eq!(second["mutation_id"], first["mutation_id"]);
         ui.drain();
-        // A later DoubleClick event is also harmless after the first recall finished.
-        ui.invoke(&saved.name, ControlInput::DoubleClick).unwrap();
         assert!(!worker::busy(ui.app.world()));
+        assert!(!ui.app.world().contains_resource::<PendingRecall>());
         assert_eq!(
             fixture
                 .bridge
@@ -361,6 +360,7 @@ fn reopening_a_clean_editor_uses_the_active_engine_view() {
         let fixture = Fixture::new();
         let saved = solid_and_view(&fixture);
         let mut second = saved.clone();
+        second.id = None;
         second.name = "Externally activated view".into();
         second.camera.position[0] += 30.;
         fixture
@@ -407,6 +407,7 @@ fn recall_completion_preserves_edits_made_after_enqueue_and_the_next_paint() {
         let fixture = Fixture::new();
         let saved = solid_and_view(&fixture);
         let mut second = saved.clone();
+        second.id = None;
         second.name = "Recall target".into();
         fixture
             .bridge
@@ -473,6 +474,7 @@ fn recall_completion_refreshes_a_hidden_editors_stale_view_list() {
         ui.paint(1360., 860.);
         ui.invoke("Close named views", ControlInput::Click).unwrap();
         let mut added = saved.clone();
+        added.id = None;
         added.name = "Newly saved view".into();
         added.camera.target[0] += 15.;
         fixture
@@ -506,6 +508,62 @@ fn recall_completion_refreshes_a_hidden_editors_stale_view_list() {
         assert_eq!(state.selected.as_deref(), Some(added.name.as_str()));
         assert_eq!(state.draft.as_ref(), Some(&added));
         assert_eq!(state.views, read_views(&fixture.engine).unwrap().views);
+    });
+}
+
+#[test]
+fn discard_reconciles_external_updates_and_deletions_after_preserving_a_dirty_draft() {
+    crate::session_bridge::tests::with_isolated_session_test(|| {
+        for operation in ["upsert_named_view", "delete_named_view"] {
+            let fixture = Fixture::new();
+            let saved = solid_and_view(&fixture);
+            let mut ui = ViewControls::new(&fixture);
+            open(
+                ui.app.world_mut(),
+                &fixture.engine,
+                &ui.owner,
+                Some(&saved.name),
+            )
+            .unwrap();
+            ui.paint(1360., 860.);
+            edit(
+                ui.app.world_mut(),
+                &fixture.engine,
+                Field::Name,
+                "Keep my edit",
+                UnitSystem::Mm,
+            )
+            .unwrap();
+            let draft = ui.app.world().resource::<State>().draft.clone();
+            let mut updated = saved.clone();
+            updated.camera.position[0] += 25.;
+            let arguments = if operation == "upsert_named_view" {
+                serde_json::to_value(&updated).unwrap()
+            } else {
+                json!({"name":saved.name})
+            };
+            fixture
+                .bridge
+                .apply_native_mutation(&fixture.engine, &ui.owner, operation, &arguments, || Ok(()))
+                .unwrap();
+            ui.paint(1360., 860.);
+            assert_eq!(ui.app.world().resource::<State>().draft, draft);
+            ui.invoke("Discard edits", ControlInput::Click).unwrap();
+            ui.paint(1360., 860.);
+            let state = ui.app.world().resource::<State>();
+            assert!(state.visible);
+            assert!(!has_unsaved_changes(state));
+            if operation == "upsert_named_view" {
+                assert_eq!(state.selected.as_deref(), Some(updated.name.as_str()));
+                assert_eq!(state.draft.as_ref(), Some(&updated));
+                assert_eq!(state.original.as_ref(), Some(&updated));
+            } else {
+                assert!(state.selected.is_none());
+                assert!(state.draft.is_none());
+                assert!(state.draft_baseline.is_none());
+                assert!(saved_action_error(state, &Command::Recall).is_some());
+            }
+        }
     });
 }
 
@@ -661,6 +719,7 @@ fn browser_activation_and_editor_selection_preserve_unfinished_view_edits() {
         let fixture = Fixture::new();
         let saved = solid_and_view(&fixture);
         let mut second = saved.clone();
+        second.id = None;
         second.name = "Second view".into();
         fixture
             .bridge
@@ -850,6 +909,7 @@ fn deleting_a_view_clears_its_draft_baseline_before_another_activation() {
         let fixture = Fixture::new();
         let saved = solid_and_view(&fixture);
         let mut second = saved.clone();
+        second.id = None;
         second.name = "Remaining view".into();
         fixture
             .bridge
@@ -1094,7 +1154,12 @@ fn solid_and_view(fixture: &Fixture) -> NamedViewConfigurationDto {
             || Ok(()),
         )
         .unwrap();
-    saved
+    read_views(&fixture.engine)
+        .unwrap()
+        .views
+        .into_iter()
+        .find(|view| view.name == saved.name)
+        .unwrap()
 }
 
 #[test]

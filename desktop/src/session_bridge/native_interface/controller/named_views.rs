@@ -74,6 +74,13 @@ struct PreviewOrigin {
     presentation: native_viewport::ViewportPresentation,
 }
 
+#[derive(Resource)]
+struct PendingRecall {
+    owner: DocumentContext,
+    name: String,
+    response: Value,
+}
+
 pub(crate) fn active(world: &World) -> bool {
     world.get_resource::<State>().is_some_and(|s| s.visible)
 }
@@ -394,6 +401,14 @@ pub(crate) fn activate(
     name: &str,
 ) -> Result<Value, String> {
     let receipt = bridge.native_document_receipt(engine, owner)?;
+    if worker::busy(world) {
+        if let Some(pending) = world
+            .get_resource::<PendingRecall>()
+            .filter(|pending| &pending.owner == owner && pending.name == name)
+        {
+            return Ok(pending.response.clone());
+        }
+    }
     if presentation_locked(world) || crate::native_editor::active(engine)?.is_some() {
         return Err(
             native_viewport::localization::translate(world, "namedViews.finishOperation").into(),
@@ -405,13 +420,16 @@ pub(crate) fn activate(
         .get_resource::<State>()
         .filter(|state| state.owner.as_ref() == Some(owner))
         .map(|state| (state.generation, state.draft.clone()));
-    worker::enqueue_operation(
+    let pending_owner = owner.clone();
+    let pending_name = name.clone();
+    let response = worker::enqueue_operation(
         world,
         receipt.owner,
         receipt.revision,
         "recall_named_view".into(),
         json!({"name":name}),
         move |world, services, result| {
+            world.remove_resource::<PendingRecall>();
             let result = result?;
             let owner = result.context.clone();
             let recalled_revision = result.engine_revision;
@@ -455,7 +473,13 @@ pub(crate) fn activate(
             }
             Ok(value)
         },
-    )
+    )?;
+    world.insert_resource(PendingRecall {
+        owner: pending_owner,
+        name: pending_name,
+        response: response.clone(),
+    });
+    Ok(response)
 }
 
 pub(crate) fn open(
@@ -870,7 +894,11 @@ fn reduce_inner(
                         revision,
                     },
                 )?;
-                select(&mut world.resource_mut::<State>(), baseline, saved);
+                let mut state = world.resource_mut::<State>();
+                select(&mut state, baseline, saved);
+                // An external update may have been observed while the draft
+                // was protected. Reconcile it now that the draft is clean.
+                state.revision = None;
                 Ok(json!({"discarded":true}))
             });
         }
@@ -1222,6 +1250,12 @@ pub(super) fn synchronize(
                 } else {
                     state.selected = None;
                     state.original = None;
+                    state.draft = None;
+                    state.draft_baseline = None;
+                    state.placement = None;
+                    state.placement_dirty = false;
+                    state.target.clear();
+                    state.generation = state.generation.saturating_add(1);
                 }
             }
             state.views = views.views;
