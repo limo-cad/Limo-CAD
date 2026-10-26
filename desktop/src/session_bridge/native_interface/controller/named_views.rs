@@ -1158,7 +1158,7 @@ fn reduce_inner(
                                 // baseline, not edits made while it was pending.
                                 if let Some(current) = state.draft.as_mut() {
                                     if current.id == draft.id {
-                                        current.id = stored.id;
+                                        current.id = stored.id.clone();
                                     }
                                 }
                                 state.selected = Some(name);
