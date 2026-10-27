@@ -48,7 +48,7 @@ serde_json = { version = "1.0.154", features = ["float_roundtrip"] }
 dirs = "7.0.0"
 sysinfo = { version = "0.39.6", default-features = false, features = ["system"] }
 base64 = "0.23.1"
-resvg = { version = "=0.48.1", default-features = false, features = ["text", "system-fonts"] }
+resvg = { version = "=0.49.0", default-features = false, features = ["text", "system-fonts"] }
 uuid = { version = "1.28.0", features = ["v4"] }
 limo-cad-core = { path = "../crates/core" }
 limo-cad-interface = { path = "../crates/interface" }
