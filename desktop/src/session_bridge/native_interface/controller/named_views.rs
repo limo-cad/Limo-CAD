@@ -262,6 +262,9 @@ pub(crate) fn after_metadata_history(world: &mut World, owner: &DocumentContext,
         state.preview_origin = None;
         state.owner = Some(owner.clone());
         state.revision = Some(revision);
+        // Metadata history preserves saved views, including external edits the
+        // covered editor may not have read before this owner was replaced.
+        state.refresh_pending = true;
         state.generation = state.generation.saturating_add(1);
     }
 }

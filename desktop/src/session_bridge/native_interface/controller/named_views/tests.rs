@@ -1215,109 +1215,226 @@ fn failed_async_recall_preserves_the_camera_and_editor() {
 #[test]
 fn print_metadata_cannot_conceal_saved_view_changes_while_the_editor_is_hidden() {
     crate::session_bridge::tests::with_isolated_session_test(|| {
-        for operation in ["upsert_named_view", "delete_named_view"] {
-            for dirty in [false, true] {
-                let fixture = Fixture::new();
-                let saved = solid_and_view(&fixture);
-                let mut ui = ViewControls::new(&fixture);
-                open(
-                    ui.app.world_mut(),
-                    &fixture.engine,
-                    &ui.owner,
-                    Some(&saved.name),
-                )
-                .unwrap();
-                ui.paint(1360., 860.);
-                if dirty {
-                    edit(
+        for path in ["direct", "undo", "redo"] {
+            for operation in ["upsert_named_view", "delete_named_view"] {
+                for recovery in ["clean", "discard", "revert"] {
+                    let fixture = Fixture::new();
+                    let saved = solid_and_view(&fixture);
+                    let mut ui = ViewControls::new(&fixture);
+                    open(
                         ui.app.world_mut(),
                         &fixture.engine,
-                        Field::Name,
-                        "Keep my edit",
-                        UnitSystem::Mm,
-                    )
-                    .unwrap();
-                }
-                let draft = ui.app.world().resource::<State>().draft.clone();
-                let revision = ui.app.world().resource::<State>().revision;
-                print_intent::open(
-                    ui.app.world_mut(),
-                    &fixture.engine,
-                    &ui.owner,
-                    Some(saved.visible_body_ids[0]),
-                )
-                .unwrap();
-                let mut updated = saved.clone();
-                updated.camera.position[0] += 25.;
-                let arguments = if operation == "upsert_named_view" {
-                    serde_json::to_value(&updated).unwrap()
-                } else {
-                    json!({"name":saved.name})
-                };
-                fixture
-                    .bridge
-                    .apply_native_mutation(
-                        &fixture.engine,
                         &ui.owner,
-                        operation,
-                        &arguments,
-                        || Ok(()),
+                        Some(&saved.name),
                     )
                     .unwrap();
-                ui.paint(1360., 860.);
-                assert_eq!(ui.app.world().resource::<State>().revision, revision);
-                let model =
-                    parse_engine_envelope(fixture.engine.engine_call("project_export_model", ""))
-                        .unwrap();
-                let result = fixture
-                    .bridge
-                    .apply_native_mutation(
-                        &fixture.engine,
-                        &ui.owner,
-                        "print_intent_set_part",
-                        &json!({"body_id":saved.visible_body_ids[0],
-                            "settings":{"wall_count":6},"expected_model_json":model}),
-                        || Ok(()),
-                    )
-                    .unwrap();
-                let result = finish_mutation(
-                    &fixture.engine,
-                    &fixture.bridge,
-                    ui.app.world_mut(),
-                    "print_intent_set_part",
-                    result,
-                );
-                assert!(result["render_error"].is_null(), "{result}");
-                assert_eq!(ui.app.world().resource::<State>().draft, draft);
-                print_intent::cancel(
-                    ui.app.world_mut(),
-                    &fixture.engine,
-                    &fixture.bridge,
-                    &ui.owner,
-                )
-                .unwrap();
-                ui.paint(1360., 860.);
-                if dirty {
-                    assert_eq!(ui.app.world().resource::<State>().draft, draft);
-                    assert!(has_unsaved_changes(ui.app.world().resource::<State>()));
-                    ui.invoke("Discard edits", ControlInput::Click).unwrap();
                     ui.paint(1360., 860.);
-                }
-                let state = ui.app.world().resource::<State>();
-                assert!(!has_unsaved_changes(state));
-                assert!(!state.refresh_pending);
-                if operation == "upsert_named_view" {
-                    assert_eq!(state.draft.as_ref(), Some(&updated));
-                    assert_eq!(state.draft_baseline.as_ref(), Some(&updated));
-                    assert_eq!(state.original.as_ref(), Some(&updated));
-                } else {
-                    assert!(state.selected.is_none());
-                    assert!(state.draft.is_none());
-                    assert!(state.draft_baseline.is_none());
+                    if recovery != "clean" {
+                        edit(
+                            ui.app.world_mut(),
+                            &fixture.engine,
+                            Field::Name,
+                            "Keep my edit",
+                            UnitSystem::Mm,
+                        )
+                        .unwrap();
+                    }
+                    let draft = ui.app.world().resource::<State>().draft.clone();
+                    let revision = ui.app.world().resource::<State>().revision;
+                    print_intent::open(
+                        ui.app.world_mut(),
+                        &fixture.engine,
+                        &ui.owner,
+                        Some(saved.visible_body_ids[0]),
+                    )
+                    .unwrap();
+                    let mut updated = saved.clone();
+                    updated.camera.position[0] += 25.;
+                    let arguments = if operation == "upsert_named_view" {
+                        serde_json::to_value(&updated).unwrap()
+                    } else {
+                        json!({"name":saved.name})
+                    };
+                    if path == "direct" {
+                        fixture
+                            .bridge
+                            .apply_native_mutation(
+                                &fixture.engine,
+                                &ui.owner,
+                                operation,
+                                &arguments,
+                                || Ok(()),
+                            )
+                            .unwrap();
+                    } else {
+                        apply_print_inbox_mutation(&mut ui, operation, arguments, 1);
+                    }
+                    ui.paint(1360., 860.);
+                    assert_eq!(ui.app.world().resource::<State>().revision, revision);
+                    let model = parse_engine_envelope(
+                        fixture.engine.engine_call("project_export_model", ""),
+                    )
+                    .unwrap();
+                    let print_arguments = json!({"body_id":saved.visible_body_ids[0],
+                    "settings":{"wall_count":6},"expected_model_json":model});
+                    if path == "direct" {
+                        let result = fixture
+                            .bridge
+                            .apply_native_mutation(
+                                &fixture.engine,
+                                &ui.owner,
+                                "print_intent_set_part",
+                                &print_arguments,
+                                || Ok(()),
+                            )
+                            .unwrap();
+                        let result = finish_mutation(
+                            &fixture.engine,
+                            &fixture.bridge,
+                            ui.app.world_mut(),
+                            "print_intent_set_part",
+                            result,
+                        );
+                        assert!(result["render_error"].is_null(), "{result}");
+                    } else {
+                        apply_print_inbox_mutation(
+                            &mut ui,
+                            "print_intent_set_part",
+                            print_arguments,
+                            2,
+                        );
+                        for history in
+                            ["undo", "redo"]
+                                .into_iter()
+                                .take(if path == "undo" { 1 } else { 2 })
+                        {
+                            let result = fixture
+                                .bridge
+                                .apply_native_mutation(
+                                    &fixture.engine,
+                                    &ui.owner,
+                                    history,
+                                    &json!({}),
+                                    || Ok(()),
+                                )
+                                .unwrap();
+                            assert_eq!(result.value["print_metadata_history"], true);
+                            ui.owner = result.context.clone();
+                            let result = finish_mutation(
+                                &fixture.engine,
+                                &fixture.bridge,
+                                ui.app.world_mut(),
+                                history,
+                                result,
+                            );
+                            assert!(result["render_error"].is_null(), "{result}");
+                            ui.paint(1360., 860.);
+                            assert_eq!(
+                                ui.app.world().resource::<State>().owner.as_ref(),
+                                Some(&ui.owner)
+                            );
+                            assert_eq!(ui.app.world().resource::<State>().draft, draft);
+                        }
+                    }
+                    assert_eq!(ui.app.world().resource::<State>().draft, draft);
+                    print_intent::cancel(
+                        ui.app.world_mut(),
+                        &fixture.engine,
+                        &fixture.bridge,
+                        &ui.owner,
+                    )
+                    .unwrap();
+                    ui.paint(1360., 860.);
+                    if recovery != "clean" {
+                        assert_eq!(ui.app.world().resource::<State>().draft, draft);
+                        assert!(has_unsaved_changes(ui.app.world().resource::<State>()));
+                        if recovery == "discard" {
+                            ui.invoke("Discard edits", ControlInput::Click).unwrap();
+                        } else {
+                            edit(
+                                ui.app.world_mut(),
+                                &fixture.engine,
+                                Field::Name,
+                                &saved.name,
+                                UnitSystem::Mm,
+                            )
+                            .unwrap();
+                        }
+                        ui.paint(1360., 860.);
+                    }
+                    let state = ui.app.world().resource::<State>();
+                    assert!(!has_unsaved_changes(state));
+                    assert!(!state.refresh_pending);
+                    if operation == "upsert_named_view" {
+                        assert_eq!(state.draft.as_ref(), Some(&updated));
+                        assert_eq!(state.draft_baseline.as_ref(), Some(&updated));
+                        assert_eq!(state.original.as_ref(), Some(&updated));
+                    } else {
+                        assert!(state.selected.is_none());
+                        assert!(state.draft.is_none());
+                        assert!(state.draft_baseline.is_none());
+                    }
                 }
             }
         }
     });
+}
+
+fn apply_print_inbox_mutation(
+    ui: &mut ViewControls,
+    operation: &str,
+    arguments: Value,
+    sequence: u8,
+) {
+    ui.services
+        .bridge
+        .publish_native_document(&ui.services.engine, &ui.owner, "solid")
+        .unwrap();
+    let session = ui
+        .services
+        .bridge
+        .session_id_for_window("main")
+        .unwrap()
+        .unwrap();
+    let receipt = ui
+        .services
+        .bridge
+        .native_document_receipt(&ui.services.engine, &ui.owner)
+        .unwrap();
+    let inbox = crate::session_bridge::session_root()
+        .join(&session)
+        .join("inbox");
+    std::fs::create_dir_all(&inbox).unwrap();
+    std::fs::write(
+        inbox.join(format!("{sequence}.json")),
+        json!({"name":operation,"arguments":arguments,"base_generation":receipt.revision,
+            "session_id":session,"window_id":"main","document_id":ui.owner.document_id})
+        .to_string(),
+    )
+    .unwrap();
+    let applied = crate::session_bridge::apply_or_reject_one_inbox_op_with_presentation_guard(
+        &ui.services.bridge,
+        "main",
+        &ui.services.engine,
+        None,
+        Some((&ui.owner.document_id, &session)),
+        false,
+    )
+    .unwrap();
+    assert_eq!(applied["applied"], true, "{applied}");
+    assert_eq!(applied["model_changed"], true, "{applied}");
+    let result = finish_mutation(
+        &ui.services.engine,
+        &ui.services.bridge,
+        ui.app.world_mut(),
+        "inbox",
+        NativeMutationResult {
+            context: ui.owner.clone(),
+            engine_revision: applied["engine_revision"].as_u64().unwrap(),
+            value: applied,
+        },
+    );
+    assert!(result["render_error"].is_null(), "{result}");
 }
 
 #[test]
