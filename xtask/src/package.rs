@@ -1,5 +1,5 @@
 //! Native package builders. There are no legacy-script fallbacks.
-mod common;
+pub(crate) mod common;
 mod dmg;
 mod linux;
 mod macos;
