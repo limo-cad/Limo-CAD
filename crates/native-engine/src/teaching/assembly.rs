@@ -173,10 +173,10 @@ mod tests {
             [10_000., 10_000., 0.];
         assert!(super::super::validate_frames(&[frame.clone()]).is_err());
         poses_reset(&mut frame);
-        let pose = frame.assembly.as_ref().unwrap().instance_body_poses[0].clone();
+        let pose = frame.assembly.as_ref().unwrap().instance_body_poses[0];
         frame.assembly.as_mut().unwrap().instance_body_poses = (0..256)
             .map(|i| {
-                let mut p = pose.clone();
+                let mut p = pose;
                 p.occurrence_id.0 = i + 1;
                 p
             })
