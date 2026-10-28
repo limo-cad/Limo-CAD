@@ -937,7 +937,7 @@ fn browser_activation_and_editor_selection_preserve_unfinished_view_edits() {
             ui.app.world_mut(),
             &fixture.engine,
             &ui.owner,
-            Some(saved.visible_body_ids[0].0),
+            Some(saved.visible_body_ids[0]),
         )
         .unwrap();
         assert!(ui
