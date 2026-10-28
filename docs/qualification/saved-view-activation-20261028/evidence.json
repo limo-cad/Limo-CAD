@@ -1,15 +1,15 @@
 {
     "schema_version":  1,
-    "source_revision":  "14595d8b6b88d6898e3d71dddc3db7d3a6292fe2",
-    "run_url":  "https://github.com/limo-cad/Limo-CAD/actions/runs/40689520117",
+    "source_revision":  "df8151e1263af6a225b4be72f567ff96cb1b70e5",
+    "run_url":  "https://github.com/limo-cad/Limo-CAD/actions/runs/40704386596",
     "run_conclusion":  "success",
     "artifact":  {
-                     "sha256":  "c07be6ce347233335bba1f1013a220739604d758bda0b41cc41cb8c947151c4a",
-                     "compressed_bytes":  9171950,
-                     "id":  12817389259
+                     "sha256":  "3f753f2b07e5bfa986137fd78223c629da9da8fa02ae5eed61e1c7767cdc4d93",
+                     "compressed_bytes":  9438293,
+                     "id":  12826050920
                  },
     "native_build":  {
-                         "revision":  "14595d8b6b88d6898e3d71dddc3db7d3a6292fe2",
+                         "revision":  "df8151e1263af6a225b4be72f567ff96cb1b70e5",
                          "version":  "0.3.0-rc.3",
                          "modified":  false
                      },
@@ -34,9 +34,9 @@
                                      "05-edits-preserved",
                                      "06-front-after-discard"
                                  ],
-                      "duration_ms":  24500,
+                      "duration_ms":  25170,
                       "readability_pause_ms":  1200,
-                      "frames":  147
+                      "frames":  151
                   },
     "verified":  [
                      "native camera restored to distinct isometric/front saved configurations",
@@ -53,7 +53,8 @@
                        "explicit service wake regression",
                        "recorder readiness regression",
                        "native saved-view action copy/font proof",
-                       "isolated native recording and locale fixture"
+                       "isolated native recording and locale fixture",
+                       "18-case saved-view reconciliation regression through direct print edits, inbox Undo/Redo, Discard and manual reversion"
                    ],
     "not_proven":  [
                        "OS pointer delivery",
@@ -64,8 +65,8 @@
     "media":  [
                   {
                       "path":  "saved-views.gif",
-                      "sha256":  "c3b1d489a0d861d705c8588df1d363f8df40f02d79da6a560034e6eedc5e3e17",
-                      "bytes":  3435554
+                      "sha256":  "415ed554c9dc33d6ddc1e9ab1c6e0a99a6d663cd61955045b65817d3fc8c13d5",
+                      "bytes":  3661423
                   },
                   {
                       "path":  "01-overview.png",
@@ -84,12 +85,12 @@
                   },
                   {
                       "path":  "locale-de-unsaved.png",
-                      "sha256":  "b1c967a3939512c739b4924288378a670c33007258636f64aedd9a62a8a975e7",
+                      "sha256":  "919218a9ed5daba041ec8e6c3e0774f4d5324087fcc195ca634f4a7f9c0a42fb",
                       "bytes":  182006
                   },
                   {
                       "path":  "locale-zh-CN-unsaved.png",
-                      "sha256":  "ccafdc96a2fa58708c7f43ae4594b06750090e757a91b30bfef29cfe412aa38f",
+                      "sha256":  "5fe3795b07aa164cafec539d6591248452c31723271a240e493ca7b83e4b5711",
                       "bytes":  158552
                   },
                   {
@@ -97,5 +98,10 @@
                       "sha256":  "a0811947e66a7bb64db36e707a301b22dde767d9c318ed8b1db7d043374c7e43",
                       "bytes":  289353
                   }
-              ]
+              ],
+    "native_host_tests":  {
+                              "ignored":  16,
+                              "failed":  0,
+                              "passed":  1135
+                          }
 }
