@@ -91,6 +91,11 @@
                       "path":  "locale-zh-CN-unsaved.png",
                       "sha256":  "ccafdc96a2fa58708c7f43ae4594b06750090e757a91b30bfef29cfe412aa38f",
                       "bytes":  158552
+                  },
+                  {
+                      "path":  "06-front-after-discard.png",
+                      "sha256":  "a0811947e66a7bb64db36e707a301b22dde767d9c318ed8b1db7d043374c7e43",
+                      "bytes":  289353
                   }
               ]
 }
