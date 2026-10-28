@@ -111,6 +111,13 @@ pub(crate) fn active(world: &World) -> bool {
     world.get_resource::<State>().is_some_and(|s| s.visible)
 }
 
+pub(crate) fn displays_error(world: &World, message: &str) -> bool {
+    !message.is_empty()
+        && world
+            .get_resource::<State>()
+            .is_some_and(|s| s.visible && s.error.as_deref() == Some(message))
+}
+
 pub(crate) fn cancel(
     world: &mut World,
     engine: &AppState,
