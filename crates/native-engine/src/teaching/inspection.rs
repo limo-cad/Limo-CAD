@@ -171,8 +171,7 @@ impl Inspection {
             let n = b.positions.len();
             if b.body_id != s.request.body_id
                 || !b.display_warnings.is_empty()
-                || n < 9
-                || n > 300_000
+                || !(9..=300_000).contains(&n)
                 || n % 3 != 0
                 || b.normals.len() != n
                 || b.indices.len() < 3
@@ -213,7 +212,8 @@ impl Inspection {
                 return Err("Incomplete native section face coverage".into());
             }
             let axis = s.request.plane.axis();
-            if b.positions.chunks_exact(3).any(|p| {
+            let (positions, _) = b.positions.as_chunks::<3>();
+            if positions.iter().any(|p| {
                 let delta = f64::from(p[axis]) - s.request.offset_mm;
                 if s.request.keep_positive {
                     delta < -1e-4
