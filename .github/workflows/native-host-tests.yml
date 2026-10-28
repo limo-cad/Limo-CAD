@@ -365,9 +365,9 @@ jobs:
         if: inputs.desktop-input || inputs.saved-views-proof
         run: cargo build --locked --manifest-path desktop/Cargo.toml --bin limo-cad
 
-      - name: Install the owned-window resize tool
+      - name: Install owned-window capture tools
         if: inputs.saved-views-proof && (matrix.family == 'all' || matrix.family == 'keyboard' || (inputs.input-family && inputs.input-family != 'all'))
-        run: sudo apt-get install --yes --no-install-recommends xdotool
+        run: sudo apt-get install --yes --no-install-recommends xdotool ffmpeg
 
       - name: Verify and capture direct saved-view activation
         id: saved-views-proof

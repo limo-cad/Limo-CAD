@@ -13,6 +13,18 @@ use std::{
     time::{Duration, Instant},
 };
 
+mod recording;
+
+fn recorded_capture(
+    c: &mut Client,
+    out: &Path,
+    name: &str,
+    recording: &mut recording::Recording,
+) -> Result<()> {
+    capture(c, out, name)?;
+    recording.hold(name)
+}
+
 fn field(c: &mut Client, label: &str, value: Option<&str>) -> Result<Value> {
     panel_field(
         c,
@@ -147,6 +159,7 @@ fn exercise(c: &mut Client, out: &Path, config: &Path) -> Result<Value> {
     let overview = expected_camera(c, "Overview")?;
     let front = expected_camera(c, "Front")?;
     ensure!(overview != front, "Fixture views must be visibly different");
+    let mut recording = recording::Recording::start(out)?;
     browser_select(c, "Named Views", "Overview")?;
     assert_camera(c, &overview)?;
     let state = ui(c, json!({"action":"inspect"}))?;
@@ -154,13 +167,13 @@ fn exercise(c: &mut Client, out: &Path, config: &Path) -> Result<Value> {
         !controls(&state).any(|v| v["label"] == "Close named views"),
         "Browser activation opened the editor"
     );
-    capture(c, out, "01-overview")?;
+    recorded_capture(c, out, "01-overview", &mut recording)?;
     browser_select(c, "Named Views", "Front")?;
     assert_camera(c, &front)?;
-    capture(c, out, "02-front-click")?;
+    recorded_capture(c, out, "02-front-click", &mut recording)?;
     browser_select(c, "Named Views", "Overview")?;
     assert_camera(c, &overview)?;
-    capture(c, out, "03-overview-click")?;
+    recorded_capture(c, out, "03-overview-click", &mut recording)?;
     control(c, "Edit saved view Overview", None)?;
     assert_camera(c, &overview)?;
     let first = ui(c, json!({"action":"inspect"}))?;
@@ -168,7 +181,7 @@ fn exercise(c: &mut Client, out: &Path, config: &Path) -> Result<Value> {
         controls(&first).any(|v| v["label"] == "Activate view" && v["disabled"] == false),
         "Activation is missing from the first editor page"
     );
-    capture(c, out, "04-edit-separate")?;
+    recorded_capture(c, out, "04-edit-separate", &mut recording)?;
     field(c, "View name", Some("Unfinished name"))?;
     let state = ui(c, json!({"action":"inspect"}))?;
     let front_row = controls(&state)
@@ -188,11 +201,12 @@ fn exercise(c: &mut Client, out: &Path, config: &Path) -> Result<Value> {
         controls(&state).any(|v| v["label"] == "View name" && v["value"] == "Unfinished name"),
         "Draft name was lost after rejected activation"
     );
-    capture(c, out, "05-edits-preserved")?;
+    recorded_capture(c, out, "05-edits-preserved", &mut recording)?;
     control(c, "Discard edits", None)?;
     browser_select(c, "Named Views", "Front")?;
     assert_camera(c, &front)?;
-    capture(c, out, "06-front-after-discard")?;
+    recorded_capture(c, out, "06-front-after-discard", &mut recording)?;
+    recording.finish()?;
 
     minimum_window(c)?;
     let mut locales = Vec::new();
