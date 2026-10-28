@@ -234,6 +234,14 @@ pub(crate) fn advance_metadata(world: &mut World, owner: &DocumentContext, revis
         .filter(|s| s.owner.as_ref() == Some(owner))
     {
         let previous_revision = state.revision;
+        if previous_revision.and_then(|revision| revision.checked_add(1)) != Some(revision) {
+            // A print edit cannot acknowledge changes this editor has not read.
+            // Reconcile the saved views after the overlay closes, retaining any
+            // unfinished draft until it becomes clean.
+            state.refresh_pending = true;
+            state.preview_origin = None;
+            return;
+        }
         if let Some(origin) = state.preview_origin.as_mut().filter(|origin| {
             origin.receipt.owner == *owner && Some(origin.receipt.revision) == previous_revision
         }) {

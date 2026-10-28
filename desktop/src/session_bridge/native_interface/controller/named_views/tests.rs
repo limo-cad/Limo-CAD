@@ -1213,6 +1213,114 @@ fn failed_async_recall_preserves_the_camera_and_editor() {
 }
 
 #[test]
+fn print_metadata_cannot_conceal_saved_view_changes_while_the_editor_is_hidden() {
+    crate::session_bridge::tests::with_isolated_session_test(|| {
+        for operation in ["upsert_named_view", "delete_named_view"] {
+            for dirty in [false, true] {
+                let fixture = Fixture::new();
+                let saved = solid_and_view(&fixture);
+                let mut ui = ViewControls::new(&fixture);
+                open(
+                    ui.app.world_mut(),
+                    &fixture.engine,
+                    &ui.owner,
+                    Some(&saved.name),
+                )
+                .unwrap();
+                ui.paint(1360., 860.);
+                if dirty {
+                    edit(
+                        ui.app.world_mut(),
+                        &fixture.engine,
+                        Field::Name,
+                        "Keep my edit",
+                        UnitSystem::Mm,
+                    )
+                    .unwrap();
+                }
+                let draft = ui.app.world().resource::<State>().draft.clone();
+                let revision = ui.app.world().resource::<State>().revision;
+                print_intent::open(
+                    ui.app.world_mut(),
+                    &fixture.engine,
+                    &ui.owner,
+                    Some(saved.visible_body_ids[0]),
+                )
+                .unwrap();
+                let mut updated = saved.clone();
+                updated.camera.position[0] += 25.;
+                let arguments = if operation == "upsert_named_view" {
+                    serde_json::to_value(&updated).unwrap()
+                } else {
+                    json!({"name":saved.name})
+                };
+                fixture
+                    .bridge
+                    .apply_native_mutation(
+                        &fixture.engine,
+                        &ui.owner,
+                        operation,
+                        &arguments,
+                        || Ok(()),
+                    )
+                    .unwrap();
+                ui.paint(1360., 860.);
+                assert_eq!(ui.app.world().resource::<State>().revision, revision);
+                let model =
+                    parse_engine_envelope(fixture.engine.engine_call("project_export_model", ""))
+                        .unwrap();
+                let result = fixture
+                    .bridge
+                    .apply_native_mutation(
+                        &fixture.engine,
+                        &ui.owner,
+                        "print_intent_set_part",
+                        &json!({"body_id":saved.visible_body_ids[0],
+                            "settings":{"wall_count":6},"expected_model_json":model}),
+                        || Ok(()),
+                    )
+                    .unwrap();
+                let result = finish_mutation(
+                    &fixture.engine,
+                    &fixture.bridge,
+                    ui.app.world_mut(),
+                    "print_intent_set_part",
+                    result,
+                );
+                assert!(result["render_error"].is_null(), "{result}");
+                assert_eq!(ui.app.world().resource::<State>().draft, draft);
+                print_intent::cancel(
+                    ui.app.world_mut(),
+                    &fixture.engine,
+                    &fixture.bridge,
+                    &ui.owner,
+                )
+                .unwrap();
+                ui.paint(1360., 860.);
+                if dirty {
+                    assert_eq!(ui.app.world().resource::<State>().draft, draft);
+                    assert!(has_unsaved_changes(ui.app.world().resource::<State>()));
+                    ui.invoke("Discard edits", ControlInput::Click).unwrap();
+                    ui.paint(1360., 860.);
+                }
+                let state = ui.app.world().resource::<State>();
+                assert!(!has_unsaved_changes(state));
+                assert!(!state.refresh_pending);
+                if operation == "upsert_named_view" {
+                    assert_eq!(state.draft.as_ref(), Some(&updated));
+                    assert_eq!(state.draft_baseline.as_ref(), Some(&updated));
+                    assert_eq!(state.original.as_ref(), Some(&updated));
+                } else {
+                    assert!(state.selected.is_none());
+                    assert!(state.draft.is_none());
+                    assert!(state.draft_baseline.is_none());
+                }
+            }
+        }
+    });
+}
+
+#[test]
 fn print_metadata_receipts_preserve_unapplied_layout_preview_and_its_export_guard() {
     let mut world = World::new();
     let owner = DocumentContext {
