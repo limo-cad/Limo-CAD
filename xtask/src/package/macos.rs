@@ -35,26 +35,28 @@ const ENTRY_LIBRARIES: &[&str] = &[
     "TKernel",
 ];
 
-/// Apple's ticket service can drop the connection after notarization succeeds.
-/// Retry only stapler's observed host/network failure, never signing or submission.
-fn staple_with_retry(
+/// Apple's ticket service can drop the connection after notarization succeeds,
+/// both while stapling and while validating the attached ticket. Retry only
+/// stapler's observed host/network failure, never signing or submission.
+fn stapler_with_retry(
+    action: &str,
     path: &Path,
-    mut staple: impl FnMut(&Path) -> Result<Option<i32>>,
+    mut stapler: impl FnMut(&Path) -> Result<Option<i32>>,
     mut wait: impl FnMut(Duration),
 ) -> Result<()> {
     for attempt in 1..=4 {
-        let code = staple(path)?;
+        let code = stapler(path)?;
         if code == Some(0) {
             return Ok(());
         }
         ensure!(
             code == Some(68) && attempt < 4,
-            "stapler staple {} failed (exit {code:?}, attempt {attempt})",
+            "stapler {action} {} failed (exit {code:?}, attempt {attempt})",
             path.display()
         );
         let delay = Duration::from_secs(5 * (1 << (attempt - 1)));
         eprintln!(
-            "Apple ticket service unavailable for {}; retrying in {} seconds",
+            "Apple ticket service unavailable during stapler {action} for {}; retrying in {} seconds",
             path.display(),
             delay.as_secs()
         );
@@ -64,25 +66,23 @@ fn staple_with_retry(
 }
 
 fn staple(package: &Package, path: &Path) -> Result<()> {
-    staple_with_retry(
-        path,
-        |path| {
-            Ok(package
-                .command("xcrun")
-                .args(["stapler", "staple"])
-                .arg(path)
-                .status()
-                .context("start stapler staple")?
-                .code())
-        },
-        std::thread::sleep,
-    )?;
-    common::run(
-        package
-            .command("xcrun")
-            .args(["stapler", "validate"])
-            .arg(path),
-    )
+    for action in ["staple", "validate"] {
+        stapler_with_retry(
+            action,
+            path,
+            |path| {
+                Ok(package
+                    .command("xcrun")
+                    .args(["stapler", action])
+                    .arg(path)
+                    .status()
+                    .with_context(|| format!("start stapler {action}"))?
+                    .code())
+            },
+            std::thread::sleep,
+        )?;
+    }
+    Ok(())
 }
 
 fn system(name: &str) -> bool {
@@ -439,7 +439,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn stapling_retries_only_network_failures_with_a_bounded_backoff() {
+    fn stapler_retries_only_network_failures_with_a_bounded_backoff() {
+        for action in ["staple", "validate"] {
+            check_stapler_retry(action);
+        }
+    }
+
+    fn check_stapler_retry(action: &str) {
         for (codes, succeeds) in [
             (vec![Some(0)], true),
             (vec![Some(68), Some(0)], true),
@@ -453,7 +459,8 @@ mod tests {
             let mut attempts = 0;
             let mut delays = Vec::new();
             let path = Path::new("Limo CAD.dmg");
-            let result = staple_with_retry(
+            let result = stapler_with_retry(
+                action,
                 path,
                 |actual| {
                     assert_eq!(actual, path);
@@ -463,11 +470,15 @@ mod tests {
                 },
                 |delay| delays.push(delay.as_secs()),
             );
-            assert_eq!(result.is_ok(), succeeds, "{codes:?}: {result:?}");
+            assert_eq!(result.is_ok(), succeeds, "{action} {codes:?}: {result:?}");
+            if let Err(error) = result {
+                assert!(error.to_string().starts_with(&format!("stapler {action} ")));
+            }
             assert_eq!(attempts, codes.len());
             assert_eq!(delays, [5, 10, 20][..codes.len() - 1]);
         }
-        assert!(staple_with_retry(
+        assert!(stapler_with_retry(
+            action,
             Path::new("Limo CAD.app"),
             |_| anyhow::bail!("cannot start stapler"),
             |_| panic!("startup errors must not retry"),

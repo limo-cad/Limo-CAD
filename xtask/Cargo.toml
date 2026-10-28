@@ -35,6 +35,6 @@ flate2 = { workspace = true, features = ["rust_backend"] }
 sysinfo = { workspace = true, features = ["system"] }
 
 [target.'cfg(windows)'.dependencies]
-arboard = { version = "=3.6.1", default-features = false, optional = true }
-find-msvc-tools = "=0.1.14"
+arboard = { version = "=3.7.0", default-features = false, optional = true }
+find-msvc-tools = "=0.1.15"
 windows = { workspace = true, features = ["Win32_UI_WindowsAndMessaging"] }

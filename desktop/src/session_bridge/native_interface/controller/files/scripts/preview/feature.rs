@@ -1219,6 +1219,16 @@ mod tests {
         app.world_mut()
             .entity_mut(extrude)
             .insert(rect(110., 34., 48., 54.));
+        crate::session_bridge::native_interface::bind_command(
+            app.world_mut(),
+            extrude,
+            NativeCommand::Feature(FeatureCommand::Open {
+                kind: SolidFormKind::Extrude,
+                feature_id: None,
+            }),
+        )
+        .unwrap();
+        app.update();
         let camera = app.world_mut().spawn_empty().id();
         let mut widgets = chrome::Widgets::default();
         let action = handle

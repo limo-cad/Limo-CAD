@@ -32,13 +32,13 @@ fn native_script_preview_tabs_after_extrude_in_the_production_ribbon() {
     let camera = app.world_mut().spawn(InterfaceCamera).id();
     let mut originals = Widgets::default();
     let mut controls = HashMap::new();
-    for name in [
-        "extrude",
-        "revolve",
-        "sweep",
-        "loft",
-        "solid-fillet",
-        "solid-chamfer",
+    for (name, kind) in [
+        ("extrude", feature::SolidFormKind::Extrude),
+        ("revolve", feature::SolidFormKind::Revolve),
+        ("sweep", feature::SolidFormKind::Sweep),
+        ("loft", feature::SolidFormKind::Loft),
+        ("solid-fillet", feature::SolidFormKind::Fillet),
+        ("solid-chamfer", feature::SolidFormKind::Chamfer),
     ] {
         let entity = originals
             .button(
@@ -47,14 +47,10 @@ fn native_script_preview_tabs_after_extrude_in_the_production_ribbon() {
                 name,
                 InterfaceControl::button("solid/build", name),
                 None,
-                if name == "solid-fillet" {
-                    NativeCommand::Feature(feature::FeatureCommand::Open {
-                        kind: feature::SolidFormKind::Fillet,
-                        feature_id: None,
-                    })
-                } else {
-                    NativeCommand::ClearSelection
-                },
+                NativeCommand::Feature(feature::FeatureCommand::Open {
+                    kind,
+                    feature_id: None,
+                }),
                 ribbon::node(0., 0., 48.),
                 None,
                 30,
