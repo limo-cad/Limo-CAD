@@ -113,6 +113,7 @@ pub(crate) fn active(world: &World) -> bool {
 
 pub(crate) fn displays_error(world: &World, message: &str) -> bool {
     !message.is_empty()
+        && !print_intent::active(world)
         && world
             .get_resource::<State>()
             .is_some_and(|s| s.visible && s.error.as_deref() == Some(message))

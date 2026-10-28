@@ -931,6 +931,35 @@ fn browser_activation_and_editor_selection_preserve_unfinished_view_edits() {
         let draft = ui.app.world().resource::<State>().draft.clone();
         assert_eq!(draft.as_ref().unwrap().name, "Unfinished edits");
         ui.paint(1360., 860.);
+        let rejection = ui.app.world().resource::<State>().error.clone().unwrap();
+        assert!(displays_error(ui.app.world(), &rejection));
+        print_intent::open(
+            ui.app.world_mut(),
+            &fixture.engine,
+            &ui.owner,
+            Some(saved.visible_body_ids[0].0),
+        )
+        .unwrap();
+        assert!(ui
+            .invoke(&second.name, ControlInput::Click)
+            .unwrap_err()
+            .contains("Save or discard"));
+        ui.paint(1360., 860.);
+        assert!(!displays_error(ui.app.world(), &rejection));
+        assert_eq!(
+            ui.app.world().resource::<State>().error.as_deref(),
+            Some(rejection.as_str()),
+            "Print Settings hides the editor, so its warning must remain available globally"
+        );
+        print_intent::cancel(
+            ui.app.world_mut(),
+            &fixture.engine,
+            &fixture.bridge,
+            &ui.owner,
+        )
+        .unwrap();
+        ui.paint(1360., 860.);
+        assert!(displays_error(ui.app.world(), &rejection));
         for label in [&second.name, &format!("Edit saved view {}", second.name)] {
             assert!(ui
                 .invoke(label, ControlInput::Click)
