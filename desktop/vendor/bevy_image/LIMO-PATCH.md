@@ -16,11 +16,14 @@ exists. The locked `zstd 0.13.3`, `zstd-safe 7.3.0` and
 [RUSTSEC-2026-0398](https://rustsec.org/advisories/RUSTSEC-2026-0398.html),
 [RUSTSEC-2026-0403](https://rustsec.org/advisories/RUSTSEC-2026-0403.html) and
 [RUSTSEC-2026-0410](https://rustsec.org/advisories/RUSTSEC-2026-0410.html)
-(all 2026-10-16), which fail the desktop RustSec gate. `zstd 0.14.3` with
+(reported 2026-10-16 and issued 2026-10-26), which fail the desktop RustSec gate.
+`zstd 0.14.3` with
 `zstd-safe 8.2.0` and `zstd-sys 2.1.2` is the patched line.
 
 Bevy's only use of the crate under the desktop's `zstd_c` feature is
 `zstd::decode_all` in `src/ktx2.rs`, whose signature is unchanged in 0.14.
+Its implementation changes, including capped preallocation; signature
+compatibility alone does not establish KTX2 decoding behavior.
 The `zstd_rust` backend stays off because `ruzstd 0.8` is affected by
 RUSTSEC-2026-0344 (see `desktop/Cargo.toml`).
 
