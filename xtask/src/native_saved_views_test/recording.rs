@@ -12,6 +12,17 @@ use std::{
 const MEDIA_LIMIT: u64 = 8 * 1024 * 1024;
 const RECORDING_LIMIT: Duration = Duration::from_secs(40);
 
+fn captured_frames(progress: &str) -> bool {
+    let field = |key: &str| {
+        progress.lines().rev().find_map(|line| {
+            line.strip_prefix(key)
+                .and_then(|value| value.trim().parse::<u64>().ok())
+        })
+    };
+    field("frame=").is_some_and(|count| count >= 2)
+        && field("out_time_us=").is_some_and(|elapsed| elapsed > 0)
+}
+
 struct OwnedChild(Child);
 
 impl Drop for OwnedChild {
@@ -80,12 +91,17 @@ impl Recording {
             "Unexpected private display: {geometry}"
         );
         let log = fs::File::create_new(directory.join("recording.log"))?;
+        let progress = fs::File::create_new(directory.join("recording-progress.txt"))?;
         let child = Command::new("ffmpeg")
             .args([
                 "-hide_banner",
                 "-loglevel",
                 "error",
                 "-nostats",
+                "-progress",
+                "pipe:1",
+                "-stats_period",
+                "0.2",
                 "-n",
                 "-f",
                 "x11grab",
@@ -117,7 +133,7 @@ impl Recording {
             ])
             .arg(directory.join("saved-views.mp4"))
             .stdin(Stdio::piped())
-            .stdout(Stdio::null())
+            .stdout(Stdio::from(progress))
             .stderr(Stdio::from(log))
             .spawn()
             .context("Start the private native screen recorder")?;
@@ -127,9 +143,24 @@ impl Recording {
             directory: directory.to_owned(),
             stages: Vec::new(),
         };
-        // Reject unavailable capture/codec support before the first action.
-        std::thread::sleep(Duration::from_millis(300));
-        recording.live()?;
+        // Process liveness alone does not prove that X11 pixels were captured.
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            recording.live()?;
+            let progress = directory.join("recording-progress.txt");
+            ensure!(
+                fs::metadata(&progress)?.len() <= 128 * 1024,
+                "Recorder progress exceeds 128 KiB"
+            );
+            if captured_frames(&fs::read_to_string(progress)?) {
+                break;
+            }
+            ensure!(
+                Instant::now() < deadline,
+                "Native recorder did not capture its first frames"
+            );
+            std::thread::sleep(Duration::from_millis(50));
+        }
         Ok(recording)
     }
 
@@ -212,5 +243,27 @@ impl Recording {
             }))?,
         )?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn readiness_requires_captured_frames_and_a_positive_output_time() {
+        for pending in [
+            "",
+            "frame=0\nout_time_us=0\n",
+            "frame=1\nout_time_us=166667\n",
+            "frame=2\nout_time_us=0\n",
+            "frame=2\nout_time_us=N/A\n",
+        ] {
+            assert!(!captured_frames(pending), "{pending}");
+        }
+        assert!(captured_frames(
+            "frame=2\nout_time_us=166667\nprogress=continue\n"
+        ));
+        assert!(captured_frames("frame=0\nout_time_us=0\nprogress=continue\nframe=3\nout_time_us=333334\nprogress=continue\n"));
     }
 }

@@ -376,6 +376,7 @@ jobs:
           LIBGL_ALWAYS_SOFTWARE: 'true'
           WGPU_BACKEND: vulkan
         run: |
+          cargo test --locked -p xtask native_saved_views_test::recording::tests
           cargo xtask ci native-ignored-test named-view-copy
           dbus-run-session -- xvfb-run -a -s '-screen 0 1360x860x24' \
             cargo xtask test-mcp native-saved-views \
