@@ -95,12 +95,56 @@ impl Image<'_> {
         }
         bail!("unterminated or overlong PE import name")
     }
+    /// Function names imported through one name table; ordinals become `#N`.
+    fn functions(&self, table: u32, functions: &mut Vec<String>) -> Result<()> {
+        let ordinal = 1u64 << (self.pointer_width * 8 - 1);
+        for index in 0..4096u32 {
+            let address = index
+                .checked_mul(self.pointer_width as u32)
+                .and_then(|delta| table.checked_add(delta))
+                .context("PE name table overflow")?;
+            let offset = self.offset(address, self.pointer_width)?;
+            let entry = if self.pointer_width == 8 {
+                u64::from_le_bytes(span(self.bytes, offset, 8)?.try_into()?)
+            } else {
+                u32_at(self.bytes, offset)?.into()
+            };
+            if entry == 0 {
+                return Ok(());
+            }
+            if entry & ordinal != 0 {
+                functions.push(format!("#{}", entry & 0xffff));
+                continue;
+            }
+            ensure!(entry < 1 << 31, "invalid PE hint/name address");
+            // Skip the two-byte hint before the name.
+            let start = (entry as u32).checked_add(2).context("PE name overflow")?;
+            let mut name = Vec::new();
+            for index in 0..=1024u32 {
+                let byte = self.bytes
+                    [self.offset(start.checked_add(index).context("PE name overflow")?, 1)?];
+                if byte == 0 {
+                    break;
+                }
+                ensure!(
+                    byte.is_ascii_graphic() && index < 1024,
+                    "unsafe or overlong PE import function name"
+                );
+                name.push(byte);
+            }
+            ensure!(!name.is_empty(), "empty PE import function name");
+            functions.push(String::from_utf8(name)?);
+        }
+        bail!("unterminated PE import name table")
+    }
     fn directory(
         &self,
         address: u32,
         size: u32,
         delay: bool,
         imports: &mut Vec<String>,
+        want: Option<&str>,
+        functions: &mut Vec<String>,
     ) -> Result<()> {
         if address == 0 && size == 0 {
             return Ok(());
@@ -127,13 +171,29 @@ impl Image<'_> {
             ensure!(address_table != 0, "PE import lacks address table");
             self.offset(address_table, self.pointer_width)?;
             ensure!(name != 0, "PE import lacks DLL name");
-            imports.push(self.name(name)?);
+            let name = self.name(name)?;
+            if want == Some(name.as_str()) {
+                // Delay descriptors keep their name table at +16; ordinary ones
+                // at +0, falling back to the address table when it is absent.
+                let table = match (delay, u32_at(descriptor, if delay { 16 } else { 0 })?) {
+                    (true, 0) => bail!("PE delay import lacks name table"),
+                    (false, 0) => address_table,
+                    (_, table) => table,
+                };
+                self.functions(table, functions)?;
+            }
+            imports.push(name);
         }
         bail!("unterminated PE import descriptor table")
     }
 }
 
 pub(crate) fn inspect_bytes(bytes: &[u8]) -> Result<ImageImports> {
+    Ok(parse(bytes, None)?.0)
+}
+
+/// Like `inspect_bytes`, also returning the functions imported from `dll`.
+fn parse(bytes: &[u8], want: Option<&str>) -> Result<(ImageImports, Vec<String>)> {
     ensure!(
         bytes.len() <= 512 * 1024 * 1024,
         "PE image exceeds inspection limit"
@@ -184,6 +244,7 @@ pub(crate) fn inspect_bytes(bytes: &[u8]) -> Result<ImageImports> {
         pointer_width,
     };
     let mut imports = Vec::new();
+    let mut functions = Vec::new();
     for (index, delay) in [(1, false), (13, true)] {
         if index < directory_count {
             let entry = directories + index * 8;
@@ -192,12 +253,16 @@ pub(crate) fn inspect_bytes(bytes: &[u8]) -> Result<ImageImports> {
                 u32_at(header, entry + 4)?,
                 delay,
                 &mut imports,
+                want,
+                &mut functions,
             )?;
         }
     }
     imports.sort();
     imports.dedup();
-    Ok(ImageImports { machine, imports })
+    functions.sort();
+    functions.dedup();
+    Ok((ImageImports { machine, imports }, functions))
 }
 
 /// Deliberate Windows/API-set and centrally serviced VC v14 prerequisites.
@@ -333,8 +398,73 @@ pub(crate) fn verify_directory(directory: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Packaged images allowed to import zlib. The CVE-2026-85091 exception in
+/// .github/grype/exceptions.yaml rests on these using only inflate/deflate:
+/// the vulnerable gz_vacate() is reached only through gzprintf()/gzvprintf().
+/// A new consumer, a gz* import, a runtime lookup of either name or a second
+/// static zlib copy fails the package until the review record is updated.
+const ZLIB: &str = "z.dll";
+const ZLIB_CONSUMERS: &[&str] = &["freetype.dll", "libpng16.dll"];
+
+pub(crate) fn verify_zlib_consumers(directory: &Path) -> Result<()> {
+    crate::package::ordinary_directory(directory)?;
+    // GetProcAddress needs the name as a string; a static copy keeps zlib's banner.
+    let embedded = regex::bytes::Regex::new(r"gzv?printf| (?:in|de)flate 1\.[0-9]")?;
+    for entry in fs::read_dir(directory)? {
+        let path = entry?.path();
+        let Some(file) = path.file_name().and_then(|name| name.to_str()) else {
+            continue;
+        };
+        let name = file.to_ascii_lowercase();
+        if !(name.ends_with(".dll") || name.ends_with(".exe")) || name == ZLIB {
+            continue;
+        }
+        crate::package::ordinary_file(&path)?;
+        let mut bytes = Vec::new();
+        fs::File::open(&path)?
+            .take(512 * 1024 * 1024 + 1)
+            .read_to_end(&mut bytes)?;
+        let (image, functions) = parse(&bytes, Some(ZLIB))
+            .with_context(|| format!("inspect PE imports {}", path.display()))?;
+        if image.imports.iter().any(|import| import == ZLIB) {
+            ensure!(
+                ZLIB_CONSUMERS.contains(&name.as_str()),
+                "{file} imports {ZLIB} but is not a reviewed zlib consumer; \
+                 reassess CVE-2026-85091 in docs/security/dependencies.md"
+            );
+            for function in &functions {
+                ensure!(
+                    !function.starts_with('#'),
+                    "{file} imports {ZLIB} by ordinal {function}; it must import by name"
+                );
+                ensure!(
+                    !function.starts_with("gz"),
+                    "{file} imports {function} from {ZLIB}; the CVE-2026-85091 \
+                     exception covers only inflate/deflate consumers"
+                );
+            }
+        }
+        if let Some(found) = embedded.find(&bytes) {
+            bail!(
+                "{file} embeds {:?}; zlib's gzip printf API or a second zlib copy \
+                 is outside the CVE-2026-85091 exception",
+                String::from_utf8_lossy(found.as_bytes())
+            );
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 pub(crate) fn fixture_image(machine: u16, imports: &[&str]) -> Vec<u8> {
+    let imports: Vec<_> = imports.iter().map(|name| (*name, &[][..])).collect();
+    fixture_image_importing(machine, &imports)
+}
+
+/// A minimal image whose imports name the given functions; a DLL with no
+/// functions is imported by ordinal 1.
+#[cfg(test)]
+pub(crate) fn fixture_image_importing(machine: u16, imports: &[(&str, &[&str])]) -> Vec<u8> {
     assert!(imports.len() <= 16);
     let mut bytes = vec![0; 0x1200];
     fn word(bytes: &mut [u8], offset: usize, value: u16) {
@@ -373,7 +503,9 @@ pub(crate) fn fixture_image(machine: u16, imports: &[&str]) -> Vec<u8> {
     dword(&mut bytes, section + 16, 0x1000);
     dword(&mut bytes, section + 20, 0x200);
     let mut name_offset = 0x800;
-    for (index, name) in imports.iter().enumerate() {
+    let mut function_offset = 0xc00;
+    let width = if pe32 { 4 } else { 8 };
+    for (index, (name, functions)) in imports.iter().enumerate() {
         let descriptor = 0x200 + index * 20;
         dword(&mut bytes, descriptor, 0x1300 + (index * 32) as u32);
         dword(
@@ -382,11 +514,23 @@ pub(crate) fn fixture_image(machine: u16, imports: &[&str]) -> Vec<u8> {
             0x1000 + (name_offset - 0x200) as u32,
         );
         dword(&mut bytes, descriptor + 16, 0x1300 + (index * 32) as u32);
-        if pe32 {
-            dword(&mut bytes, 0x500 + index * 32, 0x80000001);
-        } else {
-            bytes[0x500 + index * 32..0x508 + index * 32]
-                .copy_from_slice(&0x8000000000000001u64.to_le_bytes());
+        if functions.is_empty() {
+            if pe32 {
+                dword(&mut bytes, 0x500 + index * 32, 0x80000001);
+            } else {
+                bytes[0x500 + index * 32..0x508 + index * 32]
+                    .copy_from_slice(&0x8000000000000001u64.to_le_bytes());
+            }
+        }
+        assert!(functions.len() < 32 / width);
+        for (slot, function) in functions.iter().enumerate() {
+            // Hint/name entries live past the DLL names; the file offset maps
+            // to RVA + 0xe00 in the single fixture section.
+            let thunk = 0x500 + index * 32 + slot * width;
+            dword(&mut bytes, thunk, (function_offset + 0xe00) as u32);
+            let start = function_offset + 2;
+            bytes[start..start + function.len()].copy_from_slice(function.as_bytes());
+            function_offset = start + function.len() + 1;
         }
         bytes[name_offset..name_offset + name.len()].copy_from_slice(name.as_bytes());
         name_offset += name.len() + 1;
@@ -503,5 +647,88 @@ mod tests {
         assert!(inspect_bytes(&missing_delay_table).is_err());
         delay[0x300..0x304].copy_from_slice(&0u32.to_le_bytes());
         assert!(inspect_bytes(&delay).is_err());
+    }
+    #[test]
+    fn zlib_consumers_stay_within_the_reviewed_exception() {
+        use std::io::Write;
+        let temp = tempfile::tempdir().unwrap();
+        // macOS temp paths pass through the /var symlink, which the
+        // ordinary-directory check rejects.
+        let directory = temp.path().canonicalize().unwrap();
+        let write = |name: &str, image: Vec<u8>| fs::write(directory.join(name), image).unwrap();
+        let rejects = |reason: &str| {
+            let error = format!("{:#}", verify_zlib_consumers(&directory).unwrap_err());
+            assert!(error.contains(reason), "expected {reason:?}, got {error:?}");
+        };
+        write("z.dll", fixture_image(0x8664, &["kernel32.dll"]));
+        // z.dll itself is excluded from the scan, so its own API names are fine.
+        fs::OpenOptions::new()
+            .append(true)
+            .open(directory.join("z.dll"))
+            .unwrap()
+            .write_all(b"gzprintf\0 inflate 1.3.2 Copyright")
+            .unwrap();
+        write(
+            "freetype.dll",
+            fixture_image_importing(0x8664, &[("z.dll", &["inflate", "inflateEnd"])]),
+        );
+        write(
+            "libpng16.dll",
+            fixture_image_importing(0x14c, &[("Z.DLL", &["deflate", "crc32"])]),
+        );
+        write("TKernel.dll", fixture_image(0x8664, &["kernel32.dll"]));
+        verify_zlib_consumers(&directory).unwrap();
+        let (_, functions) = parse(
+            &fs::read(directory.join("freetype.dll")).unwrap(),
+            Some(ZLIB),
+        )
+        .unwrap();
+        assert_eq!(functions, ["inflate", "inflateEnd"]);
+
+        write(
+            "TKernel.dll",
+            fixture_image_importing(0x8664, &[("z.dll", &["inflate"])]),
+        );
+        rejects("TKernel.dll imports z.dll but is not a reviewed zlib consumer");
+        write("TKernel.dll", fixture_image(0x8664, &["kernel32.dll"]));
+
+        write(
+            "freetype.dll",
+            fixture_image_importing(0x8664, &[("z.dll", &["inflate", "gzdopen"])]),
+        );
+        rejects("freetype.dll imports gzdopen from z.dll");
+        write("freetype.dll", fixture_image(0x8664, &["z.dll"]));
+        rejects("freetype.dll imports z.dll by ordinal #1");
+
+        let mut delay = fixture_image_importing(0x8664, &[("kernel32.dll", &["Sleep"])]);
+        let directory_entry = 0x98 + 112 + 13 * 8;
+        delay[directory_entry..directory_entry + 4].copy_from_slice(&0x1100u32.to_le_bytes());
+        delay[directory_entry + 4..directory_entry + 8].copy_from_slice(&64u32.to_le_bytes());
+        delay[0x300..0x304].copy_from_slice(&1u32.to_le_bytes());
+        delay[0x304..0x308].copy_from_slice(&0x1700u32.to_le_bytes());
+        delay[0x30c..0x310].copy_from_slice(&0x1340u32.to_le_bytes());
+        delay[0x310..0x314].copy_from_slice(&0x1a80u32.to_le_bytes());
+        delay[0x900..0x906].copy_from_slice(b"z.dll\0");
+        delay[0xc80..0xc84].copy_from_slice(&0x1b00u32.to_le_bytes());
+        delay[0xd02..0xd0b].copy_from_slice(b"gzprintf\0");
+        write("freetype.dll", delay.clone());
+        rejects("freetype.dll imports gzprintf from z.dll");
+        delay[0x310..0x314].fill(0);
+        write("freetype.dll", delay);
+        rejects("PE delay import lacks name table");
+        write(
+            "freetype.dll",
+            fixture_image_importing(0x8664, &[("z.dll", &["inflate"])]),
+        );
+
+        for (text, found) in [
+            (&b"\0gzvprintf\0"[..], "gzvprintf"),
+            (b" deflate 1.3.2 Copyright 1995-2026", " deflate 1.3"),
+        ] {
+            let mut image = fixture_image(0x8664, &["kernel32.dll"]);
+            image.extend_from_slice(text);
+            write("TKernel.dll", image);
+            rejects(&format!("TKernel.dll embeds {found:?}"));
+        }
     }
 }

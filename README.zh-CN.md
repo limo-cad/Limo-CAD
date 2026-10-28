@@ -13,21 +13,22 @@
 在你自己的电脑上设计机械零件、装配体和工程图，可以亲手操作，也可以交给 AI 智能体，
 每一个草图和特征都保持可编辑。
 
-[![Bevy 预览版](https://img.shields.io/badge/Bevy-0.20.0--rc.2-blue)](https://github.com/limo-cad/Limo-CAD/releases/tag/bevy-preview-0.2.2-20261004.1)
+[![候选发布版](https://img.shields.io/badge/release-0.3.0--rc.3-blue)](https://github.com/limo-cad/Limo-CAD/releases/tag/v0.3.0-rc.3)
 [![许可证：LGPL 2.1+](https://img.shields.io/badge/license-LGPL%202.1%2B-blue)](LICENSE)
 [![Discussions](https://img.shields.io/github/discussions/limo-cad/Limo-CAD?label=discussions)](https://github.com/limo-cad/Limo-CAD/discussions)
 
-**早期预览版（Pre-alpha）· Bevy rc.2 · 应用版本 0.2.2**
-· [预览版说明、源码版本与检查结果](https://github.com/limo-cad/Limo-CAD/releases/tag/bevy-preview-0.2.2-20261004.1)
+**早期预览版（Pre-alpha）· 候选发布版 0.3.0-rc.3**
+· [发布说明、源码版本与检查结果（英文）](https://github.com/limo-cad/Limo-CAD/releases/tag/v0.3.0-rc.3)
 · [安装帮助（英文）](docs/INSTALL.md)
 
 | 平台 | 下载 |
 |---|---|
-| Windows 11 | [x64 ZIP](https://github.com/limo-cad/Limo-CAD/releases/download/bevy-preview-0.2.2-20261004.1/noBS-CAD-0.2.2-windows-x64.zip) |
-| Linux | [Ubuntu 26.04 x64 DEB](https://github.com/limo-cad/Limo-CAD/releases/download/bevy-preview-0.2.2-20261004.1/noBS.CAD_0.2.2_amd64.deb) |
+| Windows 11 | [x64 ZIP](https://github.com/limo-cad/Limo-CAD/releases/download/v0.3.0-rc.3/Limo-CAD-0.3.0-rc.3-windows-x64.zip) · [ARM64 ZIP](https://github.com/limo-cad/Limo-CAD/releases/download/v0.3.0-rc.3/Limo-CAD-0.3.0-rc.3-windows-arm64.zip) |
+| macOS（Apple 芯片） | [DMG](https://github.com/limo-cad/Limo-CAD/releases/download/v0.3.0-rc.3/Limo.CAD_0.3.0-rc.3_aarch64.dmg) |
+| Linux | [Ubuntu 26.04 x64 DEB](https://github.com/limo-cad/Limo-CAD/releases/download/v0.3.0-rc.3/Limo.CAD_0.3.0-rc.3_amd64.deb) · [x64 AppImage（glibc 2.35+）](https://github.com/limo-cad/Limo-CAD/releases/download/v0.3.0-rc.3/Limo.CAD_0.3.0-rc.3_amd64.AppImage) |
 
-这些包使用源码版本 `9b082687`，尚未包含后续集成修复。Windows ARM64、macOS 和
-AppImage 仍待验证。Bevy 浏览器界面尚在开发中。已发布的文件名保留原产品名称。
+全部五个软件包均基于源码版本 `ca5b1ca6` 构建；macOS DMG 已签名并经过公证。此候选发布版
+不会取代 0.2.2 成为最新稳定版。Bevy 浏览器界面尚在开发中。
 详情见[迁移状态（英文）](docs/native-transition-status.md)。
 
 Windows 包尚未签名。首次启动时 SmartScreen 可能会发出警告，请选择
