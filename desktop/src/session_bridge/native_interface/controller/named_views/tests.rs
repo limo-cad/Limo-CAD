@@ -1308,13 +1308,17 @@ fn print_metadata_cannot_conceal_saved_view_changes_while_the_editor_is_hidden()
                                 .into_iter()
                                 .take(if path == "undo" { 1 } else { 2 })
                         {
+                            let receipt = fixture
+                                .bridge
+                                .native_document_receipt(&fixture.engine, &ui.owner)
+                                .unwrap();
                             let result = fixture
                                 .bridge
-                                .apply_native_mutation(
+                                .apply_native_history_at(
                                     &fixture.engine,
-                                    &ui.owner,
-                                    history,
-                                    &json!({}),
+                                    &receipt.owner,
+                                    receipt.revision,
+                                    history == "redo",
                                     || Ok(()),
                                 )
                                 .unwrap();
