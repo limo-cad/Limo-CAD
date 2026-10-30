@@ -3,6 +3,76 @@ use super::*;
 use serde_json::{json, Value};
 
 #[test]
+fn authored_drafting_rejects_partial_exports_before_projection_without_mutation() {
+    use limo_cad_occt::drawing_export::{DrawingExportFormat, DrawingExportRequest};
+    use limo_cad_sketch::drafting::{Document, Viewport, ViewportId};
+    let state = NativeEngineHost::new();
+    let mut manager = SketchManager::new();
+    for name in ["Authored", "Technical"] {
+        manager
+            .drawing_command(
+                serde_json::from_value(json!({
+                    "type":"create_sheet", "arguments":{
+                        "name":name,"format":"a4","orientation":"landscape"
+                    }
+                }))
+                .unwrap(),
+            )
+            .unwrap();
+    }
+    let mut drawing = manager.drawing_document();
+    drawing.drafting = Some(Document {
+        next_id: 2,
+        viewports: vec![Viewport {
+            id: ViewportId(1),
+            sheet_id: 1,
+            model_center_mm: [0., 0.],
+            paper_center_mm: [100., 100.],
+            rotation_rad: 0.,
+            paper_mm_per_model_mm: 0.02,
+            clip_mm: [10., 10., 180., 120.],
+            hidden_layers: vec![],
+        }],
+        ..Document::default()
+    });
+    value(state.engine_call(
+        "drawing_set_document",
+        &serde_json::to_string(&drawing).unwrap(),
+    ));
+    let before = value(state.engine_call("project_export_model", ""));
+    for format in [DrawingExportFormat::Svg, DrawingExportFormat::Dxf] {
+        let request = DrawingExportRequest {
+            sheet_id: 1,
+            format,
+        };
+        assert!(state
+            .prepare_drawing_export(&request)
+            .err()
+            .unwrap()
+            .contains("authored drafting"));
+        let result = limo_cad_occt::drawing_export::export_sheet_with_units(
+            &drawing,
+            &state.viewport_snapshot().2,
+            &manager.assembly_document(),
+            &request,
+            limo_cad_core::UnitSystem::Mm,
+            |_| panic!("Unsupported authored sheet must reject before projection"),
+        );
+        assert!(result.unwrap_err().contains("authored drafting"));
+        let supported = DrawingExportRequest {
+            sheet_id: 2,
+            format,
+        };
+        assert!(state
+            .prepare_drawing_export(&supported)
+            .unwrap()
+            .content()
+            .is_ok());
+    }
+    assert_eq!(value(state.engine_call("project_export_model", "")), before);
+}
+
+#[test]
 fn detached_drawing_export_preserves_observers_and_rejects_stale_native_sources() {
     use limo_cad_occt::drawing_export::{DrawingExportFormat, DrawingExportRequest};
     let state = NativeEngineHost::new();
