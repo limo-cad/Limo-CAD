@@ -14,6 +14,8 @@ repository = "https://github.com/limo-cad/Limo-CAD"
 bevy_winit = { path = "vendor/bevy_winit" }
 # Preserve the original press position when standard dialog dragging starts.
 bevy_ui_widgets = { path = "vendor/bevy_ui_widgets" }
+# Decode KTX2 zstd levels with zstd 0.14.3 (RUSTSEC-2026-0391/0398/0403/0410).
+bevy_image = { path = "vendor/bevy_image" }
 
 [profile.release]
 strip = "symbols"
