@@ -966,6 +966,12 @@ fn capture_lesson_mode(
     widgets.finish(app.world_mut());
     capture(&mut app, &target, &out.join("help.png"));
     command(app.world_mut(), &handle, Action::Demo, &ControlInput::Click).unwrap();
+    // Instructions use a smaller model area. Restore the production panel layout
+    // before freezing the revision/key for motion-only captures.
+    widgets.begin();
+    panel::paint(app.world_mut(), camera, &mut widgets, 432., 600., theme).unwrap();
+    widgets.finish(app.world_mut());
+    settle(&mut app);
     // Retain geometric motion where the renderer supports the actual payload.
     // Otherwise qualify an authored before/after pair via the production UI blend.
     let geometry_motion = app
