@@ -1,10 +1,11 @@
-# Install Limo CAD 0.3.0-rc.3
+# Install Limo CAD 0.3.0
 
-Use the packages on the **[0.3.0-rc.3 pre-release page](https://github.com/limo-cad/Limo-CAD/releases/tag/v0.3.0-rc.3)**
+Use the packages on the **[0.3.0 release page](https://github.com/limo-cad/Limo-CAD/releases/tag/v0.3.0)**
 once publication has completed. That page lists the source revision, checksums,
 build evidence and qualification limits. Choose an application package, not
-GitHub's **Source code** archives. This candidate does not replace the stable
-release marked Latest.
+GitHub's **Source code** archives. For an earlier download, use the installation
+guide linked from that release's notes on the
+[published releases page](https://github.com/limo-cad/Limo-CAD/releases).
 
 This is pre-alpha software. Keep an original copy of important CAD projects.
 The `.limo` container remains version 1; the current model schema is 15. The app
@@ -12,11 +13,11 @@ also reads legacy `.nbcad` projects; older builds may reject newer saved models.
 
 | Platform | Package |
 | --- | --- |
-| Windows 11 x64 | `Limo-CAD-0.3.0-rc.3-windows-x64.zip` |
-| Windows 11 ARM64 | `Limo-CAD-0.3.0-rc.3-windows-arm64.zip` |
-| macOS Apple silicon | `Limo.CAD_0.3.0-rc.3_aarch64.dmg` |
-| Ubuntu 26.04 x64 | `Limo.CAD_0.3.0-rc.3_amd64.deb` |
-| Linux x64, glibc 2.35+ | `Limo.CAD_0.3.0-rc.3_amd64.AppImage` |
+| Windows 11 x64 | `Limo-CAD-0.3.0-windows-x64.zip` |
+| Windows 11 ARM64 | `Limo-CAD-0.3.0-windows-arm64.zip` |
+| macOS Apple silicon | `Limo.CAD_0.3.0_aarch64.dmg` |
+| Ubuntu 26.04 x64 | `Limo.CAD_0.3.0_amd64.deb` |
+| Linux x64, glibc 2.35+ | `Limo.CAD_0.3.0_amd64.AppImage` |
 
 The release workflow publishes only after all five packages and their checks
 succeed. A listed target is not a claim that the unfinished manual UI/MCP
@@ -24,9 +25,9 @@ qualification ledger is complete. See the release notes for known gaps.
 
 Find the installed version, source revision and build channel under
 **File → Settings → About Limo CAD**. The executable should report
-**0.3.0-rc.3** and channel **v0.3.0-rc.3**; include that build text in bug reports.
+**0.3.0** and channel **v0.3.0**; include that build text in bug reports.
 Apple bundle metadata uses `0.3.0`, and Debian package metadata uses
-`0.3.0~rc.3`, while the executable retains the complete candidate version.
+`0.3.0`, while the executable also records its source revision and build channel.
 
 ## Windows
 
@@ -54,7 +55,7 @@ older application. This release does not provide an Intel Mac package.
 On **Ubuntu 26.04 LTS, x86_64**, download the DEB and run this from its folder:
 
 ```sh
-sudo apt install ./Limo.CAD_0.3.0-rc.3_amd64.deb
+sudo apt install ./Limo.CAD_0.3.0_amd64.deb
 ```
 
 Open **Limo CAD** from the application launcher. Vulkan support is required.
@@ -67,8 +68,8 @@ On an **x86_64 glibc 2.35+** system with a working Vulkan driver, download the
 AppImage, verify its checksum, then run:
 
 ```sh
-chmod +x Limo.CAD_0.3.0-rc.3_amd64.AppImage
-./Limo.CAD_0.3.0-rc.3_amd64.AppImage
+chmod +x Limo.CAD_0.3.0_amd64.AppImage
+./Limo.CAD_0.3.0_amd64.AppImage
 ```
 
 See [Linux dependencies and troubleshooting](LINUX_PACKAGING.md).
@@ -212,8 +213,8 @@ Download the package's adjacent `.sha256` asset into the same folder.
 On Windows, compare the following values (hash letter case does not matter):
 
 ```powershell
-Get-FileHash .\Limo-CAD-0.3.0-rc.3-windows-x64.zip -Algorithm SHA256
-Get-Content .\Limo-CAD-0.3.0-rc.3-windows-x64.zip.sha256
+Get-FileHash .\Limo-CAD-0.3.0-windows-x64.zip -Algorithm SHA256
+Get-Content .\Limo-CAD-0.3.0-windows-x64.zip.sha256
 ```
 
 On Ubuntu use `sha256sum -c PACKAGE.sha256`, substituting the downloaded
