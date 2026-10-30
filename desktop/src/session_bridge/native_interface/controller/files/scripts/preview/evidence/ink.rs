@@ -4,6 +4,7 @@
 pub(super) const MINIMUM_INK: f32 = 8.;
 const MINIMUM_COVERAGE: f32 = 0.25;
 const MAX_COLOR_ERROR: f32 = 0.01;
+const MAX_FOREGROUND_ERROR: f32 = 0.02;
 
 pub(super) struct Ink {
     background: [f32; 3],
@@ -44,8 +45,8 @@ impl Ink {
     }
 
     /// Return equivalent fully covered pixels, rather than counting only
-    /// samples close to the solid foreground color. Blank, low-contrast and
-    /// unrelated-color pixels contribute nothing.
+    /// samples close to the solid foreground color. Samples inconsistent with
+    /// the expected foreground/background mixture contribute nothing.
     pub(super) fn coverage(&self, pixel: [u8; 3]) -> f32 {
         if self.squared_distance <= f32::EPSILON {
             return 0.;
@@ -59,7 +60,10 @@ impl Ink {
         if coverage < MINIMUM_COVERAGE
             || (0..3).any(|axis| {
                 let expected = self.background[axis] + coverage * self.delta[axis];
-                (sample[axis] - expected).abs() > MAX_COLOR_ERROR
+                let error = (sample[axis] - expected).abs();
+                // Absolute tolerance alone hides the wrong ink hue at low coverage.
+                // Also bound the error of the inferred full-coverage foreground.
+                error > MAX_COLOR_ERROR || error > MAX_FOREGROUND_ERROR * coverage
             })
         {
             0.
@@ -75,6 +79,20 @@ mod tests {
 
     fn rgb(value: [u8; 3]) -> [f32; 3] {
         value.map(|channel| f32::from(channel) / 255.)
+    }
+
+    fn composite(foreground: [u8; 3], background: [u8; 3], coverage: f32) -> [u8; 3] {
+        let foreground = rgb(foreground).map(linear);
+        let background = rgb(background).map(linear);
+        std::array::from_fn(|axis| {
+            let value = coverage * foreground[axis] + (1. - coverage) * background[axis];
+            let encoded = if value <= 0.0031308 {
+                value * 12.92
+            } else {
+                1.055 * value.powf(1. / 2.4) - 0.055
+            };
+            (encoded * 255.).round() as u8
+        })
     }
 
     #[test]
@@ -112,6 +130,42 @@ mod tests {
             assert!((ink.coverage(foreground) - 1.).abs() < 1e-5);
             for pixel in excluded.into_iter().chain([background, [180, 40, 40]]) {
                 assert_eq!(ink.coverage(pixel), 0., "{pixel:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn antialiased_neutral_text_does_not_count_as_dimension_ink() {
+        let background = [220, 227, 234];
+        let ink = Ink::new(rgb([52, 70, 0]), rgb(background));
+        // This quantized UI-ink blend passed the absolute-only error bound.
+        assert_eq!(ink.coverage([194, 201, 207]), 0.);
+        for foreground in [[37, 43, 50], [80; 3], [128; 3]] {
+            for percent in 25..=100 {
+                let pixel = composite(foreground, background, percent as f32 / 100.);
+                assert_eq!(
+                    ink.coverage(pixel),
+                    0.,
+                    "{foreground:?}, {percent}%, {pixel:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn quantized_dimension_blends_retain_visible_coverage_in_both_themes() {
+        for (foreground, background) in [
+            ([52, 70, 0], [220, 227, 234]),
+            ([174, 203, 30], [42, 45, 51]),
+        ] {
+            let ink = Ink::new(rgb(foreground), rgb(background));
+            for expected in [0.3, 0.5, 0.75, 1.] {
+                let pixel = composite(foreground, background, expected);
+                let actual = ink.coverage(pixel);
+                assert!(
+                    actual >= MINIMUM_COVERAGE && (actual - expected).abs() < 0.02,
+                    "{foreground:?}, {expected}, {pixel:?}, {actual}"
+                );
             }
         }
     }
