@@ -140,7 +140,7 @@ pub(super) fn run(args: impl Iterator<Item = String>) -> Result<()> {
     view(c, "View offset X", Some("25 mm"))?;
     view(c, "View rotation Z", Some("90 deg"))?;
     view(c, "Save view", None)?;
-    view(c, "Recall saved view", None)?;
+    view(c, "Activate view", None)?;
     view(
         c,
         "CAD occurrence or body",
