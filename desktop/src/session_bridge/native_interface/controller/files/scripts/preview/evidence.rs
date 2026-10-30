@@ -764,21 +764,25 @@ fn capture_lesson_mode(
         );
         capture(&mut app, &target, &out.join(format!("frame-{index}.png")));
         if id == lesson::Id::Sketch {
-            let dimension_step = app
-                .world()
-                .resource::<Files>()
-                .script
-                .preview
-                .retained
-                .as_ref()
-                .unwrap()
-                .descriptor
-                .cues[index]
-                == Some(crate::native_viewport::script_preview::PreviewCue::Dimension);
+            use crate::native_viewport::script_preview::PreviewCue;
+            // The foundation sketch introduces dimensions at parameter entry
+            // and retains them on Apply; setup/profile steps stay uncluttered.
+            let dimension_step = matches!(
+                app.world()
+                    .resource::<Files>()
+                    .script
+                    .preview
+                    .retained
+                    .as_ref()
+                    .unwrap()
+                    .descriptor
+                    .cues[index],
+                Some(PreviewCue::Dimension | PreviewCue::Apply)
+            );
             assert_eq!(
                 widgets.entity("lesson-dimension-label-0").is_some(),
                 dimension_step,
-                "Dimension labels appear only on their authored step"
+                "Sketch dimensions appear at parameter entry and remain on Apply"
             );
             if dimension_step {
                 let mut labels = Vec::new();
