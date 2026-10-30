@@ -60,7 +60,9 @@ jobs:
 
   native-visual:
     runs-on: macos-14
-    timeout-minutes: 45
+    # Cold SDK setup and compilation precede the complete guide catalog.
+    # Keep every fixture deadline and bound the full qualification job.
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
