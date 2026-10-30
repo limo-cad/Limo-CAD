@@ -43,6 +43,8 @@ mod teaching_queue;
 #[path = "viewport_renderer/teaching_scene.rs"]
 mod teaching_scene;
 pub(crate) use teaching_queue::connect_preview;
+#[cfg(test)]
+pub(crate) use teaching_queue::teaching_retirement_finished;
 use teaching_queue::{Job, JobQueue};
 
 const CAD_TARGET_FORMAT: TextureFormat = TextureFormat::Rgba8UnormSrgb;
@@ -714,6 +716,8 @@ fn render_worker(
                 if app.should_exit().is_some() {
                     return Err("CAD viewport reported a rendering error".into());
                 }
+                #[cfg(test)]
+                jobs.finish_retirement();
                 continue;
             }
             Job::Teaching(job) => {
@@ -974,7 +978,11 @@ fn retire_teaching(app: &mut App) -> bool {
             })
             .collect()
     };
+    app.world_mut()
+        .insert_resource(surface_submission::TeachingRetirement);
     app.update();
+    app.world_mut()
+        .remove_resource::<surface_submission::TeachingRetirement>();
     for (entity, active) in cameras {
         if let Some(mut camera) = app.world_mut().get_mut::<Camera>(entity) {
             camera.is_active = active;

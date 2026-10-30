@@ -94,6 +94,12 @@ fn lifecycle(app: &mut App, handle: &NativeInterfaceHandle, id: lesson::Id) -> V
 
 fn update(app: &mut App) {
     app.update();
+    assert!(
+        app.should_exit().is_none(),
+        "Native evidence renderer failed"
+    );
+    crate::native_viewport::script_preview::shared_fixture_retirement_finished(app.world())
+        .expect("Native evidence CAD worker stopped");
     app.world()
         .resource::<RenderDevice>()
         .wgpu_device()
@@ -139,12 +145,15 @@ fn released_textures(app: &mut App) {
         let imported = crate::native_viewport::script_preview::textures::imported_count(
             app.sub_app(bevy::render::RenderApp).world(),
         );
-        if retained == 0 && imported == 0 {
+        let retired =
+            crate::native_viewport::script_preview::shared_fixture_retirement_finished(app.world())
+                .expect("Close stopped the CAD worker");
+        if retained == 0 && imported == 0 && retired {
             break;
         }
         assert!(
             Instant::now() < deadline,
-            "Closed teaching textures were retained: {retained}/{imported}"
+            "Close did not finish: textures {retained}/{imported}, worker retired {retired}"
         );
     }
 }
