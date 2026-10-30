@@ -1898,6 +1898,7 @@ fn native_visual_requires_targeted_navigation_and_menu_focus_regressions() {
     let run = step["run"].as_str().unwrap();
     for command in [
         "cargo test --locked --manifest-path desktop/Cargo.toml --lib preview::navigation_tests:: -- --test-threads=1",
+        "cargo test --locked --manifest-path desktop/Cargo.toml --lib preview::evidence::ink:: -- --test-threads=1",
         "cargo test --locked --manifest-path desktop/Cargo.toml --lib native_script_preview_book_focus_waits_only_for_its_dismissed_menu -- --test-threads=1",
     ] {
         assert_eq!(run.matches(command).count(), 1);
@@ -1979,6 +1980,7 @@ fn check_visual_acceptance(visual: &Value) -> Result<()> {
                 "cargo test --locked --manifest-path desktop/Cargo.toml --lib chamfer_form",
                 "cargo test --locked --manifest-path desktop/Cargo.toml --lib preview::transition_tests:: -- --test-threads=1",
                 "cargo test --locked --manifest-path desktop/Cargo.toml --lib preview::navigation_tests:: -- --test-threads=1",
+                "cargo test --locked --manifest-path desktop/Cargo.toml --lib preview::evidence::ink:: -- --test-threads=1",
                 "cargo test --locked --manifest-path desktop/Cargo.toml --lib native_script_preview_book_focus_waits_only_for_its_dismissed_menu -- --test-threads=1",
                 "cargo test --locked --manifest-path desktop/Cargo.toml --lib native_script_preview_tabs_after_extrude_in_the_production_ribbon -- --test-threads=1",
             ])
