@@ -1,16 +1,19 @@
 //! Isolated teaching geometry in the existing CAD renderer. No live-scene resources are changed.
 use super::*;
 use crate::native_viewport::script_preview::{
-    PreviewCue, PreviewDocument, PreviewFinish, RenderRequest,
+    body_transforms, PreviewCue, PreviewDocument, PreviewFinish, RenderRequest,
 };
 
 #[path = "teaching_animation.rs"]
 mod animation;
 #[path = "teaching_inspection.rs"]
 mod inspection;
+use std::collections::BTreeMap;
 const LAYER: usize = 2;
 #[derive(Component)]
 struct TeachingOwned;
+#[derive(Component)]
+struct TeachingInstance(Transform);
 #[derive(Component)]
 pub(super) struct TeachingCamera;
 #[derive(Default, Reflect, GizmoConfigGroup)]
@@ -33,6 +36,7 @@ struct Scene {
     meshes: Vec<Handle<Mesh>>,
     materials: Vec<Handle<StandardMaterial>>,
     solid: Option<Arc<SolidSceneDto>>,
+    poses: BTreeMap<u64, Vec<Transform>>,
     profile: Option<limo_cad_sketch::SketchDto>,
     plane: Option<([f64; 2], [f64; 2])>,
     selected: Vec<u64>,
@@ -95,7 +99,12 @@ pub(super) fn show(
         let mut entities = Vec::new();
         let mut mesh_handles = Vec::new();
         let mut material_handles = Vec::new();
+        let mut poses = BTreeMap::new();
         for body in &source.scene.bodies {
+            let transforms = body_transforms(source.assembly.as_ref(), body.id.0);
+            if transforms.is_empty() {
+                continue;
+            }
             for (mesh, accent) in inspection::meshes(body, source.inspection.as_ref()) {
                 let mesh = world.resource_mut::<Assets<Mesh>>().add(mesh);
                 let material =
@@ -114,22 +123,27 @@ pub(super) fn show(
                             cull_mode: None,
                             ..default()
                         });
-                entities.push(
-                    world
-                        .spawn((
-                            TeachingOwned,
-                            Mesh3d(mesh.clone()),
-                            MeshMaterial3d(material.clone()),
-                            Transform::default(),
-                            RenderLayers::layer(LAYER),
-                        ))
-                        .id(),
-                );
+                for pose in &transforms {
+                    entities.push(
+                        world
+                            .spawn((
+                                TeachingOwned,
+                                TeachingInstance(*pose),
+                                Mesh3d(mesh.clone()),
+                                MeshMaterial3d(material.clone()),
+                                *pose,
+                                RenderLayers::layer(LAYER),
+                            ))
+                            .id(),
+                    );
+                }
                 mesh_handles.push(mesh);
                 material_handles.push(material);
             }
+            poses.insert(body.id.0, transforms);
         }
         let mut scene = world.resource_mut::<Scene>();
+        scene.poses = poses;
         scene.geometry = entities;
         scene.meshes = mesh_handles;
         scene.materials = material_handles;
@@ -151,8 +165,9 @@ pub(super) fn show(
     let transform = world.resource::<Scene>().animation.transform(progress);
     let entities = world.resource::<Scene>().geometry.clone();
     for entity in entities {
+        let pose = world.get::<TeachingInstance>(entity).unwrap().0;
         if let Some(mut value) = world.get_mut::<Transform>(entity) {
-            *value = transform;
+            *value = transform.mul_transform(pose);
         }
     }
     {
@@ -254,6 +269,7 @@ pub(super) fn resident_scene(world: &World) -> Option<std::sync::Weak<SolidScene
 fn clear_geometry(world: &mut World) {
     let (entities, meshes, materials) = {
         let mut scene = world.resource_mut::<Scene>();
+        scene.poses.clear();
         (
             std::mem::take(&mut scene.geometry),
             std::mem::take(&mut scene.meshes),
@@ -297,62 +313,68 @@ fn draw(
     else {
         return;
     };
-    let transform = scene.transform;
     for body in &solid.bodies {
-        if scene
-            .inspection
-            .as_ref()
-            .and_then(|i| i.visibility.as_ref())
-            .is_some_and(|v| v.hidden_body_ids.contains(&body.id.0))
-        {
-            continue;
-        }
-        if let Some(section) = scene
-            .inspection
-            .as_ref()
-            .and_then(|i| i.section.as_ref())
-            .filter(|s| s.request.body_id == body.id)
-        {
-            if let Some(cutaway) = &section.cutaway {
-                for edge in &cutaway.edges {
-                    for pair in edge.points.windows(2) {
-                        let point = |p: &limo_cad_solid::Point3Dto| {
-                            Vec3::new(p.x as f32, p.y as f32, p.z as f32)
-                        };
-                        edges.line(point(&pair[0]), point(&pair[1]), rgba(palette.edge, 0.92));
+        for pose in scene.poses.get(&body.id.0).into_iter().flatten() {
+            let transform = scene.transform.mul_transform(*pose);
+            if scene
+                .inspection
+                .as_ref()
+                .and_then(|i| i.visibility.as_ref())
+                .is_some_and(|v| v.hidden_body_ids.contains(&body.id.0))
+            {
+                continue;
+            }
+            if let Some(section) = scene
+                .inspection
+                .as_ref()
+                .and_then(|i| i.section.as_ref())
+                .filter(|s| s.request.body_id == body.id)
+            {
+                if let Some(cutaway) = &section.cutaway {
+                    for edge in &cutaway.edges {
+                        for pair in edge.points.windows(2) {
+                            let point = |p: &limo_cad_solid::Point3Dto| {
+                                Vec3::new(p.x as f32, p.y as f32, p.z as f32)
+                            };
+                            edges.line(
+                                transform.transform_point(point(&pair[0])),
+                                transform.transform_point(point(&pair[1])),
+                                rgba(palette.edge, 0.92),
+                            );
+                        }
                     }
                 }
+                continue;
             }
-            continue;
-        }
-        let sides = edge_side_faces(body, &transform);
-        for edge in &body.edges {
-            let side = sides.get(edge.key.as_str()).copied().unwrap_or_default();
-            draw_edge_segments(
-                &mut edges,
-                edge,
-                rgba(palette.edge, 0.92),
-                &transform,
-                Some(EdgeLift {
-                    camera,
-                    viewport,
-                    sides: side,
-                    ceiling: MODEL_EDGE_MAX_LIFT_MM,
-                }),
-            );
-            if inspection::edge_selected(scene.inspection.as_ref(), body, edge)
-                || scene.selected.contains(&edge.id.0)
-                    && scene
-                        .animation
-                        .edge_visible(edge.id.0, &scene.selected, scene.progress)
-            {
+            let sides = edge_side_faces(body, &transform);
+            for edge in &body.edges {
+                let side = sides.get(edge.key.as_str()).copied().unwrap_or_default();
                 draw_edge_segments(
-                    &mut selected,
+                    &mut edges,
                     edge,
-                    rgb(palette.edge_selected),
+                    rgba(palette.edge, 0.92),
                     &transform,
-                    None,
+                    Some(EdgeLift {
+                        camera,
+                        viewport,
+                        sides: side,
+                        ceiling: MODEL_EDGE_MAX_LIFT_MM,
+                    }),
                 );
+                if inspection::edge_selected(scene.inspection.as_ref(), body, edge)
+                    || scene.selected.contains(&edge.id.0)
+                        && scene
+                            .animation
+                            .edge_visible(edge.id.0, &scene.selected, scene.progress)
+                {
+                    draw_edge_segments(
+                        &mut selected,
+                        edge,
+                        rgb(palette.edge_selected),
+                        &transform,
+                        None,
+                    );
+                }
             }
         }
     }
@@ -775,5 +797,81 @@ mod close_resource_tests {
             !release_closed(&mut world),
             "Repeated cleanup must be a no-op"
         );
+    }
+}
+
+#[cfg(test)]
+mod package_scene_tests {
+    use super::*;
+    #[test]
+    fn native_script_preview_package_occurrences_share_meshes_and_hidden_instances_have_no_edges() {
+        let first: crate::native_viewport::script_preview::Frame =
+            serde_json::from_value(serde_json::json!({
+                "caption":"Assembly", "scene":{"bodies":[{"id":1,"name":"Stock","feature_id":2,
+                "faces":[],"edges":[],"mesh":{"positions":[0,0,0, 10,0,0, 0,10,0],
+                "normals":[0,0,1,0,0,1,0,0,1],"indices":[0,1,2]}}],"errors":[]},
+                "assembly":{"solved":true,"diagnostics":[],"body_poses":[
+                    {"body_id":1,"translation":[8000,0,0],"rotation":[0,0,0,1]}
+                ],"instance_body_poses":[
+                    {"occurrence_id":1,"component_id":1,"body_id":1,
+                        "translation":[100,0,0],"rotation":[0,0,0,1],"visible":true},
+                    {"occurrence_id":2,"component_id":1,"body_id":1,
+                        "translation":[300,0,0],"rotation":[0,0,0,1],"visible":true},
+                    {"occurrence_id":3,"component_id":1,"body_id":1,
+                        "translation":[500,0,0],"rotation":[0,0,0,1],"visible":false}
+                ]}
+            }))
+            .unwrap();
+        let mut hidden = first.clone();
+        for pose in &mut hidden.assembly.as_mut().unwrap().instance_body_poses {
+            pose.visible = false;
+        }
+        let document = PreviewDocument::new(vec![first, hidden]).unwrap();
+        let mut world = World::new();
+        world.init_resource::<Scene>();
+        world.init_resource::<Assets<Mesh>>();
+        world.init_resource::<Assets<StandardMaterial>>();
+        world.init_resource::<PaletteResource>();
+        world.init_resource::<ModelResource>();
+        world.init_resource::<CameraResource>();
+        let before = (
+            world.resource::<ModelResource>().session_id.clone(),
+            world.resource::<ModelResource>().revision,
+            world.resource::<CameraResource>().revision,
+        );
+        let mut request = RenderRequest {
+            preview_id: "assembly".into(),
+            view_id: "view".into(),
+            revision: 1,
+            frame_index: 0,
+            width: 300,
+            height: 176,
+            yaw: 0.5,
+            pitch: 0.5,
+            palette: None,
+        };
+        show(&mut world, &document, &request, Handle::default(), 1.).unwrap();
+        let scene = world.resource::<Scene>();
+        assert_eq!(scene.geometry.len(), 2);
+        assert_eq!(scene.meshes.len(), 1, "Occurrences share the admitted mesh");
+        assert_eq!(scene.materials.len(), 1);
+        let poses = &scene.poses[&1];
+        assert_eq!(poses.len(), 2, "The edge pass uses the visible mesh poses");
+        for (entity, pose) in scene.geometry.iter().zip(poses) {
+            assert_eq!(world.get::<Transform>(*entity).unwrap(), pose);
+        }
+        assert_eq!(poses[0].translation, Vec3::new(100., 0., 0.));
+        assert_eq!(poses[1].translation, Vec3::new(300., 0., 0.));
+        request.frame_index = 1;
+        request.revision += 1;
+        show(&mut world, &document, &request, Handle::default(), 1.).unwrap();
+        let scene = world.resource::<Scene>();
+        assert!(scene.geometry.is_empty());
+        assert!(scene.poses.is_empty(), "Hidden occurrences draw no edges");
+        assert!(world.resource::<Assets<Mesh>>().is_empty());
+        assert!(world.resource::<Assets<StandardMaterial>>().is_empty());
+        assert_eq!(world.resource::<ModelResource>().session_id, before.0);
+        assert_eq!(world.resource::<ModelResource>().revision, before.1);
+        assert_eq!(world.resource::<CameraResource>().revision, before.2);
     }
 }

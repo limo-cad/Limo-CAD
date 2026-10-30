@@ -14,6 +14,7 @@ use bevy::{
 use std::{path::Path, sync::atomic::AtomicUsize};
 
 mod operational;
+mod package;
 
 #[derive(Resource, Default)]
 struct Capture(Option<Vec<u8>>);
@@ -349,6 +350,7 @@ fn native_show_me_ui_evidence_and_performance() {
         &Path::new(&root).join("cut-measured"),
         false,
     );
+    package::capture(&Path::new(&root).join("project-preview"));
 }
 /// Compare only pixels inside the model, excluding captions, focus rings and UI
 /// metadata. A changing step number or PNG encoding cannot qualify motion.
