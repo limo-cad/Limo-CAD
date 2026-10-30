@@ -602,6 +602,105 @@ mod tests {
 #[cfg(test)]
 mod close_resource_tests {
     use super::*;
+
+    #[derive(Default, Resource)]
+    struct CleanupExtractions(usize);
+
+    #[test]
+    fn native_teaching_close_flushes_without_cameras_and_restores_activation() {
+        // Run the production retirement path and prewarm hook with a CPU-only
+        // render sub-app. A cleanup pass must not need any GPU cache resources.
+        let mut app = App::new();
+        app.init_resource::<Scene>();
+        app.init_resource::<Assets<Mesh>>();
+        app.init_resource::<Assets<StandardMaterial>>();
+        let main = app
+            .world_mut()
+            .spawn((Camera::default(), NativeViewportCamera))
+            .id();
+        let overlay = app
+            .world_mut()
+            .spawn((Camera::default(), NativeViewportCamera))
+            .id();
+        let inactive = app
+            .world_mut()
+            .spawn(Camera {
+                is_active: false,
+                ..default()
+            })
+            .id();
+        let teaching = app
+            .world_mut()
+            .spawn((Camera::default(), TeachingCamera, TeachingOwned))
+            .id();
+        app.world_mut().resource_mut::<Scene>().fixtures = vec![teaching];
+        let solid = Arc::new(SolidSceneDto::default());
+        let witness = Arc::downgrade(&solid);
+        app.world_mut().resource_mut::<Scene>().solid = Some(solid);
+        let closed = Arc::new(AtomicBool::new(false));
+        bind_view(app.world_mut(), closed.clone());
+        hide(app.world_mut());
+        let mut render = bevy::app::SubApp::new();
+        render.init_resource::<CleanupExtractions>();
+        render.set_extract(|main, render| {
+            assert!(main
+                .query::<&Camera>()
+                .iter(main)
+                .all(|camera| !camera.is_active));
+            assert_eq!(
+                main.query_filtered::<Entity, With<TeachingCamera>>()
+                    .iter(main)
+                    .count(),
+                0,
+                "the teaching fixture must be removed before extraction"
+            );
+            super::super::surface_submission::prewarm_blit_pipelines(main, render);
+            render.resource_mut::<CleanupExtractions>().0 += 1;
+        });
+        app.insert_sub_app(RenderApp, render);
+        assert!(
+            !super::super::retire_teaching(&mut app),
+            "a hidden, still-open teaching scene must remain resident"
+        );
+        assert_eq!(
+            app.sub_app(RenderApp)
+                .world()
+                .resource::<CleanupExtractions>()
+                .0,
+            0
+        );
+        closed.store(true, Ordering::Release);
+        assert!(super::super::retire_teaching(&mut app));
+        assert!(witness.upgrade().is_none());
+        assert!(app.world().get_entity(teaching).is_err());
+        assert!(app.world().get::<Camera>(main).unwrap().is_active);
+        assert!(app.world().get::<Camera>(overlay).unwrap().is_active);
+        assert!(!app.world().get::<Camera>(inactive).unwrap().is_active);
+        assert!(!app
+            .world()
+            .contains_resource::<super::super::surface_submission::TeachingRetirement>());
+        assert!(!super::super::retire_teaching(&mut app));
+        assert_eq!(
+            app.sub_app(RenderApp)
+                .world()
+                .resource::<CleanupExtractions>()
+                .0,
+            1,
+            "repeated Close must not schedule another extraction"
+        );
+        // A delayed Close after a newer view binds must remain a no-op.
+        let reopened = Arc::new(AtomicBool::new(false));
+        bind_view(app.world_mut(), reopened);
+        assert!(!super::super::retire_teaching(&mut app));
+        assert_eq!(
+            app.sub_app(RenderApp)
+                .world()
+                .resource::<CleanupExtractions>()
+                .0,
+            1
+        );
+    }
+
     #[test]
     fn native_teaching_close_drops_resident_scene_but_keeps_live_assets_and_new_views() {
         let mut world = World::new();

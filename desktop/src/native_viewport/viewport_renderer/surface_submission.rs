@@ -209,6 +209,10 @@ struct CompiledAfterDraw(bool);
 #[derive(Default, Resource)]
 struct WorkerExiting(bool);
 
+/// Scoped to Close's removal-only extraction; render requests never set this.
+#[derive(Resource)]
+pub(super) struct TeachingRetirement;
+
 pub(super) fn compiled_after_draw(world: &World) -> bool {
     world.resource::<CompiledAfterDraw>().0
 }
@@ -279,7 +283,7 @@ fn remove_cache_processor<R: Resource>(render: &mut SubApp) {
         });
 }
 
-fn prewarm_blit_pipelines(main: &mut World, world: &mut World) {
+pub(super) fn prewarm_blit_pipelines(main: &mut World, world: &mut World) {
     // Main work uses two linear CAD cameras; teaching uses its isolated single
     // camera. The main transient overlay uses alpha blending.
     // Materialize their actual native target keys before guarded Prepare. The
@@ -290,6 +294,10 @@ fn prewarm_blit_pipelines(main: &mut World, world: &mut World) {
     // Render camera insertion is deferred until ExtractCommands. Derive keys
     // from the actual worker cameras/image here, not stale extracted components.
     let keys = blit_keys(main);
+    if keys.is_empty() {
+        // Retirement still extracts removals, but has no draw or blit to warm.
+        return;
+    }
     world.resource_scope(|world, mut cache: Mut<PipelineCache>| {
         world.resource_scope(
             |world, mut pipelines: Mut<SpecializedRenderPipelines<BlitPipeline>>| {
@@ -307,6 +315,15 @@ fn prewarm_blit_pipelines(main: &mut World, world: &mut World) {
 }
 
 fn blit_keys(main: &mut World) -> Vec<BlitPipelineKey> {
+    if main.contains_resource::<TeachingRetirement>() {
+        assert!(
+            main.query::<&Camera>()
+                .iter(main)
+                .all(|camera| !camera.is_active),
+            "teaching retirement must not render any camera"
+        );
+        return Vec::new();
+    }
     let mut camera_query = main.query_filtered::<(
         &Camera,
         &RenderTarget,
@@ -526,6 +543,47 @@ mod tests {
         );
         world.get_mut::<Camera>(teaching).unwrap().is_active = false;
         assert_eq!(blit_keys(&mut world).len(), 2);
+        // A removal-only Close may sit between ordinary main and teaching
+        // draws. Its permission must not survive restoration or reopening.
+        world.get_mut::<Camera>(main).unwrap().is_active = false;
+        world.get_mut::<Camera>(overlay).unwrap().is_active = false;
+        world.insert_resource(TeachingRetirement);
+        prewarm_blit_pipelines(&mut world, &mut World::new());
+        world.remove_resource::<TeachingRetirement>();
+        world.get_mut::<Camera>(teaching).unwrap().is_active = true;
+        assert_eq!(blit_keys(&mut world).len(), 1);
+        world.get_mut::<Camera>(teaching).unwrap().is_active = false;
+        world.get_mut::<Camera>(main).unwrap().is_active = true;
+        world.get_mut::<Camera>(overlay).unwrap().is_active = true;
+        assert_eq!(blit_keys(&mut world).len(), 2);
+    }
+
+    #[test]
+    fn native_shared_blit_zero_cameras_require_removal_only_retirement() {
+        let mut main = World::new();
+        assert!(
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| blit_keys(&mut main)))
+                .is_err(),
+            "a render request with no active cameras must still fail closed"
+        );
+        main.insert_resource(TeachingRetirement);
+        // Neither world has image/pipeline/GPU resources. Close must not look
+        // up a retired target or specialize/compile a blit for an empty pass.
+        prewarm_blit_pipelines(&mut main, &mut World::new());
+        let camera = main.spawn(Camera::default()).id();
+        assert!(
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| blit_keys(&mut main)))
+                .is_err(),
+            "retirement must reject even an untagged, targetless active camera"
+        );
+        main.get_mut::<Camera>(camera).unwrap().is_active = false;
+        prewarm_blit_pipelines(&mut main, &mut World::new());
+        main.remove_resource::<TeachingRetirement>();
+        assert!(
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| blit_keys(&mut main)))
+                .is_err(),
+            "cleanup must not make a later zero-camera render request valid"
+        );
     }
 
     use bevy::ecs::{change_detection::Tick, system::SystemChangeTick};
