@@ -13,6 +13,7 @@ use bevy::{
 };
 use std::{path::Path, sync::atomic::AtomicUsize};
 
+mod ink;
 mod operational;
 
 #[derive(Resource, Default)]
@@ -230,21 +231,23 @@ fn capture_component(app: &mut App, target: &Handle<Image>, path: &Path, card_vi
                     let max = corners.into_iter().fold(Vec2::splat(f32::NEG_INFINITY), Vec2::max)
                         .min(Vec2::new(size.width as f32, size.height as f32));
                     let inverse = transform.try_inverse().unwrap();
-                    let color = crate::native_viewport::ui::palette(app.world()).dimension.map(|value| (value * 255.).round() as i16);
-                    let mut ink = 0;
+                    let palette = crate::native_viewport::ui::palette(app.world());
+                    let dimension_ink = ink::Ink::new(palette.dimension, palette.background);
+                    let color = palette.dimension.map(|value| (value * 255.).round() as i16);
+                    let mut covered_pixels = 0.;
                     for y in min.y as usize..max.y as usize {
                         for x in min.x as usize..max.x as usize {
                             let local = inverse.transform_point2(Vec2::new(x as f32 + 0.5, y as f32 + 0.5));
                             if local.x.abs() >= half.x - 2. || local.y.abs() >= half.y - 2. { continue; }
                             let offset = (y * size.width as usize + x) * 4;
-                            if (0..3).all(|axis| (pixels[offset + axis] as i16 - color[axis]).abs() < 45) { ink += 1; }
+                            covered_pixels += dimension_ink.coverage([pixels[offset], pixels[offset + 1], pixels[offset + 2]]);
                         }
                     }
-                    // Completed dimension frames keep the existing ink gate.
+                    // Require visible text coverage within the same rotated label box.
                     // Intermediate labels intentionally fade with their image.
                     if app.world().resource::<Files>().script.preview.animation_complete() {
-                        assert!(ink > 8,
-                            "Dimension {} must rasterize inside its own label box in {}: ink={ink}, bounds={min:?}..{max:?}, node_size={:?}, raster={}x{}, color={color:?}",
+                        assert!(covered_pixels > ink::MINIMUM_INK,
+                            "Dimension {} must rasterize inside its own label box in {}: covered_pixels={covered_pixels}, bounds={min:?}..{max:?}, node_size={:?}, raster={}x{}, color={color:?}",
                             text.0, path.display(), node.size, size.width, size.height);
                     }
                 }

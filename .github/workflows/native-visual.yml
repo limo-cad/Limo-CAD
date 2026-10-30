@@ -93,6 +93,7 @@ jobs:
           cargo test --locked --manifest-path desktop/Cargo.toml --lib chamfer_form
           cargo test --locked --manifest-path desktop/Cargo.toml --lib preview::transition_tests:: -- --test-threads=1
           cargo test --locked --manifest-path desktop/Cargo.toml --lib preview::navigation_tests:: -- --test-threads=1
+          cargo test --locked --manifest-path desktop/Cargo.toml --lib preview::evidence::ink::
           cargo test --locked --manifest-path desktop/Cargo.toml --lib native_script_preview_book_focus_waits_only_for_its_dismissed_menu -- --test-threads=1
           cargo test --locked --manifest-path desktop/Cargo.toml --lib native_script_preview_tabs_after_extrude_in_the_production_ribbon -- --test-threads=1
       - name: Verify the Extrude lesson profile and solid on the GPU
