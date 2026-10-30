@@ -198,6 +198,12 @@ pub(crate) fn reduce(
         || matches!(input, ControlInput::Key(key) if key.key == "ContextMenu" || (key.key == "F10" && key.shift));
     let body_context =
         matches!(command, BrowserCommand::Select(_)) && node.kind == Kind::Body && context_gesture;
+    if node.kind == Kind::NamedView
+        && ((matches!(command, BrowserCommand::Edit(_)) && super::super::is_activation(input))
+            || (matches!(command, BrowserCommand::Select(_)) && context_gesture))
+    {
+        return named_views::open(world, engine, &action.context, node.name.as_deref());
+    }
     if matches!(command, BrowserCommand::Select(_)) && node.kind == Kind::Sketch && context_gesture
     {
         let feature_id = engine.with_document(|document| {
@@ -259,15 +265,19 @@ pub(crate) fn reduce(
     }
     match command {
         BrowserCommand::Select(_) => {
-            if matches!(node.kind, Kind::NamedViews | Kind::NamedView) {
-                return named_views::open(
+            if node.kind == Kind::NamedView {
+                let result = named_views::activate(
                     world,
                     engine,
+                    bridge,
                     &action.context,
-                    (node.kind == Kind::NamedView)
-                        .then_some(node.name.as_deref())
-                        .flatten(),
-                );
+                    node.name.as_deref().ok_or("Missing saved view name")?,
+                )?;
+                world.resource_mut::<Browser>().selected = Some(id);
+                return Ok(result);
+            }
+            if node.kind == Kind::NamedViews {
+                return named_views::open(world, engine, &action.context, None);
             }
             if let Some(panel) = feature::panel(world).filter(|p| {
                 matches!(
@@ -480,6 +490,15 @@ fn button(
         BrowserCommand::Visibility(_) => {
             limo_cad_interface::catalog::group_for("project_set_visibility").unwrap()
         }
+        BrowserCommand::Edit(id)
+            if state
+                .document
+                .as_ref()
+                .and_then(|document| find(&document.browser, id))
+                .is_some_and(|node| node.kind == Kind::NamedView) =>
+        {
+            "document/views"
+        }
         BrowserCommand::Edit(_) => limo_cad_interface::catalog::group_for("sketch_edit").unwrap(),
         _ => "solid/selection",
     }
@@ -496,7 +515,7 @@ fn button(
             .document
             .as_ref()
             .and_then(|document| find(&document.browser, id))
-            .is_some_and(|node| matches!(node.kind, Kind::Sketch | Kind::Body))
+            .is_some_and(|node| matches!(node.kind, Kind::Sketch | Kind::Body | Kind::NamedView))
         {
             control.owned_keys.push(KeyChord::plain("ContextMenu"));
             control.owned_keys.push(KeyChord {
@@ -761,7 +780,7 @@ pub(crate) fn synchronize(
                 indent - x + 37.,
                 if n.kind == Kind::Sketch {
                     48.
-                } else if can_hide {
+                } else if n.kind == Kind::NamedView || can_hide {
                     26.
                 } else {
                     6.
@@ -831,7 +850,13 @@ pub(crate) fn synchronize(
                     false,
                 )?;
             }
-            if n.kind == Kind::Sketch {
+            if matches!(n.kind, Kind::Sketch | Kind::NamedView) {
+                let edit_label = if n.kind == Kind::NamedView {
+                    native_viewport::localization::translate(world, "namedViews.edit")
+                        .replace("{name}", name)
+                } else {
+                    format!("Edit {name}")
+                };
                 button(
                     world,
                     &mut state,
@@ -840,11 +865,16 @@ pub(crate) fn synchronize(
                     &assets,
                     theme,
                     format!("edit-{id}"),
-                    format!("Edit {name}"),
+                    edit_label,
                     "",
                     BrowserCommand::Edit(id),
                     Icon::Pencil,
-                    node(x + width - 44., row_y, 20., 24.),
+                    node(
+                        x + width - if can_hide { 44. } else { 22. },
+                        row_y,
+                        20.,
+                        24.,
+                    ),
                     0.,
                     None,
                     None,
