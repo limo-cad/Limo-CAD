@@ -9,6 +9,8 @@ struct Pending {
     teaching: Option<Box<RenderJob>>,
     closed: bool,
     retire_teaching: bool,
+    #[cfg(test)]
+    retirement_in_flight: bool,
 }
 #[derive(Default)]
 pub(super) struct JobQueue {
@@ -92,6 +94,10 @@ impl JobQueue {
             // Constant-time retirement cannot starve behind continuous main
             // work. It submits no teaching render and preserves main priority.
             if std::mem::take(&mut pending.retire_teaching) {
+                #[cfg(test)]
+                {
+                    pending.retirement_in_flight = true;
+                }
                 return Some(Job::RetireTeaching);
             }
             if let Some(main) = pending.main.take() {
@@ -115,6 +121,30 @@ impl JobQueue {
         pending.retire_teaching = false;
         self.changed.notify_all();
     }
+
+    #[cfg(test)]
+    pub(super) fn finish_retirement(&self) {
+        self.pending.lock().unwrap().retirement_in_flight = false;
+    }
+
+    #[cfg(test)]
+    fn retirement_finished(&self) -> Result<bool, String> {
+        let pending = self.pending.lock().map_err(|_| "CAD queue unavailable")?;
+        if pending.closed {
+            return Err("CAD renderer stopped".into());
+        }
+        Ok(!pending.retire_teaching && !pending.retirement_in_flight)
+    }
+}
+
+/// Evidence must observe worker retirement, not just host texture removal.
+#[cfg(test)]
+pub(crate) fn teaching_retirement_finished(world: &World) -> Result<bool, String> {
+    world
+        .get_resource::<Worker>()
+        .and_then(|worker| worker.requests.as_ref())
+        .ok_or("CAD renderer is not ready")?
+        .retirement_finished()
 }
 
 pub(crate) fn connect_preview(world: &World, service: &PreviewService) -> Result<(), String> {
@@ -204,6 +234,7 @@ mod tests {
         queue.teaching(job).unwrap();
         // This is the teardown performed after any worker outcome, including panic.
         queue.close();
+        assert!(queue.retirement_finished().unwrap_err().contains("stopped"));
         assert!(matches!(
             response.try_recv(),
             Err(mpsc::TryRecvError::Disconnected)
@@ -213,6 +244,33 @@ mod tests {
             queue.try_send(snapshot()),
             Err(mpsc::TrySendError::Disconnected(_))
         ));
+    }
+
+    #[test]
+    fn native_teaching_retirement_receipt_waits_for_flush_and_repeated_closes() {
+        let queue = JobQueue::default();
+        assert!(queue.retirement_finished().unwrap());
+        queue.retire_closed();
+        assert!(!queue.retirement_finished().unwrap());
+        assert!(matches!(queue.next(), Some(Job::RetireTeaching)));
+        assert!(
+            !queue.retirement_finished().unwrap(),
+            "dequeueing Close is not completion of the render-world flush"
+        );
+        // Another Close can arrive while the first extraction is in flight.
+        queue.retire_closed();
+        queue.retire_closed();
+        queue.finish_retirement();
+        assert!(!queue.retirement_finished().unwrap());
+        assert!(matches!(queue.next(), Some(Job::RetireTeaching)));
+        assert!(!queue.retirement_finished().unwrap());
+        queue.finish_retirement();
+        assert!(queue.retirement_finished().unwrap());
+        // This is the caught-panic teardown, including a panic during Close.
+        queue.retire_closed();
+        assert!(matches!(queue.next(), Some(Job::RetireTeaching)));
+        queue.close();
+        assert!(queue.retirement_finished().unwrap_err().contains("stopped"));
     }
 
     #[test]

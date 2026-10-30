@@ -270,6 +270,12 @@ pub(crate) fn shared_fixture_plugins() -> bevy::app::PluginGroupBuilder {
 pub(crate) fn install_shared_fixture(app: &mut App) {
     super::viewport_renderer::install(app);
 }
+
+#[cfg(test)]
+pub(crate) fn shared_fixture_retirement_finished(world: &World) -> Result<bool, String> {
+    super::viewport_renderer::teaching_retirement_finished(world)
+}
+
 impl Drop for PendingRender {
     fn drop(&mut self) {
         self.cancelled.store(true, Ordering::Release);
