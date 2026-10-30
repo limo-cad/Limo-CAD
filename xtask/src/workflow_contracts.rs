@@ -1826,19 +1826,223 @@ fn native_font_and_visual_commands_require_nonempty_compiled_inventory() {
         .unwrap();
     upload["with"]["if-no-files-found"] = Value::String("warn".into());
     assert!(check_visual_acceptance(&missing_evidence).is_err());
+    let mut missing_lesson = visual.clone();
+    missing_lesson["jobs"]["native-visual"]["steps"]
+        .as_sequence_mut()
+        .unwrap()
+        .retain(|step| {
+            step["name"].as_str() != Some("Verify the Extrude lesson profile and solid on the GPU")
+        });
+    assert!(check_visual_acceptance(&missing_lesson).is_err());
+    for field in ["if", "continue-on-error"] {
+        let mut bypass = visual.clone();
+        let steps = bypass["jobs"]["native-visual"]["steps"]
+            .as_sequence_mut()
+            .unwrap();
+        let lesson = steps
+            .iter_mut()
+            .find(|step| {
+                step["name"].as_str()
+                    == Some("Verify the Extrude lesson profile and solid on the GPU")
+            })
+            .unwrap();
+        lesson[field] = Value::Bool(field == "continue-on-error");
+        assert!(check_visual_acceptance(&bypass).is_err());
+    }
+}
+
+#[test]
+fn native_visual_reserves_a_bounded_budget_for_the_complete_guide_catalog() {
+    let visual = workflow(".github/workflows/native-visual.yml");
+    check_visual_acceptance(&visual).unwrap();
+    for budget in [
+        Value::Null,
+        Value::Number(45_u64.into()),
+        Value::Number(91_u64.into()),
+        Value::String("${{ inputs.timeout }}".into()),
+    ] {
+        let mut drift = visual.clone();
+        drift["jobs"]["native-visual"]["timeout-minutes"] = budget;
+        assert!(check_visual_acceptance(&drift).is_err());
+    }
+}
+
+#[test]
+fn native_guide_authoring_precedes_capture_and_cannot_be_skipped() {
+    let visual = workflow(".github/workflows/native-visual.yml");
+    check_visual_acceptance(&visual).unwrap();
+    let position = named_step(
+        &visual["jobs"]["native-visual"],
+        "Generate Show me snapshots with the checked out engine",
+    )
+    .unwrap()
+    .0;
+    for field in ["if", "continue-on-error"] {
+        let mut bypass = visual.clone();
+        bypass["jobs"]["native-visual"]["steps"][position][field] =
+            Value::Bool(field == "continue-on-error");
+        assert!(check_visual_acceptance(&bypass).is_err());
+    }
+    for suffix in [" || true", " --out another-directory", " > /dev/null; true"] {
+        let mut bypass = visual.clone();
+        let run = bypass["jobs"]["native-visual"]["steps"][position]["run"]
+            .as_str()
+            .unwrap();
+        let command = "cargo run --locked --manifest-path mcp-server/Cargo.toml --example generate_show_me -- --out desktop/assets/show-me";
+        bypass["jobs"]["native-visual"]["steps"][position]["run"] =
+            Value::String(run.replacen(command, &format!("{command}{suffix}"), 1));
+        assert!(check_visual_acceptance(&bypass).is_err());
+    }
+    let mut reordered = visual.clone();
+    let steps = reordered["jobs"]["native-visual"]["steps"]
+        .as_sequence_mut()
+        .unwrap();
+    let authoring = steps.remove(position);
+    steps.push(authoring);
+    assert!(check_visual_acceptance(&reordered).is_err());
+}
+
+#[test]
+fn native_visual_requires_targeted_navigation_and_menu_focus_regressions() {
+    let visual = workflow(".github/workflows/native-visual.yml");
+    check_visual_acceptance(&visual).unwrap();
+    let (position, step) = named_step(
+        &visual["jobs"]["native-visual"],
+        "Verify bundled lesson source freshness and geometry budgets",
+    )
+    .unwrap();
+    let run = step["run"].as_str().unwrap();
+    for command in [
+        "cargo test --locked --manifest-path desktop/Cargo.toml --lib preview::navigation_tests:: -- --test-threads=1",
+        "cargo test --locked --manifest-path desktop/Cargo.toml --lib preview::evidence::ink:: -- --test-threads=1",
+        "cargo test --locked --manifest-path desktop/Cargo.toml --lib native_script_preview_book_focus_waits_only_for_its_dismissed_menu -- --test-threads=1",
+    ] {
+        assert_eq!(run.matches(command).count(), 1);
+        for mutated in [
+            run.lines().filter(|line| line.trim() != command).collect::<Vec<_>>().join("\n") + "\n",
+            run.replacen(command, &format!("{command} || true"), 1),
+            run.replacen(command, &command.replace("--test-threads=1", "--test-threads=2"), 1),
+        ] {
+            let mut bypass = visual.clone();
+            bypass["jobs"]["native-visual"]["steps"][position]["run"] = Value::String(mutated);
+            assert!(check_visual_acceptance(&bypass).is_err());
+        }
+    }
+    for field in ["if", "continue-on-error"] {
+        let mut bypass = visual.clone();
+        bypass["jobs"]["native-visual"]["steps"][position][field] =
+            Value::Bool(field == "continue-on-error");
+        assert!(check_visual_acceptance(&bypass).is_err());
+    }
+    let transition = "cargo test --locked --manifest-path desktop/Cargo.toml --lib preview::transition_tests:: -- --test-threads=1";
+    assert_eq!(run.matches(transition).count(), 1);
+    let mut duplicate = visual.clone();
+    duplicate["jobs"]["native-visual"]["steps"][position]["run"] =
+        Value::String(run.replacen(transition, &format!("{transition}\n{transition}"), 1));
+    assert!(check_visual_acceptance(&duplicate).is_err());
+    let mut reordered = visual;
+    let steps = reordered["jobs"]["native-visual"]["steps"]
+        .as_sequence_mut()
+        .unwrap();
+    let regressions = steps.remove(position);
+    steps.insert(0, regressions);
+    assert!(check_visual_acceptance(&reordered).is_err());
 }
 
 fn check_visual_acceptance(visual: &Value) -> Result<()> {
     let job = &visual["jobs"]["native-visual"];
     ensure!(
+        job["timeout-minutes"].as_u64() == Some(90),
+        "Keep a bounded 90 minute budget for cold SDK setup and the complete native guide catalog"
+    );
+    ensure!(
         job["if"].is_null() && job["continue-on-error"].is_null(),
         "GPU acceptance must execute and propagate failures on relevant PRs"
+    );
+    let (authoring_index, authoring) = named_step(
+        job,
+        "Generate Show me snapshots with the checked out engine",
+    )?;
+    requires_command(authoring, "cargo run --locked --manifest-path mcp-server/Cargo.toml --example generate_show_me -- --out desktop/assets/show-me")?;
+    ensure!(
+        authoring["run"].as_str().map(|run| run.lines().map(str::trim).collect::<Vec<_>>())
+            == Some(vec![
+                "# Cargo examples do not inherit the desktop binary's SDK rpath.",
+                r#"DYLD_LIBRARY_PATH="$OCCT_ROOT/lib${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}" \"#,
+                "cargo run --locked --manifest-path mcp-server/Cargo.toml --example generate_show_me -- --out desktop/assets/show-me",
+                "mkdir -p docs/qa/native-boundary/show-me-generated",
+                "cp desktop/assets/show-me/*.cbor desktop/assets/show-me/provenance.json docs/qa/native-boundary/show-me-generated/",
+            ])
+            && authoring["env"]["CARGO_TARGET_DIR"].as_str()
+                == Some("${{ github.workspace }}/desktop/target"),
+        "Guide generation must propagate failures, retain its exact inputs and reuse the native build lane"
+    );
+    ensure!(
+        authoring["if"].is_null() && authoring["continue-on-error"].is_null(),
+        "Trusted guide recipes and assertions must run before native capture"
+    );
+    let (first_native_compile, _) = named_step(
+        job,
+        "Verify projected boundaries and thin-wall occlusion on the GPU",
+    )?;
+    ensure!(
+        authoring_index < first_native_compile,
+        "Native capture must compile the snapshots generated by its own engine"
+    );
+    let (regressions_index, regressions) = named_step(
+        job,
+        "Verify bundled lesson source freshness and geometry budgets",
+    )?;
+    ensure!(
+        regressions["run"].as_str().map(|run| run.lines().map(str::trim).collect::<Vec<_>>())
+            == Some(vec![
+                "cargo test --locked --manifest-path desktop/Cargo.toml --lib native_script_preview_bundled_assets",
+                "cargo test --locked --manifest-path desktop/Cargo.toml --lib chamfer_form",
+                "cargo test --locked --manifest-path desktop/Cargo.toml --lib preview::transition_tests:: -- --test-threads=1",
+                "cargo test --locked --manifest-path desktop/Cargo.toml --lib preview::navigation_tests:: -- --test-threads=1",
+                "cargo test --locked --manifest-path desktop/Cargo.toml --lib preview::evidence::ink:: -- --test-threads=1",
+                "cargo test --locked --manifest-path desktop/Cargo.toml --lib native_script_preview_book_focus_waits_only_for_its_dismissed_menu -- --test-threads=1",
+                "cargo test --locked --manifest-path desktop/Cargo.toml --lib native_script_preview_tabs_after_extrude_in_the_production_ribbon -- --test-threads=1",
+            ])
+            && regressions["if"].is_null()
+            && regressions["continue-on-error"].is_null()
+            && authoring_index < regressions_index,
+        "Native guide regressions must remain exact, serial and unconditional after generation"
     );
     let (_, check) = named_step(
         job,
         "Verify projected boundaries and thin-wall occlusion on the GPU",
     )?;
     requires_command(check, "cargo xtask ci native-ignored-test sketch-visual")?;
+    let (_, lesson) = named_step(
+        job,
+        "Verify the Extrude lesson profile and solid on the GPU",
+    )?;
+    requires_command(lesson, "cargo xtask ci native-ignored-test extrude-preview")?;
+    requires_command(lesson, "cargo xtask ci native-ignored-test show-me-ui")?;
+    ensure!(
+        lesson["env"]["RUST_TEST_THREADS"].as_i64() == Some(1)
+            && lesson["env"]["LIMO_CAD_BUILD_REVISION"].as_str() == Some("${{ github.sha }}"),
+        "Operational GPU fixtures must run serially and attest the compiled source revision"
+    );
+    requires_command(
+        lesson,
+        "cargo xtask ci native-ignored-test show-me-lifecycle",
+    )?;
+    ensure!(
+        lesson["if"].is_null() && lesson["continue-on-error"].is_null(),
+        "Extrude GPU acceptance must execute and propagate failures"
+    );
+    ensure!(
+        lesson["env"]["LIMO_CAD_PREVIEW_PROOF_DIR"].as_str()
+            == Some("${{ github.workspace }}/docs/qa/native-boundary"),
+        "Extrude GPU captures must be included in the retained visual evidence"
+    );
+    ensure!(
+        lesson["env"]["LIMO_CAD_SHOW_ME_PROOF_DIR"].as_str()
+            == Some("${{ github.workspace }}/docs/qa/native-boundary/show-me"),
+        "Show me UI captures must be included in the retained visual evidence"
+    );
     let (_, evidence) = named_step(job, "Retain native visual evidence")?;
     ensure!(
         evidence["with"]["if-no-files-found"].as_str() == Some("error"),
@@ -1858,9 +2062,29 @@ fn check_visual_acceptance(visual: &Value) -> Result<()> {
         .context("renderer PR paths")?;
     for path in [
         "desktop/src/native_viewport/**",
+        "desktop/src/session_bridge/native_interface/controller/files/scripts/preview/**",
+        "desktop/src/session_bridge/native_interface/controller/files/scripts/preview.rs",
+        "desktop/src/session_bridge/native_interface/controller/chrome.rs",
+        "desktop/src/session_bridge/native_interface/controller/files.rs",
+        "desktop/src/session_bridge/native_interface/controller/files/panel.rs",
         "crates/occt/**",
         "crates/sketch/**",
+        "crates/recipes/**",
+        "crates/help/**",
+        "knowledge/concepts/bracket-sketch.md",
+        "knowledge/concepts/bracket-cut.md",
+        "crates/script/**",
+        "mcp-server/src/**",
+        "mcp-server/Cargo.toml",
+        "examples/scripts/extrude-basics.limo.jsonc",
+        "examples/scripts/show-me-*.limo.jsonc",
+        "examples/scripts/show-me-sketch.lessons.json",
+        "knowledge/concepts/show-me-*.md",
+        "interface/demonstrations.json",
+        "interface/catalog.json",
+        "assets/i18n/**",
         "xtask/src/repository_ci.rs",
+        "xtask/src/workflow_contracts.rs",
         ".github/workflows/native-visual.yml",
     ] {
         ensure!(

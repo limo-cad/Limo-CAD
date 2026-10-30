@@ -1,0 +1,398 @@
+{
+  "$schema": "./limo-cad-script.schema.json",
+  "version": 1,
+  "name": "Thread a bracket locating pin",
+  "starting_state": "empty",
+  "steps": [
+    {
+      "chapter": "Prepared inputs",
+      "note": "A native 8 mm diameter, 14 mm long cylindrical locating pin is prepared on XY. Its unthreaded cylindrical face is selected by analytic radius.",
+      "duration_ms": 1000
+    },
+    {
+      "id": "empty_scene",
+      "call": {
+        "group": "solid/check",
+        "operation": "solid_scene",
+        "arguments": {}
+      }
+    },
+    {
+      "id": "pin_begin",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_begin",
+        "arguments": {
+          "name": "pin",
+          "plane": {
+            "type": "origin_plane",
+            "plane": "xy"
+          }
+        }
+      }
+    },
+    {
+      "call": {
+        "group": "sketch/selection",
+        "operation": "sketch_set_grid_snap",
+        "arguments": {
+          "enabled": false
+        }
+      }
+    },
+    {
+      "id": "pin_circle",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_circle_locked",
+        "arguments": {
+          "mode": "center_diameter",
+          "anchor": {
+            "x": 0,
+            "y": 0
+          },
+          "edge_hint": {
+            "x": 4,
+            "y": 0
+          },
+          "diameter_mm": 8,
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "pin_finish",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_finish",
+        "arguments": {}
+      }
+    },
+    {
+      "id": "pin_build",
+      "call": {
+        "group": "solid/build",
+        "operation": "solid_extrude",
+        "arguments": {
+          "sketch_name": "pin",
+          "profile_indices": [
+            0
+          ],
+          "operation": "new_body",
+          "extent": {
+            "type": "distance",
+            "distance": 14
+          },
+          "taper_angle_deg": 0,
+          "flip": false,
+          "target_body_ids": []
+        }
+      }
+    },
+    {
+      "let": {
+        "pin_body": {
+          "$select": {
+            "from": {
+              "$ref": "pin_build"
+            },
+            "path": "/scene/bodies",
+            "where": {},
+            "take": "one"
+          }
+        }
+      }
+    },
+    {
+      "let": {
+        "cylinder": {
+          "$select": {
+            "from": {
+              "$ref": "pin_body"
+            },
+            "path": "/faces",
+            "where": {
+              "/cylinder/radius": 4
+            },
+            "take": "one"
+          }
+        }
+      }
+    },
+    {
+      "chapter": "External thread",
+      "note": "Choose the cylindrical side, use the M8 x 1.25 right-hand 6g modeled thread, and extend the threaded depth from 5 to 10 mm. This is actual helical geometry.",
+      "duration_ms": 1000
+    },
+    {
+      "id": "preview",
+      "call": {
+        "group": "solid/refine",
+        "operation": "solid_external_thread",
+        "arguments": {
+          "body_id": {
+            "$ref": "pin_body",
+            "pointer": "/id"
+          },
+          "face_id": {
+            "$ref": "cylinder",
+            "pointer": "/id"
+          },
+          "thread": {
+            "standard": "iso_metric",
+            "series": "metric_coarse",
+            "designation": "M8 x 1.25 - 6g",
+            "class": "6g",
+            "nominal_diameter": 8,
+            "pitch": 1.25,
+            "threads_per_inch": null,
+            "hand": "right",
+            "depth": 5,
+            "representation": "modeled",
+            "tap_drill_designation": null
+          },
+          "flip": false
+        }
+      }
+    },
+    {
+      "let": {
+        "lesson_feature": {
+          "$select": {
+            "from": {
+              "$ref": "preview"
+            },
+            "path": "/document/features",
+            "where": {},
+            "take": "last",
+            "pointer": "/id"
+          }
+        }
+      }
+    },
+    {
+      "id": "result",
+      "call": {
+        "group": "solid/refine",
+        "operation": "solid_edit_external_thread",
+        "arguments": {
+          "feature_id": {
+            "$ref": "lesson_feature"
+          },
+          "request": {
+            "body_id": {
+              "$ref": "pin_body",
+              "pointer": "/id"
+            },
+            "face_id": {
+              "$ref": "cylinder",
+              "pointer": "/id"
+            },
+            "thread": {
+              "standard": "iso_metric",
+              "series": "metric_coarse",
+              "designation": "M8 x 1.25 - 6g",
+              "class": "6g",
+              "nominal_diameter": 8,
+              "pitch": 1.25,
+              "threads_per_inch": null,
+              "hand": "right",
+              "depth": 10,
+              "representation": "modeled",
+              "tap_drill_designation": null
+            },
+            "flip": false
+          }
+        }
+      }
+    }
+  ],
+  "checks": [
+    {
+      "id": "final_scene",
+      "call": {
+        "group": "solid/check",
+        "operation": "solid_scene",
+        "arguments": {}
+      },
+      "expect": {
+        "/errors": []
+      }
+    },
+    {
+      "assert": {
+        "$count": {
+          "$ref": "final_scene",
+          "pointer": "/bodies"
+        }
+      },
+      "equals": 1
+    },
+    {
+      "id": "definitions",
+      "call": {
+        "group": "solid/check",
+        "operation": "solid_body_feature_definitions",
+        "arguments": {}
+      }
+    },
+    {
+      "assert": {
+        "$count": {
+          "$ref": "definitions"
+        }
+      },
+      "equals": 1
+    },
+    {
+      "assert": {
+        "$ref": "definitions",
+        "pointer": "/0/type"
+      },
+      "equals": "external_thread"
+    },
+    {
+      "assert": {
+        "$ref": "definitions",
+        "pointer": "/0/thread/nominal_diameter"
+      },
+      "equals": 8
+    },
+    {
+      "assert": {
+        "$ref": "definitions",
+        "pointer": "/0/thread/pitch"
+      },
+      "equals": 1.25
+    },
+    {
+      "assert": {
+        "$ref": "definitions",
+        "pointer": "/0/thread/depth"
+      },
+      "equals": 10
+    },
+    {
+      "assert": {
+        "$ref": "definitions",
+        "pointer": "/0/thread/class"
+      },
+      "equals": "6g"
+    },
+    {
+      "assert": {
+        "$ref": "definitions",
+        "pointer": "/0/thread/representation"
+      },
+      "equals": "modeled"
+    },
+    {
+      "assert": {
+        "$ref": "definitions",
+        "pointer": "/0/thread/hand"
+      },
+      "equals": "right"
+    },
+    {
+      "assert": {
+        "$ref": "final_scene",
+        "pointer": "/bodies"
+      },
+      "equals": {
+        "$ref": "result",
+        "pointer": "/scene/bodies"
+      }
+    }
+  ],
+  "exports": {
+    "lessons": {
+      "external_thread": [
+        {
+          "caption": "external_thread.inputs",
+          "scene": {
+            "$ref": "pin_build",
+            "pointer": "/scene"
+          },
+          "cue": "body",
+          "duration_ms": 1400,
+          "finish": "satin_aluminum"
+        },
+        {
+          "caption": "external_thread.preview",
+          "scene": {
+            "$ref": "preview",
+            "pointer": "/scene"
+          },
+          "cue": "depth",
+          "duration_ms": 1400,
+          "finish": "satin_aluminum"
+        },
+        {
+          "caption": "external_thread.parameter",
+          "scene": {
+            "$ref": "result",
+            "pointer": "/scene"
+          },
+          "cue": "depth",
+          "duration_ms": 1400,
+          "finish": "satin_aluminum"
+        },
+        {
+          "caption": "external_thread.apply",
+          "scene": {
+            "$ref": "result",
+            "pointer": "/scene"
+          },
+          "cue": "apply",
+          "duration_ms": 1400,
+          "finish": "satin_aluminum"
+        }
+      ]
+    },
+    "preview_frames": [
+      {
+        "caption": "external_thread.inputs",
+        "scene": {
+          "$ref": "pin_build",
+          "pointer": "/scene"
+        },
+        "cue": "body",
+        "duration_ms": 1400,
+        "finish": "satin_aluminum"
+      },
+      {
+        "caption": "external_thread.preview",
+        "scene": {
+          "$ref": "preview",
+          "pointer": "/scene"
+        },
+        "cue": "depth",
+        "duration_ms": 1400,
+        "finish": "satin_aluminum"
+      },
+      {
+        "caption": "external_thread.parameter",
+        "scene": {
+          "$ref": "result",
+          "pointer": "/scene"
+        },
+        "cue": "depth",
+        "duration_ms": 1400,
+        "finish": "satin_aluminum"
+      },
+      {
+        "caption": "external_thread.apply",
+        "scene": {
+          "$ref": "result",
+          "pointer": "/scene"
+        },
+        "cue": "apply",
+        "duration_ms": 1400,
+        "finish": "satin_aluminum"
+      }
+    ],
+    "final_scene": {
+      "$ref": "final_scene"
+    }
+  }
+}

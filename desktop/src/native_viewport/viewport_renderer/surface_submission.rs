@@ -4,7 +4,7 @@
 //! fail if another thread submits on the shared queue before the queue is empty.
 //! Acquisition can also reconfigure an outdated surface. Keep both surface paths
 //! protected, while main-world modeling and pipeline compilation stay independent.
-use super::{NativeViewportCamera, CAD_TARGET_FORMAT};
+use super::{teaching_scene::TeachingCamera, NativeViewportCamera, CAD_TARGET_FORMAT};
 use bevy::ecs::system::NonSendMarker;
 use bevy::{
     app::{AppExit, SubApp},
@@ -209,6 +209,10 @@ struct CompiledAfterDraw(bool);
 #[derive(Default, Resource)]
 struct WorkerExiting(bool);
 
+/// Scoped to Close's removal-only extraction; render requests never set this.
+#[derive(Resource)]
+pub(super) struct TeachingRetirement;
+
 pub(super) fn compiled_after_draw(world: &World) -> bool {
     world.resource::<CompiledAfterDraw>().0
 }
@@ -279,9 +283,9 @@ fn remove_cache_processor<R: Resource>(render: &mut SubApp) {
         });
 }
 
-fn prewarm_blit_pipelines(main: &mut World, world: &mut World) {
-    // setup_scene owns exactly two linear CAD cameras on the same image: the
-    // first replaces its output and the transient overlay uses alpha blending.
+pub(super) fn prewarm_blit_pipelines(main: &mut World, world: &mut World) {
+    // Main work uses two linear CAD cameras; teaching uses its isolated single
+    // camera. The main transient overlay uses alpha blending.
     // Materialize their actual native target keys before guarded Prepare. The
     // upstream upscaling system otherwise calls process_queue for a new blit ID,
     // which can compile every newly queued PBR shader while holding the gate.
@@ -289,14 +293,47 @@ fn prewarm_blit_pipelines(main: &mut World, world: &mut World) {
     // during device recovery; keep the upstream upscaling system unchanged.
     // Render camera insertion is deferred until ExtractCommands. Derive keys
     // from the actual worker cameras/image here, not stale extracted components.
-    let mut camera_query = main.query_filtered::<
-        (&Camera, &RenderTarget, Option<&CompositingSpace>),
-        With<NativeViewportCamera>,
-    >();
+    let keys = blit_keys(main);
+    if keys.is_empty() {
+        // Retirement still extracts removals, but has no draw or blit to warm.
+        return;
+    }
+    world.resource_scope(|world, mut cache: Mut<PipelineCache>| {
+        world.resource_scope(
+            |world, mut pipelines: Mut<SpecializedRenderPipelines<BlitPipeline>>| {
+                let blit = world.resource::<BlitPipeline>();
+                let ids: Vec<_> = keys
+                    .into_iter()
+                    .map(|key| pipelines.specialize(&cache, blit, key))
+                    .collect();
+                for id in ids {
+                    cache.block_on_render_pipeline(id);
+                }
+            },
+        );
+    });
+}
+
+fn blit_keys(main: &mut World) -> Vec<BlitPipelineKey> {
+    if main.contains_resource::<TeachingRetirement>() {
+        assert!(
+            main.query::<&Camera>()
+                .iter(main)
+                .all(|camera| !camera.is_active),
+            "teaching retirement must not render any camera"
+        );
+        return Vec::new();
+    }
+    let mut camera_query = main.query_filtered::<(
+        &Camera,
+        &RenderTarget,
+        Option<&CompositingSpace>,
+        Option<&TeachingCamera>,
+    ), Or<(With<NativeViewportCamera>, With<TeachingCamera>)>>();
     let mut cameras: Vec<_> = camera_query
         .iter(main)
         .filter(|(camera, ..)| camera.is_active)
-        .map(|(camera, target, space)| {
+        .map(|(camera, target, space, teaching)| {
             assert!(
                 matches!(space, None | Some(CompositingSpace::Linear)),
                 "CAD camera compositing must remain linear"
@@ -304,24 +341,39 @@ fn prewarm_blit_pipelines(main: &mut World, world: &mut World) {
             let RenderTarget::Image(target) = target else {
                 panic!("CAD worker camera must target its native image");
             };
-            (camera.order, target.handle.clone(), camera.output_mode)
+            (
+                camera.order,
+                target.handle.clone(),
+                camera.output_mode,
+                teaching.is_some(),
+            )
         })
         .collect();
-    assert_eq!(cameras.len(), 2, "expected two native CAD cameras");
-    cameras.sort_unstable_by_key(|(order, ..)| *order);
-    assert!(
-        cameras[0].0 < cameras[1].0,
-        "CAD camera order must be distinct"
-    );
-    assert_eq!(
-        cameras[0].1, cameras[1].1,
-        "CAD cameras must share an image"
-    );
+    let teaching = cameras.iter().filter(|camera| camera.3).count();
+    if teaching > 0 {
+        assert_eq!(teaching, 1, "expected one teaching camera");
+        assert_eq!(
+            cameras.len(),
+            1,
+            "main cameras must be inactive during teaching"
+        );
+    } else {
+        assert_eq!(cameras.len(), 2, "expected two native CAD cameras");
+        cameras.sort_unstable_by_key(|(order, ..)| *order);
+        assert!(
+            cameras[0].0 < cameras[1].0,
+            "CAD camera order must be distinct"
+        );
+        assert_eq!(
+            cameras[0].1, cameras[1].1,
+            "CAD cameras must share an image"
+        );
+    }
     let images = main.resource::<Assets<Image>>();
-    let keys = cameras
+    cameras
         .into_iter()
         .enumerate()
-        .map(|(index, (_, image, output))| {
+        .map(|(index, (_, image, output, _))| {
             let image = images.get(&image).expect("native CAD target image");
             let format = image
                 .texture_view_descriptor
@@ -341,20 +393,8 @@ fn prewarm_blit_pipelines(main: &mut World, world: &mut World) {
                 samples: 1,
                 source_space: None,
             }
-        });
-    world.resource_scope(|world, mut cache: Mut<PipelineCache>| {
-        world.resource_scope(
-            |world, mut pipelines: Mut<SpecializedRenderPipelines<BlitPipeline>>| {
-                let blit = world.resource::<BlitPipeline>();
-                let ids: Vec<_> = keys
-                    .map(|key| pipelines.specialize(&cache, blit, key))
-                    .collect();
-                for id in ids {
-                    cache.block_on_render_pipeline(id);
-                }
-            },
-        );
-    });
+        })
+        .collect()
 }
 
 fn compile_pipelines(world: &mut World) -> bool {
@@ -440,6 +480,112 @@ fn install_worker_schedule(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn native_shared_blit_keys_follow_active_main_or_teaching_cameras() {
+        let mut world = World::new();
+        world.init_resource::<Assets<Image>>();
+        let image = world
+            .resource_mut::<Assets<Image>>()
+            .add(super::super::target_image(UVec2::ONE));
+        let main = world
+            .spawn((
+                NativeViewportCamera,
+                Camera::default(),
+                RenderTarget::Image(image.clone().into()),
+            ))
+            .id();
+        let overlay = world
+            .spawn((
+                NativeViewportCamera,
+                Camera {
+                    order: 1,
+                    ..default()
+                },
+                RenderTarget::Image(image.clone().into()),
+            ))
+            .id();
+        let teaching = world
+            .spawn((
+                TeachingCamera,
+                Camera {
+                    is_active: false,
+                    ..default()
+                },
+                RenderTarget::Image(image.into()),
+            ))
+            .id();
+        let keys = blit_keys(&mut world);
+        assert_eq!(keys.len(), 2);
+        assert_eq!(keys[0].blend_state, None);
+        assert_eq!(keys[1].blend_state, Some(BlendState::ALPHA_BLENDING));
+        world.get_mut::<Camera>(main).unwrap().is_active = false;
+        world.get_mut::<Camera>(overlay).unwrap().is_active = false;
+        world.get_mut::<Camera>(teaching).unwrap().is_active = true;
+        let keys = blit_keys(&mut world);
+        assert_eq!(keys.len(), 1);
+        assert_eq!(keys[0].blend_state, None);
+        if let CameraOutputMode::Write { blend_state, .. } =
+            &mut world.get_mut::<Camera>(teaching).unwrap().output_mode
+        {
+            *blend_state = Some(BlendState::ALPHA_BLENDING);
+        }
+        assert_eq!(
+            blit_keys(&mut world)[0].blend_state,
+            Some(BlendState::ALPHA_BLENDING)
+        );
+        world.get_mut::<Camera>(main).unwrap().is_active = true;
+        world.get_mut::<Camera>(overlay).unwrap().is_active = true;
+        assert!(
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| blit_keys(&mut world)))
+                .is_err(),
+            "mixed main and teaching activation must fail before GPU work"
+        );
+        world.get_mut::<Camera>(teaching).unwrap().is_active = false;
+        assert_eq!(blit_keys(&mut world).len(), 2);
+        // A removal-only Close may sit between ordinary main and teaching
+        // draws. Its permission must not survive restoration or reopening.
+        world.get_mut::<Camera>(main).unwrap().is_active = false;
+        world.get_mut::<Camera>(overlay).unwrap().is_active = false;
+        world.insert_resource(TeachingRetirement);
+        prewarm_blit_pipelines(&mut world, &mut World::new());
+        world.remove_resource::<TeachingRetirement>();
+        world.get_mut::<Camera>(teaching).unwrap().is_active = true;
+        assert_eq!(blit_keys(&mut world).len(), 1);
+        world.get_mut::<Camera>(teaching).unwrap().is_active = false;
+        world.get_mut::<Camera>(main).unwrap().is_active = true;
+        world.get_mut::<Camera>(overlay).unwrap().is_active = true;
+        assert_eq!(blit_keys(&mut world).len(), 2);
+    }
+
+    #[test]
+    fn native_shared_blit_zero_cameras_require_removal_only_retirement() {
+        let mut main = World::new();
+        assert!(
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| blit_keys(&mut main)))
+                .is_err(),
+            "a render request with no active cameras must still fail closed"
+        );
+        main.insert_resource(TeachingRetirement);
+        // Neither world has image/pipeline/GPU resources. Close must not look
+        // up a retired target or specialize/compile a blit for an empty pass.
+        prewarm_blit_pipelines(&mut main, &mut World::new());
+        let camera = main.spawn(Camera::default()).id();
+        assert!(
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| blit_keys(&mut main)))
+                .is_err(),
+            "retirement must reject even an untagged, targetless active camera"
+        );
+        main.get_mut::<Camera>(camera).unwrap().is_active = false;
+        prewarm_blit_pipelines(&mut main, &mut World::new());
+        main.remove_resource::<TeachingRetirement>();
+        assert!(
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| blit_keys(&mut main)))
+                .is_err(),
+            "cleanup must not make a later zero-camera render request valid"
+        );
+    }
+
     use bevy::ecs::{change_detection::Tick, system::SystemChangeTick};
     use bevy::render::RenderStartup;
     use std::{sync::mpsc, thread, time::Duration};

@@ -1,0 +1,434 @@
+{
+  "$schema": "./limo-cad-script.schema.json",
+  "version": 1,
+  "name": "Hollow a small parts tray",
+  "starting_state": "empty",
+  "steps": [
+    {
+      "chapter": "Prepared inputs",
+      "note": "A 32 x 24 x 12 mm rectangular tray blank is prepared. Its top planar face will be removed.",
+      "duration_ms": 1000
+    },
+    {
+      "id": "empty_scene",
+      "call": {
+        "group": "solid/check",
+        "operation": "solid_scene",
+        "arguments": {}
+      }
+    },
+    {
+      "id": "tray_begin",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_begin",
+        "arguments": {
+          "name": "tray",
+          "plane": {
+            "type": "origin_plane",
+            "plane": "xy"
+          }
+        }
+      }
+    },
+    {
+      "call": {
+        "group": "sketch/selection",
+        "operation": "sketch_set_grid_snap",
+        "arguments": {
+          "enabled": false
+        }
+      }
+    },
+    {
+      "id": "tray_rectangle",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_rectangle_locked",
+        "arguments": {
+          "mode": "two_point",
+          "anchor": {
+            "x": -16,
+            "y": -12
+          },
+          "corner_hint": {
+            "x": 16,
+            "y": 12
+          },
+          "width_mm": 32,
+          "height_mm": 24,
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "tray_locate",
+      "call": {
+        "group": "sketch/constrain",
+        "operation": "sketch_add_constraint",
+        "arguments": {
+          "type": "fix",
+          "entity": {
+            "$select": {
+              "from": {
+                "$ref": "tray_rectangle",
+                "pointer": "/sketch"
+              },
+              "path": "/entities",
+              "where": {
+                "/kind": "point",
+                "/position/x": -16,
+                "/position/y": -12
+              },
+              "take": "one",
+              "pointer": "/id"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "tray_finish",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_finish",
+        "arguments": {}
+      }
+    },
+    {
+      "id": "tray_build",
+      "call": {
+        "group": "solid/build",
+        "operation": "solid_extrude",
+        "arguments": {
+          "sketch_name": "tray",
+          "profile_indices": [
+            0
+          ],
+          "operation": "new_body",
+          "extent": {
+            "type": "distance",
+            "distance": 12
+          },
+          "taper_angle_deg": 0,
+          "flip": false,
+          "target_body_ids": []
+        }
+      }
+    },
+    {
+      "let": {
+        "tray_body": {
+          "$select": {
+            "from": {
+              "$ref": "tray_build"
+            },
+            "path": "/scene/bodies",
+            "where": {
+              "/feature_id": {
+                "$select": {
+                  "from": {
+                    "$ref": "tray_build"
+                  },
+                  "path": "/document/features",
+                  "where": {},
+                  "take": "last",
+                  "pointer": "/id"
+                }
+              }
+            },
+            "take": "one"
+          }
+        }
+      }
+    },
+    {
+      "let": {
+        "opening": {
+          "$select": {
+            "from": {
+              "$ref": "tray_body"
+            },
+            "path": "/faces",
+            "where": {
+              "/plane/normal/2": 1,
+              "/plane/origin/2": 12
+            },
+            "take": "one"
+          }
+        }
+      }
+    },
+    {
+      "chapter": "Shell",
+      "note": "Remove the top face, keep the outer dimensions, and increase the inward wall thickness from 1 to 2 mm.",
+      "duration_ms": 1000
+    },
+    {
+      "id": "preview",
+      "call": {
+        "group": "solid/refine",
+        "operation": "solid_shell",
+        "arguments": {
+          "body_id": {
+            "$ref": "tray_body",
+            "pointer": "/id"
+          },
+          "face_ids": [
+            {
+              "$ref": "opening",
+              "pointer": "/id"
+            }
+          ],
+          "thickness": 1,
+          "inward": true
+        }
+      }
+    },
+    {
+      "let": {
+        "lesson_feature": {
+          "$select": {
+            "from": {
+              "$ref": "preview"
+            },
+            "path": "/document/features",
+            "where": {},
+            "take": "last",
+            "pointer": "/id"
+          }
+        }
+      }
+    },
+    {
+      "id": "result",
+      "call": {
+        "group": "solid/refine",
+        "operation": "solid_edit_shell",
+        "arguments": {
+          "feature_id": {
+            "$ref": "lesson_feature"
+          },
+          "request": {
+            "body_id": {
+              "$ref": "tray_body",
+              "pointer": "/id"
+            },
+            "face_ids": [
+              {
+                "$ref": "opening",
+                "pointer": "/id"
+              }
+            ],
+            "thickness": 2,
+            "inward": true
+          }
+        }
+      }
+    }
+  ],
+  "checks": [
+    {
+      "id": "final_scene",
+      "call": {
+        "group": "solid/check",
+        "operation": "solid_scene",
+        "arguments": {}
+      },
+      "expect": {
+        "/errors": []
+      }
+    },
+    {
+      "assert": {
+        "$count": {
+          "$ref": "final_scene",
+          "pointer": "/bodies"
+        }
+      },
+      "equals": 1
+    },
+    {
+      "id": "definitions",
+      "call": {
+        "group": "solid/check",
+        "operation": "solid_body_feature_definitions",
+        "arguments": {}
+      }
+    },
+    {
+      "assert": {
+        "$count": {
+          "$ref": "definitions"
+        }
+      },
+      "equals": 1
+    },
+    {
+      "assert": {
+        "$ref": "definitions",
+        "pointer": "/0/type"
+      },
+      "equals": "shell"
+    },
+    {
+      "assert": {
+        "$ref": "definitions",
+        "pointer": "/0/face_ids"
+      },
+      "equals": [
+        {
+          "$ref": "opening",
+          "pointer": "/id"
+        }
+      ]
+    },
+    {
+      "assert": {
+        "$ref": "definitions",
+        "pointer": "/0/thickness"
+      },
+      "equals": 2
+    },
+    {
+      "assert": {
+        "$ref": "definitions",
+        "pointer": "/0/inward"
+      },
+      "equals": true
+    },
+    {
+      "assert": {
+        "$ref": "final_scene",
+        "pointer": "/bodies"
+      },
+      "equals": {
+        "$ref": "result",
+        "pointer": "/scene/bodies"
+      }
+    },
+    {
+      "let": {
+        "tray_result": {
+          "$select": {
+            "from": {
+              "$ref": "final_scene"
+            },
+            "path": "/bodies",
+            "where": {},
+            "take": "one"
+          }
+        }
+      }
+    },
+    {
+      "assert": {
+        "$count": {
+          "$select": {
+            "from": {
+              "$ref": "tray_result"
+            },
+            "path": "/faces",
+            "where": {
+              "/plane/normal/2": 1,
+              "/plane/origin/2": 2
+            },
+            "take": "all"
+          }
+        }
+      },
+      "equals": 1
+    }
+  ],
+  "exports": {
+    "lessons": {
+      "shell": [
+        {
+          "caption": "shell.inputs",
+          "scene": {
+            "$ref": "tray_build",
+            "pointer": "/scene"
+          },
+          "cue": "body",
+          "duration_ms": 1400,
+          "finish": "satin_aluminum"
+        },
+        {
+          "caption": "shell.preview",
+          "scene": {
+            "$ref": "preview",
+            "pointer": "/scene"
+          },
+          "cue": "depth",
+          "duration_ms": 1400,
+          "finish": "satin_aluminum"
+        },
+        {
+          "caption": "shell.parameter",
+          "scene": {
+            "$ref": "result",
+            "pointer": "/scene"
+          },
+          "cue": "dimension",
+          "duration_ms": 1400,
+          "finish": "satin_aluminum"
+        },
+        {
+          "caption": "shell.apply",
+          "scene": {
+            "$ref": "result",
+            "pointer": "/scene"
+          },
+          "cue": "apply",
+          "duration_ms": 1400,
+          "finish": "satin_aluminum"
+        }
+      ]
+    },
+    "preview_frames": [
+      {
+        "caption": "shell.inputs",
+        "scene": {
+          "$ref": "tray_build",
+          "pointer": "/scene"
+        },
+        "cue": "body",
+        "duration_ms": 1400,
+        "finish": "satin_aluminum"
+      },
+      {
+        "caption": "shell.preview",
+        "scene": {
+          "$ref": "preview",
+          "pointer": "/scene"
+        },
+        "cue": "depth",
+        "duration_ms": 1400,
+        "finish": "satin_aluminum"
+      },
+      {
+        "caption": "shell.parameter",
+        "scene": {
+          "$ref": "result",
+          "pointer": "/scene"
+        },
+        "cue": "dimension",
+        "duration_ms": 1400,
+        "finish": "satin_aluminum"
+      },
+      {
+        "caption": "shell.apply",
+        "scene": {
+          "$ref": "result",
+          "pointer": "/scene"
+        },
+        "cue": "apply",
+        "duration_ms": 1400,
+        "finish": "satin_aluminum"
+      }
+    ],
+    "final_scene": {
+      "$ref": "final_scene"
+    }
+  }
+}

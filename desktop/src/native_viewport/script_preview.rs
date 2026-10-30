@@ -1,8 +1,16 @@
 //! Immutable teaching snapshots rendered by the production CAD scene systems.
-//! One windowless worker owns its Bevy world. It sleeps while idle and has no
-//! AppState, publisher, native child view, or access to the live camera/picker.
+//! Requests use the existing CAD worker and GPU. Teaching objects remain isolated
+//! from the live document, camera, selection and history.
 use super::super::DEFAULT_VERTICAL_FOV_DEGREES;
 use super::*;
+#[cfg(test)]
+use crate::native_viewport::FinishedSketchEntityPickRef;
+use bevy::render::texture::GpuImage;
+#[path = "script_preview/inspection.rs"]
+pub(crate) mod inspection;
+#[path = "script_preview/textures.rs"]
+pub(crate) mod textures;
+#[cfg(test)]
 use bevy::render::{
     pipelined_rendering::PipelinedRenderingPlugin,
     render_resource::{
@@ -10,48 +18,78 @@ use bevy::render::{
         TextureUsages,
     },
     renderer::RenderDevice,
-    view::screenshot::{Screenshot, ScreenshotCaptured},
+    view::screenshot::{Capturing, Screenshot, ScreenshotCaptured},
     RenderApp,
 };
+#[cfg(test)]
 use bevy::window::{ExitCondition, WindowPlugin};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::VecDeque,
-    panic::AssertUnwindSafe,
     sync::{
-        atomic::{AtomicBool, AtomicUsize, Ordering},
+        atomic::{AtomicBool, Ordering},
         mpsc,
     },
     time::{Duration, Instant},
 };
 
 const MAX_CACHE_BYTES: usize = 32 * 1024 * 1024;
-const MAX_DOCUMENT_BYTES: usize = 16 * 1024 * 1024;
 const MAX_DOCUMENTS: usize = 8;
 const MAX_VIEWS: usize = 8;
+pub(crate) const MAX_RENDER_SIZE: [u32; 2] = [640, 400];
 const REQUEST_LIFETIME: Duration = Duration::from_secs(20);
+const PREVIEW_CLOSED: &str = "Feature preview closed";
+const PREVIEW_TIMED_OUT: &str = "Feature preview request timed out";
 
-fn panic_message(payload: Box<dyn std::any::Any + Send>) -> String {
-    if let Some(message) = payload.downcast_ref::<&str>() {
-        (*message).to_owned()
-    } else if let Some(message) = payload.downcast_ref::<String>() {
-        message.clone()
-    } else {
-        "unknown renderer panic".to_owned()
+pub(crate) use limo_cad_native_engine::teaching::{Frame, PreviewCue, PreviewFinish};
+
+/// Keep native parameter callouts visible through radius entry and the result.
+/// Setup/profile-only steps retain their uncluttered geometry view.
+pub(crate) fn permits_dimension_annotations(cue: Option<PreviewCue>) -> bool {
+    matches!(
+        cue,
+        Some(PreviewCue::Dimension | PreviewCue::Radius | PreviewCue::Apply)
+    )
+}
+
+#[cfg(test)]
+#[derive(Resource, Default)]
+struct TeachingFinish(Option<PreviewFinish>);
+
+#[cfg(test)]
+fn apply_teaching_finish(
+    finish: Res<TeachingFinish>,
+    bodies: Query<&MeshMaterial3d<StandardMaterial>, With<NativeCadBody>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    if let Some(PreviewFinish::SatinAluminum) = finish.0 {
+        for handle in &bodies {
+            if let Some(mut material) = materials.get_mut(&handle.0) {
+                material.base_color = Color::srgb(0.75, 0.78, 0.79);
+                material.metallic = 0.55;
+                material.perceptual_roughness = 0.34;
+            }
+        }
     }
 }
 
-#[derive(Clone, Deserialize, Serialize)]
-pub(crate) struct Frame {
-    pub caption: String,
-    pub scene: SolidSceneDto,
-}
-
 #[derive(Serialize)]
-struct RetainedFrame {
-    caption: String,
+pub(super) struct RetainedFrame {
+    pub(super) caption: String,
     #[serde(serialize_with = "serialize_scene")]
-    scene: Arc<SolidSceneDto>,
+    pub(super) scene: Arc<SolidSceneDto>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(super) profile: Option<limo_cad_sketch::SketchDto>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(super) cue: Option<PreviewCue>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(super) duration_ms: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(super) finish: Option<PreviewFinish>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub(super) edges: Vec<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(super) inspection: Option<inspection::Inspection>,
 }
 
 fn serialize_scene<S: serde::Serializer>(
@@ -61,120 +99,31 @@ fn serialize_scene<S: serde::Serializer>(
     scene.as_ref().serialize(serializer)
 }
 
-struct PreviewDocument {
-    frames: Vec<RetainedFrame>,
+pub(super) struct PreviewDocument {
+    pub(super) frames: Vec<RetainedFrame>,
     center: Vec3,
     radius: f32,
     bytes: usize,
 }
 
 impl PreviewDocument {
-    fn new(frames: Vec<Frame>) -> Result<Self, String> {
-        if frames.is_empty() || frames.len() > 16 {
-            return Err("A feature preview needs between 1 and 16 frames".into());
-        }
-        let mut low = Vec3::splat(f32::INFINITY);
-        let mut high = Vec3::splat(f32::NEG_INFINITY);
-        let mut triangles = 0;
-        let mut points = 0;
-        let mut bodies = 0;
-        let mut faces = 0;
-        let mut edges = 0;
-        for frame in &frames {
-            if frame.caption.len() > 4000 || !frame.scene.errors.is_empty() {
-                return Err("A preview frame has an invalid caption or failed geometry".into());
-            }
-            for body in &frame.scene.bodies {
-                let mesh = &body.mesh;
-                bodies += 1;
-                faces += body.faces.len();
-                edges += body.edges.len();
-                triangles += mesh.indices.len() / 3;
-                points += mesh.positions.len() / 3
-                    + body
-                        .edges
-                        .iter()
-                        .map(|edge| edge.points.len())
-                        .sum::<usize>();
-                if bodies > 256
-                    || faces > 10_000
-                    || edges > 10_000
-                    || triangles > 100_000
-                    || mesh.positions.len() % 3 != 0
-                    || mesh.indices.len() < 3
-                    || points > 300_000
-                    || mesh.positions.len() < 9
-                    || mesh.normals.len() != mesh.positions.len()
-                    || mesh.normals.iter().any(|value| !value.is_finite())
-                    || mesh.indices.len() % 3 != 0
-                    || mesh
-                        .indices
-                        .iter()
-                        .any(|index| *index as usize >= mesh.positions.len() / 3)
-                    || mesh
-                        .positions
-                        .iter()
-                        .any(|value| !value.is_finite() || value.abs() > 10_000.0)
-                {
-                    return Err("This geometry exceeds the bounded feature preview; run the script in a new design".into());
-                }
-
-                let mut ranges = body
-                    .faces
-                    .iter()
-                    .map(|face| (face.first_index as usize, face.index_count as usize))
-                    .collect::<Vec<_>>();
-                ranges.sort_unstable();
-                let mut previous_end = 0;
-                for (start, count) in ranges {
-                    let end = start
-                        .checked_add(count)
-                        .ok_or("Invalid preview face range")?;
-                    if start % 3 != 0
-                        || count % 3 != 0
-                        || start < previous_end
-                        || end > mesh.indices.len()
-                    {
-                        return Err("Invalid preview face range".into());
-                    }
-                    previous_end = end;
-                }
-                if body
-                    .edges
-                    .iter()
-                    .flat_map(|edge| &edge.points)
-                    .any(|point| {
-                        [point.x, point.y, point.z]
-                            .iter()
-                            .any(|value| !value.is_finite() || value.abs() > 10_000.0)
-                    })
-                {
-                    return Err("Invalid preview edge points".into());
-                }
-                for point in mesh.positions.as_chunks::<3>().0 {
-                    let point = Vec3::new(point[0], point[1], point[2]);
-                    low = low.min(point);
-                    high = high.max(point);
-                }
-            }
-        }
-        let bytes = serde_json::to_vec(&frames)
-            .map_err(|error| error.to_string())?
-            .len();
-        if bytes > MAX_DOCUMENT_BYTES {
-            return Err("The feature preview is too large; run the script in a new design".into());
-        }
-        let (center, radius) = if low.is_finite() {
-            ((low + high) * 0.5, low.distance(high).max(2.0) * 0.5)
-        } else {
-            (Vec3::ZERO, 1.0)
-        };
+    pub(super) fn new(frames: Vec<Frame>) -> Result<Self, String> {
+        let bounds = limo_cad_native_engine::teaching::validate_frames(&frames)?;
+        let center = Vec3::from_array(bounds.center);
+        let radius = bounds.radius;
+        let bytes = bounds.bytes;
         Ok(Self {
             frames: frames
                 .into_iter()
                 .map(|frame| RetainedFrame {
                     caption: frame.caption,
                     scene: Arc::new(frame.scene),
+                    profile: frame.profile,
+                    cue: frame.cue,
+                    duration_ms: frame.duration_ms,
+                    finish: frame.finish,
+                    edges: frame.edges,
+                    inspection: frame.inspection,
                 })
                 .collect(),
             center,
@@ -183,7 +132,7 @@ impl PreviewDocument {
         })
     }
 
-    fn camera(&self, request: &RenderRequest) -> ViewportCamera {
+    pub(super) fn camera(&self, request: &RenderRequest) -> ViewportCamera {
         let direction = Vec3::new(
             request.yaw.cos() * request.pitch.cos(),
             -request.yaw.sin() * request.pitch.cos(),
@@ -206,11 +155,15 @@ impl PreviewDocument {
 pub(crate) struct PreviewDescriptor {
     pub preview_id: String,
     pub captions: Vec<String>,
+    pub cues: Vec<Option<PreviewCue>>,
+    pub durations_ms: Vec<u64>,
 }
 
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct RenderRequest {
+    #[serde(default)]
+    pub palette: Option<ViewportPalette>,
     pub preview_id: String,
     pub view_id: String,
     pub revision: u64,
@@ -224,8 +177,8 @@ impl RenderRequest {
     fn validate(&self) -> Result<(), String> {
         if uuid::Uuid::parse_str(&self.view_id).is_err()
             || self.revision == 0
-            || !(64..=640).contains(&self.width)
-            || !(64..=400).contains(&self.height)
+            || !(64..=MAX_RENDER_SIZE[0]).contains(&self.width)
+            || !(64..=MAX_RENDER_SIZE[1]).contains(&self.height)
             || !self.yaw.is_finite()
             || self.yaw.abs() > 100_000.0
             || !self.pitch.is_finite()
@@ -240,65 +193,130 @@ impl RenderRequest {
 #[derive(Default)]
 struct ServiceState {
     documents: VecDeque<(String, Arc<PreviewDocument>)>,
-    views: HashMap<String, (u64, Arc<AtomicBool>)>,
-    worker: Option<mpsc::SyncSender<WorkerCommand>>,
+    views: HashMap<String, ViewState>,
+    worker: Option<Submit>,
+    retire: Option<Retire>,
+}
+
+type Submit = Arc<dyn Fn(Box<RenderJob>) -> Result<(), String> + Send + Sync>;
+type Retire = Arc<dyn Fn() + Send + Sync>;
+
+struct ViewState {
+    revision: u64,
+    cancelled: Arc<AtomicBool>,
+    // Stable across revisions: superseding a sample must not retire a view.
+    closed: Arc<AtomicBool>,
+}
+impl Default for ViewState {
+    fn default() -> Self {
+        Self {
+            revision: 0,
+            cancelled: Arc::new(AtomicBool::new(false)),
+            closed: Arc::new(AtomicBool::new(false)),
+        }
+    }
 }
 
 #[derive(Default)]
-pub(crate) struct PreviewService(Mutex<ServiceState>, Arc<AtomicUsize>);
-enum WorkerCommand {
-    Render(RenderJob),
-    Release,
-}
-struct RenderJob {
-    document: Arc<PreviewDocument>,
-    request: RenderRequest,
-    cancelled: Arc<AtomicBool>,
-    reply: mpsc::SyncSender<Result<Vec<u8>, String>>,
-    deadline: Instant,
+pub(crate) struct PreviewService(Mutex<ServiceState>);
+
+#[derive(Clone)]
+pub(crate) struct RenderedTexture {
+    pub image: GpuImage,
+    pub lease: Arc<()>,
 }
 
-#[derive(Debug)]
+pub(super) struct RenderJob {
+    pub view_closed: Arc<AtomicBool>,
+    pub document: Arc<PreviewDocument>,
+    pub request: RenderRequest,
+    pub progress: f32,
+    pub cancelled: Arc<AtomicBool>,
+    pub reply: mpsc::SyncSender<Result<RenderedTexture, String>>,
+    pub deadline: Instant,
+}
+
 pub(crate) struct PendingRender {
-    response: mpsc::Receiver<Result<Vec<u8>, String>>,
+    response: mpsc::Receiver<Result<RenderedTexture, String>>,
     cancelled: Arc<AtomicBool>,
     deadline: Instant,
 }
+impl std::fmt::Debug for PendingRender {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PendingRender")
+            .field("deadline", &self.deadline)
+            .finish()
+    }
+}
 impl PendingRender {
-    pub fn wait(self) -> Result<Vec<u8>, String> {
+    pub fn try_recv(&self) -> Result<Option<RenderedTexture>, String> {
+        check_request(&self.cancelled, self.deadline)?;
+        match self.response.try_recv() {
+            Ok(result) => result.map(Some),
+            Err(mpsc::TryRecvError::Empty) => Ok(None),
+            Err(mpsc::TryRecvError::Disconnected) => Err("CAD renderer stopped".into()),
+        }
+    }
+    #[cfg(test)]
+    pub fn wait(self) -> Result<RenderedTexture, String> {
+        check_request(&self.cancelled, self.deadline)?;
         self.response
             .recv_timeout(self.deadline.saturating_duration_since(Instant::now()))
             .map_err(|error| format!("Feature preview request ended: {error}"))?
     }
 }
+
+pub(crate) fn connect(world: &World, service: &PreviewService) -> Result<(), String> {
+    super::viewport_renderer::connect_preview(world, service)
+}
+
+#[cfg(test)]
+pub(crate) fn shared_fixture_plugins() -> bevy::app::PluginGroupBuilder {
+    super::viewport_renderer::interface_plugins()
+}
+
+#[cfg(test)]
+pub(crate) fn install_shared_fixture(app: &mut App) {
+    super::viewport_renderer::install(app);
+}
+
+#[cfg(test)]
+pub(crate) fn shared_fixture_retirement_finished(world: &World) -> Result<bool, String> {
+    super::viewport_renderer::teaching_retirement_finished(world)
+}
+
 impl Drop for PendingRender {
     fn drop(&mut self) {
         self.cancelled.store(true, Ordering::Release);
     }
 }
 
-fn check_request(cancelled: &AtomicBool, deadline: Instant) -> Result<(), String> {
+pub(super) fn check_request(cancelled: &AtomicBool, deadline: Instant) -> Result<(), String> {
     if cancelled.load(Ordering::Acquire) {
-        return Err("Feature preview closed".into());
+        return Err(PREVIEW_CLOSED.into());
     }
     if Instant::now() >= deadline {
         cancelled.store(true, Ordering::Release);
-        return Err("Feature preview request timed out".into());
+        return Err(PREVIEW_TIMED_OUT.into());
     }
     Ok(())
 }
 
 impl PreviewService {
+    pub(super) fn connect(&self, submit: Submit, retire: Retire) {
+        if let Ok(mut state) = self.0.lock() {
+            state.worker = Some(submit);
+            state.retire = Some(retire);
+        }
+    }
+
     pub fn open_view(&self) -> Result<String, String> {
         let mut state = self.0.lock().map_err(|_| "Preview cache lock poisoned")?;
         if state.views.len() >= MAX_VIEWS {
             return Err("Too many feature preview views are open".into());
         }
         let id = uuid::Uuid::new_v4().to_string();
-        state
-            .views
-            .insert(id.clone(), (0, Arc::new(AtomicBool::new(false))));
-        self.1.fetch_add(1, Ordering::AcqRel);
+        state.views.insert(id.clone(), ViewState::default());
         Ok(id)
     }
 
@@ -310,6 +328,12 @@ impl PreviewService {
                 .frames
                 .iter()
                 .map(|frame| frame.caption.clone())
+                .collect(),
+            cues: document.frames.iter().map(|frame| frame.cue).collect(),
+            durations_ms: document
+                .frames
+                .iter()
+                .map(|frame| frame.duration_ms.unwrap_or(1800))
                 .collect(),
         };
         let mut state = self.0.lock().map_err(|_| "Preview cache lock poisoned")?;
@@ -336,20 +360,80 @@ impl PreviewService {
         }
     }
 
-    pub fn close_view(&self, view_id: &str) {
-        if let Ok(mut state) = self.0.lock() {
-            if let Some((_, cancelled)) = state.views.remove(view_id) {
-                cancelled.store(true, Ordering::Release);
-                self.1.fetch_sub(1, Ordering::AcqRel);
-
-                if let Some(worker) = &state.worker {
-                    let _ = worker.try_send(WorkerCommand::Release);
-                }
+    /// Projection only: no GPU work or mutation of the live document/renderer.
+    pub(crate) fn dimension_annotations(
+        &self,
+        request: &RenderRequest,
+        size: [f32; 2],
+    ) -> Result<crate::native_editor::annotations::teaching::Annotations, String> {
+        let document = self
+            .0
+            .lock()
+            .map_err(|_| "Preview cache lock poisoned")?
+            .documents
+            .iter()
+            .find(|(id, _)| id == &request.preview_id)
+            .map(|(_, document)| Arc::clone(document))
+            .ok_or("Teaching document has been released")?;
+        let frame = document
+            .frames
+            .get(request.frame_index)
+            .ok_or("Unknown teaching frame")?;
+        if let Some(inspection) = &frame.inspection {
+            if inspection.measurement.is_some() || inspection.section.is_some() {
+                return inspection::annotations(
+                    inspection,
+                    document.camera(request),
+                    size,
+                    [request.width as f32, request.height as f32],
+                );
             }
+        }
+        let Some(profile) = frame
+            .profile
+            .as_ref()
+            .filter(|_| permits_dimension_annotations(frame.cue))
+        else {
+            return Ok(Default::default());
+        };
+        crate::native_editor::annotations::teaching::project(
+            profile,
+            document.camera(request),
+            size,
+            [request.width as f32, request.height as f32],
+        )
+    }
+
+    pub fn close_view(&self, view_id: &str) {
+        let retire = {
+            // Closing remains effective even if an earlier submitter panicked.
+            let mut state = self.0.lock().unwrap_or_else(|error| error.into_inner());
+            let Some(view) = state.views.remove(view_id) else {
+                return;
+            };
+            view.cancelled.store(true, Ordering::Release);
+            view.closed.store(true, Ordering::Release);
+            state.retire.clone()
+        };
+        // Wake the existing worker once, without holding the service lock.
+        // Its coalesced cleanup slot fences both queued and in-flight work.
+        if let Some(retire) = retire {
+            retire();
         }
     }
 
     pub fn render(&self, request: RenderRequest) -> Result<PendingRender, String> {
+        self.render_animated(request, 1.0)
+    }
+
+    pub fn render_animated(
+        &self,
+        request: RenderRequest,
+        progress: f32,
+    ) -> Result<PendingRender, String> {
+        if !progress.is_finite() || !(0.0..=1.0).contains(&progress) {
+            return Err("Invalid feature preview animation progress".into());
+        }
         request.validate()?;
         let mut state = self.0.lock().map_err(|_| "Preview cache lock poisoned")?;
         let document = state
@@ -361,42 +445,33 @@ impl PreviewService {
         if request.frame_index >= document.frames.len() {
             return Err("Unknown feature preview frame".into());
         }
-        let (revision, _) = state
+        let view = state
             .views
             .get(&request.view_id)
             .ok_or("Feature preview view is closed")?;
-        if request.revision <= *revision {
+        if request.revision <= view.revision {
             return Err("Superseded feature preview request".into());
         }
         let cancelled = Arc::new(AtomicBool::new(false));
         let (reply, response) = mpsc::sync_channel(1);
         let deadline = Instant::now() + REQUEST_LIFETIME;
-        if state.worker.is_none() {
-            let (sender, jobs) = mpsc::sync_channel::<WorkerCommand>(2);
-            let active_views = self.1.clone();
-            std::thread::Builder::new()
-                .name("CAD feature previews".into())
-                .spawn(move || render_worker(jobs, active_views))
-                .map_err(|error| error.to_string())?;
-            state.worker = Some(sender);
-        }
         let view_id = request.view_id.clone();
         let revision = request.revision;
-        state
-            .worker
-            .as_ref()
-            .unwrap()
-            .try_send(WorkerCommand::Render(RenderJob {
-                document,
-                request,
-                cancelled: cancelled.clone(),
-                reply,
-                deadline,
-            }))
-            .map_err(|_| "Feature preview renderer is busy; try again")?;
-        if let Some((_, previous)) = state.views.insert(view_id, (revision, cancelled.clone())) {
-            previous.store(true, Ordering::Release);
-        }
+        let view_closed = Arc::clone(&view.closed);
+        let command = Box::new(RenderJob {
+            view_closed,
+            document,
+            request,
+            progress,
+            cancelled: cancelled.clone(),
+            reply,
+            deadline,
+        });
+        state.worker.as_ref().ok_or("CAD renderer is not ready")?(command)?;
+        let view = state.views.get_mut(&view_id).unwrap();
+        view.revision = revision;
+        let previous = std::mem::replace(&mut view.cancelled, cancelled.clone());
+        previous.store(true, Ordering::Release);
         Ok(PendingRender {
             response,
             cancelled,
@@ -405,57 +480,69 @@ impl PreviewService {
     }
 }
 
-fn render_worker(jobs: mpsc::Receiver<WorkerCommand>, active_views: Arc<AtomicUsize>) {
-    let mut renderer = None;
-    while let Ok(command) = jobs.recv() {
-        let job = match command {
-            WorkerCommand::Release => {
-                if active_views.load(Ordering::Acquire) == 0 {
-                    renderer = None;
-                }
-                continue;
-            }
-            WorkerCommand::Render(job) => job,
-        };
-        if let Err(error) = check_request(&job.cancelled, job.deadline) {
-            if active_views.load(Ordering::Acquire) == 0 {
-                renderer = None;
-            }
-            let _ = job.reply.send(Err(error));
-            continue;
-        }
-        let result = std::panic::catch_unwind(AssertUnwindSafe(|| {
-            if renderer.is_none() {
-                renderer = Some(PreviewRenderer::new()?);
-            }
-            renderer.as_mut().unwrap().render(
-                &job.document,
-                &job.request,
-                &job.cancelled,
-                job.deadline,
-            )
-        }))
-        .unwrap_or_else(|failure| {
-            renderer = None;
-            Err(format!(
-                "Feature preview renderer failed: {}",
-                panic_message(failure)
-            ))
-        });
+#[cfg(test)]
+mod close_lifetime_tests {
+    use super::*;
 
-        if result.is_err() || active_views.load(Ordering::Acquire) == 0 {
-            renderer = None;
-        }
-        let _ = job.reply.send(result);
+    #[test]
+    fn native_preview_close_has_one_stable_view_lifetime_and_one_retirement_signal() {
+        let service = PreviewService::default();
+        let descriptor = service.retain(vec![Frame::default()]).unwrap();
+        let (send, receive) = mpsc::channel();
+        let retirements = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let counted = Arc::clone(&retirements);
+        service.connect(
+            Arc::new(move |job| send.send(job).map_err(|e| e.to_string())),
+            Arc::new(move || {
+                counted.fetch_add(1, Ordering::AcqRel);
+            }),
+        );
+        let view = service.open_view().unwrap();
+        let request = |revision| RenderRequest {
+            palette: None,
+            preview_id: descriptor.preview_id.clone(),
+            view_id: view.clone(),
+            revision,
+            frame_index: 0,
+            width: 300,
+            height: 176,
+            yaw: 0.5,
+            pitch: 0.5,
+        };
+        let _first = service.render(request(1)).unwrap();
+        let first = receive.recv().unwrap();
+        let _second = service.render(request(2)).unwrap();
+        let second = receive.recv().unwrap();
+        assert!(first.cancelled.load(Ordering::Acquire));
+        assert!(
+            !first.view_closed.load(Ordering::Acquire),
+            "Superseding a sample keeps its view resident"
+        );
+        assert!(Arc::ptr_eq(&first.view_closed, &second.view_closed));
+        service.close_view(&view);
+        service.close_view(&view);
+        assert!(second.cancelled.load(Ordering::Acquire));
+        assert!(second.view_closed.load(Ordering::Acquire));
+        assert_eq!(retirements.load(Ordering::Acquire), 1);
+        let reopened = service.open_view().unwrap();
+        let state = service.0.lock().unwrap();
+        assert!(!Arc::ptr_eq(
+            &state.views[&reopened].closed,
+            &second.view_closed
+        ));
+        assert!(!state.views[&reopened].closed.load(Ordering::Acquire));
     }
 }
 
+// Test-only pixel oracle for authored geometry; never used by the preview service.
+#[cfg(test)]
 #[derive(Resource, Default)]
 struct CapturedImage {
     revision: u64,
     result: Option<Result<Vec<u8>, String>>,
 }
 
+#[cfg(test)]
 struct PreviewRenderer {
     app: bevy::app::App,
     target: Handle<Image>,
@@ -465,6 +552,7 @@ struct PreviewRenderer {
     model_key: Option<(String, usize)>,
 }
 
+#[cfg(test)]
 impl PreviewRenderer {
     fn new() -> Result<Self, String> {
         let mut app = bevy::app::App::new();
@@ -482,6 +570,21 @@ impl PreviewRenderer {
         let plugins = plugins.disable::<bevy::winit::WinitPlugin>();
         app.add_plugins(plugins);
         install_cad_scene(&mut app);
+        app.init_resource::<TeachingFinish>();
+        // Last runs after the normal scene material updates, before render extraction.
+        app.add_systems(Last, apply_teaching_finish);
+        app.add_systems(
+            Startup,
+            (|mut config: ResMut<GizmoConfigStore>| {
+                // Keep the teaching profile readable after thumbnail downsampling.
+                config
+                    .config_mut::<CadDirectPickFeedbackGizmos>()
+                    .0
+                    .line
+                    .width = 2.;
+            })
+            .after(setup_scene),
+        );
         app.init_resource::<CapturedImage>();
         app.finish();
         app.cleanup();
@@ -506,6 +609,21 @@ impl PreviewRenderer {
             geometry_revision: 0,
             model_key: None,
         })
+    }
+
+    fn abort_capture(&mut self) {
+        // Fence late readbacks. Submitted captures must live until Bevy retires
+        // them: its completion handler inserts Captured on the original entity.
+        // Only screenshots not yet submitted may be safely despawned here.
+        let world = self.app.world_mut();
+        *world.resource_mut::<CapturedImage>() = CapturedImage::default();
+        let pending: Vec<Entity> = world
+            .query_filtered::<Entity, (With<Screenshot>, Without<Capturing>)>()
+            .iter(world)
+            .collect();
+        for entity in pending {
+            world.despawn(entity);
+        }
     }
 
     fn update(&mut self, cancelled: &AtomicBool, deadline: Instant) -> Result<(), String> {
@@ -595,6 +713,10 @@ impl PreviewRenderer {
             self.model_key = Some(model_key);
         }
         let world = self.app.world_mut();
+        world.resource_mut::<TeachingFinish>().0 = document.frames[request.frame_index].finish;
+        if let Some(palette) = request.palette {
+            apply_interface_palette(world, palette);
+        }
         *world.resource_mut::<CapturedImage>() = CapturedImage {
             revision,
             result: None,
@@ -606,11 +728,44 @@ impl PreviewRenderer {
                 revision: self.geometry_revision,
                 document: std::sync::Arc::new(limo_cad_native_engine::NativeViewportDocument {
                     scene: Arc::clone(&document.frames[request.frame_index].scene),
+                    finished_sketches: document.frames[request.frame_index]
+                        .profile
+                        .clone()
+                        .into_iter()
+                        .collect(),
                     ..Default::default()
                 }),
                 ..default()
             };
             bind_document_geometry(world);
+            world
+                .resource_mut::<PresentationResource>()
+                .0
+                .selected_edge_ids = document.frames[request.frame_index].edges.clone();
+            world
+                .resource_mut::<PresentationResource>()
+                .0
+                .selected_finished_sketch_entities = document.frames[request.frame_index]
+                .profile
+                .as_ref()
+                .into_iter()
+                .flat_map(|profile| {
+                    profile
+                        .entities
+                        .iter()
+                        .filter(|entity| {
+                            matches!(
+                                entity,
+                                limo_cad_sketch::EntityDto::Line { .. }
+                                    | limo_cad_sketch::EntityDto::Circle { .. }
+                            )
+                        })
+                        .map(|entity| FinishedSketchEntityPickRef {
+                            sketch_name: profile.name.clone(),
+                            entity_id: entity.id().0,
+                        })
+                })
+                .collect();
         }
         *world.resource_mut::<CameraResource>() = CameraResource {
             camera: document.camera(request),
@@ -645,8 +800,7 @@ impl PreviewRenderer {
                 .result
                 .take();
             Ok(captured.is_some())
-        })
-        .map_err(|_| "Feature preview capture did not complete".to_owned())?;
+        })?;
         check_request(cancelled, deadline)?;
         captured.ok_or_else(|| "Feature preview capture did not complete".to_owned())?
     }
@@ -673,6 +827,7 @@ mod tests {
 
     fn request(preview_id: String, view_id: String, revision: u64) -> RenderRequest {
         RenderRequest {
+            palette: None,
             preview_id,
             view_id,
             revision,
@@ -681,6 +836,64 @@ mod tests {
             height: 176,
             yaw: std::f32::consts::FRAC_PI_4,
             pitch: std::f32::consts::PI / 6.0,
+        }
+    }
+
+    #[test]
+    fn native_script_preview_cancel_fences_capture_without_destroying_inflight_entity() {
+        let mut app = bevy::app::App::new();
+        app.insert_resource(CapturedImage {
+            revision: 9,
+            result: Some(Ok(vec![1])),
+        });
+        let target = Handle::<Image>::default();
+        let queued = app
+            .world_mut()
+            .spawn(Screenshot::image(target.clone()))
+            .id();
+        let submitted = app
+            .world_mut()
+            .spawn((Screenshot::image(target.clone()), Capturing))
+            .id();
+        let mut renderer = PreviewRenderer {
+            app,
+            target,
+            size: (300, 176),
+            revision: 9,
+            geometry_revision: 0,
+            model_key: None,
+        };
+        renderer.abort_capture();
+        let world = renderer.app.world();
+        assert!(world.get_entity(queued).is_err());
+        assert!(world.get_entity(submitted).is_ok());
+        assert_eq!(world.resource::<CapturedImage>().revision, 0);
+        assert!(world.resource::<CapturedImage>().result.is_none());
+        assert_eq!(
+            renderer.revision, 9,
+            "next render must advance beyond old callback revision"
+        );
+    }
+
+    #[test]
+    fn native_script_preview_requires_shared_renderer_without_spawning_a_fallback() {
+        let service = PreviewService::default();
+        let descriptor = service.retain(vec![frame(0.)]).unwrap();
+        let view = service.open_view().unwrap();
+        assert!(service
+            .render(request(descriptor.preview_id, view, 1))
+            .unwrap_err()
+            .contains("not ready"));
+    }
+
+    #[test]
+    fn native_preview_animation_rejects_invalid_progress_before_submitting() {
+        let service = PreviewService::default();
+        for progress in [f32::NAN, f32::INFINITY, -0.01, 1.01] {
+            assert!(service
+                .render_animated(request(String::new(), String::new(), 1), progress)
+                .unwrap_err()
+                .contains("animation progress"));
         }
     }
 
@@ -729,12 +942,182 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "requires a native graphics adapter"]
+    fn extrude_preview_renders_selected_profile_and_real_solid() {
+        let mut report = limo_cad_mcp::preview_script(include_str!(
+            "../../../examples/scripts/extrude-basics.limo.jsonc"
+        ))
+        .unwrap();
+        let frames =
+            serde_json::from_value(report["exports"]["lessons"]["extrude"].take()).unwrap();
+        let mut document = PreviewDocument::new(frames).unwrap();
+        let mut renderer = PreviewRenderer::new().unwrap();
+        let cancelled = AtomicBool::new(false);
+        let mut request = request("extrude-profile".into(), "proof".into(), 1);
+        request.yaw = -40. * std::f32::consts::PI / 180.;
+        request.pitch = 32. * std::f32::consts::PI / 180.;
+        request.width = 600;
+        request.height = 400;
+        let mut render = |document: &PreviewDocument, request: &RenderRequest| {
+            renderer
+                .render(
+                    document,
+                    request,
+                    &cancelled,
+                    Instant::now() + Duration::from_secs(60),
+                )
+                .unwrap()
+        };
+        let profile = render(&document, &request);
+        request.frame_index = 4;
+        request.revision += 1;
+        let solid = render(&document, &request);
+        document.frames[4].finish = None;
+        request.preview_id = "extrude-matte-control".into();
+        request.revision += 1;
+        let matte = render(&document, &request);
+        document.frames[0].profile = None;
+        request.frame_index = 0;
+        request.preview_id = "extrude-negative-control".into();
+        request.revision += 1;
+        let blank = render(&document, &request);
+        let (_, _, profile_pixels) = decode_rgba(&profile);
+        let (_, _, solid_pixels) = decode_rgba(&solid);
+        let (_, _, matte_pixels) = decode_rgba(&matte);
+        let (_, _, blank_pixels) = decode_rgba(&blank);
+        let changed = |left: &[u8], right: &[u8]| {
+            left.as_chunks::<4>()
+                .0
+                .iter()
+                .zip(right.as_chunks::<4>().0.iter())
+                .filter(|(a, b)| a[..3] != b[..3])
+                .count()
+        };
+        assert!(
+            changed(&profile_pixels, &blank_pixels) > 30,
+            "The first selected profile must be visible"
+        );
+        assert!(
+            changed(&profile_pixels, &solid_pixels) > 1000,
+            "Extrusion must visibly change real geometry"
+        );
+        assert!(
+            changed(&solid_pixels, &matte_pixels) > 1000,
+            "The opt-in metal finish must visibly differ from default matte shading"
+        );
+        let mut cut_frames: Vec<Frame> =
+            serde_json::from_value(report["exports"]["lessons"]["cut"].take()).unwrap();
+        for frame in &mut cut_frames {
+            if let Some(profile) = &mut frame.profile {
+                profile.projected_edges.clear();
+                profile.reference_midpoints.clear();
+            }
+        }
+        let mut cut_document = PreviewDocument::new(cut_frames).unwrap();
+        request.preview_id = "cut-profile-contrast".into();
+        request.revision += 1;
+        let cut_profile = render(&cut_document, &request);
+        cut_document.frames[0].profile = None;
+        request.preview_id = "cut-profile-negative-control".into();
+        request.revision += 1;
+        let cut_blank = render(&cut_document, &request);
+        let accent_pixels = |png: &[u8]| {
+            let (_, _, pixels) = decode_rgba(png);
+            pixels
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .filter(|p| p[2] as i16 > p[1] as i16 + 30 && p[0] as i16 > p[1] as i16 + 10)
+                .count()
+        };
+        let contrast = (accent_pixels(&cut_profile), accent_pixels(&cut_blank));
+        let fillet_frames: Vec<Frame> =
+            serde_json::from_value(report["exports"]["lessons"]["fillet"].take()).unwrap();
+        let mut invalid = fillet_frames.clone();
+        invalid[1].edges.push(u64::MAX);
+        assert!(
+            PreviewDocument::new(invalid).is_err(),
+            "Selection must belong to the retained scene"
+        );
+        let mut fillet = PreviewDocument::new(fillet_frames).unwrap();
+        request.frame_index = 1;
+        request.preview_id = "fillet-selection".into();
+        request.revision += 1;
+        let fillet_selected = render(&fillet, &request);
+        fillet.frames[1].edges.clear();
+        request.preview_id = "fillet-selection-negative-control".into();
+        request.revision += 1;
+        let fillet_blank = render(&fillet, &request);
+        let selected_edge_pixels = |png: &[u8]| {
+            decode_rgba(png)
+                .2
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .filter(|p| p[0] > 180 && p[1] > 150 && p[2] as i16 + 30 < p[1] as i16)
+                .count()
+        };
+        let fillet_contrast = (
+            selected_edge_pixels(&fillet_selected),
+            selected_edge_pixels(&fillet_blank),
+        );
+        let mut measured_frames: Vec<Frame> =
+            serde_json::from_value(report["exports"]["lessons"]["cut_measured"].take()).unwrap();
+        for frame in &mut measured_frames {
+            if let Some(profile) = &mut frame.profile {
+                profile.projected_edges.clear();
+                profile.reference_midpoints.clear();
+            }
+        }
+        let measured = PreviewDocument::new(measured_frames).unwrap();
+        request.frame_index = 3;
+        request.preview_id = "cut-measured-floor".into();
+        request.revision += 1;
+        let blind = render(&measured, &request);
+        request.preview_id = "cut-through-opening".into();
+        request.revision += 1;
+        let through = render(&cut_document, &request);
+        assert!(
+            changed(&decode_rgba(&blind).2, &decode_rgba(&through).2) > 1000,
+            "Blind floor must visibly differ from a through opening"
+        );
+        if let Ok(path) = std::env::var("LIMO_CAD_PREVIEW_PROOF_DIR") {
+            std::fs::create_dir_all(&path).unwrap();
+            for (name, bytes) in [
+                ("extrude-profile.png", profile),
+                ("extrude-solid.png", solid),
+                ("extrude-matte-control.png", matte),
+                ("extrude-blank-control.png", blank),
+                ("cut-profile.png", cut_profile),
+                ("cut-blank-control.png", cut_blank),
+                ("fillet-selected.png", fillet_selected),
+                ("fillet-selection-control.png", fillet_blank),
+                ("cut-measured.png", blind),
+                ("cut-through.png", through),
+            ] {
+                std::fs::write(std::path::Path::new(&path).join(name), bytes).unwrap();
+            }
+        }
+        assert!(
+            contrast.0 > contrast.1 + 50,
+            "The prepared circle must contrast with the solid in the selection accent: {contrast:?}"
+        );
+        assert!(
+            fillet_contrast.0 > fillet_contrast.1 + 50,
+            "Selected Fillet edges must visibly contrast with the solid: {fillet_contrast:?}"
+        );
+    }
+
+    #[test]
     fn closed_preview_view_rejects_late_work_and_queue_stays_bounded() {
         let service = PreviewService::default();
         let descriptor = service.retain(vec![frame(0.0)]).unwrap();
 
         let (worker, jobs) = mpsc::sync_channel(2);
-        service.0.lock().unwrap().worker = Some(worker);
+        service.connect(
+            Arc::new(move |job| worker.try_send(job).map_err(|_| "busy".into())),
+            Arc::new(|| {}),
+        );
         let view = service.open_view().unwrap();
         let first = request(descriptor.preview_id.clone(), view.clone(), 1);
         let _first_reply = service.render(first.clone()).unwrap();
@@ -743,17 +1126,12 @@ mod tests {
         let _second_reply = service.render(next.clone()).unwrap();
         next.revision = 3;
         assert!(service.render(next.clone()).unwrap_err().contains("busy"));
-        let WorkerCommand::Render(stale) = jobs.try_recv().unwrap() else {
-            panic!("expected render")
-        };
+        let stale = jobs.try_recv().unwrap();
         assert!(stale.cancelled.load(Ordering::Acquire));
-        let WorkerCommand::Render(current) = jobs.try_recv().unwrap() else {
-            panic!("expected render")
-        };
+        let current = jobs.try_recv().unwrap();
         service.close_view(&view);
         assert!(current.cancelled.load(Ordering::Acquire));
         assert!(service.render(next).unwrap_err().contains("closed"));
-        assert!(matches!(jobs.try_recv(), Ok(WorkerCommand::Release)));
         assert!(jobs.try_recv().is_err());
         let replacement = service.open_view().unwrap();
         assert_ne!(replacement, view);
@@ -1143,10 +1521,12 @@ mod tests {
                 Frame {
                     caption: format!("{label} with edges"),
                     scene,
+                    ..default()
                 },
                 Frame {
                     caption: format!("{label} without edges"),
                     scene: without_edges,
+                    ..default()
                 },
             ])
             .unwrap();
@@ -1867,6 +2247,7 @@ mod tests {
             let mut document = PreviewDocument::new(vec![Frame {
                 caption: "Thin partial circular plate".into(),
                 scene: scene.clone(),
+                ..default()
             }])
             .unwrap();
             let base_radius = document.radius;
@@ -1978,14 +2359,17 @@ mod tests {
             Frame {
                 caption: "Hidden edges present".into(),
                 scene,
+                ..default()
             },
             Frame {
                 caption: "Hidden edges removed".into(),
                 scene: without_hidden_edges,
+                ..default()
             },
             Frame {
                 caption: "All edges removed (negative control)".into(),
                 scene: without_any_edges,
+                ..default()
             },
         ])
         .unwrap();

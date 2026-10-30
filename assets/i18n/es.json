@@ -308,7 +308,7 @@
       "patternCircular": "Patrón circular",
       "patternOnPath": "Patrón en trayectoria",
       "mirror": "Espejo",
-      "fillet": "Radio",
+      "fillet": "Redondeo",
       "chamfer": "Chamfer",
       "shell": "Cascarón",
       "draft": "Desmoldeo",
@@ -453,7 +453,7 @@
       "patternCircular": "Patrón circular",
       "sketchDimension": "Cota de croquis",
       "fillet": "Radio",
-      "chamfer": "Chamfrado",
+      "chamfer": "Chaflán",
       "offset": "Desplazamiento",
       "trim": "Recortar",
       "extend": "Extender",
@@ -798,8 +798,8 @@
     "toNextNeedsTarget": "«Hasta la siguiente» necesita Agregar, Sustraer o Común para tener un cuerpo objetivo donde detenerse."
   },
   "solidEdge": {
-    "fillet": "Chamferado sólido",
-    "editFillet": "Editar chamferado sólido",
+    "fillet": "Redondeo del sólido",
+    "editFillet": "Editar redondeo del sólido",
     "chamfer": "Chamfer sólido",
     "editChamfer": "Editar chamfer sólido",
     "loading": "Cargando topología sólida…",

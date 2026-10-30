@@ -1,0 +1,173 @@
+{
+  "version": 1,
+  "locales": {
+    "en": {
+      "construction_visibility": {
+        "title": "Show and hide construction references",
+        "summary": "Clear the bracket view without removing its saved sketch or center datum.",
+        "prerequisite": "The 32 × 44 × 40 mm bracket, its 8 mm walls, section sketch and center datum are already prepared.",
+        "instructions": ["Find the retained L section sketch and center datum on the prepared bracket.", "Use Show refs to hide the retained sketches and datums. The solid remains visible.", "In the Browser, show just the section sketch. The datum stays hidden.", "Show all construction references again. Visibility changes leave the body geometry intact."],
+        "captions": ["Sketch and datum visible", "References hidden; solid preserved", "Only the section sketch restored", "All references visible again"],
+        "actions": ["Inspect references", "Hide references", "Show the sketch", "Show all references"]
+      },
+      "section_analysis": {
+        "title": "Inspect the bracket with a section",
+        "summary": "Look through the upright, reverse the retained half, then close the temporary view.",
+        "prerequisite": "A 32 × 44 × 40 mm bracket with 8 mm walls is already prepared. Section analysis creates no feature.",
+        "instructions": ["Open Section analysis and choose the prepared bracket body.", "Choose XZ at Y = 20 mm. The capped cutaway exposes the L section halfway across the 40 mm width.", "Reverse the retained side. A probe at Z = 20 mm crosses 8 mm of upright material in either view.", "Close Section analysis to restore the complete body. The original geometry and history stay intact."],
+        "captions": ["Choose the prepared body", "XZ section at Y = 20 mm", "Reverse side; same 8 mm wall", "Close the temporary section"],
+        "actions": ["Choose body", "Set section plane", "Reverse retained side", "Close section"]
+      },
+      "selection_solid": {
+        "title": "Select a face or an edge",
+        "summary": "Distinguish the bracket's upright face from its top edge before starting another tool.",
+        "prerequisite": "The 32 × 44 × 40 mm bracket with 8 mm walls is already prepared.",
+        "instructions": ["Choose Select in the Solid workspace and inspect the prepared bracket.", "Click inside the upright's inner face. The face highlight identifies a surface selection.", "Click the top edge of that face. The edge highlight identifies a curve selection.", "Click empty space to clear the selection. Selecting geometry does not create or modify a feature."],
+        "captions": ["Select mode; no geometry selected", "Inner upright face selected", "Top edge selected", "Selection cleared; bracket intact"],
+        "actions": ["Choose Select", "Pick a face", "Pick an edge", "Clear selection"]
+      },
+      "selection_sketch": {
+        "title": "Select sketch entities",
+        "summary": "Pick one segment, add a second with Shift, then clear the selection.",
+        "prerequisite": "The prepared 32 × 44 mm L section has 8 mm walls and is open for sketch editing.",
+        "instructions": ["Choose Select in the Sketch workspace. The prepared L section stays unchanged.", "Click the middle of the 32 mm bottom segment to select the segment rather than an endpoint.", "Shift-click the adjacent 8 mm vertical segment to add it to the selection.", "Click empty space without Shift to clear both selections. Dimensions and constraints stay unchanged."],
+        "captions": ["Prepared sketch in Select mode", "Bottom segment selected", "Shift adds the adjacent segment", "Both selections cleared"],
+        "actions": ["Choose Select", "Pick one segment", "Shift-click to add", "Clear selection"]
+      },
+      "measure": {
+        "title": "Measure the upright wall",
+        "summary": "Measure the exact gap between the upright's outside and inside faces.",
+        "prerequisite": "The 32 × 44 × 40 mm bracket and its 8 mm walls are already prepared.",
+        "instructions": ["Open Measure on the prepared bracket.", "Choose the outer upright face at X = 0 mm as the first selection.", "Choose the inner upright face at X = 8 mm. Read the native minimum distance: 8 mm.", "Close Measure. The readout is temporary and the bracket geometry stays unchanged."],
+        "captions": ["Open Measure on the bracket", "Choose the outer upright face", "Native face distance: 8 mm", "Close Measure; geometry preserved"],
+        "actions": ["Open Measure", "Choose first face", "Choose second face", "Close Measure"]
+      }
+    },
+    "zh-CN": {
+      "construction_visibility": {
+        "title": "显示与隐藏构造参照",
+        "summary": "隐藏支架的已保存草图和中心基准面，让视图更清楚，同时保留这些参照。",
+        "prerequisite": "32 × 44 × 40 mm 支架、8 mm 壁厚、截面草图和中心基准面均已准备好。",
+        "instructions": ["在已准备好的支架上找到保留的 L 形截面草图和中心基准面。", "使用构造可见性隐藏保留的草图和基准面。实体仍然可见。", "在浏览器中只显示截面草图。基准面保持隐藏。", "再次显示全部构造参照。可见性更改不会改变实体几何。"],
+        "captions": ["草图和基准面均可见", "参照已隐藏，实体保留", "仅恢复截面草图", "全部参照再次可见"],
+        "actions": ["查看参照", "隐藏参照", "显示草图", "显示全部参照"]
+      },
+      "section_analysis": {
+        "title": "用剖面检查支架",
+        "summary": "查看立壁内部，切换保留的一侧，然后关闭临时剖视图。",
+        "prerequisite": "32 × 44 × 40 mm、壁厚 8 mm 的支架已准备好。剖面分析不会创建特征。",
+        "instructions": ["打开剖面分析并选择已准备好的支架实体。", "选择 Y = 20 mm 处的 XZ 平面。带封口的剖切视图显示 40 mm 宽度中间的 L 形截面。", "反转保留的一侧。在两种视图中，Z = 20 mm 处的探测线都穿过 8 mm 厚的立壁材料。", "关闭剖面分析以恢复完整实体。原始几何和历史记录保持不变。"],
+        "captions": ["选择已准备好的实体", "Y = 20 mm 处的 XZ 剖面", "反转保留侧，壁厚仍为 8 mm", "关闭临时剖面"],
+        "actions": ["选择实体", "设置剖切平面", "反转保留侧", "关闭剖面"]
+      },
+      "selection_solid": {
+        "title": "选择面或边",
+        "summary": "在开始其他工具之前，区分支架立壁的内侧面和顶边。",
+        "prerequisite": "32 × 44 × 40 mm、壁厚 8 mm 的支架已准备好。",
+        "instructions": ["在实体工作区选择“选择”，查看已准备好的支架。", "单击立壁内侧面的内部。面高亮表示当前选中的是曲面。", "单击该面的顶边。边高亮表示当前选中的是曲线。", "单击空白处清除选择。选择几何不会创建或修改特征。"],
+        "captions": ["选择模式，尚未选中几何", "已选中立壁内侧面", "已选中顶边", "选择已清除，支架保持完整"],
+        "actions": ["进入选择模式", "选择面", "选择边", "清除选择"]
+      },
+      "selection_sketch": {
+        "title": "选择草图实体",
+        "summary": "选择一条线段，按住 Shift 添加第二条，然后清除选择。",
+        "prerequisite": "32 × 44 mm、壁厚 8 mm 的 L 形截面已准备好，并已进入草图编辑。",
+        "instructions": ["在草图工作区选择“选择”。已准备好的 L 形截面保持不变。", "单击 32 mm 底部线段的中间，选中线段而不是端点。", "按住 Shift 单击相邻的 8 mm 竖直线段，将其添加到选择中。", "松开 Shift，单击空白处清除两个选择。尺寸和约束保持不变。"],
+        "captions": ["草图已进入选择模式", "已选中底部线段", "按住 Shift 添加相邻线段", "两个选择均已清除"],
+        "actions": ["进入选择模式", "选择一条线段", "按住 Shift 添加", "清除选择"]
+      },
+      "measure": {
+        "title": "测量立壁厚度",
+        "summary": "精确测量立壁外侧面与内侧面之间的距离。",
+        "prerequisite": "32 × 44 × 40 mm 支架及其 8 mm 壁厚均已准备好。",
+        "instructions": ["在已准备好的支架上打开测量。", "选择 X = 0 mm 处的立壁外侧面作为第一个选择。", "选择 X = 8 mm 处的立壁内侧面。读取原生最小距离：8 mm。", "关闭测量。读数是临时的，支架几何保持不变。"],
+        "captions": ["打开支架测量", "选择立壁外侧面", "原生面间距：8 mm", "关闭测量，保留几何"],
+        "actions": ["打开测量", "选择第一个面", "选择第二个面", "关闭测量"]
+      }
+    },
+    "es": {
+      "construction_visibility": {
+        "title": "Mostrar y ocultar referencias de construcción",
+        "summary": "Despeja la vista del soporte sin eliminar su boceto guardado ni el plano central.",
+        "prerequisite": "El soporte de 32 × 44 × 40 mm, sus paredes de 8 mm, el boceto de sección y el plano central ya están preparados.",
+        "instructions": ["Localiza el boceto de sección en L y el plano central en el soporte preparado.", "Usa Visibilidad de construcción para ocultar los bocetos y planos guardados. El sólido sigue visible.", "En el navegador, muestra solo el boceto de sección. El plano permanece oculto.", "Vuelve a mostrar todas las referencias. Cambiar la visibilidad conserva la geometría del cuerpo."],
+        "captions": ["Boceto y plano visibles", "Referencias ocultas; sólido intacto", "Solo se restaura el boceto", "Todas las referencias visibles"],
+        "actions": ["Examinar referencias", "Ocultar referencias", "Mostrar el boceto", "Mostrar todas las referencias"]
+      },
+      "section_analysis": {
+        "title": "Inspeccionar el soporte con una sección",
+        "summary": "Examina el interior de la pared vertical, invierte el lado conservado y cierra la vista temporal.",
+        "prerequisite": "El soporte de 32 × 44 × 40 mm con paredes de 8 mm ya está preparado. El análisis de sección no crea ninguna operación de modelado.",
+        "instructions": ["Abre Análisis de sección y elige el cuerpo del soporte preparado.", "Elige XZ en Y = 20 mm. La vista cortada y tapada muestra la sección en L a mitad de los 40 mm de ancho.", "Invierte el lado conservado. Una sonda en Z = 20 mm atraviesa 8 mm de material de la pared vertical en ambas vistas.", "Cierra Análisis de sección para restaurar el cuerpo completo. La geometría y el historial originales se conservan."],
+        "captions": ["Elegir el cuerpo preparado", "Sección XZ en Y = 20 mm", "Invertir lado; pared de 8 mm", "Cerrar la sección temporal"],
+        "actions": ["Elegir cuerpo", "Definir plano de sección", "Invertir lado conservado", "Cerrar sección"]
+      },
+      "selection_solid": {
+        "title": "Seleccionar una cara o una arista",
+        "summary": "Distingue la cara interior del soporte de su arista superior antes de iniciar otra herramienta.",
+        "prerequisite": "El soporte de 32 × 44 × 40 mm con paredes de 8 mm ya está preparado.",
+        "instructions": ["Elige Seleccionar en el espacio Sólido y observa el soporte preparado.", "Haz clic dentro de la cara interior de la pared vertical. El resaltado de la cara identifica una selección de superficie.", "Haz clic en la arista superior de esa cara. El resaltado de la arista identifica una selección de curva.", "Haz clic en un espacio vacío para borrar la selección. Seleccionar geometría no crea ni modifica operaciones."],
+        "captions": ["Modo Seleccionar; sin selección", "Cara interior seleccionada", "Arista superior seleccionada", "Selección borrada; soporte intacto"],
+        "actions": ["Elegir Seleccionar", "Seleccionar una cara", "Seleccionar una arista", "Borrar selección"]
+      },
+      "selection_sketch": {
+        "title": "Seleccionar entidades del boceto",
+        "summary": "Selecciona un segmento, añade otro con Mayús y borra la selección.",
+        "prerequisite": "La sección en L de 32 × 44 mm y paredes de 8 mm está preparada y abierta para editar el boceto.",
+        "instructions": ["Elige Seleccionar en el espacio Boceto. La sección en L preparada no cambia.", "Haz clic en el centro del segmento inferior de 32 mm para seleccionar el segmento y no un extremo.", "Haz clic con Mayús en el segmento vertical contiguo de 8 mm para añadirlo a la selección.", "Haz clic en un espacio vacío sin Mayús para borrar ambas selecciones. Las cotas y restricciones se conservan."],
+        "captions": ["Boceto preparado en modo Seleccionar", "Segmento inferior seleccionado", "Mayús añade el segmento contiguo", "Ambas selecciones borradas"],
+        "actions": ["Elegir Seleccionar", "Seleccionar un segmento", "Añadir con Mayús", "Borrar selección"]
+      },
+      "measure": {
+        "title": "Medir el espesor de la pared vertical",
+        "summary": "Mide la distancia exacta entre las caras exterior e interior de la pared vertical.",
+        "prerequisite": "El soporte de 32 × 44 × 40 mm y sus paredes de 8 mm ya están preparados.",
+        "instructions": ["Abre Medir en el soporte preparado.", "Elige la cara exterior de la pared en X = 0 mm como primera selección.", "Elige la cara interior en X = 8 mm. Lee la distancia mínima calculada por el motor nativo: 8 mm.", "Cierra Medir. El resultado es temporal y la geometría del soporte se conserva."],
+        "captions": ["Abrir Medir en el soporte", "Elegir la cara exterior", "Distancia nativa entre caras: 8 mm", "Cerrar Medir; geometría intacta"],
+        "actions": ["Abrir Medir", "Elegir primera cara", "Elegir segunda cara", "Cerrar Medir"]
+      }
+    },
+    "de": {
+      "construction_visibility": {
+        "title": "Konstruktionsreferenzen ein- und ausblenden",
+        "summary": "Blende gespeicherte Skizze und Mittelebene aus, um die Halterung übersichtlicher zu sehen.",
+        "prerequisite": "Die 32 × 44 × 40 mm große Halterung mit 8 mm Wandstärke, Querschnittsskizze und Mittelebene ist vorbereitet.",
+        "instructions": ["Suche die gespeicherte L-Querschnittsskizze und die Mittelebene an der vorbereiteten Halterung.", "Blende mit Konstruktion die gespeicherten Skizzen und Bezugsebenen aus. Der Körper bleibt sichtbar.", "Blende im Browser nur die Querschnittsskizze ein. Die Bezugsebene bleibt ausgeblendet.", "Blende alle Konstruktionsreferenzen wieder ein. Änderungen der Sichtbarkeit lassen die Körpergeometrie unverändert."],
+        "captions": ["Skizze und Bezugsebene sichtbar", "Referenzen ausgeblendet; Körper erhalten", "Nur die Querschnittsskizze eingeblendet", "Alle Referenzen wieder sichtbar"],
+        "actions": ["Referenzen ansehen", "Referenzen ausblenden", "Skizze einblenden", "Alle Referenzen einblenden"]
+      },
+      "section_analysis": {
+        "title": "Die Halterung im Schnitt untersuchen",
+        "summary": "Blicke in die aufrechte Wand, wechsle die beibehaltene Seite und schließe die temporäre Ansicht.",
+        "prerequisite": "Die 32 × 44 × 40 mm große Halterung mit 8 mm Wandstärke ist vorbereitet. Die Schnittanalyse erzeugt kein Formelement.",
+        "instructions": ["Öffne die Schnittanalyse und wähle den vorbereiteten Halterungskörper.", "Wähle XZ bei Y = 20 mm. Die geschlossene Schnittansicht zeigt den L-Querschnitt in der Mitte der 40 mm breiten Halterung.", "Wechsle die beibehaltene Seite. Eine Messlinie bei Z = 20 mm durchquert in beiden Ansichten 8 mm Material der aufrechten Wand.", "Schließe die Schnittanalyse, um den vollständigen Körper wiederherzustellen. Geometrie und Verlauf bleiben unverändert."],
+        "captions": ["Vorbereiteten Körper auswählen", "XZ-Schnitt bei Y = 20 mm", "Seite wechseln; weiterhin 8 mm Wand", "Temporären Schnitt schließen"],
+        "actions": ["Körper wählen", "Schnittebene festlegen", "Beibehaltene Seite wechseln", "Schnitt schließen"]
+      },
+      "selection_solid": {
+        "title": "Eine Fläche oder Kante auswählen",
+        "summary": "Unterscheide die innere Wandfläche der Halterung von ihrer oberen Kante, bevor du ein weiteres Werkzeug startest.",
+        "prerequisite": "Die 32 × 44 × 40 mm große Halterung mit 8 mm Wandstärke ist vorbereitet.",
+        "instructions": ["Wähle Auswählen im Arbeitsbereich Volumenkörper und betrachte die vorbereitete Halterung.", "Klicke in das Innere der aufrechten Innenfläche. Die Flächenhervorhebung kennzeichnet die ausgewählte Oberfläche.", "Klicke auf die obere Kante dieser Fläche. Die Kantenhervorhebung kennzeichnet die ausgewählte Kurve.", "Klicke in einen leeren Bereich, um die Auswahl aufzuheben. Eine Auswahl erzeugt oder verändert kein Formelement."],
+        "captions": ["Auswahlmodus; keine Geometrie ausgewählt", "Innere Wandfläche ausgewählt", "Obere Kante ausgewählt", "Auswahl aufgehoben; Halterung unverändert"],
+        "actions": ["Auswahlmodus wählen", "Fläche auswählen", "Kante auswählen", "Auswahl aufheben"]
+      },
+      "selection_sketch": {
+        "title": "Skizzenelemente auswählen",
+        "summary": "Wähle ein Segment, füge mit Umschalt ein zweites hinzu und hebe die Auswahl auf.",
+        "prerequisite": "Der vorbereitete L-Querschnitt ist 32 × 44 mm groß, hat 8 mm Wandstärke und ist zur Skizzenbearbeitung geöffnet.",
+        "instructions": ["Wähle Auswählen im Arbeitsbereich Skizze. Der vorbereitete L-Querschnitt bleibt unverändert.", "Klicke in die Mitte des 32 mm langen unteren Segments, um das Segment statt eines Endpunkts auszuwählen.", "Klicke mit gedrückter Umschalttaste auf das benachbarte 8 mm lange vertikale Segment, um es hinzuzufügen.", "Klicke ohne Umschalttaste in einen leeren Bereich, um beide Auswahlen aufzuheben. Maße und Abhängigkeiten bleiben unverändert."],
+        "captions": ["Vorbereitete Skizze im Auswahlmodus", "Unteres Segment ausgewählt", "Umschalt fügt das Nachbarsegment hinzu", "Beide Auswahlen aufgehoben"],
+        "actions": ["Auswahlmodus wählen", "Ein Segment auswählen", "Mit Umschalt hinzufügen", "Auswahl aufheben"]
+      },
+      "measure": {
+        "title": "Die aufrechte Wand messen",
+        "summary": "Miss den genauen Abstand zwischen Außen- und Innenfläche der aufrechten Wand.",
+        "prerequisite": "Die 32 × 44 × 40 mm große Halterung mit 8 mm Wandstärke ist vorbereitet.",
+        "instructions": ["Öffne Messen an der vorbereiteten Halterung.", "Wähle zuerst die äußere Wandfläche bei X = 0 mm.", "Wähle die innere Wandfläche bei X = 8 mm. Lies den vom nativen Geometriekern berechneten Mindestabstand ab: 8 mm.", "Schließe Messen. Die Anzeige ist temporär und die Geometrie der Halterung bleibt unverändert."],
+        "captions": ["Messen an der Halterung öffnen", "Äußere Wandfläche wählen", "Nativer Flächenabstand: 8 mm", "Messen schließen; Geometrie erhalten"],
+        "actions": ["Messen öffnen", "Erste Fläche wählen", "Zweite Fläche wählen", "Messen schließen"]
+      }
+    }
+  }
+}

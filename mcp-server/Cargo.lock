@@ -876,6 +876,7 @@ name = "limo-cad-mcp"
 version = "0.3.0-rc.3"
 dependencies = [
  "base64",
+ "ciborium",
  "enigo",
  "jsonschema",
  "libc",
@@ -885,6 +886,7 @@ dependencies = [
  "limo-cad-help",
  "limo-cad-interface",
  "limo-cad-mcp-mutate",
+ "limo-cad-native-engine",
  "limo-cad-occt",
  "limo-cad-print",
  "limo-cad-project-file",
@@ -896,6 +898,7 @@ dependencies = [
  "limo-cad-solid",
  "serde",
  "serde_json",
+ "sha2",
  "windows-capture",
  "windows-sys",
  "zip",
@@ -906,6 +909,22 @@ name = "limo-cad-mcp-mutate"
 version = "0.3.0-rc.3"
 dependencies = [
  "limo-cad-export",
+ "serde_json",
+]
+
+[[package]]
+name = "limo-cad-native-engine"
+version = "0.3.0-rc.3"
+dependencies = [
+ "base64",
+ "limo-cad-cam",
+ "limo-cad-core",
+ "limo-cad-export",
+ "limo-cad-occt",
+ "limo-cad-project-file",
+ "limo-cad-sketch",
+ "limo-cad-solid",
+ "serde",
  "serde_json",
 ]
 
