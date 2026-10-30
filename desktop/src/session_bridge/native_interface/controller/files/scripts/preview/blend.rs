@@ -48,7 +48,9 @@ pub(super) fn geometry_motion(frames: &[Frame]) -> Vec<bool> {
                                 .is_none_or(|p| !p.entities.iter().any(|e| e.id() == entity.id()))
                     })
                 }),
-                Some(PreviewCue::Edges) => !frame.edges.is_empty(),
+                // A single highlight has only off/on states. Dissolve its cached
+                // endpoints instead of scheduling identical geometry samples.
+                Some(PreviewCue::Edges) => frame.edges.len() > 1,
                 Some(PreviewCue::Radius) => previous.is_some_and(|i| !frames[i].edges.is_empty()),
                 Some(PreviewCue::Extrude | PreviewCue::Depth) if extrusion => frames
                     .iter()
