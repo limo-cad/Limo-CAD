@@ -438,22 +438,37 @@ fn draw(
             let Some(entity) = animation::partial_curve(entity, fraction) else {
                 continue;
             };
-            draw_sketch_curve_at_offset(
-                &mut selected,
-                &profile.basis,
-                &entity,
-                if scene
-                    .inspection
-                    .as_ref()
-                    .and_then(|i| i.selection.as_ref())
-                    .is_none_or(|s| s.sketch_entity_ids.contains(&entity.id().0))
-                {
-                    rgb(palette.accent)
-                } else {
-                    rgba(palette.edge, 0.8)
-                },
-                DIRECT_PICK_FEEDBACK_OFFSET,
-            );
+            let color = if scene
+                .inspection
+                .as_ref()
+                .and_then(|i| i.selection.as_ref())
+                .is_none_or(|s| s.sketch_entity_ids.contains(&entity.id().0))
+            {
+                rgb(palette.accent)
+            } else {
+                rgba(palette.edge, 0.8)
+            };
+            if let limo_cad_sketch::EntityDto::Point { fully_defined, .. } = &entity {
+                // Curves deliberately omit points. Reuse the document viewport's
+                // screen-sized grips so an authored point is visible at every zoom.
+                draw_sketch_entity_grips(
+                    &mut selected,
+                    &profile.basis,
+                    &entity,
+                    (camera, viewport),
+                    3.5,
+                    color,
+                    !*fully_defined,
+                );
+            } else {
+                draw_sketch_curve_at_offset(
+                    &mut selected,
+                    &profile.basis,
+                    &entity,
+                    color,
+                    DIRECT_PICK_FEEDBACK_OFFSET,
+                );
+            }
         }
     }
     scene
