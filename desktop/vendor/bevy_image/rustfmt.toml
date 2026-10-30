@@ -1,0 +1,2 @@
+# Preserve the published Bevy source's formatting when checking this local patch.
+style_edition = "2021"
