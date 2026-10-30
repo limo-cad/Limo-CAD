@@ -11,7 +11,7 @@ use std::{
 use toml_edit::{value, DocumentMut, Item};
 
 const DOCS: &[&str] = &[
-    "README.md",
+    // Public README/site downloads move only after the release is published.
     "docs/DEVELOPMENT.md",
     "docs/INSTALL.md",
     "docs/OCCT_PACKAGING.md",
@@ -469,7 +469,7 @@ mod tests {
     }
 
     #[test]
-    fn release_bump_preserves_crlf_and_historical_notes() {
+    fn release_bump_preserves_crlf_history_and_published_downloads() {
         let root = super::super::root();
         let version = read(root).unwrap();
         assert!(plan(root, &version).unwrap().is_empty());
@@ -485,6 +485,28 @@ mod tests {
                 .replace("\r\n", "\n");
             fs::write(target, source.replace('\n', "\r\n")).unwrap();
         }
+        let published_downloads: Vec<_> = [
+            "README.md",
+            "README.de.md",
+            "README.es.md",
+            "README.zh-CN.md",
+            "knowledge/home.html",
+            "knowledge/home.de.html",
+            "knowledge/home.es.html",
+            "knowledge/home.zh-CN.html",
+        ]
+        .into_iter()
+        .map(|file| {
+            let source = fs::read_to_string(root.join(file))
+                .unwrap()
+                .replace("\r\n", "\n")
+                .replace('\n', "\r\n");
+            let target = temp.path().join(file);
+            fs::create_dir_all(target.parent().unwrap()).unwrap();
+            fs::write(target, &source).unwrap();
+            (file, source)
+        })
+        .collect();
         let historical = temp
             .path()
             .join(format!("docs/release-notes/v{version}.md"));
@@ -501,6 +523,12 @@ mod tests {
             fs::read_to_string(historical).unwrap(),
             "historical notes\r\n"
         );
+        for (file, source) in published_downloads {
+            assert!(
+                fs::read_to_string(temp.path().join(file)).unwrap() == source,
+                "version bumps must preserve published downloads in {file}"
+            );
+        }
         assert!(notes(temp.path(), target_version).is_err());
         let file = temp
             .path()
