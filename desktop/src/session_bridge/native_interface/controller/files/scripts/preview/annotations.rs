@@ -24,8 +24,9 @@ pub(super) fn paint(
     let Some(retained) = preview.retained.as_ref().filter(|retained| {
         current
             && preview.geometry_animation_complete()
-            && retained.descriptor.cues[preview.frame_index()]
-                == Some(crate::native_viewport::script_preview::PreviewCue::Dimension)
+            && crate::native_viewport::script_preview::permits_dimension_annotations(
+                retained.descriptor.cues[preview.frame_index()],
+            )
     }) else {
         return Ok(());
     };
@@ -157,6 +158,17 @@ mod tests {
             .map(|dimension| dimension.text.clone())
             .collect();
         assert!(!expected.is_empty());
+        let finish_expected: Vec<_> = frames[index + 1]
+            .profile
+            .as_ref()
+            .map(|profile| {
+                profile
+                    .dimensions
+                    .iter()
+                    .map(|dimension| dimension.text.clone())
+                    .collect()
+            })
+            .unwrap_or_default();
         let service = PreviewService::default();
         let descriptor = service.retain(frames).unwrap();
         let mut request = RenderRequest {
@@ -204,6 +216,88 @@ mod tests {
         assert!(plane.labels.is_empty() && plane.lines.is_empty());
         request.frame_index = index + 1;
         let finish = service.dimension_annotations(&request, size).unwrap();
-        assert!(finish.labels.is_empty() && finish.lines.is_empty());
+        assert_eq!(
+            finish
+                .labels
+                .iter()
+                .map(|label| &label.text)
+                .collect::<Vec<_>>(),
+            finish_expected.iter().collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn native_script_preview_authored_dimension_callouts_survive_radius_and_apply() {
+        use crate::native_viewport::script_preview::PreviewCue;
+        for id in [
+            lesson::Id::SketchDimension,
+            lesson::Id::SketchArc,
+            lesson::Id::SketchOffset,
+            lesson::Id::SketchFillet,
+            lesson::Id::SketchChamfer,
+        ] {
+            let examples = catalog::examples();
+            let source = &examples
+                .iter()
+                .find(|example| example.id == id.recipe())
+                .unwrap()
+                .source;
+            let frames =
+                prepared::prepare(&Mutex::new(prepared::Cache::default()), source, Some(id))
+                    .unwrap();
+            let expected: Vec<_> = frames
+                .iter()
+                .enumerate()
+                .filter_map(|(index, frame)| {
+                    let labels: Vec<_> = frame
+                        .profile
+                        .as_ref()?
+                        .dimensions
+                        .iter()
+                        .map(|dimension| dimension.text.clone())
+                        .collect();
+                    (!labels.is_empty()).then_some((index, labels))
+                })
+                .collect();
+            assert!(!expected.is_empty(), "{id:?} must retain native callouts");
+            let mut setup = frames[expected[0].0].clone();
+            setup.cue = Some(PreviewCue::Profile);
+            let service = PreviewService::default();
+            let descriptor = service.retain(frames).unwrap();
+            let mut request = RenderRequest {
+                palette: None,
+                preview_id: descriptor.preview_id,
+                view_id: uuid::Uuid::new_v4().to_string(),
+                revision: 1,
+                frame_index: 0,
+                width: 592,
+                height: 400,
+                yaw: HOME.0,
+                pitch: HOME.1,
+            };
+            for (index, labels) in expected {
+                request.frame_index = index;
+                let actual = service
+                    .dimension_annotations(&request, [296., 200.])
+                    .unwrap();
+                assert_eq!(
+                    actual
+                        .labels
+                        .iter()
+                        .map(|label| label.text.clone())
+                        .collect::<Vec<_>>(),
+                    labels,
+                    "{id:?} frame {index} must show its native dimension values"
+                );
+                assert!(!actual.lines.is_empty(), "{id:?} callouts need leaders");
+            }
+            let setup = service.retain(vec![setup]).unwrap();
+            request.preview_id = setup.preview_id;
+            request.frame_index = 0;
+            let hidden = service
+                .dimension_annotations(&request, [296., 200.])
+                .unwrap();
+            assert!(hidden.labels.is_empty() && hidden.lines.is_empty());
+        }
     }
 }

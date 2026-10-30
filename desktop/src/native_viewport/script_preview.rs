@@ -43,6 +43,15 @@ const PREVIEW_TIMED_OUT: &str = "Feature preview request timed out";
 
 pub(crate) use limo_cad_native_engine::teaching::{Frame, PreviewCue, PreviewFinish};
 
+/// Keep native parameter callouts visible through radius entry and the result.
+/// Setup/profile-only steps retain their uncluttered geometry view.
+pub(crate) fn permits_dimension_annotations(cue: Option<PreviewCue>) -> bool {
+    matches!(
+        cue,
+        Some(PreviewCue::Dimension | PreviewCue::Radius | PreviewCue::Apply)
+    )
+}
+
 #[cfg(test)]
 #[derive(Resource, Default)]
 struct TeachingFinish(Option<PreviewFinish>);
@@ -406,7 +415,7 @@ impl PreviewService {
         let Some(profile) = frame
             .profile
             .as_ref()
-            .filter(|_| frame.cue == Some(PreviewCue::Dimension))
+            .filter(|_| permits_dimension_annotations(frame.cue))
         else {
             return Ok(Default::default());
         };
