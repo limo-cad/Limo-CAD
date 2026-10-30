@@ -1,0 +1,1266 @@
+{
+  "sourceHead": "bdb55e0f9201c15c4ca4184c7612c349ebea2c33",
+  "compiledRevision": "f863c4f4d76ced6a9f9894298e2e9aa2443bb30e",
+  "sourceTree": "d0295ac04dacd56411ea666453fa9118e45f7a95",
+  "compiledTree": "d0295ac04dacd56411ea666453fa9118e45f7a95",
+  "compiledModified": true,
+  "run": 41083664402,
+  "nativeJob": 124159066464,
+  "artifact": 12995075556,
+  "artifactApiArchiveBytes": 295399572,
+  "artifactApiArchiveSha256": "5dc00ea53fdec2c27b5a41ff887fbdd96884475a7d6f9ac8bb20e6455de9605b",
+  "wholeArchiveDigestRecomputed": false,
+  "acquisitionScope": "Selected original ZIP entries via bounded exact ranges; safe names and containment, local/central flags/methods/names, CRC32, lengths and retained SHA-256 checked.",
+  "recordingScope": "Five native checkpoint walkthroughs, not continuous OS input/video or FPS proof. Original 864x1200 PNGs encoded at 432x600 with Windows PresentationCore GifBitmapEncoder; palette conversion and downsampling are lossy. Twelve real checkpoints per guide; original order and actual recorded intervals retained, rounded to GIF centiseconds. No added pointer or invented motion.",
+  "sourceBinding": {
+    "assets": [
+      {
+        "lesson": "sketch",
+        "bytes": 7340,
+        "frames": 5,
+        "sha256": "568929be11a674f87ad36d7712925da7eccfb2237a616f61c70b09d83d196a9b"
+      },
+      {
+        "lesson": "extrude",
+        "bytes": 26875,
+        "frames": 5,
+        "sha256": "5d5df22929a4da839d3a80177a6c5a56a73843bd1b8ab06e212fd5856314e340"
+      },
+      {
+        "lesson": "cut",
+        "bytes": 1528883,
+        "frames": 6,
+        "sha256": "9bec3edb1b834d8a16a93f62e143d03024f14df3525b472789cbb7d7ce50244a"
+      },
+      {
+        "lesson": "fillet",
+        "bytes": 80962,
+        "frames": 4,
+        "sha256": "37b951dc18935befa64ed4efe189a32da879bd7511800475ccad98d4024042d8"
+      },
+      {
+        "lesson": "chamfer",
+        "bytes": 28941,
+        "frames": 4,
+        "sha256": "f4a57aaf71f9117c708fc4378c7ec75f26e33c00890d80519323a539b576d911"
+      },
+      {
+        "lesson": "circular_pattern",
+        "bytes": 43197,
+        "frames": 4,
+        "sha256": "6180d313196468c29259620ab5c73c6d909d1168afa1634023d0ebb19cd0d490"
+      },
+      {
+        "lesson": "combine",
+        "bytes": 38098,
+        "frames": 4,
+        "sha256": "328c19863590180807ed2691fe1d8ba75083db3189108c10bbcebf0e9205b132"
+      },
+      {
+        "lesson": "construction_visibility",
+        "bytes": 32775,
+        "frames": 4,
+        "sha256": "2d48103e10a4f02cd9e4c5e792e0a1167cfc24379ce2f689143194649d7be325"
+      },
+      {
+        "lesson": "external_thread",
+        "bytes": 886343,
+        "frames": 4,
+        "sha256": "5d23ee202d7b2b5eab4155cb92a23243d69ccc65984546a2e12918f1bb9dbf7e"
+      },
+      {
+        "lesson": "hole",
+        "bytes": 110297,
+        "frames": 4,
+        "sha256": "a03e3df7a5d8363648202585975d934fa98eae7503b37d21b09ec65dbbf81987"
+      },
+      {
+        "lesson": "loft",
+        "bytes": 30761,
+        "frames": 4,
+        "sha256": "0095654804011afbc1ba37690b3bd24a1d2f6be2c79e5e30d08ce97a8ab72417"
+      },
+      {
+        "lesson": "measure",
+        "bytes": 23626,
+        "frames": 4,
+        "sha256": "434c693993bbadd4550e014beb3469604dd547ea4c7670e0a8c730de7068d938"
+      },
+      {
+        "lesson": "midplane",
+        "bytes": 26754,
+        "frames": 4,
+        "sha256": "17363093f5230093c6ff55f29ebf57841a3eb9b960c85782eb28e1c625cdc6e9"
+      },
+      {
+        "lesson": "mirror",
+        "bytes": 34634,
+        "frames": 4,
+        "sha256": "491f269fadcd094c6bd41a0642184fb29d53bca1fcb0f3d7369e6332edd1b891"
+      },
+      {
+        "lesson": "move_copy",
+        "bytes": 40850,
+        "frames": 4,
+        "sha256": "8cba93f3755c23aaff9ed487a027494f85c283d05fa0821368722003c6543408"
+      },
+      {
+        "lesson": "offset_plane",
+        "bytes": 26756,
+        "frames": 4,
+        "sha256": "fd147ce7633e429ced84da9fb4f8ac304ac5f9b979c5cd8f0b941d8d770fa276"
+      },
+      {
+        "lesson": "plane_at_angle",
+        "bytes": 26826,
+        "frames": 4,
+        "sha256": "4f1d618b6b33634dfa683c5629f331d2aa817f51e65990e35e5b371ec3c08ad2"
+      },
+      {
+        "lesson": "rectangular_pattern",
+        "bytes": 88450,
+        "frames": 4,
+        "sha256": "3b46891b3bb72dfd98ece2c17be65f239068f8775c0717c1cd05fdb35e954705"
+      },
+      {
+        "lesson": "revolve",
+        "bytes": 78879,
+        "frames": 4,
+        "sha256": "cfa25693ffe96c5178bf594f0d2496991432c1455aab1264b42faeece73d83af"
+      },
+      {
+        "lesson": "rib",
+        "bytes": 38041,
+        "frames": 4,
+        "sha256": "abcee40a43a18870efeda01794b09d23dc0ce844203b20bdcc56b8035d4ce73d"
+      },
+      {
+        "lesson": "section_analysis",
+        "bytes": 44550,
+        "frames": 4,
+        "sha256": "bfb0f1f726c45ea8c348ce7fb0d4fbb22643abe7480973787bd76e6cd3ef71bd"
+      },
+      {
+        "lesson": "selection_sketch",
+        "bytes": 9591,
+        "frames": 4,
+        "sha256": "f618b93df700e01627f4994bbf54a7aae45077100a8fcf140b98977ec8bcdf74"
+      },
+      {
+        "lesson": "selection_solid",
+        "bytes": 23013,
+        "frames": 4,
+        "sha256": "0a7ea12e0a4e58a34188d655bf6b9f6e7cc9d4c1c1f5c158c2bc4435eea64e39"
+      },
+      {
+        "lesson": "shell",
+        "bytes": 26226,
+        "frames": 4,
+        "sha256": "79500e4e6c26148e7065a598f009919cf0d973e6f9ab6c2063729bd6996bf7ea"
+      },
+      {
+        "lesson": "sketch_coincident",
+        "bytes": 6831,
+        "frames": 4,
+        "sha256": "605da3f0521695aba38a1fb0e117ce5ab5315ac2ecbb44c0182c2130e66948f8"
+      },
+      {
+        "lesson": "sketch_horizontal_vertical",
+        "bytes": 7611,
+        "frames": 4,
+        "sha256": "d6067a6f7071fd10d1deb086a79a54e3d9b7e1593986eef92f060b3bf4733b70"
+      },
+      {
+        "lesson": "sketch_tangent",
+        "bytes": 7207,
+        "frames": 4,
+        "sha256": "2c6129412578c40917b5bb166efe6c9a7b4f5c540d006518caae72cde7db9922"
+      },
+      {
+        "lesson": "sketch_parallel",
+        "bytes": 7397,
+        "frames": 4,
+        "sha256": "93ad3bddf3c4ca08142c28bfb2d531f884a58efa44d17f544974cd42754fd483"
+      },
+      {
+        "lesson": "sketch_perpendicular",
+        "bytes": 7449,
+        "frames": 4,
+        "sha256": "7b1affa3fb4e186946261b52bda0209d8b86aba36b790772f097d29cb2f1389c"
+      },
+      {
+        "lesson": "sketch_equal",
+        "bytes": 7029,
+        "frames": 4,
+        "sha256": "598a40cc0956f48c8acbbf52f00c994fa52ddf84e3259b8c89e3b77912354897"
+      },
+      {
+        "lesson": "sketch_fix_unfix",
+        "bytes": 6456,
+        "frames": 4,
+        "sha256": "2d2040dd9822d899a8b37c1807d57d389def24b1b2ba354c2dfdf6b32d99ab46"
+      },
+      {
+        "lesson": "sketch_midpoint",
+        "bytes": 6809,
+        "frames": 4,
+        "sha256": "845350e23f57e2f9d607d02ec6be79ca38efde4bea12ce252e2090f707c4e6d2"
+      },
+      {
+        "lesson": "sketch_collinear",
+        "bytes": 7408,
+        "frames": 4,
+        "sha256": "6922e6735f90dbe69af0b9a6a5f3ee966afbebd7a037c954ef9224394a47ef62"
+      },
+      {
+        "lesson": "sketch_concentric",
+        "bytes": 7083,
+        "frames": 4,
+        "sha256": "8c4f2496acfd650fa48d8d9e12d3e95080563532d92b425fcc84840b07259f0a"
+      },
+      {
+        "lesson": "sketch_symmetry",
+        "bytes": 7019,
+        "frames": 4,
+        "sha256": "b3fd1fe21fef107cd8404c0ff7f26bf5bf3089150865745a77599ff7c4035230"
+      },
+      {
+        "lesson": "sketch_line",
+        "bytes": 5263,
+        "frames": 4,
+        "sha256": "e336b192d6fa45cd1af8979b5acfdd849cbeb595dbc6e240e0de34596484b45c"
+      },
+      {
+        "lesson": "sketch_midpoint_line",
+        "bytes": 6129,
+        "frames": 4,
+        "sha256": "29db1c418f896a4693413b4dd96486ed4b874748537a7c0d7375cc017de0f392"
+      },
+      {
+        "lesson": "sketch_point",
+        "bytes": 5834,
+        "frames": 4,
+        "sha256": "b64a31734a0d7d531b09137592f6f500c420a5533281db59297f43babe7ff786"
+      },
+      {
+        "lesson": "sketch_rectangle",
+        "bytes": 9049,
+        "frames": 4,
+        "sha256": "db3a6e394c7bc4eb26fcc143956ff52085b172f7911dab4a27dea6eed3143b52"
+      },
+      {
+        "lesson": "sketch_circle",
+        "bytes": 6773,
+        "frames": 4,
+        "sha256": "82502b180e3232ee11e20b437b2bd39e3593716cd52872e26ac2b0a495d6c853"
+      },
+      {
+        "lesson": "sketch_arc",
+        "bytes": 7401,
+        "frames": 4,
+        "sha256": "1c4224c60fa985e8042235a7e894f50d0f6a056c2624b2175aa0baabc87c5271"
+      },
+      {
+        "lesson": "sketch_spline",
+        "bytes": 6861,
+        "frames": 4,
+        "sha256": "5446f9304c6a029f0a7415aca9a6dd27f8112040d16539afbf2cfeb4b9c2d733"
+      },
+      {
+        "lesson": "sketch_polygon",
+        "bytes": 8662,
+        "frames": 4,
+        "sha256": "d7d823a0209c3d809fec9ab9e8057a65a951646a460a1206c54c1792eccacd34"
+      },
+      {
+        "lesson": "sketch_slot",
+        "bytes": 12580,
+        "frames": 4,
+        "sha256": "2666a93e10932fdc98daf3182ebff9d323313503d3aa2256f718c30fe5834558"
+      },
+      {
+        "lesson": "sketch_move_copy",
+        "bytes": 6589,
+        "frames": 4,
+        "sha256": "99b90f72721418840aab5b41b262e8dc5aeed1c1da238531e914ecd8d33cd661"
+      },
+      {
+        "lesson": "sketch_scale",
+        "bytes": 6397,
+        "frames": 4,
+        "sha256": "d17a101dfdda4a4f03ff2029e389e2eb1f3fd48d0903162721d79020dd087feb"
+      },
+      {
+        "lesson": "sketch_offset",
+        "bytes": 6761,
+        "frames": 4,
+        "sha256": "bf95f836f1aa657e433c883d7382774004ff74edbb8838311c0abc833046983e"
+      },
+      {
+        "lesson": "sketch_trim",
+        "bytes": 8274,
+        "frames": 4,
+        "sha256": "a3ab71824f83d1691ddf7e300075bcdda1fdffa5dbfd173c70dc8897aa2fb678"
+      },
+      {
+        "lesson": "sketch_extend",
+        "bytes": 7356,
+        "frames": 4,
+        "sha256": "1f419c47f94b9d6acd97b37b6b8c5d1728c3f8f79c790b2625938e8101941d3b"
+      },
+      {
+        "lesson": "sketch_break",
+        "bytes": 6692,
+        "frames": 4,
+        "sha256": "13d587fb6e0906c8bb8fcc30e4b54128c19afe5846c86f093291d28e97850a89"
+      },
+      {
+        "lesson": "sketch_fillet",
+        "bytes": 7715,
+        "frames": 4,
+        "sha256": "62ed45bf86798119008cecbf0aaa3660617406f9d09f2e2e1f16484af4e5d5bf"
+      },
+      {
+        "lesson": "sketch_chamfer",
+        "bytes": 7596,
+        "frames": 4,
+        "sha256": "4391607d4107192348c20d1ee04ab2f8db1451928595628293f9646ee7fdd1d8"
+      },
+      {
+        "lesson": "sketch_dimension",
+        "bytes": 6970,
+        "frames": 4,
+        "sha256": "48d43b4c578a3e48af4d978e7c9d653e009279c12b9313d5c9ff3debdffee64a"
+      },
+      {
+        "lesson": "sketch_mirror",
+        "bytes": 7326,
+        "frames": 4,
+        "sha256": "ccc9eddd490c5f411e322a91e5afd889b95a50adde4eb9799402d73d488ab41c"
+      },
+      {
+        "lesson": "sketch_rectangular_pattern",
+        "bytes": 7616,
+        "frames": 4,
+        "sha256": "3b5422da8a896b487e7cfc3630b08a86fb9901e63107e4da070fe886fd109560"
+      },
+      {
+        "lesson": "sketch_circular_pattern",
+        "bytes": 7273,
+        "frames": 4,
+        "sha256": "321da8ec36715965f4152e5693d532af98848eac3d33d551f9273427403c96b3"
+      },
+      {
+        "lesson": "split_body",
+        "bytes": 35125,
+        "frames": 4,
+        "sha256": "f62b06d6b9ad2312529bb4bf4e7e95bfa2151011859b9ca919261500c79f61ba"
+      },
+      {
+        "lesson": "sweep",
+        "bytes": 385238,
+        "frames": 4,
+        "sha256": "c0ffa638552bddf15871a0e9bb74c321dcf5a658a9d183eb7a080765334fea7f"
+      }
+    ],
+    "recipes": [
+      {
+        "checks_completed": 6,
+        "recipe": "extrude-basics",
+        "source_sha256_lf": "1850b6f03056ec8f0053ca47b1b047283f7f2f81b0723a3a6537d8a5d26d5a5d",
+        "steps_completed": 66
+      },
+      {
+        "checks_completed": 12,
+        "recipe": "show-me-chamfer",
+        "source_sha256_lf": "5f666207d6e73216d2101ab17809d82b6ed0b48eccf7f6d2a1aecefeab863a45",
+        "steps_completed": 31
+      },
+      {
+        "checks_completed": 13,
+        "recipe": "show-me-circular-pattern",
+        "source_sha256_lf": "3afeb6f21c9b4ef67ff6fb4db49a29fabeb406efcef94ad2aeaff27a29b2a85f",
+        "steps_completed": 13
+      },
+      {
+        "checks_completed": 12,
+        "recipe": "show-me-combine",
+        "source_sha256_lf": "b6272b24173db1530fd593221c001cf88c516ae5498f9361dc40871db434bdc5",
+        "steps_completed": 36
+      },
+      {
+        "checks_completed": 11,
+        "recipe": "show-me-construction-visibility",
+        "source_sha256_lf": "e3ddff68aae120cf380e035636aff5ed46a4a6cbc9996a0e23e819bf33ccadb8",
+        "steps_completed": 36
+      },
+      {
+        "checks_completed": 12,
+        "recipe": "show-me-external-thread",
+        "source_sha256_lf": "0f5de1c7c8fef3b038b225399bcdc4808ffb66b35d9f77aa11bb8f2f5cb6ac8d",
+        "steps_completed": 13
+      },
+      {
+        "checks_completed": 12,
+        "recipe": "show-me-hole",
+        "source_sha256_lf": "2d38788364946b9f447ddcbe4737d2c5295224d89ab069f8753e5d06202c9bcc",
+        "steps_completed": 34
+      },
+      {
+        "checks_completed": 10,
+        "recipe": "show-me-loft",
+        "source_sha256_lf": "0b3e5914e2f522e98567288bc29339864247206e1ca1139ea39dc88d1121e1e9",
+        "steps_completed": 23
+      },
+      {
+        "checks_completed": 2,
+        "recipe": "show-me-measure",
+        "source_sha256_lf": "510376596d6ed486d08eb2e678064bf1d6d5a3f2a3b70b51461ddfc93abd339a",
+        "steps_completed": 31
+      },
+      {
+        "checks_completed": 8,
+        "recipe": "show-me-midplane",
+        "source_sha256_lf": "d4b4766b21660218c15f9a16fe0776d33cb24eae898e6932a491b3daf83a2dd8",
+        "steps_completed": 41
+      },
+      {
+        "checks_completed": 12,
+        "recipe": "show-me-mirror",
+        "source_sha256_lf": "d83c09b50c8b8c7fe030ce747358c7e70348ad63bd82408de3715a58fa21d2f1",
+        "steps_completed": 34
+      },
+      {
+        "checks_completed": 14,
+        "recipe": "show-me-move-copy",
+        "source_sha256_lf": "fc6dae4666f09bc52291561ae275b1e12043aebfae521394919521bf70eedb71",
+        "steps_completed": 31
+      },
+      {
+        "checks_completed": 9,
+        "recipe": "show-me-offset-plane",
+        "source_sha256_lf": "cf71b92818798fbea6191af9e0da6238ee4dc70bf518ca6e9ce8c98fc7101a1b",
+        "steps_completed": 40
+      },
+      {
+        "checks_completed": 10,
+        "recipe": "show-me-plane-at-angle",
+        "source_sha256_lf": "a55b79555e9fc9939b9d338b35c8de04171d7f0bb863a4d239e17790c7b0a18b",
+        "steps_completed": 41
+      },
+      {
+        "checks_completed": 16,
+        "recipe": "show-me-rectangular-pattern",
+        "source_sha256_lf": "4b6729a210f8431976d6b5bf2c393dbd60a491394529ec3422206852bbaa6564",
+        "steps_completed": 31
+      },
+      {
+        "checks_completed": 12,
+        "recipe": "show-me-revolve",
+        "source_sha256_lf": "05e4e1f7d791fae8ca730126e3293727da44a11bde94dd9685c69c017fcf56c5",
+        "steps_completed": 11
+      },
+      {
+        "checks_completed": 15,
+        "recipe": "show-me-rib",
+        "source_sha256_lf": "6983b082fb89af81783701d84808f35ecc939c7f9811139a1986da58f347de10",
+        "steps_completed": 40
+      },
+      {
+        "checks_completed": 15,
+        "recipe": "show-me-section-analysis",
+        "source_sha256_lf": "2d4fda5e8877bfadcbdf566c6322325dd057fe1ac350bdc0a78aa8afac59bac9",
+        "steps_completed": 31
+      },
+      {
+        "checks_completed": 6,
+        "recipe": "show-me-selection-sketch",
+        "source_sha256_lf": "35648dc7529d6d59b523a94dcdc0a6628d252195b161b107bee277ffbdec4f72",
+        "steps_completed": 24
+      },
+      {
+        "checks_completed": 2,
+        "recipe": "show-me-selection-solid",
+        "source_sha256_lf": "36d404bfcf61e7de84c627e035f2f4176a5ea61ff0ef27f53cf3e7d78e0ceb19",
+        "steps_completed": 31
+      },
+      {
+        "checks_completed": 11,
+        "recipe": "show-me-shell",
+        "source_sha256_lf": "d1bab93a3355a686683630325c99d5115549d4ac934030bfcb4ab18f7dc93633",
+        "steps_completed": 14
+      },
+      {
+        "checks_completed": 18,
+        "recipe": "show-me-sketch-constraints",
+        "source_sha256_lf": "5ce0424452a12cbefc27dfa557e1c54b48d4c206cb76daa362b5d2a237ed06ac",
+        "steps_completed": 157
+      },
+      {
+        "checks_completed": 26,
+        "recipe": "show-me-sketch-draw",
+        "source_sha256_lf": "7e6fba0e1b4c206413ec2fa979fa2f39be786027c99708c855f10919250983c0",
+        "steps_completed": 114
+      },
+      {
+        "checks_completed": 30,
+        "recipe": "show-me-sketch-edit",
+        "source_sha256_lf": "63f8f3d1fdf81d069ffbb4bc403931183c0fec9e1be22d3b3a0d63603f8fb8cb",
+        "steps_completed": 111
+      },
+      {
+        "checks_completed": 13,
+        "recipe": "show-me-sketch-repeat",
+        "source_sha256_lf": "3d3d44b9b73c12c76ce4c8c995984b4ad70b47e017495c96c8740daf99a8a458",
+        "steps_completed": 60
+      },
+      {
+        "checks_completed": 13,
+        "recipe": "show-me-split-body",
+        "source_sha256_lf": "4c4e78a2e835d15ddee346cace53d4c8d4b07eeea72405015ce4516cbf6d71d0",
+        "steps_completed": 35
+      },
+      {
+        "checks_completed": 12,
+        "recipe": "show-me-sweep",
+        "source_sha256_lf": "c0fac3fb00f7ba368ba0a40243de5b487df352ad4d8b8132388a242ef6c56eb9",
+        "steps_completed": 19
+      }
+    ],
+    "frameCount": 236,
+    "assetBytes": 3956447
+  },
+  "captures": {
+    "platform": "macOS/aarch64",
+    "profile": "debug tests",
+    "nativeOriginalsAcquired": 78,
+    "operationalFrames": 60,
+    "independentlyDecodedGifFrames": 60,
+    "locales": [
+      "en",
+      "zh-CN",
+      "es",
+      "de"
+    ],
+    "maximumUiScale": 1.75,
+    "minimumWindow": [
+      1200,
+      760
+    ],
+    "sourcePngDimensions": [
+      864,
+      1200
+    ],
+    "gifDimensions": [
+      432,
+      600
+    ]
+  },
+  "keyboardCompanion": {
+    "test": "native_script_preview_tabs_after_extrude_in_the_production_ribbon",
+    "result": "passed",
+    "scope": "Production ribbon Extrude/Show me/Cut/Revolve neighbors and reverse navigation from Fillet; physical OS input unqualified"
+  },
+  "limits": [
+    "Component captures do not qualify the whole packaged application or physical OS input",
+    "All 58 guides automated; manual media inspection is a representative subset",
+    "GIF downsampling and palette conversion are lossy; full-resolution native PNG details are retained",
+    "Checkpoint intervals are actual recorded delays, not continuous video or an FPS measurement",
+    "Whole-application CPU/GPU utilization and driver memory are unqualified"
+  ],
+  "mediaBudgetBytes": 8388608,
+  "mediaBytes": 6753040,
+  "files": [
+    {
+      "file": "sketch.gif",
+      "bytes": 949070,
+      "sha256": "7ca8367f8af5a7cab5fd98d84ab44fc8c0cb816d27f43dabd5e0b49fb8822194",
+      "kind": "checkpoint-gif",
+      "width": 432,
+      "height": 600,
+      "guide": "sketch"
+    },
+    {
+      "file": "extrude.gif",
+      "bytes": 896588,
+      "sha256": "e2365240920c4d4fe42e9c60b88fb4c40d01988f38c8021418162367f73cf80c",
+      "kind": "checkpoint-gif",
+      "width": 432,
+      "height": 600,
+      "guide": "extrude"
+    },
+    {
+      "file": "cut.gif",
+      "bytes": 920972,
+      "sha256": "696d14109511831eeacadf4b9369b63938227a8b2473348e83ebadf8a3180c4e",
+      "kind": "checkpoint-gif",
+      "width": 432,
+      "height": 600,
+      "guide": "cut"
+    },
+    {
+      "file": "fillet.gif",
+      "bytes": 946442,
+      "sha256": "4bb917c2368b37b7eeda12c56ecdcafe36a78880eb59a66d930259d4f8ccfc65",
+      "kind": "checkpoint-gif",
+      "width": 432,
+      "height": 600,
+      "guide": "fillet"
+    },
+    {
+      "file": "circular-pattern.gif",
+      "bytes": 838650,
+      "sha256": "1375540436842aefb0d3862a5c40af190e307fb3827098c7ce661c0743077c8b",
+      "kind": "checkpoint-gif",
+      "width": 432,
+      "height": 600,
+      "guide": "circular_pattern"
+    },
+    {
+      "file": "selection-solid.png",
+      "bytes": 161344,
+      "sha256": "5d3d6971dd4297e58df899a21b7703908b940660a62be5d27cb0520cf1ef396a",
+      "kind": "original-native-png",
+      "originalEntry": "show-me/selection_solid/frame-1.png",
+      "width": 864,
+      "height": 1200
+    },
+    {
+      "file": "sketch-point.png",
+      "bytes": 308553,
+      "sha256": "1c2a822c18ded1efeb655c783756827a442b0c998dfce341bfa16c839f7dcdd1",
+      "kind": "original-native-png",
+      "originalEntry": "show-me/sketch_point/frame-3.png",
+      "width": 864,
+      "height": 1200
+    },
+    {
+      "file": "sketch-arc.png",
+      "bytes": 309936,
+      "sha256": "c373c9549ab905f3b64327fdcaac52bd964e7bceeb78225d0b9ad4d64a33d15d",
+      "kind": "original-native-png",
+      "originalEntry": "show-me/sketch_arc/frame-2.png",
+      "width": 864,
+      "height": 1200
+    },
+    {
+      "file": "sketch-dimension.png",
+      "bytes": 310854,
+      "sha256": "a1c76c5ac84d40c11b3092c42919e7dba004621ccf6cf055a26f734cc7180591",
+      "kind": "original-native-png",
+      "originalEntry": "show-me/sketch_dimension/frame-3.png",
+      "width": 864,
+      "height": 1200
+    },
+    {
+      "file": "selection-175-en.png",
+      "bytes": 93858,
+      "sha256": "648c6c44a44faba3ce15e1b294da6df40665b9b9565b98b0db03d51be66cbd7b",
+      "kind": "original-native-png",
+      "originalEntry": "show-me/selection_solid/demo-175-en.png",
+      "width": 1200,
+      "height": 760
+    },
+    {
+      "file": "selection-175-zh-CN.png",
+      "bytes": 90720,
+      "sha256": "d65c3e8158af3b26df3d58134531f8abe744dac221a4b17007c360eb519908eb",
+      "kind": "original-native-png",
+      "originalEntry": "show-me/selection_solid/demo-175-zh-CN.png",
+      "width": 1200,
+      "height": 760
+    },
+    {
+      "file": "selection-175-es.png",
+      "bytes": 100399,
+      "sha256": "a8dae13fa317074f10f27b467001cb47c4a821bdc89454aa648202ddb1a8ad3e",
+      "kind": "original-native-png",
+      "originalEntry": "show-me/selection_solid/demo-175-es.png",
+      "width": 1200,
+      "height": 760
+    },
+    {
+      "file": "selection-175-de.png",
+      "bytes": 98533,
+      "sha256": "150b4254a86689d7736944fedd0645f31ff2c0511250b8237176df60c5e0d848",
+      "kind": "original-native-png",
+      "originalEntry": "show-me/selection_solid/demo-175-de.png",
+      "width": 1200,
+      "height": 760
+    },
+    {
+      "file": "help-175-en.png",
+      "bytes": 179616,
+      "sha256": "dd457b8b7eb0bfd3cf7283ac7e4ab97da95cef5a940bbcdcb519314b6e17e7eb",
+      "kind": "original-native-png",
+      "originalEntry": "show-me/extrude/help-175-en-bottom.png",
+      "width": 1200,
+      "height": 760
+    },
+    {
+      "file": "help-175-zh-CN.png",
+      "bytes": 167209,
+      "sha256": "7a215f6c798c595e10cae9b94a7b31c179eb2c334404d563b203a7165af28dc2",
+      "kind": "original-native-png",
+      "originalEntry": "show-me/extrude/help-175-zh-CN-bottom.png",
+      "width": 1200,
+      "height": 760
+    },
+    {
+      "file": "help-175-es.png",
+      "bytes": 187164,
+      "sha256": "39acd93e6d9aaecf3b4f3f8d58e90fb2d98cbe908a16e3c960d77f1ff4ad59f9",
+      "kind": "original-native-png",
+      "originalEntry": "show-me/extrude/help-175-es-bottom.png",
+      "width": 1200,
+      "height": 760
+    },
+    {
+      "file": "help-175-de.png",
+      "bytes": 193132,
+      "sha256": "06b8a42da47ad0cf48893d6ebedadc5696fa06f12c019299ba48ff09fc41b265",
+      "kind": "original-native-png",
+      "originalEntry": "show-me/extrude/help-175-de-bottom.png",
+      "width": 1200,
+      "height": 760
+    }
+  ],
+  "gifs": [
+    {
+      "guide": "sketch",
+      "file": "sketch.gif",
+      "bytes": 949070,
+      "sha256": "7ca8367f8af5a7cab5fd98d84ab44fc8c0cb816d27f43dabd5e0b49fb8822194",
+      "recordingSha256": "a8c39f5c2ea062c4d7e34b595ec40c0262eac6764b2639885b0307e5f8c3c47a",
+      "executedSourceRevision": "f863c4f4d76ced6a9f9894298e2e9aa2443bb30e",
+      "compiledModified": true,
+      "frames": [
+        {
+          "file": "00-guidance-entry.png",
+          "order": 1,
+          "sourceSha256": "02798a42ef4efcbcad4427e2ed0f380113ab95331d40c4a56e4dcb51375a86b1",
+          "sourceDelayMs": 1191,
+          "encodedDelayMs": 1190,
+          "compressedSha256": "ebef71d9c326bca128608b4d2a27c4cccbc8b7fd02572eec689ec6b1802361c3"
+        },
+        {
+          "file": "01-autoplay-opening.png",
+          "order": 4,
+          "sourceSha256": "03d08a4ad10193ca4f1add3bbfa1cf4def2636d610c027f3d9485e45ddbb9b7e",
+          "sourceDelayMs": 3376,
+          "encodedDelayMs": 3380,
+          "compressedSha256": "10c708e77228267eb036f651cc6deb457ba91579d691b64dd020e6ff0a04b9f1"
+        },
+        {
+          "file": "02-autoplay-before-operation.png",
+          "order": 6,
+          "sourceSha256": "bc5f916381682cbfb917f6a6c94a5a41a01b982c2ea555b6c2d9aa003d689d3f",
+          "sourceDelayMs": 1527,
+          "encodedDelayMs": 1530,
+          "compressedSha256": "769c46fe5d1091e5f932256a4f89e674eb2f40f469cf5c0d60d41d2d24301133"
+        },
+        {
+          "file": "03-autoplay-before.png",
+          "order": 8,
+          "sourceSha256": "8488f36ed087f1b259bdd249257df3a76d462d186762a20fe3bb51177c721f0e",
+          "sourceDelayMs": 1602,
+          "encodedDelayMs": 1600,
+          "compressedSha256": "b9811d044ec46cf243cb8fee6f25ae06ba1664dd5303fbb54b64b527f07bdb5f"
+        },
+        {
+          "file": "04-autoplay-intermediate.png",
+          "order": 10,
+          "sourceSha256": "b092f7b8ae503b28e8033a7b2950455c3abfc9ba09fd37151ccc4ad2bcb9f577",
+          "sourceDelayMs": 896,
+          "encodedDelayMs": 900,
+          "compressedSha256": "0c5187b4b825dcd6f6ce8f30270e48f8a2c9f4886c8e3cd53cac511a589d7961"
+        },
+        {
+          "file": "05-paused.png",
+          "order": 13,
+          "sourceSha256": "7345101d1350ed06dbe39bd13a2d599b6c177ae1c294ef4cbee172598b54ed2c",
+          "sourceDelayMs": 1529,
+          "encodedDelayMs": 1530,
+          "compressedSha256": "70ce92fb60c27d46d3a4c139944e4c51787add439be0f489e317fc77db108985"
+        },
+        {
+          "file": "06-paused-after-wait.png",
+          "order": 15,
+          "sourceSha256": "7345101d1350ed06dbe39bd13a2d599b6c177ae1c294ef4cbee172598b54ed2c",
+          "sourceDelayMs": 1013,
+          "encodedDelayMs": 1010,
+          "compressedSha256": "70ce92fb60c27d46d3a4c139944e4c51787add439be0f489e317fc77db108985"
+        },
+        {
+          "file": "07-inline-instructions.png",
+          "order": 19,
+          "sourceSha256": "ee5d9c63ff3dc30c803411f71cdc5dcc142ebd256a434bf78cf497a3fc7dfcf2",
+          "sourceDelayMs": 1393,
+          "encodedDelayMs": 1390,
+          "compressedSha256": "7695df95210dd749cf8089b3238a674dc3c3e7a370bb261cacb8a4f1fbbefe84"
+        },
+        {
+          "file": "08-resumed-autoplay.png",
+          "order": 23,
+          "sourceSha256": "7df2d02e7fc992b56f6a323f281b1b4581c24b47eb96da0c55c2a13344f078f9",
+          "sourceDelayMs": 2496,
+          "encodedDelayMs": 2500,
+          "compressedSha256": "04e2125286cec127d2bde78af5e1e104798ec2ecf4c7283ea6b342f7b0b05ccf"
+        },
+        {
+          "file": "09-autoplay-after.png",
+          "order": 25,
+          "sourceSha256": "0885c99c18d2474f0cfb76f6e259ab672c7233c97b38d3fafe5286ed670e1078",
+          "sourceDelayMs": 9350,
+          "encodedDelayMs": 9350,
+          "compressedSha256": "affcbaa55e3ab9966f46177fff7d93de216f8f8e191181fbf4b140105a9b947c"
+        },
+        {
+          "file": "10-autoplay-complete.png",
+          "order": 27,
+          "sourceSha256": "6f6d656afad98443fe285091e27dd1fbacc332d50da3f87208050da2265319d6",
+          "sourceDelayMs": 856,
+          "encodedDelayMs": 860,
+          "compressedSha256": "04b0b329e963348f271e148db5673f3a89c0c01fb7659a85c1db19f65b8ef9f1"
+        },
+        {
+          "file": "11-closed-textures-released.png",
+          "order": 30,
+          "sourceSha256": "02798a42ef4efcbcad4427e2ed0f380113ab95331d40c4a56e4dcb51375a86b1",
+          "sourceDelayMs": 462,
+          "encodedDelayMs": 460,
+          "compressedSha256": "ebef71d9c326bca128608b4d2a27c4cccbc8b7fd02572eec689ec6b1802361c3"
+        }
+      ]
+    },
+    {
+      "guide": "extrude",
+      "file": "extrude.gif",
+      "bytes": 896588,
+      "sha256": "e2365240920c4d4fe42e9c60b88fb4c40d01988f38c8021418162367f73cf80c",
+      "recordingSha256": "f82ffd48a842265d600e24c1672fafc476b525208c4dc10fdce5cba4fc635830",
+      "executedSourceRevision": "f863c4f4d76ced6a9f9894298e2e9aa2443bb30e",
+      "compiledModified": true,
+      "frames": [
+        {
+          "file": "00-guidance-entry.png",
+          "order": 1,
+          "sourceSha256": "17895b72dcd102aad39399c7e38237ee1c1993127a584426c396f43fd7bd2de8",
+          "sourceDelayMs": 1139,
+          "encodedDelayMs": 1140,
+          "compressedSha256": "95a19e0e73dc51c5aa1e0188e1fe3742fbf7360443d7ee569a47bbfe5ea31303"
+        },
+        {
+          "file": "01-autoplay-opening.png",
+          "order": 4,
+          "sourceSha256": "8b5e7d68d0cf62d08b18e83816e1b0735d00c69e25e42d443a76ce89a33e395f",
+          "sourceDelayMs": 7768,
+          "encodedDelayMs": 7770,
+          "compressedSha256": "398c1a9beb71a8f1e28fb232c7c4ffb25396760a8144590554fe19b7531a1804"
+        },
+        {
+          "file": "02-autoplay-before-operation.png",
+          "order": 6,
+          "sourceSha256": "aabc2229e9674998450ceb293a67a34abd2b5c9413551fc12fc3d8e3711b13c1",
+          "sourceDelayMs": 672,
+          "encodedDelayMs": 670,
+          "compressedSha256": "493e16c69ef7dd0827ed7640ec0b644e0d388dab2a3835b8f513ed226a5b3dfe"
+        },
+        {
+          "file": "03-autoplay-before.png",
+          "order": 8,
+          "sourceSha256": "d72eff68cd8658bc9e63604479bf5ad706050bc92f7346424636db490f48fe6e",
+          "sourceDelayMs": 1272,
+          "encodedDelayMs": 1270,
+          "compressedSha256": "15e65a7e4086c5779ef3638212e923be5c887e8e9a69f545be9ac3e2d875b25e"
+        },
+        {
+          "file": "04-autoplay-intermediate.png",
+          "order": 10,
+          "sourceSha256": "f8f19cea0658edc6c69be495d0173aed2afe39095a11a25698d098745146b267",
+          "sourceDelayMs": 713,
+          "encodedDelayMs": 710,
+          "compressedSha256": "6ce870a25c2bbe4002975f4782e28bdc70aa82f460b267fa30b475cc1cd761ab"
+        },
+        {
+          "file": "05-paused.png",
+          "order": 13,
+          "sourceSha256": "2bdc239d3e5265cd75990a611b2be51a4d3cf9437643cede1a5a99b7ea31c599",
+          "sourceDelayMs": 1408,
+          "encodedDelayMs": 1410,
+          "compressedSha256": "a83b47c7f09082cd10205b9ff1c16b3dead68f5d0fb403803a9de81ad642b6be"
+        },
+        {
+          "file": "06-paused-after-wait.png",
+          "order": 15,
+          "sourceSha256": "2bdc239d3e5265cd75990a611b2be51a4d3cf9437643cede1a5a99b7ea31c599",
+          "sourceDelayMs": 757,
+          "encodedDelayMs": 760,
+          "compressedSha256": "a83b47c7f09082cd10205b9ff1c16b3dead68f5d0fb403803a9de81ad642b6be"
+        },
+        {
+          "file": "07-inline-instructions.png",
+          "order": 19,
+          "sourceSha256": "cd8bf9b7a1aaeffb65102d03ad8661861740ffbdf3df1716166ad4cc6da86877",
+          "sourceDelayMs": 1350,
+          "encodedDelayMs": 1350,
+          "compressedSha256": "f4ab5e699e02315ce17b21b0e73175e20779a7fa6aae4dbf230dd8f3032dabea"
+        },
+        {
+          "file": "08-resumed-autoplay.png",
+          "order": 23,
+          "sourceSha256": "31d6ed4822beb86afab38b0d40b42cc14565179df2687b202ba2617f3e417bb5",
+          "sourceDelayMs": 2479,
+          "encodedDelayMs": 2480,
+          "compressedSha256": "e5e6f2b631c62c427928826d3d568803640fedbf60afb406aa2df98f89d2234f"
+        },
+        {
+          "file": "09-autoplay-after.png",
+          "order": 25,
+          "sourceSha256": "0ecccd7f8d21b46b7de5b136cd3fc7fbf20f31e377d854adddfe725812fb9eef",
+          "sourceDelayMs": 6769,
+          "encodedDelayMs": 6770,
+          "compressedSha256": "fa1d9e7dfbcf6479813bef25d15d405e1150fa3552e9e06df93b60f76053ce80"
+        },
+        {
+          "file": "10-autoplay-complete.png",
+          "order": 27,
+          "sourceSha256": "244da2e3bafb195a0e8a2be474f781efe95a0464243bb2134fbfb877d9f862d8",
+          "sourceDelayMs": 891,
+          "encodedDelayMs": 890,
+          "compressedSha256": "0c629ea6d8164386f46fda0d00fe6e575c1daa86bbf946c66300bfbbf4c6c440"
+        },
+        {
+          "file": "11-closed-textures-released.png",
+          "order": 30,
+          "sourceSha256": "17895b72dcd102aad39399c7e38237ee1c1993127a584426c396f43fd7bd2de8",
+          "sourceDelayMs": 627,
+          "encodedDelayMs": 630,
+          "compressedSha256": "95a19e0e73dc51c5aa1e0188e1fe3742fbf7360443d7ee569a47bbfe5ea31303"
+        }
+      ]
+    },
+    {
+      "guide": "cut",
+      "file": "cut.gif",
+      "bytes": 920972,
+      "sha256": "696d14109511831eeacadf4b9369b63938227a8b2473348e83ebadf8a3180c4e",
+      "recordingSha256": "64005004e1ce3e20fd7cf029242406f120c70fba2d3d36e2e59f671eb63d0f1c",
+      "executedSourceRevision": "f863c4f4d76ced6a9f9894298e2e9aa2443bb30e",
+      "compiledModified": true,
+      "frames": [
+        {
+          "file": "00-guidance-entry.png",
+          "order": 1,
+          "sourceSha256": "7df53ad2bd6cbdac7d604607b9a4977f0f1bdea9ff194c499f19b6915c46a0e0",
+          "sourceDelayMs": 1702,
+          "encodedDelayMs": 1700,
+          "compressedSha256": "9dce6ee01b9b89049c74fa80731bab034d0943cc905ac285500afff2c5fd1cb7"
+        },
+        {
+          "file": "01-autoplay-opening.png",
+          "order": 4,
+          "sourceSha256": "9759ca0319f0ca9c4ff181d18c02b8ca56688b239ddf5118a5f8ccffe315f7ea",
+          "sourceDelayMs": 7390,
+          "encodedDelayMs": 7390,
+          "compressedSha256": "5831c330d38002c57315bb736472614bce44420303e1facc126ab522c74afe29"
+        },
+        {
+          "file": "02-autoplay-before-operation.png",
+          "order": 6,
+          "sourceSha256": "da97e9f76f07ecece83c8ea217fc0b3ce8084d16f72d7cd70ef768bf2196b91e",
+          "sourceDelayMs": 1542,
+          "encodedDelayMs": 1540,
+          "compressedSha256": "aea6bebf7907bcc8d6c0d825f3742f3d991361f6b1a0763f15cc72d1b508a14f"
+        },
+        {
+          "file": "03-autoplay-before.png",
+          "order": 8,
+          "sourceSha256": "25685e57fb67711abb8d3412269961a54cf09e752b6ab96365aef8a56887d071",
+          "sourceDelayMs": 1288,
+          "encodedDelayMs": 1290,
+          "compressedSha256": "5f1e4db78f7834a9cf037948ea30dc885e01d83dfc258b2144f18116396447d4"
+        },
+        {
+          "file": "04-autoplay-intermediate.png",
+          "order": 10,
+          "sourceSha256": "58b4478962ec3433a7dc103d854b49f706d9ba75f04dca020e04ce8788e49d70",
+          "sourceDelayMs": 708,
+          "encodedDelayMs": 710,
+          "compressedSha256": "7493962860b2adc53d6f7f3163149e961a888cd2c43345da631a0b651a200532"
+        },
+        {
+          "file": "05-paused.png",
+          "order": 13,
+          "sourceSha256": "732af53b086dbd9add95b969871f66defd5aeb13aac1693c07c562dd2ef19ae4",
+          "sourceDelayMs": 1339,
+          "encodedDelayMs": 1340,
+          "compressedSha256": "b10a40755490e651cb570e5be055b435ebad53394d077388c3727fa430ff399a"
+        },
+        {
+          "file": "06-paused-after-wait.png",
+          "order": 15,
+          "sourceSha256": "732af53b086dbd9add95b969871f66defd5aeb13aac1693c07c562dd2ef19ae4",
+          "sourceDelayMs": 909,
+          "encodedDelayMs": 910,
+          "compressedSha256": "b10a40755490e651cb570e5be055b435ebad53394d077388c3727fa430ff399a"
+        },
+        {
+          "file": "07-inline-instructions.png",
+          "order": 19,
+          "sourceSha256": "3c0d61d5f7c931304b4bdcfb43b3ad56d6b8db4b0b38982ed22947928db0600d",
+          "sourceDelayMs": 1385,
+          "encodedDelayMs": 1390,
+          "compressedSha256": "39236ff642acdbe0f4a87d9743b84cf6499e0ae26fd04253822b099f20130e41"
+        },
+        {
+          "file": "08-resumed-autoplay.png",
+          "order": 23,
+          "sourceSha256": "d80ea80340f278ff677052f44f1198732467ce9114e4e54d49dd8704bd448c11",
+          "sourceDelayMs": 2568,
+          "encodedDelayMs": 2570,
+          "compressedSha256": "f2288f7265a493ba8d2c0f19484c35bdf1ea6d0113b3142242f51e8c8c088db8"
+        },
+        {
+          "file": "09-autoplay-after.png",
+          "order": 25,
+          "sourceSha256": "da6ac55b0c01cdfb49784c3cf651ae5887ec98aa91fcdfa3af153e2e935a23e1",
+          "sourceDelayMs": 3505,
+          "encodedDelayMs": 3510,
+          "compressedSha256": "c3abd13d3120d96480fca2a5f7e2f6f8a498720ff558cd3282cd3b98818695ae"
+        },
+        {
+          "file": "10-autoplay-complete.png",
+          "order": 27,
+          "sourceSha256": "ea3859314d8e7c6e10ff53611a4fcc4e9619c9bb12844059cb8b49d0e5389a05",
+          "sourceDelayMs": 798,
+          "encodedDelayMs": 800,
+          "compressedSha256": "a27f4cf930ac7e17d7b5a7112ab114e0558bf02f9d5eede11352508de007b968"
+        },
+        {
+          "file": "11-closed-textures-released.png",
+          "order": 30,
+          "sourceSha256": "7df53ad2bd6cbdac7d604607b9a4977f0f1bdea9ff194c499f19b6915c46a0e0",
+          "sourceDelayMs": 655,
+          "encodedDelayMs": 660,
+          "compressedSha256": "9dce6ee01b9b89049c74fa80731bab034d0943cc905ac285500afff2c5fd1cb7"
+        }
+      ]
+    },
+    {
+      "guide": "fillet",
+      "file": "fillet.gif",
+      "bytes": 946442,
+      "sha256": "4bb917c2368b37b7eeda12c56ecdcafe36a78880eb59a66d930259d4f8ccfc65",
+      "recordingSha256": "9be0a638e43c67c5695237f47a48e35f35e0449e5284ff2e6218d55dcf1996db",
+      "executedSourceRevision": "f863c4f4d76ced6a9f9894298e2e9aa2443bb30e",
+      "compiledModified": true,
+      "frames": [
+        {
+          "file": "00-guidance-entry.png",
+          "order": 1,
+          "sourceSha256": "829b91d3a530be25603a9528b21821b106f9bf6c8849e411fc11fc4071da63f2",
+          "sourceDelayMs": 1643,
+          "encodedDelayMs": 1640,
+          "compressedSha256": "d56fb00a392da7aa063837df269be4dae5cd8d85d3c81808ff29f54ac32a058b"
+        },
+        {
+          "file": "01-autoplay-opening.png",
+          "order": 4,
+          "sourceSha256": "f4865b005612a5cc703f36b48c527d3dc0c7e9360ea2ca6017c31bb69d0d73eb",
+          "sourceDelayMs": 4153,
+          "encodedDelayMs": 4150,
+          "compressedSha256": "f30bc9b84270431e4be6c8ecfcee3061ed0f40d5da48f14ecf902d6935be176c"
+        },
+        {
+          "file": "02-autoplay-before-operation.png",
+          "order": 6,
+          "sourceSha256": "ecf321c1b63449c829886dd13e6f1a4220a025f284eea5a48b57ce3616873a96",
+          "sourceDelayMs": 1566,
+          "encodedDelayMs": 1570,
+          "compressedSha256": "ef5c0cc66c05317d9963020038eb3713fcf2fc3e248e7e8bfbe19fe11d2331ef"
+        },
+        {
+          "file": "03-autoplay-before.png",
+          "order": 8,
+          "sourceSha256": "43f638d8e55ca2b9a238ec8ef6bf83dd931eec1d72329bffa9928502213bc1b8",
+          "sourceDelayMs": 1370,
+          "encodedDelayMs": 1370,
+          "compressedSha256": "71db0f4c29626de4d3ae09d827a396734b4d049d3a95351932abb6ef1e67089e"
+        },
+        {
+          "file": "04-autoplay-intermediate.png",
+          "order": 10,
+          "sourceSha256": "667d8ea711be1283dc9c90237ffa44a3febcc3354c185619523bdecbce41731a",
+          "sourceDelayMs": 688,
+          "encodedDelayMs": 690,
+          "compressedSha256": "3af9cea5daa475c9664b7d0ed75f19e7ff2b696dc4191d49998b6084746cbca0"
+        },
+        {
+          "file": "05-paused.png",
+          "order": 13,
+          "sourceSha256": "4eb082ed71e81ab89bc4b55b7dc0dfb045c142b6d0351b0f911c84fb1f838da3",
+          "sourceDelayMs": 1276,
+          "encodedDelayMs": 1280,
+          "compressedSha256": "57cb61a83b060cea1f6556deda3a7215b7aebd5a09120a451e4fd8151a04c8be"
+        },
+        {
+          "file": "06-paused-after-wait.png",
+          "order": 15,
+          "sourceSha256": "4eb082ed71e81ab89bc4b55b7dc0dfb045c142b6d0351b0f911c84fb1f838da3",
+          "sourceDelayMs": 950,
+          "encodedDelayMs": 950,
+          "compressedSha256": "57cb61a83b060cea1f6556deda3a7215b7aebd5a09120a451e4fd8151a04c8be"
+        },
+        {
+          "file": "07-inline-instructions.png",
+          "order": 19,
+          "sourceSha256": "5ebc63ff8b4fc4ff404190a3d385e447ac90dfa8478731c9f4c929f1d3745304",
+          "sourceDelayMs": 1648,
+          "encodedDelayMs": 1650,
+          "compressedSha256": "5847c09d53ffbd75fb148504b00f2a6c331de98c41e9769cc668d5c36af0c396"
+        },
+        {
+          "file": "08-resumed-autoplay.png",
+          "order": 23,
+          "sourceSha256": "24610b35e96ea7dce0a5d1b83785b33f48e33a522a5403281a92aeb06dc29043",
+          "sourceDelayMs": 2400,
+          "encodedDelayMs": 2400,
+          "compressedSha256": "4f992b562d8183c52c64ae7a5e282f8cf299070252113a6363151aa162ffaac3"
+        },
+        {
+          "file": "09-autoplay-after.png",
+          "order": 25,
+          "sourceSha256": "3c441a3fe30ee79c7d5e0aa5363fd4d78919b81031943bf621a654ee14738d81",
+          "sourceDelayMs": 3348,
+          "encodedDelayMs": 3350,
+          "compressedSha256": "7ddb6f4001d84d8a227964f5f91cf6ff7d8961979c6ad19603e85d01bf7e3f1d"
+        },
+        {
+          "file": "10-autoplay-complete.png",
+          "order": 27,
+          "sourceSha256": "b7309ff21265539a5947aa12b259ced42eebcd205843757264033a85702e906a",
+          "sourceDelayMs": 792,
+          "encodedDelayMs": 790,
+          "compressedSha256": "2b8e523c10699f673ebd7ce829868122618792b3caab4033ade12b298cba708d"
+        },
+        {
+          "file": "11-closed-textures-released.png",
+          "order": 30,
+          "sourceSha256": "829b91d3a530be25603a9528b21821b106f9bf6c8849e411fc11fc4071da63f2",
+          "sourceDelayMs": 514,
+          "encodedDelayMs": 510,
+          "compressedSha256": "d56fb00a392da7aa063837df269be4dae5cd8d85d3c81808ff29f54ac32a058b"
+        }
+      ]
+    },
+    {
+      "guide": "circular_pattern",
+      "file": "circular-pattern.gif",
+      "bytes": 838650,
+      "sha256": "1375540436842aefb0d3862a5c40af190e307fb3827098c7ce661c0743077c8b",
+      "recordingSha256": "3801677fabfacd6906b69f9462832bf99ee45b4d7e09d1dc67aaa74960da6150",
+      "executedSourceRevision": "f863c4f4d76ced6a9f9894298e2e9aa2443bb30e",
+      "compiledModified": true,
+      "frames": [
+        {
+          "file": "00-guidance-entry.png",
+          "order": 1,
+          "sourceSha256": "b93c41399dc9fcf36027f8f0a7c97e9c46e25435878fceb12ad286969d27424b",
+          "sourceDelayMs": 1673,
+          "encodedDelayMs": 1670,
+          "compressedSha256": "81b1c5793cda67a8ab1556f6051b5018b0f58770c65372cbf87adb3233d0955b"
+        },
+        {
+          "file": "01-autoplay-opening.png",
+          "order": 4,
+          "sourceSha256": "76ac5ee82a88f1ca3a2512108346a5009bd4069a584cad0a677b7e8521f0626d",
+          "sourceDelayMs": 1956,
+          "encodedDelayMs": 1960,
+          "compressedSha256": "9f82a8e4e5bd1b89551e192e5cf0426a3e07c315bac1b25f95d264fd65cbb411"
+        },
+        {
+          "file": "02-autoplay-before-operation.png",
+          "order": 6,
+          "sourceSha256": "25273b38224a746a0bc4ed017d8276acf2a24452d7c8adf1362941ad7698b077",
+          "sourceDelayMs": 1585,
+          "encodedDelayMs": 1590,
+          "compressedSha256": "392b950805ae565061b01c3340dda656ad5490dd73812315cd65d454c5d4f7fb"
+        },
+        {
+          "file": "03-autoplay-before.png",
+          "order": 8,
+          "sourceSha256": "a1377a33efdcc7ff559caec0d3853f4ab87da08fd9cff88f6e624bef64d61ba6",
+          "sourceDelayMs": 809,
+          "encodedDelayMs": 810,
+          "compressedSha256": "7712660c6fc5423b591863d032207d865d23b7456d606c024a5e2aa12f0d0640"
+        },
+        {
+          "file": "04-autoplay-intermediate.png",
+          "order": 10,
+          "sourceSha256": "9f29871671a458af1000caa2abead7eebf70ae8b26c223e0abd73954d7319627",
+          "sourceDelayMs": 696,
+          "encodedDelayMs": 700,
+          "compressedSha256": "e0cfa151806ff4aa9bd81d724769d427f7abaaec2fc348ce144331989385dbb4"
+        },
+        {
+          "file": "05-paused.png",
+          "order": 14,
+          "sourceSha256": "408c38bc99bd01e5ab7460c784ac0f03ceea4ff4a948a29cb9faf9197fbba669",
+          "sourceDelayMs": 1334,
+          "encodedDelayMs": 1330,
+          "compressedSha256": "3e2d7599c3c9926f3746a450a14bc8f945cb62a72acd956d609b613c4e12db64"
+        },
+        {
+          "file": "06-paused-after-wait.png",
+          "order": 16,
+          "sourceSha256": "408c38bc99bd01e5ab7460c784ac0f03ceea4ff4a948a29cb9faf9197fbba669",
+          "sourceDelayMs": 875,
+          "encodedDelayMs": 880,
+          "compressedSha256": "3e2d7599c3c9926f3746a450a14bc8f945cb62a72acd956d609b613c4e12db64"
+        },
+        {
+          "file": "07-inline-instructions.png",
+          "order": 20,
+          "sourceSha256": "d93081ed2207b865265dbf20b567783ee82cc678330a0a1abae52e4d4880027c",
+          "sourceDelayMs": 1518,
+          "encodedDelayMs": 1520,
+          "compressedSha256": "cbebaf603c7cccdc4e8967040804ac453d75eefd947a33108c58e09314a1e29c"
+        },
+        {
+          "file": "08-resumed-autoplay.png",
+          "order": 24,
+          "sourceSha256": "e4ef8bd3f888b6bb61684bcb10c709f038bb9d9d7d1cbf5d1ea2d3d502bc9969",
+          "sourceDelayMs": 613,
+          "encodedDelayMs": 610,
+          "compressedSha256": "e1e673bfd9e378701b3f91d4e6062d80033039764aba0ca4297b4bdd9ea03349"
+        },
+        {
+          "file": "09-autoplay-after.png",
+          "order": 26,
+          "sourceSha256": "e4ef8bd3f888b6bb61684bcb10c709f038bb9d9d7d1cbf5d1ea2d3d502bc9969",
+          "sourceDelayMs": 2835,
+          "encodedDelayMs": 2840,
+          "compressedSha256": "e1e673bfd9e378701b3f91d4e6062d80033039764aba0ca4297b4bdd9ea03349"
+        },
+        {
+          "file": "10-autoplay-complete.png",
+          "order": 28,
+          "sourceSha256": "946814fe61d7b65f58d75608c69f23bce5d704baac2b1be66a8faf9178483635",
+          "sourceDelayMs": 744,
+          "encodedDelayMs": 740,
+          "compressedSha256": "16434e9b5d6bdd8382f23152f27498185bf1773c8b4bdcc497f1c528ef6ca196"
+        },
+        {
+          "file": "11-closed-textures-released.png",
+          "order": 31,
+          "sourceSha256": "b93c41399dc9fcf36027f8f0a7c97e9c46e25435878fceb12ad286969d27424b",
+          "sourceDelayMs": 523,
+          "encodedDelayMs": 520,
+          "compressedSha256": "81b1c5793cda67a8ab1556f6051b5018b0f58770c65372cbf87adb3233d0955b"
+        }
+      ]
+    }
+  ],
+  "historicalBundle": "https://github.com/limo-cad/Limo-CAD/tree/bdb55e0f9201c15c4ca4184c7612c349ebea2c33/docs/media/show-me-foundations"
+}

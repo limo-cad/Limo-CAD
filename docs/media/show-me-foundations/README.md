@@ -1,30 +1,105 @@
-# Guided examples
+# Show me: Sketch and Solid
 
-Sketch, Extrude, Fillet and Cut operate on the same angle bracket. Cut offers separate Through all and Measured depth outcomes. Long-hover or keyboard-focus Create Sketch, Extrude or Fillet to open a **Guided examples** area with Book icons and explicit example names. Modeling commands keep their existing role.
+58 guides teach one operation at a time, with 236 authored frames on the shared
+bracket workflow. Playback starts automatically. Pause, Instructions, Resume,
+clickable steps, Replay and Close operate on the retained native preview.
+English, Simplified Chinese, Spanish and German use the same lesson catalog.
 
-Opening a guide starts automatic playback. Sketch curves draw progressively, extrusion grows along its authored axis, and selection/depth guides explain the Cut and Fillet actions before revealing their exact authored results. Pause/Resume preserves progress; Next and clickable steps provide manual navigation; Replay restarts. The model remains visible while a replacement texture is pending, with captions and breadcrumbs tied to the displayed geometry.
+## Native walkthroughs
 
-**Instructions** expands within the guide and pauses playback. Wide layouts use a side column; narrow layouts use a bounded, scrollable lower region. Closing it retains the step and camera. Escape dismisses All steps, then Instructions, then the guide. Help opens the same lesson catalog. There are no duplicate Show me/Back-to-example destinations. English, Simplified Chinese, Spanish and German share the catalog.
+These five GIFs contain twelve recorded checkpoints each, including automatic
+playback, Pause, inline Instructions, Resume, completion and Close. They show
+the actual native widgets and controller in a windowless component fixture.
+The entry button is a fixture anchor; production ribbon keyboard access is
+covered by the separate companion regression below.
 
-## Rendering and reliability
+**Sketch: close and dimension the bracket section.**
 
-The guide uses the existing CAD worker, device and queue, on an isolated render layer. Built-in CBOR geometry is prepared offline; playback performs no CAD operations. Animation reuses meshes and updates curves/transforms/guides; Cut and Fillet switch to exact endpoint geometry once. Main CAD jobs have priority at queue boundaries. Cold synchronous shader compilation cannot be preempted.
+![Sketch walkthrough](sketch.gif)
 
-Sketch-bearing steps reuse the document viewport's continuous adaptive grid on the authored sketch plane. It remains visible while drawing and dimensioning, with the same depth fading and bounded line count. This adds line drawing during active renders without creating another grid implementation, GPU device or CAD operation.
+**Extrude: give the section its 40 mm width.**
 
-There is one pending teaching request, one parked deadline scheduler, and at most two imported textures / 2 MiB in the UI cache. Motion is capped at 20 samples per second; static cues render once and hold. The worker color pool remains bounded at five targets, at most 4.89 MiB at the maximum size, excluding depth/MSAA, driver allocations and shared resources. Paused/closed guides schedule no continuing animation work. This is a bounded design, not a constrained-device performance guarantee.
+![Extrude walkthrough](extrude.gif)
 
-Shader-error recovery rebuilds contaminated renderer caches once on the existing device, restores live state and queued deltas, and disables teaching for that worker. Genuine main/device failures retain their fatal handling.
+**Cut: make the upright opening with Through all.**
 
-## Evidence
+![Cut walkthrough](cut.gif)
 
-`guided-experience.json` records source hashes, capture scope and timings. GIFs sample real native component captures at authored pauses, including intermediate motion. They are not OS pointer recordings. The native suite covers all lessons and both Cut outcomes, four locales at 175%, dimension raster ink, instruction clipping, a full automatic Sketch playback without blank model frames, and bounded texture imports. CPU regressions cover pause/resume, stale replies, deadline ordering and authored geometry. Independent code/performance and visual reviews informed the fixes.
+**Fillet: round the bracket's outside corners.**
 
-Current review captures come from the successful [native visual job](https://github.com/limo-cad/Limo-CAD/actions/runs/39359657089/job/118422580828) at `2e313e7a4069ab194ec99202916c0c0ab399bfda`. `review-captures-20261020.json` records their exact paths and hashes. The Spanish guide and German instructions both use a 1200 by 760 surface at 175% scale. The instructions fit this capture; scrolling behavior is verified separately by tests. These are native component captures, not recordings of the packaged application.
+![Fillet walkthrough](fillet.gif)
 
-Existing GIFs and `guided-experience.json` retain their original capture provenance. Broad live UI/MCP qualification remains paused. Published media budget: 8 MiB.
+**Circular Pattern: repeat mounting lugs about an axis.**
 
-Use the registered Cargo lane, matching OCCT SDK, and a fresh evidence directory:
+![Circular Pattern walkthrough](circular-pattern.gif)
+
+## Detail captures
+
+The full-resolution PNGs preserve native pixels. These captures show the shorter
+navigation labels, the independent Point marker, and the authored dimensions.
+
+![Face selection and compact step navigation](selection-solid.png)
+
+- [Standalone Point](sketch-point.png)
+- [Arc radius and angle](sketch-arc.png)
+- [Driving length dimension](sketch-dimension.png)
+
+At the supported 1200 × 760 window and 175% UI scale:
+
+- Compact navigation: [English](selection-175-en.png),
+  [Chinese](selection-175-zh-CN.png), [Spanish](selection-175-es.png),
+  [German](selection-175-de.png).
+- Complete Extrude instructions and footer: [English](help-175-en.png),
+  [Chinese](help-175-zh-CN.png), [Spanish](help-175-es.png),
+  [German](help-175-de.png).
+
+## Validation and provenance
+
+[Native run 41083664402](https://github.com/limo-cad/Limo-CAD/actions/runs/41083664402)
+passed on application source `bdb55e0f9201c15c4ca4184c7612c349ebea2c33`.
+That head had 36 successful checks and 11 intentional skips. The native suite
+covered all 58 guides, both Cut outcomes, four locales at 175%, instruction bounds,
+dimension raster ink, lifecycle cleanup and single/multi-edge transitions.
+
+The real production-ribbon companion regression passed:
+`native_script_preview_tabs_after_extrude_in_the_production_ribbon`.
+It covers Extrude → Show me with the production Cut/Revolve neighbors and reverse
+navigation from Fillet. It establishes a keyboard route through those native
+controls; physical OS input and the broad live UI survey remain unqualified.
+
+The compiled commit was `f863c4f4d76ced6a9f9894298e2e9aa2443bb30e`, whose Git tree
+equals the application source tree. The debug build reports `compiled_modified:
+true` after its own-engine asset generation. All 58 generated asset hashes and
+all 27 recipe hashes match the frozen application source: 236 frames and
+3,956,447 asset bytes.
+
+[evidence.json](evidence.json) records media hashes, original frame order, actual
+recorded delays, source identities and artifact references. GIFs are encoded at
+432 × 600 from 864 × 1200 checkpoints, with lossy palette conversion and delays
+rounded to the nearest centisecond. They are checkpoint walkthroughs; continuous
+motion, FPS and physical pointer delivery are outside this capture scope.
+
+[measurements.json](measurements.json) retains the 59 native component cases,
+including the second Cut outcome. In the macOS/aarch64 debug fixture, cold opening
+took 542–1,894 ms and reopening took 53–351 ms. A three-pass warm replay averaged
+195–551 ms per pass and submitted 12–15 geometry render jobs. Cached adjacent
+navigation submitted zero additional GPU jobs. All cases recorded zero idle
+preview wakes over 100,000 polls and zero cached image bytes after Close.
+These measurements describe the windowless controller and its owned caches;
+whole-application CPU/GPU utilization and driver memory remain unqualified.
+
+The source archive is artifact `12995075556`. Acquisition used bounded ranges
+for selected original entries; entry names, flags, methods, CRCs, lengths and
+retained SHA-256 values were checked. Its API-reported archive digest is recorded
+in the manifest; the whole archive digest was not recomputed.
+
+The previous four-guide bundle and its original review receipts remain available
+at this [immutable historical snapshot](https://github.com/limo-cad/Limo-CAD/tree/bdb55e0f9201c15c4ca4184c7612c349ebea2c33/docs/media/show-me-foundations).
+Current published media stays within the 8 MiB budget. The application code,
+native tests, recipes and CBOR payloads are unchanged by this evidence refresh.
+
+To reproduce with the matching OCCT SDK and registered Cargo lane, choose fresh
+evidence directories and run:
 
 ```powershell
 $env:LIMO_CAD_SHOW_ME_PROOF_DIR = '<fresh directory>'
@@ -33,4 +108,6 @@ $env:LIMO_VIEWPORT_RENDER_PROOFS = '<fresh directory>'
 cargo xtask ci native-ignored-test show-me-lifecycle
 ```
 
-The reference proportions remain 32 mm base length, 40 mm width, 44 mm height, 8 mm walls and a 26 mm upright hole. These are inferred CAD dimensions based on the README branding concept. No user document is used by the windowless fixtures.
+The reference part has a 32 mm base length, 40 mm width, 44 mm height and 8 mm
+walls. These dimensions were inferred from the README branding concept. The
+fixtures use their own bracket and leave user documents untouched.
