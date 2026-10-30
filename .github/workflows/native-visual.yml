@@ -59,7 +59,7 @@ jobs:
       desktop-input: true
 
   native-visual:
-    runs-on: macos-14
+    runs-on: macos-15
     # Cold SDK setup and compilation precede the complete guide catalog.
     # Keep every fixture deadline and bound the full qualification job.
     timeout-minutes: 90
