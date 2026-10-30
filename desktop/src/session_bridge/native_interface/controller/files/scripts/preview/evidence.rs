@@ -178,6 +178,9 @@ fn capture_component(app: &mut App, target: &Handle<Image>, path: &Path, card_vi
     loop {
         update(app);
         if let Some(bytes) = app.world_mut().resource_mut::<Capture>().0.take() {
+            // Preserve the exact failed raster as well as successful captures.
+            // Pixel, glyph and layout assertions below must still fail normally.
+            std::fs::write(path, &bytes).unwrap();
             for (text, block) in app
                 .world_mut()
                 .query::<(&Text, &bevy::text::ComputedTextBlock)>()
@@ -240,7 +243,9 @@ fn capture_component(app: &mut App, target: &Handle<Image>, path: &Path, card_vi
                     // Completed dimension frames keep the existing ink gate.
                     // Intermediate labels intentionally fade with their image.
                     if app.world().resource::<Files>().script.preview.animation_complete() {
-                        assert!(ink > 8, "Dimension {} must rasterize inside its own label box", text.0);
+                        assert!(ink > 8,
+                            "Dimension {} must rasterize inside its own label box in {}: ink={ink}, bounds={min:?}..{max:?}, node_size={:?}, raster={}x{}, color={color:?}",
+                            text.0, path.display(), node.size, size.width, size.height);
                     }
                 }
                 if app.world().resource::<Files>().script.preview.lesson == Some(lesson::Id::Sketch)
@@ -310,7 +315,6 @@ fn capture_component(app: &mut App, target: &Handle<Image>, path: &Path, card_vi
                     "The native card title must survive view transitions"
                 );
             }
-            std::fs::write(path, bytes).unwrap();
             return;
         }
         assert!(Instant::now() < deadline, "Native UI capture timed out");
