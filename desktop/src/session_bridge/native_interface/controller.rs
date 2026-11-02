@@ -606,6 +606,9 @@ fn update_inner(
         }
         let mut accepted = true;
         for action in std::mem::take(&mut event.actions) {
+            if named_views::coalesces_native_double_click(world, &action) {
+                continue;
+            }
             if worker::busy(world) {
                 state.status = "Modeling is in progress; later input was not applied".into();
                 accepted = false;
@@ -2363,7 +2366,7 @@ fn synchronize(
         TextColor(Color::srgb(0.12, 0.09, 0.03)),
         TextLayout::new(Justify::Left, bevy::text::LineBreak::WordOrCharacter),
     ));
-    let status = if let Some(caption) = playback_caption {
+    let mut status = if let Some(caption) = playback_caption {
         caption
     } else if state.status.is_empty() && files::print_message(world, &owner).is_some() {
         files::print_message(world, &owner).unwrap_or_default()
@@ -2372,6 +2375,9 @@ fn synchronize(
     } else {
         state.status.clone()
     };
+    if named_views::displays_error(world, &status) {
+        status.clear();
+    }
     let status_height = 58_f32.min((workbench::navigation_top(height) - top - 8.).max(0.));
     let status_width = (width - side - 360.).max(1.);
     decorate(

@@ -202,7 +202,7 @@ pub(super) fn run(args: impl Iterator<Item = String>) -> Result<()> {
         first["print_layout"] == true && first["print_bed"] == profile["dual"],
         "Purpose/profile not retained"
     );
-    field(c, "Recall saved view", None)?;
+    field(c, "Activate view", None)?;
     ensure!(
         c.call("named_views", json!({}))?["active"] == "Bracket print",
         "Recall did not activate view"
@@ -265,7 +265,7 @@ pub(super) fn run(args: impl Iterator<Item = String>) -> Result<()> {
             == first["occurrence_offsets"][0]["rotation"],
         "Corrections changed saved rotation"
     );
-    field(c, "Recall saved view", None)?;
+    field(c, "Activate view", None)?;
     let corrected_report = field(c, "Check print layout", None)?["value"]["report"].clone();
     ensure!(
         corrected_report["issues"]
@@ -301,7 +301,7 @@ pub(super) fn run(args: impl Iterator<Item = String>) -> Result<()> {
     }
     field(c, "View purpose", Some("false"))?;
     field(c, "Save view", None)?;
-    field(c, "Recall saved view", None)?;
+    field(c, "Activate view", None)?;
     let presentation_output = fixture.out.join("presentation-view.3mf");
     export(c, &presentation_output, false)?;
     ensure!(

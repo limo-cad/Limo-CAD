@@ -1,4 +1,11 @@
 {
+  "namedViews": {
+    "activate": "Activate view",
+    "edit": "Edit saved view {name}",
+    "discard": "Discard edits",
+    "finishEdits": "Save or discard your view edits before switching views.",
+    "finishOperation": "Finish the current operation before activating a saved view."
+  },
   "projectReplay": {
     "needsRepair": "Source needs repair; validate before Run.",
     "filter": "Limo CAD project replay (.limo.replay.cbor)",

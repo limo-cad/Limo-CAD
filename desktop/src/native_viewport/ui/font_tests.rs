@@ -157,3 +157,44 @@ fn native_font_fallback_shapes_drawing_symbols_without_missing_glyphs() {
         }
     }
 }
+
+#[test]
+#[ignore = "platform font check: requires installed CJK fallback fonts"]
+fn native_named_view_copy_shapes_without_missing_glyphs() {
+    use crate::app_preferences::locale;
+    let mut app = font_app();
+    let assets = app.world().resource::<ViewportUiAssets>().clone();
+    for locale in locale::SUPPORTED {
+        for key in [
+            "activate",
+            "edit",
+            "discard",
+            "finishEdits",
+            "finishOperation",
+        ] {
+            let key = format!("namedViews.{key}");
+            let text = locale::translate(locale, &key).replace("{name}", "Front");
+            assert_ne!(text, key, "Missing saved-view translation");
+            if locale != crate::app_preferences::Locale::En {
+                assert_ne!(
+                    text,
+                    locale::translate(crate::app_preferences::Locale::En, &key)
+                        .replace("{name}", "Front"),
+                    "Saved-view copy must not silently fall back to English: {locale:?} {key}"
+                );
+            }
+            for weight in [FontWeight::NORMAL, FontWeight::SEMIBOLD] {
+                let font = ViewportUiTheme::from_palette(&default()).text(&assets, 12., weight);
+                let glyphs = shape(&mut app, &text, font);
+                assert!(
+                    !glyphs.is_empty(),
+                    "No glyphs shaped for {locale:?}: {text}"
+                );
+                assert!(
+                    glyphs.iter().all(|(_, _, id, _)| *id != 0),
+                    "Missing glyph for {locale:?}: {text}"
+                );
+            }
+        }
+    }
+}

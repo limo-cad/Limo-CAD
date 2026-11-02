@@ -209,6 +209,42 @@ pub(super) fn paint(
         None,
         50,
     )?;
+    let dirty = has_unsaved_changes(state);
+    let caption = native_viewport::localization::translate(world, "namedViews.activate");
+    let mut activate = InterfaceControl::button("document/views", caption);
+    activate.disabled = worker::busy(world)
+        || dirty
+        || presentation_locked(world)
+        || saved_action_error(state, &Command::Recall).is_some();
+    let activate = state.widgets.button(
+        world,
+        camera,
+        "named-view-activate",
+        activate,
+        Some(caption),
+        NativeCommand::NamedView(state.generation, Command::Recall),
+        chrome::rect(x + 12., y + 36., w - 24., 28.),
+        None,
+        50,
+    )?;
+    interface_shell::control_colors(world, activate, theme.accent, theme.panel);
+    if dirty {
+        let caption = native_viewport::localization::translate(world, "namedViews.discard");
+        let mut discard = InterfaceControl::button("document/views", caption);
+        discard.disabled = worker::busy(world);
+        state.widgets.button(
+            world,
+            camera,
+            "named-view-discard",
+            discard,
+            Some(caption),
+            NativeCommand::NamedView(state.generation, Command::Discard),
+            chrome::rect(x + 12., y + 68., w - 24., 28.),
+            None,
+            50,
+        )?;
+    }
+    let fields_top = if dirty { 104. } else { 72. };
     let mut rows: ViewRows = vec![
         ("Saved named view".into(), Some(Field::Saved), None, None),
         (
@@ -282,12 +318,6 @@ pub(super) fn paint(
         ),
         ("Save view".into(), None, Some(Command::Save), None),
         (
-            "Recall saved view".into(),
-            None,
-            Some(Command::Recall),
-            None,
-        ),
-        (
             "Rename saved view".into(),
             None,
             Some(Command::Rename),
@@ -344,7 +374,7 @@ pub(super) fn paint(
             "Whole CAD groups fit after the proposed translations; rotations and part alignment are retained."
         } else { "The proposed arrangement does not fit. Review group size or bed choice." }.into())));
     }
-    let per_page = (((h - 88.) / 51.).floor() as usize).clamp(1, 8);
+    let per_page = (((h - fields_top - 42.) / 51.).floor() as usize).clamp(1, 8);
     state.scroll = state.scroll.min(rows.len().saturating_sub(per_page));
     let total = rows.len();
     for (index, (label, field, command, information)) in rows
@@ -353,7 +383,7 @@ pub(super) fn paint(
         .take(per_page)
         .enumerate()
     {
-        let ry = y + 36. + index as f32 * 51.;
+        let ry = y + fields_top + index as f32 * 51.;
         state.widgets.text(
             world,
             camera,
