@@ -719,3 +719,96 @@ fn native_preview_layout_and_palette_replacement_remove_the_old_opacity_layer() 
         );
     }
 }
+
+#[test]
+fn native_preview_single_edge_uses_cached_dissolve_without_geometry_jobs() {
+    #[derive(serde::Deserialize)]
+    struct Bundle {
+        frames: Vec<Frame>,
+    }
+    let bundle: Bundle = ciborium::de::from_reader(
+        include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/assets/show-me/selection_solid.cbor"
+        ))
+        .as_slice(),
+    )
+    .unwrap();
+    assert_eq!(bundle.frames[2].edges.len(), 1);
+    let (mut world, handle, _) = fixture();
+    {
+        let preview = &mut world.resource_mut::<Files>().script.preview;
+        preview.lesson = Some(lesson::Id::SelectionSolid);
+        preview.retained = Some(Retained::new(preview.service.clone(), bundle.frames).unwrap());
+        preview.index = 1;
+        preview.changed().unwrap();
+    }
+    publish_current(&mut world);
+    let source = world
+        .resource::<Files>()
+        .script
+        .preview
+        .image
+        .clone()
+        .unwrap();
+    {
+        let preview = &mut world.resource_mut::<Files>().script.preview;
+        preview.index = 2;
+        preview.playing = true;
+        preview.changed().unwrap();
+        preview.begin_animation();
+        assert!(preview.geometry_animation_complete());
+        assert!(preview.blend.is_some());
+        assert_eq!(preview.display_index(), 1);
+    }
+    publish_current(&mut world);
+    let now = Instant::now();
+    let (revision, jobs, key) = {
+        let preview = &mut world.resource_mut::<Files>().script.preview;
+        arm_replay(preview, now);
+        (
+            preview.revision,
+            preview.render_jobs,
+            images::Key::current(preview),
+        )
+    };
+    for tick in 1..=blend::STEPS {
+        let preview = &mut world.resource_mut::<Files>().script.preview;
+        let at = now + ANIMATION_INTERVAL * u32::from(tick);
+        replay(preview, &handle, at).unwrap();
+        assert_eq!((preview.revision, preview.render_jobs), (revision, jobs));
+        assert!(images::Key::current(preview) == key);
+        arm_replay(preview, at);
+    }
+    let preview = &world.resource::<Files>().script.preview;
+    assert!(preview.blend.is_none());
+    assert!(preview.animation_complete());
+    assert_eq!(preview.display_index(), 2);
+    assert_eq!(preview.images.footprint(), (2, 2 * 1024 * 1024));
+    assert!(world.resource::<Assets<Image>>().contains(source.id()));
+}
+
+#[test]
+fn native_preview_multi_edge_fillet_keeps_progressive_highlighting() {
+    #[derive(serde::Deserialize)]
+    struct Bundle {
+        frames: Vec<Frame>,
+    }
+    let bundle: Bundle = ciborium::de::from_reader(
+        include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/assets/show-me/fillet.cbor"
+        ))
+        .as_slice(),
+    )
+    .unwrap();
+    let index = bundle
+        .frames
+        .iter()
+        .position(|frame| {
+            frame.cue == Some(crate::native_viewport::script_preview::PreviewCue::Edges)
+        })
+        .unwrap();
+    assert!(bundle.frames[index].edges.len() > 1);
+    assert!(blend::geometry_motion(&bundle.frames)[index]);
+}

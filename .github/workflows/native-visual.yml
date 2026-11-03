@@ -59,8 +59,10 @@ jobs:
       desktop-input: true
 
   native-visual:
-    runs-on: macos-14
-    timeout-minutes: 45
+    runs-on: macos-15
+    # Cold SDK setup and compilation precede the complete guide catalog.
+    # Keep every fixture deadline and bound the full qualification job.
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -93,6 +95,7 @@ jobs:
           cargo test --locked --manifest-path desktop/Cargo.toml --lib chamfer_form
           cargo test --locked --manifest-path desktop/Cargo.toml --lib preview::transition_tests:: -- --test-threads=1
           cargo test --locked --manifest-path desktop/Cargo.toml --lib preview::navigation_tests:: -- --test-threads=1
+          cargo test --locked --manifest-path desktop/Cargo.toml --lib preview::evidence::ink:: -- --test-threads=1
           cargo test --locked --manifest-path desktop/Cargo.toml --lib native_script_preview_book_focus_waits_only_for_its_dismissed_menu -- --test-threads=1
           cargo test --locked --manifest-path desktop/Cargo.toml --lib native_script_preview_tabs_after_extrude_in_the_production_ribbon -- --test-threads=1
       - name: Verify the Extrude lesson profile and solid on the GPU
