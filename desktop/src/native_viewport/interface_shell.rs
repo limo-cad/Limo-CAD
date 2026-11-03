@@ -1156,32 +1156,7 @@ impl NativeInterfaceHandle {
             Ok(context) => context,
             Err(_) => return Ok(has_modal(&shared)),
         };
-        let mut keys: Vec<_> = shared
-            .registry
-            .frame()
-            .controls
-            .iter()
-            .filter(|control| {
-                !shared.tab_excluded.contains(&control.key)
-                    && shared
-                        .registry
-                        .resolve_key(control.key, ControlInput::Click, &context)
-                        .is_ok()
-            })
-            .map(|control| control.key)
-            .collect();
-        for (key, anchor) in &shared.tab_after {
-            if keys.contains(anchor) {
-                if let Some(index) = keys.iter().position(|candidate| candidate == key) {
-                    let key = keys.remove(index);
-                    let index = keys
-                        .iter()
-                        .position(|candidate| candidate == anchor)
-                        .unwrap();
-                    keys.insert(index + 1, key);
-                }
-            }
-        }
+        let keys = tab_order(&shared, &context);
         if keys.is_empty() {
             return Ok(has_modal(&shared));
         }
@@ -1279,6 +1254,36 @@ fn modal_controls(shared: &Shared, scope: &str) -> Vec<(ControlKey, u64)> {
         .collect();
     controls.sort_by_key(|(key, _)| key.0);
     controls
+}
+
+fn tab_order(shared: &Shared, context: &DocumentContext) -> Vec<ControlKey> {
+    let mut keys: Vec<_> = shared
+        .registry
+        .frame()
+        .controls
+        .iter()
+        .filter(|control| {
+            !shared.tab_excluded.contains(&control.key)
+                && shared
+                    .registry
+                    .resolve_key(control.key, ControlInput::Click, context)
+                    .is_ok()
+        })
+        .map(|control| control.key)
+        .collect();
+    for (key, anchor) in &shared.tab_after {
+        if keys.contains(anchor) {
+            if let Some(index) = keys.iter().position(|candidate| candidate == key) {
+                let key = keys.remove(index);
+                let index = keys
+                    .iter()
+                    .position(|candidate| candidate == anchor)
+                    .unwrap();
+                keys.insert(index + 1, key);
+            }
+        }
+    }
+    keys
 }
 
 fn set_focus(shared: &mut Shared, focused: Option<ControlKey>) -> Result<(), String> {

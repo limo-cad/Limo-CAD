@@ -1852,6 +1852,22 @@ fn native_font_and_visual_commands_require_nonempty_compiled_inventory() {
 }
 
 #[test]
+fn native_visual_reserves_a_bounded_budget_for_the_complete_guide_catalog() {
+    let visual = workflow(".github/workflows/native-visual.yml");
+    check_visual_acceptance(&visual).unwrap();
+    for budget in [
+        Value::Null,
+        Value::Number(45_u64.into()),
+        Value::Number(91_u64.into()),
+        Value::String("${{ inputs.timeout }}".into()),
+    ] {
+        let mut drift = visual.clone();
+        drift["jobs"]["native-visual"]["timeout-minutes"] = budget;
+        assert!(check_visual_acceptance(&drift).is_err());
+    }
+}
+
+#[test]
 fn native_guide_authoring_precedes_capture_and_cannot_be_skipped() {
     let visual = workflow(".github/workflows/native-visual.yml");
     check_visual_acceptance(&visual).unwrap();
@@ -1898,6 +1914,7 @@ fn native_visual_requires_targeted_navigation_and_menu_focus_regressions() {
     let run = step["run"].as_str().unwrap();
     for command in [
         "cargo test --locked --manifest-path desktop/Cargo.toml --lib preview::navigation_tests:: -- --test-threads=1",
+        "cargo test --locked --manifest-path desktop/Cargo.toml --lib preview::evidence::ink:: -- --test-threads=1",
         "cargo test --locked --manifest-path desktop/Cargo.toml --lib native_script_preview_book_focus_waits_only_for_its_dismissed_menu -- --test-threads=1",
     ] {
         assert_eq!(run.matches(command).count(), 1);
@@ -1934,6 +1951,10 @@ fn native_visual_requires_targeted_navigation_and_menu_focus_regressions() {
 
 fn check_visual_acceptance(visual: &Value) -> Result<()> {
     let job = &visual["jobs"]["native-visual"];
+    ensure!(
+        job["timeout-minutes"].as_u64() == Some(90),
+        "Keep a bounded 90 minute budget for cold SDK setup and the complete native guide catalog"
+    );
     ensure!(
         job["if"].is_null() && job["continue-on-error"].is_null(),
         "GPU acceptance must execute and propagate failures on relevant PRs"
@@ -1979,6 +2000,7 @@ fn check_visual_acceptance(visual: &Value) -> Result<()> {
                 "cargo test --locked --manifest-path desktop/Cargo.toml --lib chamfer_form",
                 "cargo test --locked --manifest-path desktop/Cargo.toml --lib preview::transition_tests:: -- --test-threads=1",
                 "cargo test --locked --manifest-path desktop/Cargo.toml --lib preview::navigation_tests:: -- --test-threads=1",
+                "cargo test --locked --manifest-path desktop/Cargo.toml --lib preview::evidence::ink:: -- --test-threads=1",
                 "cargo test --locked --manifest-path desktop/Cargo.toml --lib native_script_preview_book_focus_waits_only_for_its_dismissed_menu -- --test-threads=1",
                 "cargo test --locked --manifest-path desktop/Cargo.toml --lib native_script_preview_tabs_after_extrude_in_the_production_ribbon -- --test-threads=1",
             ])

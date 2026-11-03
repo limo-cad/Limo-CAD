@@ -27,7 +27,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
         "desktop-changes" => return crate::desktop_changes::run(args),
         "native-ignored-test" => {
             let suite = args.next().context(
-                "missing native ignored suite (fonts, sketch-visual, grid-redraw, sketch-commit, composition, extrude-preview, show-me-ui or show-me-lifecycle)",
+                "missing native ignored suite (fonts, named-view-copy, sketch-visual, grid-redraw, sketch-commit, composition, extrude-preview, show-me-ui or show-me-lifecycle)",
             )?;
             ensure!(
                 args.next().is_none(),
@@ -122,6 +122,10 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
 
 fn native_ignored_suite(suite: &str) -> Result<(&'static str, &'static [&'static str])> {
     match suite {
+        "named-view-copy" => Ok((
+            "native_named_view_copy_shapes_without_missing_glyphs",
+            &["native_named_view_copy_shapes_without_missing_glyphs"],
+        )),
         "fonts" => Ok((
             "native_font_fallback_shapes_",
             &[
@@ -164,7 +168,7 @@ fn native_ignored_suite(suite: &str) -> Result<(&'static str, &'static [&'static
             ],
         )),
         _ => bail!(
-            "unknown native ignored suite; use fonts, sketch-visual, grid-redraw, sketch-commit, composition, extrude-preview, show-me-ui or show-me-lifecycle"
+            "unknown native ignored suite; use fonts, named-view-copy, sketch-visual, grid-redraw, sketch-commit, composition, extrude-preview, show-me-ui or show-me-lifecycle"
         ),
     }
 }
@@ -359,6 +363,7 @@ mod tests {
     fn native_diagnostic_filters_reject_empty_renamed_and_duplicate_tests() {
         for suite in [
             "fonts",
+            "named-view-copy",
             "sketch-visual",
             "grid-redraw",
             "sketch-commit",
