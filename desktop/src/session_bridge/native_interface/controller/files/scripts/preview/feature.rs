@@ -1263,6 +1263,110 @@ mod tests {
             .is_ok());
     }
 
+    #[cfg(feature = "experimental-ui-widgets")]
+    #[test]
+    fn native_script_preview_widget_tab_keeps_show_me_beside_its_anchor() {
+        use crate::native_viewport::winit_host::{HostInputState, Modifiers, NativeHostInput};
+        use bevy::{
+            input::{
+                keyboard::{Key, KeyCode, KeyboardInput},
+                ButtonState,
+            },
+            ui::{ComputedStackIndex, UiGlobalTransform},
+        };
+        let (mut app, handle, extrude, _) = interface_shell::tests::fixture();
+        initialize(
+            app.world_mut(),
+            Arc::new(Mutex::new(DocumentWorkspace::default())),
+        );
+        app.world_mut().init_resource::<ViewportUiAssets>();
+        interface_shell::widgets::install_test(&mut app);
+        let window = app.world_mut().spawn(Window::default()).id();
+        app.world_mut()
+            .entity_mut(extrude)
+            .insert(rect(110., 34., 48., 54.));
+        crate::session_bridge::native_interface::bind_command(
+            app.world_mut(),
+            extrude,
+            NativeCommand::Feature(FeatureCommand::Open {
+                kind: SolidFormKind::Extrude,
+                feature_id: None,
+            }),
+        )
+        .unwrap();
+        let neighbor = app
+            .world_mut()
+            .spawn((
+                InterfaceControl::button("Viewport", "Revolve"),
+                ComputedNode {
+                    size: Vec2::new(48., 54.),
+                    inverse_scale_factor: 1.,
+                    ..default()
+                },
+                UiGlobalTransform::from_translation(Vec2::new(200., 61.)),
+                ComputedStackIndex(2),
+                InheritedVisibility::VISIBLE,
+            ))
+            .id();
+        app.update();
+        let camera = app.world_mut().spawn_empty().id();
+        let mut widgets = chrome::Widgets::default();
+        let action = handle
+            .resolve_retained(limo_cad_interface::ControlKey(extrude.to_bits()))
+            .unwrap();
+        handle.prepare_activation(&action).unwrap();
+        widgets.begin();
+        paint_hint(app.world_mut(), camera, Some(extrude), &mut widgets, 1000.).unwrap();
+        let entry = widgets.entity("extrude-show-me").unwrap();
+        app.world_mut().entity_mut(entry).insert((
+            ComputedNode {
+                size: Vec2::new(288., 26.),
+                inverse_scale_factor: 1.,
+                ..default()
+            },
+            UiGlobalTransform::from_translation(Vec2::new(266., 181.)),
+            ComputedStackIndex(10),
+            InheritedVisibility::VISIBLE,
+        ));
+        app.update();
+        let mut state = HostInputState::default();
+        for (backwards, expected) in [(false, entry), (true, extrude), (false, entry)] {
+            let input = NativeHostInput {
+                ui_scale: 1.,
+                context: handle.presented_context(),
+                cursor: None,
+                modifiers: Modifiers {
+                    shift: backwards,
+                    ..default()
+                },
+                event: bevy::window::WindowEvent::KeyboardInput(KeyboardInput {
+                    window,
+                    key_code: KeyCode::Tab,
+                    logical_key: Key::Tab,
+                    state: ButtonState::Pressed,
+                    text: None,
+                    repeat: false,
+                }),
+                consumed: false,
+                actions: vec![],
+            };
+            assert!(interface_shell::widgets::owns_input(
+                app.world_mut(),
+                &handle,
+                &mut state,
+                &input
+            ));
+            assert_eq!(
+                handle.focused_key(),
+                Some(limo_cad_interface::ControlKey(expected.to_bits()))
+            );
+            assert_ne!(
+                handle.focused_key(),
+                Some(limo_cad_interface::ControlKey(neighbor.to_bits()))
+            );
+        }
+    }
+
     #[test]
     fn native_script_preview_hint_can_be_entered_without_running_or_latching_over_other_tools() {
         let anchor = [110., 34., 48., 54.];
