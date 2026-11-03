@@ -1329,6 +1329,11 @@ mod tests {
             InheritedVisibility::VISIBLE,
         ));
         app.update();
+        // The physical widget path starts from Bevy's focused anchor, not only
+        // the transport's focus snapshot set before the layout schedule.
+        app.world_mut()
+            .resource_mut::<bevy::input_focus::InputFocus>()
+            .set(extrude, bevy::input_focus::FocusCause::Navigated);
         let mut state = HostInputState::default();
         for (backwards, expected) in [(false, entry), (true, extrude), (false, entry)] {
             let input = NativeHostInput {
