@@ -5698,6 +5698,160 @@ mod tests {
         }
     }
 
+    #[test]
+    fn hollow_flange_deleting_inner_fillet_does_not_retarget_outer_chamfer() {
+        let mut kernel = OcctKernel::new().unwrap();
+        let mut plan = annular_chamfer_plan(false);
+        if let KernelJobDto::Revolve(job) = &mut plan.jobs[0] {
+            job.profiles[0].points = [
+                (10., 0.),
+                (10., 30.),
+                (15., 30.),
+                (15., 3.),
+                (22., 3.),
+                (22., 0.),
+            ]
+            .into_iter()
+            .map(|(x, y)| Point3Dto { x, y, z: 0. })
+            .collect();
+        }
+        let base = kernel.recompute(&plan).unwrap();
+        assert!(base.errors.is_empty(), "{:?}", base.errors);
+        let rim = |scene: &KernelSceneDto, radius: f64, y: f64| {
+            scene.bodies[0]
+                .edges
+                .iter()
+                .find(|edge| {
+                    edge.circle.is_some_and(|c| {
+                        (c.radius - radius).abs() < 1e-6 && (c.center.y - y).abs() < 1e-6
+                    })
+                })
+                .unwrap()
+                .key
+                .clone()
+        };
+        let inner = rim(&base, 10., 30.);
+        plan.jobs.push(KernelJobDto::Fillet(KernelFilletJobDto {
+            feature_id: FeatureId(3),
+            target_body_id: BodyId(1),
+            edge_keys: vec![inner.clone()],
+            radius: 1.,
+            tangent_chain: false,
+        }));
+        let rounded = kernel.recompute(&plan).unwrap();
+        assert!(rounded.errors.is_empty(), "{:?}", rounded.errors);
+        let outer = rim(&rounded, 22., 3.);
+        let support = rounded.bodies[0]
+            .edges
+            .iter()
+            .find(|e| e.key == outer)
+            .unwrap()
+            .circle;
+        plan.jobs.push(KernelJobDto::Chamfer(KernelChamferJobDto {
+            feature_id: FeatureId(4),
+            target_body_id: BodyId(1),
+            edge_keys: vec![outer.clone()],
+            distance: 0.5,
+            angle_deg: None,
+            tangent_chain: false,
+        }));
+        let finished = kernel.recompute(&plan).unwrap();
+        assert!(finished.errors.is_empty(), "{:?}", finished.errors);
+        assert!(
+            finished.bodies[0].edges.iter().any(|e| e
+                .circle
+                .is_some_and(|c| (c.radius - 21.5).abs() < 1e-6 && (c.center.y - 3.).abs() < 1e-6)),
+            "outer rim chamfer exists"
+        );
+        let reused = base.bodies[0]
+            .edges
+            .iter()
+            .find(|e| e.key == outer)
+            .and_then(|e| e.circle);
+        eprintln!("536 intended {outer}: {support:?}; same index without fillet: {reused:?}");
+        assert_ne!(reused, support, "fixture must expose positional aliasing");
+        let mut unsafe_replay = plan.clone();
+        unsafe_replay.jobs.remove(1);
+        let retargeted = kernel.recompute(&unsafe_replay).unwrap();
+        assert!(retargeted.errors.is_empty());
+        let _unchamfered_original_support = rim(&retargeted, 22., 3.);
+        assert!(
+            retargeted.bodies[0].edges.iter().any(|e| e
+                .circle
+                .is_some_and(|c| (c.radius - 21.5).abs() < 1e-6 && c.center.y.abs() < 1e-6)),
+            "raw replay chamfers the wrong bottom rim"
+        );
+        // Exercise the same document deletion planner used by the UI. The
+        // persisted selections come from the actual kernel shapes above.
+        let mut doc = limo_cad_solid::SolidDocument::restore_feature_definitions(
+            limo_cad_solid::SolidFeatureDefinitions {
+                revolves: vec![serde_json::from_value(serde_json::json!({
+                    "feature_id":2,"name":"Flanged tube","sketch_name":"Port",
+                    "profile_indices":[0],"axis_origin":{"x":0.,"y":0.},
+                    "axis_direction":{"x":0.,"y":1.},"angle_deg":360.,"flip":false,
+                    "new_body_ids":[1]
+                }))
+                .unwrap()],
+                fillets: vec![serde_json::from_value(serde_json::json!({
+                    "feature_id":3,"name":"Inside lip","body_id":1,
+                    "edge_ids":[1],"edge_keys":[inner],"radius":1.
+                }))
+                .unwrap()],
+                chamfers: vec![serde_json::from_value(serde_json::json!({
+                    "feature_id":4,"name":"Outside flange","body_id":1,
+                    "edge_ids":[2],"edge_keys":[outer],"distance":0.5
+                }))
+                .unwrap()],
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let KernelJobDto::Revolve(revolve) = &plan.jobs[0] else {
+            unreachable!()
+        };
+        let basis = limo_cad_core::PlaneRef::OriginPlane {
+            plane: limo_cad_core::OriginPlane::Xy,
+        }
+        .origin_basis()
+        .unwrap();
+        let catalog = serde_json::from_value::<Vec<limo_cad_solid::ProfileCatalogItemDto>>(
+            serde_json::json!([{
+                "sketch_name":"Port","feature_id":1,"basis":basis,
+                "profiles":[{"index":0,"area":171.,"points":revolve.profiles[0].points
+                    .iter().map(|p| serde_json::json!({"x":p.x,"y":p.y})).collect::<Vec<_>>()}]
+            }]),
+        )
+        .unwrap();
+        let active = [FeatureId(1), FeatureId(2), FeatureId(3), FeatureId(4)]
+            .into_iter()
+            .collect();
+        let restored = doc.prepare_recompute(&catalog, &active).unwrap();
+        let restored_scene = kernel.recompute(&restored).unwrap();
+        assert!(
+            restored_scene.errors.is_empty(),
+            "{:?}",
+            restored_scene.errors
+        );
+        doc.commit(restored.transaction_id, restored_scene).unwrap();
+        let previous_scene = doc.scene().clone();
+        let before = (
+            doc.fillet_definitions().to_vec(),
+            doc.chamfer_definitions().to_vec(),
+        );
+        let error = doc
+            .prepare_delete_feature(FeatureId(3), &catalog, &active)
+            .unwrap_err();
+        assert!(error.to_string().contains("downstream"));
+        assert_eq!(doc.scene(), &previous_scene);
+        assert_eq!(
+            (
+                doc.fillet_definitions().to_vec(),
+                doc.chamfer_definitions().to_vec()
+            ),
+            before
+        );
+    }
+
     fn annular_top_inner_edge(scene: &KernelSceneDto, reference_is_plane: bool) -> String {
         let body = &scene.bodies[0];
         let edge = body
