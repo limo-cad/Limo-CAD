@@ -1404,16 +1404,8 @@ fn to_ffi_job(job: &KernelJobDto) -> Result<ffi::FfiJob, OcctError> {
             set_profiles(&mut job, profile_buffers(&source.profiles));
             if let Some(face) = &source.source_face {
                 job.source_body_id = face.body_id.0;
-                job.source_face_index = face
-                    .face_key
-                    .strip_prefix("face:")
-                    .and_then(|value| value.parse::<u32>().ok())
-                    .ok_or_else(|| {
-                        OcctError(format!(
-                            "invalid planar-face topology key '{}'",
-                            face.face_key
-                        ))
-                    })?;
+                job.source_face_index =
+                    topology_indices(std::slice::from_ref(&face.face_key), "face")?[0];
                 job.source_face_signature = vec![
                     face.signature.centroid.x,
                     face.signature.centroid.y,
@@ -1510,7 +1502,7 @@ fn to_ffi_job(job: &KernelJobDto) -> Result<ffi::FfiJob, OcctError> {
             source.feature_id.0,
             5,
             source.target_body_id.0,
-            edge_indices(&source.edge_keys),
+            topology_indices(&source.edge_keys, "edge")?,
             source.radius,
         ),
         KernelJobDto::Chamfer(source) => {
@@ -1518,7 +1510,7 @@ fn to_ffi_job(job: &KernelJobDto) -> Result<ffi::FfiJob, OcctError> {
                 source.feature_id.0,
                 6,
                 source.target_body_id.0,
-                edge_indices(&source.edge_keys),
+                topology_indices(&source.edge_keys, "edge")?,
                 source.distance,
             );
             job.chamfer_angle_deg = source.angle_deg.unwrap_or(0.0);
@@ -1602,7 +1594,7 @@ fn to_ffi_job(job: &KernelJobDto) -> Result<ffi::FfiJob, OcctError> {
         KernelJobDto::ExternalThread(source) => {
             let mut job = empty_ffi_job(source.feature_id.0, 13);
             job.operation = 2;
-            job.face_indices = face_indices(std::slice::from_ref(&source.face_key));
+            job.face_indices = topology_indices(std::slice::from_ref(&source.face_key), "face")?;
             job.axis_origin_x = source.cylinder.origin.x;
             job.axis_origin_y = source.cylinder.origin.y;
             job.axis_origin_z = source.cylinder.origin.z;
@@ -1651,7 +1643,7 @@ fn to_ffi_job(job: &KernelJobDto) -> Result<ffi::FfiJob, OcctError> {
             let mut job = empty_ffi_job(source.feature_id.0, 8);
             job.target_body_ids = vec![source.target_body_id.0];
             job.result_body_ids = vec![source.target_body_id.0];
-            job.face_indices = face_indices(&source.face_keys);
+            job.face_indices = topology_indices(&source.face_keys, "face")?;
             job.radius = source.thickness;
             job.inward = source.inward;
             job
@@ -1796,15 +1788,21 @@ fn decode_base64(value: &str) -> Result<Vec<u8>, OcctError> {
     Ok(output)
 }
 
-fn edge_indices(keys: &[String]) -> Vec<u32> {
+// Resolve the entire selector set before entering C++. Dropping one malformed
+// key could otherwise refine a subset of the requested selection.
+fn topology_indices(keys: &[String], kind: &str) -> Result<Vec<u32>, OcctError> {
+    let prefix = format!("{kind}:");
     keys.iter()
-        .filter_map(|key| key.strip_prefix("edge:")?.parse::<u32>().ok())
-        .collect()
-}
-
-fn face_indices(keys: &[String]) -> Vec<u32> {
-    keys.iter()
-        .filter_map(|key| key.strip_prefix("face:")?.parse::<u32>().ok())
+        .map(|key| {
+            key.strip_prefix(&prefix)
+                .filter(|value| !value.is_empty() && value.bytes().all(|b| b.is_ascii_digit()))
+                .and_then(|value| value.parse::<u32>().ok())
+                .ok_or_else(|| {
+                    OcctError(format!(
+                        "Invalid {kind} topology reference '{key}'; reselect the {kind} on the feature input body"
+                    ))
+                })
+        })
         .collect()
 }
 
@@ -2056,6 +2054,60 @@ mod tests {
         KernelSweepJobDto, LoftContinuity, Point3Dto, RecomputePlanDto, StepThreadMetadataDto,
         SweepOrientation, SweepTransition,
     };
+
+    #[test]
+    fn malformed_topology_selection_rejects_whole_native_operation() {
+        let mut kernel = OcctKernel::new().unwrap();
+        let mut plan = RecomputePlanDto {
+            transaction_id: 1,
+            errors: Vec::new(),
+            jobs: vec![box_job(2, 1)],
+        };
+        let base = kernel.recompute(&plan).unwrap();
+        assert!(base.errors.is_empty());
+        let edge = base.bodies[0].edges[0].key.clone();
+        let face = base.bodies[0].faces[0].key.clone();
+        for job in [
+            KernelJobDto::Fillet(KernelFilletJobDto {
+                feature_id: FeatureId(3),
+                target_body_id: BodyId(1),
+                edge_keys: vec![edge.clone(), "edge:broken".into()],
+                radius: 0.5,
+                tangent_chain: false,
+            }),
+            KernelJobDto::Chamfer(KernelChamferJobDto {
+                feature_id: FeatureId(3),
+                target_body_id: BodyId(1),
+                edge_keys: vec![edge, "face:0".into()],
+                distance: 0.5,
+                angle_deg: None,
+                tangent_chain: false,
+            }),
+            KernelJobDto::Shell(limo_cad_solid::KernelShellJobDto {
+                feature_id: FeatureId(3),
+                target_body_id: BodyId(1),
+                face_keys: vec![face, "face:4294967296".into()],
+                thickness: 0.5,
+                inward: true,
+            }),
+        ] {
+            plan.jobs.truncate(1);
+            plan.jobs.push(job);
+            let rejected = kernel.recompute(&plan).unwrap();
+            assert_eq!(rejected.errors.len(), 1);
+            assert_eq!(rejected.errors[0].feature_id, FeatureId(3));
+            assert!(rejected.errors[0].message.contains("reselect"));
+            assert_eq!(
+                rejected.bodies, base.bodies,
+                "invalid selector changed the input body"
+            );
+            // A subsequent valid replay must still work after the rejected batch.
+            plan.jobs.truncate(1);
+            let recovered = kernel.recompute(&plan).unwrap();
+            assert!(recovered.errors.is_empty());
+            assert_eq!(recovered.bodies, base.bodies);
+        }
+    }
 
     fn square(z: f64, half: f64) -> KernelProfileDto {
         KernelProfileDto {
