@@ -180,3 +180,18 @@ fn opaque_domain_rejects_and_retains_snapshot() {
     assert_eq!(h.project_snapshot().unwrap(), before);
     assert!(std::sync::Arc::ptr_eq(&scene, &h.solid_scene_snapshot()));
 }
+
+#[test]
+fn encoded_desktop_ipc_delete_uses_the_same_proof_transaction() {
+    let h = fixture();
+    let id = model(&h)["fillets"][0]["feature_id"].clone();
+    ok(h.apply_encoded_mutate(
+        "solid_prepare_delete_feature",
+        &json!({"feature_id":id}).to_string(),
+        true,
+    ));
+    correct(&h);
+    let cold = NativeEngineHost::new();
+    ok(cold.project_load_snapshot(&h.project_snapshot().unwrap()));
+    correct(&cold);
+}

@@ -817,6 +817,7 @@ impl NativeEngineHost {
         match method {
             "solid_prepare_body_feature" => return self.solid_body_feature(payload),
             "solid_prepare_edit_body_feature" => return self.solid_edit_body_feature(payload),
+            "solid_prepare_delete_feature" => return self.solid_delete_feature(payload),
             _ => {}
         }
         self.execute(|manager| {
