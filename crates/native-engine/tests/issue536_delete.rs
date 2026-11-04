@@ -36,6 +36,15 @@ fn fixture_with_support(generated: bool) -> NativeEngineHost {
     fixture_with_prefix(generated, false, false)
 }
 fn fixture_with_prefix(generated: bool, extra_sketch: bool, extra_body: bool) -> NativeEngineHost {
+    native_prefix_fixture(generated, extra_sketch, extra_body, false, false)
+}
+fn native_prefix_fixture(
+    generated: bool,
+    extra_sketch: bool,
+    extra_body: bool,
+    face_support: bool,
+    kept_tool: bool,
+) -> NativeEngineHost {
     let h = NativeEngineHost::new();
     ok(h.engine_call("begin_sketch", r#"{"type":"origin_plane","plane":"xy"}"#));
     ok(h.engine_call("set_grid_snap", r#"{"enabled":false}"#));
@@ -68,6 +77,47 @@ fn fixture_with_prefix(generated: bool, extra_sketch: bool, extra_body: bool) ->
         if extra_body {
             ok(h.solid_extrude(&json!({"sketch_name":"Sketch2","profile_indices":[0],"extent":{"type":"distance","distance":10.},"taper_angle_deg":0.,"flip":false,"operation":"new_body","target_body_ids":[]}).to_string()));
         }
+    }
+    if kept_tool {
+        // A real OCCT keep-tool operation puts both retained outputs in one
+        // native dependency group, even though the source solids are disjoint.
+        ok(h.solid_body_feature(
+            &json!({"type":"combine","request":{
+                "target_body_id":1,"tool_body_ids":[2],"operation":"join","keep_tools":true
+            }})
+            .to_string(),
+        ));
+        assert_eq!(h.solid_scene_snapshot().bodies.len(), 2);
+    }
+    if face_support {
+        let scene = h.solid_scene_snapshot();
+        let face = scene.bodies[0]
+            .faces
+            .iter()
+            .find(|f| {
+                f.plane
+                    .is_some_and(|p| p.normal[1] < -0.9 && p.origin[1].abs() < 1e-6)
+            })
+            .unwrap();
+        ok(h.engine_call(
+            "begin_sketch",
+            &json!({"type":"planar_face","face_id":face.id}).to_string(),
+        ));
+        ok(h.engine_call(
+            "add_circle_locked",
+            &json!({"mode":"center_diameter",
+            "anchor":{"x":0.,"y":0.},"edge_hint":{"x":2.,"y":0.},
+            "diameter_mm":4.,"ctrl_held":true})
+            .to_string(),
+        ));
+        ok(h.engine_call("end_sketch", ""));
+        ok(h.engine_call(
+            "datum_plane_create",
+            &json!({"name":"Retained offset","source":{
+                "type":"offset","reference":{"type":"origin_plane","plane":"xy"},"distance":7.
+            }})
+            .to_string(),
+        ));
     }
     let inner = rim(&h, 10., 30.);
     if generated {
@@ -363,4 +413,88 @@ fn downstream_sketch_rejects_without_changing_live_prefix() {
     assert_eq!(h.project_snapshot().unwrap(), before);
     assert!(std::sync::Arc::ptr_eq(&scene, &h.solid_scene_snapshot()));
     assert_eq!(h.geometry_revision(), revision);
+}
+
+#[test]
+fn connected_kept_tool_prefix_rejects_atomically() {
+    let h = native_prefix_fixture(false, true, true, false, true);
+    let before = h.project_snapshot().unwrap();
+    let scene = h.solid_scene_snapshot();
+    let revision = h.geometry_revision();
+    let id = model(&h)["fillets"][0]["feature_id"].clone();
+    let reply: Value =
+        serde_json::from_str(&h.solid_delete_feature(&json!({"feature_id":id}).to_string()))
+            .unwrap();
+    assert_eq!(reply["ok"], false, "{reply}");
+    assert!(
+        reply.to_string().contains("connected retained bodies"),
+        "{reply}"
+    );
+    assert_eq!(h.project_snapshot().unwrap(), before);
+    assert!(std::sync::Arc::ptr_eq(&scene, &h.solid_scene_snapshot()));
+    assert_eq!(h.geometry_revision(), revision);
+}
+
+#[test]
+fn face_supported_sketch_and_datum_prefix_survive_delete_and_cold_limo_replay() {
+    let h = native_prefix_fixture(false, true, true, true, false);
+    let before = model(&h);
+    assert_eq!(before["sketches"].as_array().unwrap().len(), 3);
+    assert_eq!(before["sketches"][2]["plane"]["type"], "planar_face");
+    assert!(!before["sketches"][2]["basis"].is_null());
+    assert!(!before["sketches"][2]["support_boundary"]
+        .as_array()
+        .unwrap()
+        .is_empty());
+    assert_eq!(before["datum_planes"].as_array().unwrap().len(), 1);
+    assert_eq!(h.viewport_frame().document.datum_planes.len(), 1);
+    let sketches = h.viewport_frame().document.finished_sketches.clone();
+    let datums = h.viewport_frame().document.datum_planes.clone();
+    let other = h
+        .solid_scene_snapshot()
+        .bodies
+        .iter()
+        .find(|b| b.id.0 == 2)
+        .unwrap()
+        .clone();
+    let id = before["fillets"][0]["feature_id"].clone();
+    ok(h.solid_delete_feature(&json!({"feature_id":id}).to_string()));
+    let saved = h.project_snapshot().unwrap();
+    let archive = limo_cad_project_file::ProjectArchive::new(
+        saved.model_json().to_owned(),
+        limo_cad_project_file::SaveMetadata {
+            application_version: "0.3.0-rc.3",
+            saved_at: "2026-11-04T00:00:00Z",
+        },
+    )
+    .unwrap();
+    let reopened = limo_cad_project_file::ProjectArchive::decode(archive.encode().unwrap())
+        .unwrap()
+        .snapshot()
+        .unwrap();
+    let cold = NativeEngineHost::new();
+    ok(cold.project_load_snapshot(&reopened));
+    for host in [&h, &cold] {
+        correct(host);
+        let after = model(host);
+        for key in ["sketches", "datum_planes", "extrudes", "revolves"] {
+            assert_eq!(after[key], before[key], "retained {key}");
+        }
+        assert_eq!(host.viewport_frame().document.datum_planes, datums);
+        assert!(host
+            .document_snapshot()
+            .features
+            .iter()
+            .all(|f| matches!(f.status, limo_cad_core::FeatureStatus::Ok)));
+        assert_eq!(
+            host.solid_scene_snapshot()
+                .bodies
+                .iter()
+                .find(|b| b.id.0 == 2),
+            Some(&other)
+        );
+    }
+    // Live session data includes undo state, which intentionally does not cross
+    // the file boundary; authored support/basis/entities above must cross it.
+    assert_eq!(h.viewport_frame().document.finished_sketches, sketches);
 }
