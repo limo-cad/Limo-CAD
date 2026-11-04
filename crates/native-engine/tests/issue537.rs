@@ -65,7 +65,9 @@ fn volume(host: &NativeEngineHost) -> f64 {
     let scene = host.solid_scene_snapshot();
     let mesh = &scene.bodies[0].mesh;
     mesh.indices
-        .chunks_exact(3)
+        .as_chunks::<3>()
+        .0
+        .iter()
         .map(|t| {
             let p = |i: u32| {
                 let i = i as usize * 3;
