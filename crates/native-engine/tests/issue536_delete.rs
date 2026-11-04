@@ -33,6 +33,9 @@ fn fixture() -> NativeEngineHost {
     fixture_with_support(false)
 }
 fn fixture_with_support(generated: bool) -> NativeEngineHost {
+    fixture_with_prefix(generated, false, false)
+}
+fn fixture_with_prefix(generated: bool, extra_sketch: bool, extra_body: bool) -> NativeEngineHost {
     let h = NativeEngineHost::new();
     ok(h.engine_call("begin_sketch", r#"{"type":"origin_plane","plane":"xy"}"#));
     ok(h.engine_call("set_grid_snap", r#"{"enabled":false}"#));
@@ -57,6 +60,15 @@ fn fixture_with_support(generated: bool) -> NativeEngineHost {
     ok(h.solid_revolve(&json!({"sketch_name":"Sketch1","profile_indices":[0],"axis_origin":{"x":0.,"y":0.},"axis_direction":{"x":0.,"y":1.},"angle_deg":360.,"flip":false,"operation":"new_body","target_body_ids":[]}).to_string()));
     rim(&h, 22., 0.);
     rim(&h, 22., 3.);
+    if extra_sketch {
+        ok(h.engine_call("begin_sketch", r#"{"type":"origin_plane","plane":"xy"}"#));
+        ok(h.engine_call("set_grid_snap", r#"{"enabled":false}"#));
+        ok(h.engine_call("add_circle_locked", &json!({"mode":"center_diameter","anchor":{"x":100.,"y":0.},"edge_hint":{"x":105.,"y":0.},"diameter_mm":10.,"ctrl_held":true}).to_string()));
+        ok(h.engine_call("end_sketch", ""));
+        if extra_body {
+            ok(h.solid_extrude(&json!({"sketch_name":"Sketch2","profile_indices":[0],"extent":{"type":"distance","distance":10.},"taper_angle_deg":0.,"flip":false,"operation":"new_body","target_body_ids":[]}).to_string()));
+        }
+    }
     let inner = rim(&h, 10., 30.);
     if generated {
         ok(h.solid_chamfer(
@@ -142,7 +154,7 @@ fn unsupported_inactive_history_rejects_atomically() {
 
 #[test]
 fn generated_support_rejects_and_retains_live_state() {
-    let h = fixture_with_support(true);
+    let h = fixture_with_prefix(true, true, true);
     let id = model(&h)["chamfers"][0]["feature_id"].clone();
     let before = h.project_snapshot().unwrap();
     let scene = h.solid_scene_snapshot();
@@ -263,4 +275,92 @@ fn delete_preserves_sketch_undo_and_adaptive_grid() {
         (preview["snapped_to"]["y"].as_f64().unwrap() - 8.766).abs() < 1e-12,
         "{preview}"
     );
+}
+
+fn check_unchanged_prefix(extra_body: bool) {
+    let h = fixture_with_prefix(false, true, extra_body);
+    let before = model(&h);
+    let other = h
+        .solid_scene_snapshot()
+        .bodies
+        .iter()
+        .find(|b| b.id.0 == 2)
+        .cloned();
+    let id = before["fillets"][0]["feature_id"].clone();
+    ok(h.solid_delete_feature(&json!({"feature_id":id}).to_string()));
+    correct(&h);
+    let after = model(&h);
+    assert_eq!(after["sketches"], before["sketches"]);
+    assert_eq!(after["extrudes"], before["extrudes"]);
+    assert_eq!(after["revolves"], before["revolves"]);
+    assert_eq!(
+        after["document"]["history"]["rollback_index"]
+            .as_u64()
+            .unwrap(),
+        before["document"]["history"]["rollback_index"]
+            .as_u64()
+            .unwrap()
+            - 1
+    );
+    assert_eq!(
+        h.solid_scene_snapshot()
+            .bodies
+            .iter()
+            .find(|b| b.id.0 == 2)
+            .cloned(),
+        other
+    );
+    let saved = h.project_snapshot().unwrap();
+    let archive = limo_cad_project_file::ProjectArchive::new(
+        saved.model_json().to_owned(),
+        limo_cad_project_file::SaveMetadata {
+            application_version: "0.3.0-rc.3",
+            saved_at: "2026-11-04T00:00:00Z",
+        },
+    )
+    .unwrap();
+    let reopened = limo_cad_project_file::ProjectArchive::decode(archive.encode().unwrap())
+        .unwrap()
+        .snapshot()
+        .unwrap();
+    let cold = NativeEngineHost::new();
+    ok(cold.project_load_snapshot(&reopened));
+    correct(&cold);
+    assert_eq!(
+        cold.solid_scene_snapshot()
+            .bodies
+            .iter()
+            .find(|b| b.id.0 == 2)
+            .cloned(),
+        other
+    );
+    eprintln!("536 unchanged prefix extra_body={extra_body}: upper R21.5/Y3, untouched bottom R22/Y0, sketches and retained body cold-replay verified");
+}
+
+#[test]
+fn unchanged_prefix_with_unrelated_sketch_cold_replays() {
+    check_unchanged_prefix(false);
+}
+
+#[test]
+fn unchanged_prefix_with_unrelated_body_cold_replays() {
+    check_unchanged_prefix(true);
+}
+
+#[test]
+fn downstream_sketch_rejects_without_changing_live_prefix() {
+    let h = fixture_with_prefix(false, true, true);
+    ok(h.engine_call("begin_sketch", r#"{"type":"origin_plane","plane":"xz"}"#));
+    ok(h.engine_call("end_sketch", ""));
+    let before = h.project_snapshot().unwrap();
+    let scene = h.solid_scene_snapshot();
+    let revision = h.geometry_revision();
+    let id = model(&h)["fillets"][0]["feature_id"].clone();
+    let reply: Value =
+        serde_json::from_str(&h.solid_delete_feature(&json!({"feature_id":id}).to_string()))
+            .unwrap();
+    assert_eq!(reply["ok"], false, "{reply}");
+    assert_eq!(h.project_snapshot().unwrap(), before);
+    assert!(std::sync::Arc::ptr_eq(&scene, &h.solid_scene_snapshot()));
+    assert_eq!(h.geometry_revision(), revision);
 }

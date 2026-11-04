@@ -2311,32 +2311,55 @@ std::unique_ptr<Kernel> Kernel::delete_finish_branch(
   if ((removed.kind != 5 && removed.kind != 6) ||
       (consumer.kind != 5 && consumer.kind != 6) ||
       removed.target_body_ids.size() != 1 || consumer.target_body_ids.size() != 1 ||
-      removed.target_body_ids[0] != consumer.target_body_ids[0] || impl_->bodies.size() != 1)
+      removed.target_body_ids[0] != consumer.target_body_ids[0])
     throw std::runtime_error("Delete remap requires two consecutive finishes on one body");
   const auto id = removed.target_body_ids[0];
   const auto source = impl_->bodies.at(id);
+  // Conservatively reject retained outputs connected to the edited body.
+  const auto group = impl_->body_groups.find(id);
+  if (group != impl_->body_groups.end()) {
+    for (const auto& body : impl_->bodies) {
+      const auto other = impl_->body_groups.find(body.first);
+      if (body.first != id && other != impl_->body_groups.end() &&
+          other->second == group->second)
+        throw std::runtime_error("Delete remap: connected retained bodies require support reassociation");
+    }
+  }
   TopTools_IndexedMapOfShape original_edges;
   TopExp::MapShapes(source, TopAbs_EDGE, original_edges);
   // Copy before the old branch executes: builders may mutate shared geometry.
   // Keep explicit correspondence; neither coordinates nor matching ordinals
   // establish identity between independent copies.
-  BRepBuilderAPI_Copy copy(source, true, false);
+  // Copy the complete prefix, preserving native sharing among retained bodies.
+  TopoDS_Compound prefix;
+  BRep_Builder builder;
+  builder.MakeCompound(prefix);
+  for (const auto& body : impl_->bodies) builder.Add(prefix, body.second);
+  BRepBuilderAPI_Copy copy(prefix, true, false);
   if (!copy.IsDone() || copy.Shape().IsNull())
     throw std::runtime_error("Delete remap prefix copy failed");
   auto result = std::make_unique<Kernel>();
-  result->impl_->bodies.emplace(id, copy.Shape());
-  TopTools_IndexedMapOfShape copied_edges;
-  TopExp::MapShapes(copy.Shape(), TopAbs_EDGE, copied_edges);
-  // Persisted selectors will cold-replay the identical prefix, not this copy.
-  // Require the explicit copy map to preserve its enumeration; otherwise the
-  // returned ordinal would only describe the transient branch.
-  if (copied_edges.Extent() != original_edges.Extent())
-    throw std::runtime_error("Delete remap: prefix copy changed edge cardinality");
-  for (int i = 1; i <= original_edges.Extent(); ++i) {
-    const auto corresponding = copy.ModifiedShape(original_edges(i));
-    if (corresponding.IsNull() || copied_edges.FindIndex(corresponding) != i)
-      throw std::runtime_error("Delete remap: prefix copy changed edge enumeration");
+  *result->impl_ = *impl_;
+  for (auto& body : result->impl_->bodies) {
+    body.second = copy.ModifiedShape(impl_->bodies.at(body.first));
+    if (body.second.IsNull())
+      throw std::runtime_error("Delete remap: missing retained body correspondence");
+    // Persisted selectors must describe the cold-replayed prefix.
+    for (const auto kind : {TopAbs_EDGE, TopAbs_FACE}) {
+      TopTools_IndexedMapOfShape before, after;
+      TopExp::MapShapes(impl_->bodies.at(body.first), kind, before);
+      TopExp::MapShapes(body.second, kind, after);
+      if (before.Extent() != after.Extent())
+        throw std::runtime_error("Delete remap: retained body cardinality changed");
+      for (int i = 1; i <= before.Extent(); ++i) {
+        const auto mapped = copy.ModifiedShape(before(i));
+        if (mapped.IsNull() || after.FindIndex(mapped) != i)
+          throw std::runtime_error("Delete remap: retained body enumeration changed");
+      }
+    }
   }
+  TopTools_IndexedMapOfShape copied_edges;
+  TopExp::MapShapes(result->impl_->bodies.at(id), TopAbs_EDGE, copied_edges);
   apply_job(removed);
   TopTools_IndexedMapOfShape old_input_edges;
   TopExp::MapShapes(impl_->bodies.at(id), TopAbs_EDGE, old_input_edges);

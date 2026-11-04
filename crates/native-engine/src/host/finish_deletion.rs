@@ -3,17 +3,6 @@
 use super::*;
 use serde_json::{json, Value};
 
-fn contains_topology_reference(value: &Value) -> bool {
-    match value {
-        Value::Object(fields) => fields.iter().any(|(key, value)| {
-            matches!(key.as_str(), "edge" | "edge_id" | "face_id" | "body_id")
-                || contains_topology_reference(value)
-        }),
-        Value::Array(items) => items.iter().any(contains_topology_reference),
-        _ => false,
-    }
-}
-
 impl NativeEngineHost {
     pub(super) fn delete_finish_with_survivor_proof(&self, payload: &str) -> Option<String> {
         let request: DeleteFeatureRequest = serde_json::from_str(payload).ok()?;
@@ -61,17 +50,15 @@ impl NativeEngineHost {
             {
                 return Ok(None);
             }
-            // First supported contract deliberately excludes every additional
-            // historical/final-domain consumer, including inactive definitions.
-            // These cases retain actionable rejection rather than stale IDs.
+            // The prefix is unchanged. Only the final two active features may
+            // differ; native correspondence determines prefix eligibility.
             let unsupported = || {
-                "Delete remap currently supports one origin sketch, one revolve and two final active edge finishes, without drawing/assembly/CAM/domain references; other consumers require support reassociation".to_string()
+                "Delete remap requires a healthy unchanged prefix and two final active edge finishes, without drawing/assembly/CAM/domain references; other consumers require support reassociation".to_string()
             };
-            if features.len() != 4
-                || at != 2
-                || features[0]["kind"] != "sketch"
-                || features[1]["kind"] != "revolve"
-                || model["document"]["history"]["rollback_index"] != 4
+            let feature_count = features.len();
+            if at + 2 != feature_count
+                || !finish(&features[at + 1])
+                || model["document"]["history"]["rollback_index"] != json!(feature_count)
                 || features.iter().any(|f| f["suppressed"] != false)
                 || !snapshot.intents().is_empty()
             {
@@ -104,35 +91,6 @@ impl NativeEngineHost {
                 .remove("component_structure");
             if assembly != empty_assembly {
                 return Err(format!("{} (assembly)", unsupported()));
-            }
-            for key in [
-                "extrudes",
-                "sweeps",
-                "lofts",
-                "ribs",
-                "holes",
-                "body_features",
-                "datum_planes",
-            ] {
-                if model[key].as_array().is_none_or(|v| !v.is_empty()) {
-                    return Err(unsupported());
-                }
-            }
-            if model["sketches"].as_array().is_none_or(|v| v.len() != 1)
-                || model["sketches"][0]["plane"]["type"] != "origin_plane"
-                || contains_topology_reference(&model["sketches"][0]["snapshot"])
-                || model["sketches"][0]["snapshot"]["reference_edges"]
-                    .as_array()
-                    .is_none_or(|v| !v.is_empty())
-                || model["sketches"][0]["support_boundary"]
-                    .as_array()
-                    .is_some_and(|v| !v.is_empty())
-                || model["revolves"].as_array().is_none_or(|v| v.len() != 1)
-                || model["fillets"].as_array().map_or(0, Vec::len)
-                    + model["chamfers"].as_array().map_or(0, Vec::len)
-                    != 2
-            {
-                return Err(unsupported());
             }
             let mut old_manager = SketchManager::new();
             let old_plan = old_manager
@@ -172,7 +130,7 @@ impl NativeEngineHost {
                 .as_array_mut()
                 .unwrap()
                 .remove(at);
-            model["document"]["history"]["rollback_index"] = json!(3);
+            model["document"]["history"]["rollback_index"] = json!(feature_count - 1);
             let mut manager = SketchManager::new();
             let plan = manager
                 .prepare_load_project(model.to_string())
