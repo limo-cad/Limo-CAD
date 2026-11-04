@@ -182,6 +182,83 @@ fn rectangular_extrude_face_sketch_and_broken_reference_recompute_are_integrated
         .features
         .iter()
         .all(|f| f.status == FeatureStatus::Ok));
+    let edit = || limo_cad_solid::EditExtrudeRequest {
+        feature_id: second_plan.jobs[1].feature_id(),
+        extrude: extrusion("Sketch2"),
+    };
+    // Presentation-only changes do not invalidate historical geometry proof.
+    manager
+        .set_document_name("Renamed document".into())
+        .unwrap();
+    // Shared edit preflight accepts exact native prefix proof.
+    let accepted = manager.prepare_edit_extrude(edit()).unwrap();
+    manager.cancel_solid_recompute(accepted.transaction_id);
+    // Even canceled/new replay invalidates the previous proof.
+    assert!(manager
+        .prepare_edit_extrude(edit())
+        .unwrap_err()
+        .to_string()
+        .contains("no longer exists"));
+
+    // Proof never crosses a model load, even when feature/face IDs coincide.
+    let saved = manager.export_project_model().unwrap();
+    let mut other = SketchManager::new();
+    let load = other.prepare_load_project(saved.clone()).unwrap();
+    other
+        .commit_solid(CommitKernelRequest {
+            transaction_id: load.transaction_id,
+            scene: KernelSceneDto {
+                bodies: vec![planar_body(second_body, "top", 20.0)],
+                errors: Vec::new(),
+            },
+        })
+        .unwrap();
+    assert!(other
+        .prepare_edit_extrude(edit())
+        .unwrap_err()
+        .to_string()
+        .contains("no longer exists"));
+
+    // A pending load cannot borrow the current owner's proof; cancel recovers
+    // the original model and requires a new native replay for missing support.
+    let load = manager.prepare_load_project(saved).unwrap();
+    assert!(manager
+        .prepare_edit_extrude(edit())
+        .unwrap_err()
+        .to_string()
+        .contains("no longer exists"));
+    manager.cancel_solid_recompute(load.transaction_id);
+    assert!(manager
+        .prepare_edit_extrude(edit())
+        .unwrap_err()
+        .to_string()
+        .contains("no longer exists"));
+    // Reissue proof on this owner, then ensure a pending candidate cannot use
+    // it. Canceling Open recovers the still-valid original owner.
+    let replay = manager.prepare_recompute().unwrap();
+    manager
+        .commit_solid_with_verified_supports(
+            CommitKernelRequest {
+                transaction_id: replay.transaction_id,
+                scene: KernelSceneDto {
+                    bodies: vec![planar_body(second_body, "top", 20.0)],
+                    errors: Vec::new(),
+                },
+            },
+            &std::collections::BTreeSet::from([queries[0].sketch_id]),
+        )
+        .unwrap();
+    let load = manager
+        .prepare_load_project(manager.export_project_model().unwrap())
+        .unwrap();
+    assert!(manager
+        .prepare_edit_extrude(edit())
+        .unwrap_err()
+        .to_string()
+        .contains("no longer exists"));
+    manager.cancel_solid_recompute(load.transaction_id);
+    let recovered = manager.prepare_edit_extrude(edit()).unwrap();
+    manager.cancel_solid_recompute(recovered.transaction_id);
     // Conversely, final-scene existence cannot substitute for missing prefix
     // evidence. A later feature could introduce the same topology key.
     let missing_plan = manager.prepare_recompute().unwrap();
@@ -207,6 +284,11 @@ fn rectangular_extrude_face_sketch_and_broken_reference_recompute_are_integrated
         .filter(|f| matches!(f.name.as_str(), "Sketch2" | "Extrude2"))
         .all(|f| matches!(f.status, FeatureStatus::Error { .. })));
 
+    assert!(manager
+        .prepare_edit_extrude(edit())
+        .unwrap_err()
+        .to_string()
+        .contains("no longer exists"));
     let broken_plan = manager.prepare_recompute().unwrap();
     let broken = manager
         .commit_solid(CommitKernelRequest {
@@ -221,6 +303,11 @@ fn rectangular_extrude_face_sketch_and_broken_reference_recompute_are_integrated
         })
         .unwrap();
 
+    assert!(manager
+        .prepare_edit_extrude(edit())
+        .unwrap_err()
+        .to_string()
+        .contains("no longer exists"));
     for name in ["Sketch2", "Extrude2"] {
         let feature = broken
             .document
