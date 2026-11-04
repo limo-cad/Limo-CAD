@@ -57,4 +57,4 @@ windows-sys = { version = "0.61.2", features = ["Win32_System_Pipes"] }
 [dev-dependencies]
 limo-cad-export = { path = "../crates/export", features = ["test-utils"] }
 jsonschema = { version = "0.60.2", default-features = false }
-zip = { version = "9.0.3", default-features = false, features = ["deflate"] }
+zip = { version = "=9.1.2", default-features = false, features = ["deflate"] }
