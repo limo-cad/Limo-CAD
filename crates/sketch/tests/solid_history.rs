@@ -190,9 +190,16 @@ fn rectangular_extrude_face_sketch_and_broken_reference_recompute_are_integrated
     manager
         .set_document_name("Renamed document".into())
         .unwrap();
+    manager
+        .rename_solid_feature(second_plan.jobs[1].feature_id(), "Renamed extrusion".into())
+        .unwrap();
     // Shared edit preflight accepts exact native prefix proof.
     let accepted = manager.prepare_edit_extrude(edit()).unwrap();
     manager.cancel_solid_recompute(accepted.transaction_id);
+    // Restoring the original name cannot resurrect proof invalidated by a transaction.
+    manager
+        .rename_solid_feature(second_plan.jobs[1].feature_id(), "Extrude2".into())
+        .unwrap();
     // Even canceled/new replay invalidates the previous proof.
     assert!(manager
         .prepare_edit_extrude(edit())

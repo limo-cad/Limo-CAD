@@ -309,6 +309,7 @@ impl SketchManager {
             .iter()
             .position(|feature| feature.id == feature_id)
             .ok_or_else(|| SessionError::Solid("the history feature no longer exists".into()))?;
+        let renew_support_proof = self.current_historical_support_proof().is_some();
         match self.document.features().features[index].kind {
             FeatureKind::Sketch => self.rename_sketch(feature_id, name)?,
             FeatureKind::ConstructionPlane => {
@@ -324,6 +325,22 @@ impl SketchManager {
         let feature = &mut self.document.features_mut().features[index];
         feature.name.clear();
         feature.name.push_str(name);
+        // A validated metadata rename changes names in the exact fingerprint,
+        // but changes neither geometry nor historical support. Renew only an
+        // already-current native proof; stale or absent proof stays unusable.
+        if renew_support_proof {
+            match self.historical_support_state() {
+                Ok(state) => {
+                    if let Some(proof) = self.historical_support_proof.as_mut().filter(|proof| {
+                        proof.generation == self.solids.support_proof_generation()
+                            && std::sync::Arc::ptr_eq(&proof.scene, &self.solids.scene_snapshot())
+                    }) {
+                        proof.support_state = state;
+                    }
+                }
+                Err(_) => self.historical_support_proof = None,
+            }
+        }
         Ok(self.document_dto())
     }
 
@@ -5140,16 +5157,20 @@ impl SketchManager {
         ))
     }
 
-    fn validate_active_sketch_references(&self) -> Result<(), SessionError> {
-        let active = self.active_feature_ids();
-        let proof = self.historical_support_proof.as_ref().filter(|proof| {
+    fn current_historical_support_proof(&self) -> Option<&HistoricalSupportProof> {
+        self.historical_support_proof.as_ref().filter(|proof| {
             self.pending_project.is_none()
                 && proof.generation == self.solids.support_proof_generation()
                 && std::sync::Arc::ptr_eq(&proof.scene, &self.solids.scene_snapshot())
                 && self
                     .historical_support_state()
                     .is_ok_and(|state| state == proof.support_state)
-        });
+        })
+    }
+
+    fn validate_active_sketch_references(&self) -> Result<(), SessionError> {
+        let active = self.active_feature_ids();
+        let proof = self.current_historical_support_proof();
         for finished in &self.finished {
             if !active.contains(&finished.feature_id) {
                 continue;

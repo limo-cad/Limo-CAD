@@ -21,6 +21,10 @@ impl NativeEngineHost {
         let session = workspace.active_session_id.clone();
         let inner = workspace.active_mut();
         let result = (|| -> Result<Option<SolidUpdateDto>, String> {
+            inner
+                .manager
+                .validate_sketch_session_retention_boundary()
+                .map_err(|e| e.to_string())?;
             let snapshot = inner
                 .manager
                 .export_project_snapshot()
@@ -192,6 +196,9 @@ impl NativeEngineHost {
                     },
                     &verified,
                 )
+                .map_err(|e| e.to_string())?;
+            manager
+                .adopt_matching_sketch_session_retention(&mut inner.manager)
                 .map_err(|e| e.to_string())?;
             inner.manager = manager;
             inner.kernel = kernel;

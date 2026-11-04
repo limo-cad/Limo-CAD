@@ -195,3 +195,72 @@ fn encoded_desktop_ipc_delete_uses_the_same_proof_transaction() {
     ok(cold.project_load_snapshot(&h.project_snapshot().unwrap()));
     correct(&cold);
 }
+
+#[test]
+fn delete_preserves_pending_project_load() {
+    let h = fixture();
+    let id = model(&h)["fillets"][0]["feature_id"].clone();
+    let before = h.project_snapshot().unwrap();
+    let scene = h.solid_scene_snapshot();
+    let revision = h.geometry_revision();
+    let empty = NativeEngineHost::new();
+    let pending = ok(h.engine_call(
+        "project_prepare_load",
+        &serde_json::to_string(&empty.project_model_projection().unwrap()).unwrap(),
+    ));
+    let reply: Value =
+        serde_json::from_str(&h.solid_delete_feature(&json!({"feature_id":id}).to_string()))
+            .unwrap();
+    assert_eq!(reply["ok"], false, "deletion must not abandon Open");
+    assert_eq!(h.project_snapshot().unwrap(), before);
+    assert!(std::sync::Arc::ptr_eq(&scene, &h.solid_scene_snapshot()));
+    assert_eq!(h.geometry_revision(), revision);
+    ok(h.engine_call(
+        "solid_commit",
+        &json!({
+            "transaction_id":pending["transaction_id"],
+            "scene":{"bodies":[],"errors":[]}
+        })
+        .to_string(),
+    ));
+    assert!(h.document_snapshot().features.is_empty());
+}
+
+#[test]
+fn delete_preserves_sketch_undo_and_adaptive_grid() {
+    let h = fixture();
+    let id = model(&h)["fillets"][0]["feature_id"].clone();
+    ok(h.engine_call("set_grid_step", r#"{"step_mm":0.001}"#));
+    assert_eq!(
+        ok(h.engine_call("finished_sketches", ""))[0]["can_undo"],
+        true
+    );
+    ok(h.solid_delete_feature(&json!({"feature_id":id}).to_string()));
+    assert_eq!(
+        ok(h.engine_call("finished_sketches", ""))[0]["can_undo"],
+        true
+    );
+    let edited = ok(h.engine_call("edit_sketch", r#""Sketch1""#));
+    let undone = ok(h.engine_call("undo", ""));
+    assert_eq!(undone["sketch"]["can_redo"], true);
+    assert_ne!(undone["sketch"]["entities"], edited["entities"]);
+    let redone = ok(h.engine_call("redo", ""));
+    assert_eq!(redone["sketch"]["can_undo"], true);
+    assert_eq!(redone["sketch"]["entities"], edited["entities"]);
+    ok(h.engine_call("set_grid_snap", r#"{"enabled":true}"#));
+    let preview = ok(h.engine_call(
+        "preview_segment",
+        &json!({
+            "from":{"x":20.,"y":20.},"to_raw":{"x":12.34515,"y":8.76585},"ctrl_held":true
+        })
+        .to_string(),
+    ));
+    assert!(
+        (preview["snapped_to"]["x"].as_f64().unwrap() - 12.345).abs() < 1e-12,
+        "{preview}"
+    );
+    assert!(
+        (preview["snapped_to"]["y"].as_f64().unwrap() - 8.766).abs() < 1e-12,
+        "{preview}"
+    );
+}
