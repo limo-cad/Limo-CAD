@@ -272,6 +272,12 @@ mod ffi {
         fn apply_job(self: Pin<&mut Kernel>, job: &FfiJob) -> Result<()>;
         fn body_ids(self: &Kernel) -> Vec<u64>;
         fn drawing_snapshot(self: &Kernel, body_ids: &Vec<u64>) -> Result<UniquePtr<Kernel>>;
+        fn delete_finish_branch(
+            self: Pin<&mut Kernel>,
+            removed: &FfiJob,
+            consumer: &FfiJob,
+            remapped: &mut Vec<u32>,
+        ) -> Result<UniquePtr<Kernel>>;
         fn body_generations(self: &Kernel) -> Result<Vec<FfiBodyGeneration>>;
         fn planar_face_keys(self: &Kernel) -> Result<Vec<u64>>;
         fn mesh(self: &Kernel, body_id: u64) -> Result<FfiMesh>;
@@ -632,6 +638,70 @@ impl OcctKernel {
 
     /// Proofs belong only to this returned scene/transaction. Failed replay
     /// produces none; cached answers survive only an identical job prefix.
+    pub fn completed_jobs_match(&self, plan: &RecomputePlanDto) -> bool {
+        plan.errors.is_empty() && self.successful_jobs.as_ref() == Some(&plan.jobs)
+    }
+
+    /// Bounded deletion proof: resolve the final finish at its original input,
+    /// then carry unchanged prefix edges through an explicit deep copy.
+    /// The returned kernel owns only the new branch; this kernel is untouched.
+    pub fn delete_penultimate_finish(
+        &self,
+        feature: limo_cad_core::FeatureId,
+    ) -> Result<(Self, limo_cad_core::FeatureId, Vec<String>), OcctError> {
+        let jobs = self
+            .successful_jobs
+            .as_ref()
+            .ok_or_else(|| OcctError("Delete remap needs a healthy completed history".into()))?;
+        let at = jobs
+            .iter()
+            .position(|j| j.feature_id() == feature)
+            .ok_or_else(|| OcctError("Delete remap feature is inactive or missing".into()))?;
+        if at + 2 != jobs.len() {
+            return Err(OcctError(
+                "Delete remap currently requires the final two solid jobs".into(),
+            ));
+        }
+        let mut branch = Self::new()?;
+        for job in &jobs[..at] {
+            branch
+                .inner
+                .pin_mut()
+                .apply_job(&to_ffi_job(job)?)
+                .map_err(|e| OcctError(e.to_string()))?;
+        }
+        let mut indices = Vec::new();
+        let inner = branch
+            .inner
+            .pin_mut()
+            .delete_finish_branch(
+                &to_ffi_job(&jobs[at])?,
+                &to_ffi_job(&jobs[at + 1])?,
+                &mut indices,
+            )
+            .map_err(|e| OcctError(format!("Feature {}: {e}", jobs[at + 1].feature_id().0)))?;
+        branch.inner = inner;
+        let keys = indices
+            .iter()
+            .map(|i| format!("edge:{i}"))
+            .collect::<Vec<_>>();
+        let mut next = jobs[..at].to_vec();
+        let mut consumer = jobs[at + 1].clone();
+        match &mut consumer {
+            KernelJobDto::Fillet(j) => j.edge_keys = keys.clone(),
+            KernelJobDto::Chamfer(j) => j.edge_keys = keys.clone(),
+            _ => {
+                return Err(OcctError(
+                    "Delete remap requires an edge finish consumer".into(),
+                ))
+            }
+        }
+        let consumer_id = consumer.feature_id();
+        next.push(consumer);
+        branch.successful_jobs = Some(next);
+        Ok((branch, consumer_id, keys))
+    }
+
     pub fn recompute_with_supports(
         &mut self,
         plan: &RecomputePlanDto,
