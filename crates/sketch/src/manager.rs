@@ -160,6 +160,7 @@ struct HistoricalSupportProof {
     generation: u64,
     support_state: String,
     verified: BTreeSet<FeatureId>,
+    face_sketches: BTreeSet<FeatureId>,
 }
 
 #[derive(Debug)]
@@ -4554,6 +4555,14 @@ impl SketchManager {
                     generation: self.solids.support_proof_generation(),
                     support_state,
                     verified: verified.clone(),
+                    face_sketches: self
+                        .finished
+                        .iter()
+                        .filter_map(|finished| {
+                            matches!(finished.session.plane(), PlaneRef::PlanarFace { .. })
+                                .then_some(finished.feature_id)
+                        })
+                        .collect(),
                 });
             }
         }
@@ -5177,7 +5186,15 @@ impl SketchManager {
             }
             if let PlaneRef::PlanarFace { face_id } = finished.session.plane() {
                 if proof.map_or_else(
-                    || !self.solids.has_face(face_id),
+                    // Expired proof cannot be replaced by a reused final-scene
+                    // face key for a sketch covered by that replay. Newly authored
+                    // face sketches still use the ordinary current-scene check.
+                    || {
+                        self.historical_support_proof
+                            .as_ref()
+                            .is_some_and(|proof| proof.face_sketches.contains(&finished.feature_id))
+                            || !self.solids.has_face(face_id)
+                    },
                     |proof| !proof.verified.contains(&finished.feature_id),
                 ) {
                     return Err(SessionError::BrokenReference(format!(

@@ -115,14 +115,18 @@ fn rectangular_extrude_face_sketch_and_broken_reference_recompute_are_integrated
 
     let first_plan = manager.prepare_extrude(extrusion("Sketch1")).unwrap();
     let first_body = result_body_id(&first_plan.jobs[0]);
+    // Native replay can issue an empty proof before a new face sketch is authored.
     let first_update = manager
-        .commit_solid(CommitKernelRequest {
-            transaction_id: first_plan.transaction_id,
-            scene: KernelSceneDto {
-                bodies: vec![planar_body(first_body, "support", 10.0)],
-                errors: Vec::new(),
+        .commit_solid_with_verified_supports(
+            CommitKernelRequest {
+                transaction_id: first_plan.transaction_id,
+                scene: KernelSceneDto {
+                    bodies: vec![planar_body(first_body, "support", 10.0)],
+                    errors: Vec::new(),
+                },
             },
-        })
+            &std::collections::BTreeSet::new(),
+        )
         .unwrap();
     assert_eq!(first_update.scene.bodies.len(), 1);
     assert_eq!(first_update.document.features.len(), 2);
@@ -291,6 +295,15 @@ fn rectangular_extrude_face_sketch_and_broken_reference_recompute_are_integrated
         .filter(|f| matches!(f.name.as_str(), "Sketch2" | "Extrude2"))
         .all(|f| matches!(f.status, FeatureStatus::Error { .. })));
 
+    assert!(manager
+        .prepare_edit_extrude(edit())
+        .unwrap_err()
+        .to_string()
+        .contains("no longer exists"));
+    // Canceling replay advances its generation but does not make an unverified
+    // prefix support valid merely because the same face key exists at the end.
+    let canceled = manager.prepare_recompute().unwrap();
+    manager.cancel_solid_recompute(canceled.transaction_id);
     assert!(manager
         .prepare_edit_extrude(edit())
         .unwrap_err()
