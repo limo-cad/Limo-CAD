@@ -4352,7 +4352,6 @@ impl SketchManager {
             return Ok(update);
         }
 
-        self.historical_support_proof = None;
         let issued_scene = (!restoring_project
             && self.drawings.sheets.iter().any(|sheet| {
                 sheet.release.status == crate::DrawingReleaseStatus::Released
@@ -4364,6 +4363,7 @@ impl SketchManager {
             .commit(request.transaction_id, request.scene)
             .map_err(|error| SessionError::Solid(error.to_string()))?
             .clone();
+        self.historical_support_proof = None;
         if issued_scene
             .as_ref()
             .is_some_and(|prior| prior.bodies != scene.bodies || prior.errors != scene.errors)

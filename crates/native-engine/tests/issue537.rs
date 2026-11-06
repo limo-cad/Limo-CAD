@@ -340,3 +340,38 @@ fn direct_edit_after_metadata_rename_retains_historical_support() {
         assert!((volume(&host) - volume(&fresh)).abs() < 1e-6);
     }
 }
+
+#[test]
+fn rejected_commit_preserves_historical_support_for_direct_edit() {
+    let host = combined_fixture();
+    let mut request = combined_request(&host, 2.);
+    value(host.solid_chamfer(&request.to_string()));
+    let before = host.project_model_projection().unwrap();
+    let scene = host.solid_scene_snapshot();
+    let model: Value = serde_json::from_str(&before).unwrap();
+
+    let rejected: Value = serde_json::from_str(&host.engine_call(
+        "solid_commit",
+        &json!({"transaction_id":0,"scene":{"bodies":[],"errors":[]}}).to_string(),
+    ))
+    .unwrap();
+    assert_eq!(rejected["ok"], false, "{rejected}");
+    assert!(
+        rejected
+            .to_string()
+            .contains("no solid recompute is pending"),
+        "{rejected}"
+    );
+    assert_eq!(host.project_model_projection().unwrap(), before);
+    assert!(std::sync::Arc::ptr_eq(&scene, &host.solid_scene_snapshot()));
+
+    request["distance"] = json!(3.);
+    // Rejection must preserve the existing proof; no Stage reload or replay here.
+    value(host.solid_edit_chamfer(
+        &json!({"feature_id":model["chamfers"][0]["feature_id"],"chamfer":request}).to_string(),
+    ));
+    assert!(host.solid_scene_snapshot().errors.is_empty());
+    let fresh = combined_fixture();
+    value(fresh.solid_chamfer(&combined_request(&fresh, 3.).to_string()));
+    assert!((volume(&host) - volume(&fresh)).abs() < 1e-6);
+}
