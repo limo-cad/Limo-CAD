@@ -736,3 +736,31 @@ fn canceled_extrude_restores_end_and_middle_build_cursors() {
         assert!(manager.export_project_model().is_ok());
     }
 }
+
+#[test]
+fn canceled_solid_preserves_unrelated_interleaved_sketch() {
+    let (mut manager, _) = retained_face_support_manager();
+    let count = manager.document_dto().features.len();
+    let request:BodyFeatureRequestDto=serde_json::from_value(serde_json::json!({"type":"combine","request":{"target_body_id":2,"tool_body_ids":[1],"operation":"cut","keep_tools":true}})).unwrap();
+    let plan = manager.prepare_body_feature(request).unwrap();
+    manager.begin_sketch(XY).unwrap();
+    rectangle(&mut manager, Vec2::new(40., 40.), Vec2::new(50., 50.));
+    manager.end_sketch().unwrap();
+    manager.cancel_solid_recompute(plan.transaction_id);
+    let document = manager.document_dto();
+    assert_eq!(document.features.len(), count + 1);
+    assert!(document
+        .features
+        .iter()
+        .any(|feature| feature.name == "Sketch3"));
+    assert!(!document
+        .features
+        .iter()
+        .any(|feature| feature.kind == limo_cad_core::FeatureKind::Combine));
+    let saved = manager.export_project_model().unwrap();
+    let mut cold = SketchManager::new();
+    let load = cold.prepare_load_project(saved).unwrap();
+    cold.cancel_solid_recompute(load.transaction_id);
+    let replay = manager.prepare_recompute().unwrap();
+    manager.cancel_solid_recompute(replay.transaction_id);
+}
