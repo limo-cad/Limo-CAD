@@ -39,11 +39,9 @@ fn main() {
             sdk.include.join("Standard_Version.hxx").display()
         );
         // Link arguments from the OCCT dependency do not reach this package's
-        // integration-test executables. Give only those tests the checked SDK
-        // runtime path; desktop packaging keeps its own relocatable rpaths.
-        println!(
-            "cargo:rustc-link-arg-tests=-Wl,-rpath,{}",
-            sdk.lib.display()
-        );
+        // linked test executables. Library unit tests use a library target,
+        // so the tests-only selector misses them. This rlib-only package has
+        // no installed binary; desktop packaging keeps its own rpaths.
+        println!("cargo:rustc-link-arg=-Wl,-rpath,{}", sdk.lib.display());
     }
 }
