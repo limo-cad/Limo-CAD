@@ -603,3 +603,164 @@ fn changed_upstream_sketch_cannot_reuse_verified_support() {
         .to_string()
         .contains("no longer exists"));
 }
+
+#[test]
+fn canceled_new_body_feature_restores_history_and_remains_replayable() {
+    let (mut manager, _) = retained_face_support_manager();
+    let before = serde_json::to_value(manager.document_dto()).unwrap();
+    let scene = manager.solid_scene_snapshot();
+    let request: BodyFeatureRequestDto = serde_json::from_value(serde_json::json!({
+        "type":"combine", "request":{"target_body_id":2,"tool_body_ids":[1],"operation":"cut","keep_tools":true}
+    })).unwrap();
+    let plan = manager.prepare_body_feature(request.clone()).unwrap();
+    manager.cancel_solid_recompute(plan.transaction_id + 1);
+    assert_eq!(
+        manager.document_dto().features.len(),
+        before["features"].as_array().unwrap().len() + 1
+    );
+    manager.cancel_solid_recompute(plan.transaction_id);
+    assert_eq!(
+        serde_json::to_value(manager.document_dto()).unwrap(),
+        before
+    );
+    assert!(std::sync::Arc::ptr_eq(
+        &scene,
+        &manager.solid_scene_snapshot()
+    ));
+    let saved = manager.export_project_model().unwrap();
+    let replay = manager.prepare_recompute().unwrap();
+    manager.cancel_solid_recompute(replay.transaction_id);
+    let mut cold = SketchManager::new();
+    let load = cold.prepare_load_project(saved).unwrap();
+    cold.cancel_solid_recompute(load.transaction_id);
+    let retry = manager.prepare_body_feature(request).unwrap();
+    manager
+        .commit_solid(CommitKernelRequest {
+            transaction_id: retry.transaction_id,
+            scene: KernelSceneDto {
+                bodies: vec![
+                    planar_body(BodyId(1), "support", 10.),
+                    planar_body(BodyId(2), "top", 20.),
+                ],
+                errors: vec![],
+            },
+        })
+        .unwrap();
+    let committed = serde_json::to_value(manager.document_dto()).unwrap();
+    manager.cancel_solid_recompute(plan.transaction_id);
+    assert_eq!(
+        serde_json::to_value(manager.document_dto()).unwrap(),
+        committed
+    );
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&manager.export_project_model().unwrap())
+            .unwrap()["body_features"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+}
+
+#[test]
+fn rejected_new_solid_commit_restores_history_without_canceling_wrong_owner() {
+    let (mut manager, _) = retained_face_support_manager();
+    let before = serde_json::to_value(manager.document_dto()).unwrap();
+    let request: BodyFeatureRequestDto = serde_json::from_value(serde_json::json!({
+        "type":"combine", "request":{"target_body_id":2,"tool_body_ids":[1],"operation":"cut","keep_tools":true}
+    })).unwrap();
+    let plan = manager.prepare_body_feature(request).unwrap();
+    assert!(manager
+        .commit_solid(CommitKernelRequest {
+            transaction_id: plan.transaction_id + 1,
+            scene: KernelSceneDto {
+                bodies: vec![],
+                errors: vec![]
+            }
+        })
+        .is_err());
+    assert_eq!(
+        manager.document_dto().features.len(),
+        before["features"].as_array().unwrap().len() + 1
+    );
+    let mut malformed = planar_body(BodyId(2), "bad", 20.);
+    malformed.positions.pop();
+    assert!(manager
+        .commit_solid(CommitKernelRequest {
+            transaction_id: plan.transaction_id,
+            scene: KernelSceneDto {
+                bodies: vec![malformed],
+                errors: vec![]
+            }
+        })
+        .is_err());
+    assert_eq!(
+        serde_json::to_value(manager.document_dto()).unwrap(),
+        before
+    );
+    assert!(manager.export_project_model().is_ok());
+    let replay = manager.prepare_recompute().unwrap();
+    manager.cancel_solid_recompute(replay.transaction_id);
+}
+
+#[test]
+fn canceled_extrude_restores_end_and_middle_build_cursors() {
+    for middle in [false, true] {
+        let (mut manager, _) = retained_face_support_manager();
+        if middle {
+            let plan = manager
+                .prepare_set_rollback(SetRollbackRequest { rollback_index: 2 })
+                .unwrap();
+            manager
+                .commit_solid(CommitKernelRequest {
+                    transaction_id: plan.transaction_id,
+                    scene: KernelSceneDto {
+                        bodies: vec![planar_body(BodyId(1), "support", 10.)],
+                        errors: vec![],
+                    },
+                })
+                .unwrap();
+        }
+        let before = serde_json::to_value(manager.document_dto()).unwrap();
+        let scene = manager.solid_scene_snapshot();
+        let plan = manager.prepare_extrude(extrusion("Sketch1")).unwrap();
+        manager.cancel_solid_recompute(plan.transaction_id);
+        assert_eq!(
+            serde_json::to_value(manager.document_dto()).unwrap(),
+            before
+        );
+        assert!(std::sync::Arc::ptr_eq(
+            &scene,
+            &manager.solid_scene_snapshot()
+        ));
+        assert!(manager.export_project_model().is_ok());
+    }
+}
+
+#[test]
+fn canceled_solid_preserves_unrelated_interleaved_sketch() {
+    let (mut manager, _) = retained_face_support_manager();
+    let count = manager.document_dto().features.len();
+    let request:BodyFeatureRequestDto=serde_json::from_value(serde_json::json!({"type":"combine","request":{"target_body_id":2,"tool_body_ids":[1],"operation":"cut","keep_tools":true}})).unwrap();
+    let plan = manager.prepare_body_feature(request).unwrap();
+    manager.begin_sketch(XY).unwrap();
+    rectangle(&mut manager, Vec2::new(40., 40.), Vec2::new(50., 50.));
+    manager.end_sketch().unwrap();
+    manager.cancel_solid_recompute(plan.transaction_id);
+    let document = manager.document_dto();
+    assert_eq!(document.features.len(), count + 1);
+    assert!(document
+        .features
+        .iter()
+        .any(|feature| feature.name == "Sketch3"));
+    assert!(!document
+        .features
+        .iter()
+        .any(|feature| feature.kind == limo_cad_core::FeatureKind::Combine));
+    let saved = manager.export_project_model().unwrap();
+    let mut cold = SketchManager::new();
+    let load = cold.prepare_load_project(saved).unwrap();
+    cold.cancel_solid_recompute(load.transaction_id);
+    let replay = manager.prepare_recompute().unwrap();
+    manager.cancel_solid_recompute(replay.transaction_id);
+}

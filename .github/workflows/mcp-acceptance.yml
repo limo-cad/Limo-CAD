@@ -127,7 +127,7 @@ jobs:
         run: |
           cargo test --locked -p limo-cad-occt --features native-occt --tests -- --test-threads=1
           if ($LASTEXITCODE -ne 0) { throw 'native integration tests failed' }
-          cargo test --locked -p limo-cad-native-engine --features native-occt --test issue536_delete --test issue537 -- --test-threads=1
+          cargo test --locked -p limo-cad-native-engine --features native-occt --lib --test issue536_delete --test issue537 -- --test-threads=1
           if ($LASTEXITCODE -ne 0) { throw 'historical topology regressions failed' }
 
       - name: Collect bounded native recipe failure evidence

@@ -862,7 +862,7 @@ fn check_mcp_provenance(source: &Value) -> Result<()> {
             "native geometry must survive MCP failure after successful native lint, but stop on cancellation"
         );
         requires_command(geometry, "cargo test --locked -p limo-cad-occt --features native-occt --tests -- --test-threads=1")?;
-        requires_command(geometry, "cargo test --locked -p limo-cad-native-engine --features native-occt --test issue536_delete --test issue537 -- --test-threads=1")?;
+        requires_command(geometry, "cargo test --locked -p limo-cad-native-engine --features native-occt --lib --test issue536_delete --test issue537 -- --test-threads=1")?;
         ensure!(
             geometry["env"]["CARGO_TARGET_DIR"].as_str()
                 == Some("${{ github.workspace }}/mcp-server/target"),
@@ -1437,7 +1437,7 @@ fn historical_topology_regressions_execute_on_macos() {
         step["env"]["CARGO_TARGET_DIR"].as_str(),
         Some("${{ github.workspace }}/desktop/target")
     );
-    requires_command(step, "cargo test --locked -p limo-cad-native-engine --features native-occt --test issue536_delete --test issue537 -- --test-threads=1").unwrap();
+    requires_command(step, "cargo test --locked -p limo-cad-native-engine --features native-occt --lib --test issue536_delete --test issue537 -- --test-threads=1").unwrap();
 }
 
 #[test]
@@ -1480,6 +1480,14 @@ fn mcp_provenance_rejects_missing_shards_bypassed_geometry_and_stale_inputs() {
     let mut missing_lint_identity = valid.clone();
     missing_lint_identity["jobs"]["mcp-windows"]["steps"][lint_index]["id"] = Value::Null;
     assert!(check_mcp_provenance(&missing_lint_identity).is_err());
+    let mut missing_native_host_unit_tests = valid.clone();
+    let run = missing_native_host_unit_tests["jobs"]["mcp-windows"]["steps"][geometry_index]["run"]
+        .as_str()
+        .unwrap()
+        .replace("--lib --test issue536_delete", "--test issue536_delete");
+    missing_native_host_unit_tests["jobs"]["mcp-windows"]["steps"][geometry_index]["run"] =
+        Value::String(run);
+    assert!(check_mcp_provenance(&missing_native_host_unit_tests).is_err());
     let mut ignored_geometry = valid.clone();
     ignored_geometry["jobs"]["mcp-windows"]["steps"][geometry_index]["continue-on-error"] =
         Value::Bool(true);
