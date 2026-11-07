@@ -23,7 +23,9 @@ fn process_memory() -> Value {
     let Ok(pid) = sysinfo::get_current_pid() else {
         return Value::Null;
     };
-    let mut system = sysinfo::System::new();
+    let Ok(mut system) = sysinfo::System::new() else {
+        return Value::Null;
+    };
     system.refresh_processes_specifics(
         sysinfo::ProcessesToUpdate::Some(&[pid]),
         true,
