@@ -494,6 +494,13 @@ pub(super) fn synchronize(
             (width, height, side),
             cam_visible,
         )?;
+        files::paint_workbench_feature_hint(
+            world,
+            camera,
+            &mut state.widgets,
+            width,
+            state.menu.is_some(),
+        )?;
         state.widgets.finish(world);
         Ok(())
     })();

@@ -38,7 +38,7 @@ pub(crate) use platform::{
     apply_interface_view, interface_body_transform, interface_camera_snapshot, interface_geometry,
     interface_model_revision, interface_pick, interface_preview_revision,
     interface_preview_snapshot, interface_sketch_point, interface_view, interface_view_snapshot,
-    interface_visible_occurrences, interface_world_point,
+    interface_visible_occurrences, interface_world_point, project_world_point,
 };
 #[cfg(test)]
 pub(crate) use platform::{interface_geometry_fixture_snapshot, interface_scene_fixture};

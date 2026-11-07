@@ -308,7 +308,7 @@
       "patternCircular": "Kreisförmiges Muster",
       "patternOnPath": "Muster entlang Pfad",
       "mirror": "Spiegeln",
-      "fillet": "Fase",
+      "fillet": "Verrundung",
       "chamfer": "Kante",
       "shell": "Hohlkörper",
       "draft": "Zug",
@@ -453,7 +453,7 @@
       "patternCircular": "Kreisförmiges Muster",
       "sketchDimension": "Skizzenbemaßung",
       "fillet": "Fillet",
-      "chamfer": "Kante",
+      "chamfer": "Fase",
       "offset": "Abstand",
       "trim": "Kürzen",
       "extend": "Verlängern",
@@ -798,8 +798,8 @@
     "toNextNeedsTarget": "„Bis zur nächsten“ benötigt Hinzufügen, Abziehen oder Gemeinsam, damit es einen Zielkörper zum Anhalten gibt."
   },
   "solidEdge": {
-    "fillet": "Körper-Entfernung",
-    "editFillet": "Körper-Entfernung bearbeiten",
+    "fillet": "Körperverrundung",
+    "editFillet": "Körperverrundung bearbeiten",
     "chamfer": "Körper-Entwässerung",
     "editChamfer": "Körper-Entwässerung bearbeiten",
     "loading": "Körpertopologie wird geladen…",

@@ -1,4 +1,4 @@
-//! One Bevy readback. Window capture, script preview, and the UI lab all
+//! One Bevy readback. Window capture, test fixtures, and the UI lab all
 //! encode the image Bevy already rendered. Nothing here grabs the desktop.
 
 use bevy::image::Image;
@@ -24,6 +24,7 @@ pub(crate) fn png_bytes(image: &Image) -> Result<Vec<u8>, String> {
 
 /// Pump until `step` reports the screenshot observer has the image.
 /// There is no warmup delay: the observer is the completion signal.
+#[cfg(any(test, feature = "dev-ui-lab"))]
 pub(crate) fn until_captured(mut step: impl FnMut() -> Result<bool, String>) -> Result<(), String> {
     for _ in 0..60 {
         if step()? {
