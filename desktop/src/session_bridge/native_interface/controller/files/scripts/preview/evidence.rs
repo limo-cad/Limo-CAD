@@ -15,9 +15,39 @@ use std::{path::Path, sync::atomic::AtomicUsize};
 
 mod ink;
 mod operational;
+mod package;
 
 #[derive(Resource, Default)]
 struct Capture(Option<Vec<u8>>);
+
+fn capture_title_matches(text: &str, project_title: Option<&str>, is_guide_title: bool) -> bool {
+    match project_title {
+        Some(title) => text == title,
+        None => is_guide_title,
+    }
+}
+
+#[test]
+fn native_script_preview_capture_title_requires_the_active_preview_kind() {
+    assert!(capture_title_matches(
+        "Package preview",
+        Some("Package preview"),
+        false
+    ));
+    assert!(!capture_title_matches(
+        "Guide",
+        Some("Package preview"),
+        true
+    ));
+    assert!(!capture_title_matches("", Some("Package preview"), false));
+    assert!(!capture_title_matches(
+        "Wrong package",
+        Some("Package preview"),
+        false
+    ));
+    assert!(capture_title_matches("Guide", None, true));
+    assert!(!capture_title_matches("Package preview", None, false));
+}
 
 fn process_memory() -> Value {
     let Ok(pid) = sysinfo::get_current_pid() else {
@@ -290,14 +320,32 @@ fn capture_component(app: &mut App, target: &Handle<Image>, path: &Path, card_vi
                         "Initial Sketch must show its plane, not a blank stage"
                     );
                 }
+                let locale = crate::native_viewport::localization::locale(app.world());
+                let project_title =
+                    app.world()
+                        .resource::<Files>()
+                        .script
+                        .preview
+                        .project
+                        .then(|| {
+                            crate::app_preferences::locale::translate(
+                                locale,
+                                "projectReplay.previewTitle",
+                            )
+                        });
                 let (node, transform) = app
                     .world_mut()
                     .query::<(&Text, &ComputedNode, &bevy::ui::UiGlobalTransform)>()
                     .iter(app.world())
                     .find_map(|(text, node, transform)| {
-                        (lesson::ALL.into_iter().any(|id| {
-                            text.0 == lesson::text(app.world(), &format!("{}.example", id.key()))
-                        }) || text.0 == lesson::text(app.world(), "ui.guidedExamples"))
+                        capture_title_matches(
+                            &text.0,
+                            project_title,
+                            lesson::ALL.into_iter().any(|id| {
+                                text.0
+                                    == lesson::text(app.world(), &format!("{}.example", id.key()))
+                            }) || text.0 == lesson::text(app.world(), "ui.guidedExamples"),
+                        )
                         .then_some((*node, *transform))
                     })
                     .expect("Native title is laid out");
@@ -356,6 +404,7 @@ fn native_show_me_ui_evidence_and_performance() {
         &Path::new(&root).join("cut-measured"),
         false,
     );
+    package::capture(&Path::new(&root).join("project-preview"));
 }
 /// Compare only pixels inside the model, excluding captions, focus rings and UI
 /// metadata. A changing step number or PNG encoding cannot qualify motion.
