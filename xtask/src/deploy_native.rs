@@ -986,7 +986,7 @@ fn stop_runtime(executable: &Path, restart: bool) -> Result<()> {
     let Ok(canonical) = executable.canonicalize() else {
         return Ok(());
     };
-    let mut system = System::new();
+    let mut system = System::new().context("Cannot inspect installed runtime processes")?;
     system.refresh_processes_specifics(
         ProcessesToUpdate::All,
         true,

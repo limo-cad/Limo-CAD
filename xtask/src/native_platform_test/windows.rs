@@ -817,7 +817,7 @@ fn number(value: &Value, key: &str) -> Result<f64> {
 
 fn process_identity(pid: u32) -> Result<(PathBuf, u64)> {
     let pid = Pid::from_u32(pid);
-    let mut system = System::new();
+    let mut system = System::new().context("Cannot inspect the owned CAD process")?;
     system.refresh_processes_specifics(
         ProcessesToUpdate::Some(&[pid]),
         true,

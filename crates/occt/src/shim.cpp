@@ -2306,6 +2306,86 @@ std::unique_ptr<Kernel> Kernel::drawing_snapshot(const rust::Vec<std::uint64_t>&
 }
 Kernel::~Kernel() = default;
 
+std::unique_ptr<Kernel> Kernel::delete_finish_branch(
+    const FfiJob& removed, const FfiJob& consumer, rust::Vec<std::uint32_t>& remapped) {
+  if ((removed.kind != 5 && removed.kind != 6) ||
+      (consumer.kind != 5 && consumer.kind != 6) ||
+      removed.target_body_ids.size() != 1 || consumer.target_body_ids.size() != 1 ||
+      removed.target_body_ids[0] != consumer.target_body_ids[0])
+    throw std::runtime_error("Delete remap requires two consecutive finishes on one body");
+  const auto id = removed.target_body_ids[0];
+  const auto source = impl_->bodies.at(id);
+  // Conservatively reject retained outputs connected to the edited body.
+  const auto group = impl_->body_groups.find(id);
+  if (group != impl_->body_groups.end()) {
+    for (const auto& body : impl_->bodies) {
+      const auto other = impl_->body_groups.find(body.first);
+      if (body.first != id && other != impl_->body_groups.end() &&
+          other->second == group->second)
+        throw std::runtime_error("Delete remap: connected retained bodies require support reassociation");
+    }
+  }
+  TopTools_IndexedMapOfShape original_edges;
+  TopExp::MapShapes(source, TopAbs_EDGE, original_edges);
+  // Copy before the old branch executes: builders may mutate shared geometry.
+  // Keep explicit correspondence; neither coordinates nor matching ordinals
+  // establish identity between independent copies.
+  // Copy the complete prefix, preserving native sharing among retained bodies.
+  TopoDS_Compound prefix;
+  BRep_Builder builder;
+  builder.MakeCompound(prefix);
+  for (const auto& body : impl_->bodies) builder.Add(prefix, body.second);
+  BRepBuilderAPI_Copy copy(prefix, true, false);
+  if (!copy.IsDone() || copy.Shape().IsNull())
+    throw std::runtime_error("Delete remap prefix copy failed");
+  auto result = std::make_unique<Kernel>();
+  *result->impl_ = *impl_;
+  for (auto& body : result->impl_->bodies) {
+    body.second = copy.ModifiedShape(impl_->bodies.at(body.first));
+    if (body.second.IsNull())
+      throw std::runtime_error("Delete remap: missing retained body correspondence");
+    // Persisted selectors must describe the cold-replayed prefix.
+    for (const auto kind : {TopAbs_EDGE, TopAbs_FACE}) {
+      TopTools_IndexedMapOfShape before, after;
+      TopExp::MapShapes(impl_->bodies.at(body.first), kind, before);
+      TopExp::MapShapes(body.second, kind, after);
+      if (before.Extent() != after.Extent())
+        throw std::runtime_error("Delete remap: retained body cardinality changed");
+      for (int i = 1; i <= before.Extent(); ++i) {
+        const auto mapped = copy.ModifiedShape(before(i));
+        if (mapped.IsNull() || after.FindIndex(mapped) != i)
+          throw std::runtime_error("Delete remap: retained body enumeration changed");
+      }
+    }
+  }
+  TopTools_IndexedMapOfShape copied_edges;
+  TopExp::MapShapes(result->impl_->bodies.at(id), TopAbs_EDGE, copied_edges);
+  apply_job(removed);
+  TopTools_IndexedMapOfShape old_input_edges;
+  TopExp::MapShapes(impl_->bodies.at(id), TopAbs_EDGE, old_input_edges);
+  FfiJob rewritten = consumer;
+  rewritten.edge_indices.clear();
+  std::set<std::uint32_t> unique;
+  for (const auto index : consumer.edge_indices) {
+    if (index >= static_cast<std::uint32_t>(old_input_edges.Extent()))
+      throw std::runtime_error("Delete remap: consumer edge is missing at original input stage");
+    const auto selected = old_input_edges(static_cast<int>(index + 1));
+    // Direct membership takes precedence over OCCT IsDeleted, which may say
+    // true even for an unchanged edge actually present in the result.
+    if (!original_edges.Contains(selected))
+      throw std::runtime_error("Delete remap: consumed/generated/modified edge has no unchanged prefix survivor; reselect support");
+    const auto copied = copy.ModifiedShape(selected);
+    const auto next = copied.IsNull() ? 0 : copied_edges.FindIndex(copied);
+    if (next == 0 || !unique.insert(static_cast<std::uint32_t>(next - 1)).second)
+      throw std::runtime_error("Delete remap: missing or ambiguous copy correspondence; reselect support");
+    rewritten.edge_indices.push_back(static_cast<std::uint32_t>(next - 1));
+  }
+  if (rewritten.edge_indices.empty()) throw std::runtime_error("Delete remap: empty support");
+  result->apply_job(rewritten);
+  remapped = rewritten.edge_indices;
+  return result;
+}
+
 void Kernel::reset() {
   impl_->bodies.clear();
   impl_->imported_display_bodies.clear();
