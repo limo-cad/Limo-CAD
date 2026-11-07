@@ -200,17 +200,12 @@ fn rectangular_extrude_face_sketch_and_broken_reference_recompute_are_integrated
     // Shared edit preflight accepts exact native prefix proof.
     let accepted = manager.prepare_edit_extrude(edit()).unwrap();
     manager.cancel_solid_recompute(accepted.transaction_id);
-    // Restoring the original name cannot resurrect proof invalidated by a transaction.
+    // Cancellation and a metadata rename do not alter verified prefix geometry.
     manager
         .rename_solid_feature(second_plan.jobs[1].feature_id(), "Extrude2".into())
         .unwrap();
-    // Even canceled/new replay invalidates the previous proof.
-    assert!(manager
-        .prepare_edit_extrude(edit())
-        .unwrap_err()
-        .to_string()
-        .contains("no longer exists"));
-
+    let again = manager.prepare_edit_extrude(edit()).unwrap();
+    manager.cancel_solid_recompute(again.transaction_id);
     // Proof never crosses a model load, even when feature/face IDs coincide.
     let saved = manager.export_project_model().unwrap();
     let mut other = SketchManager::new();
@@ -231,7 +226,7 @@ fn rectangular_extrude_face_sketch_and_broken_reference_recompute_are_integrated
         .contains("no longer exists"));
 
     // A pending load cannot borrow the current owner's proof; cancel recovers
-    // the original model and requires a new native replay for missing support.
+    // the unchanged original owner and its native authority.
     let load = manager.prepare_load_project(saved).unwrap();
     assert!(manager
         .prepare_edit_extrude(edit())
@@ -239,11 +234,8 @@ fn rectangular_extrude_face_sketch_and_broken_reference_recompute_are_integrated
         .to_string()
         .contains("no longer exists"));
     manager.cancel_solid_recompute(load.transaction_id);
-    assert!(manager
-        .prepare_edit_extrude(edit())
-        .unwrap_err()
-        .to_string()
-        .contains("no longer exists"));
+    let recovered = manager.prepare_edit_extrude(edit()).unwrap();
+    manager.cancel_solid_recompute(recovered.transaction_id);
     // Reissue proof on this owner, then ensure a pending candidate cannot use
     // it. Canceling Open recovers the still-valid original owner.
     let replay = manager.prepare_recompute().unwrap();
@@ -522,4 +514,92 @@ fn new_sketch_is_inserted_at_the_build_cursor() {
         3,
         "later history must stay rolled back after a mid-timeline sketch"
     );
+}
+
+fn retained_face_support_manager() -> (SketchManager, limo_cad_solid::EditExtrudeRequest) {
+    let mut manager = SketchManager::new();
+    manager.begin_sketch(XY).unwrap();
+    rectangle(&mut manager, Vec2::new(0.0, 0.0), Vec2::new(20.0, 15.0));
+    manager.end_sketch().unwrap();
+    let plan = manager.prepare_extrude(extrusion("Sketch1")).unwrap();
+    let first_body = result_body_id(&plan.jobs[0]);
+    let update = manager
+        .commit_solid_with_verified_supports(
+            CommitKernelRequest {
+                transaction_id: plan.transaction_id,
+                scene: KernelSceneDto {
+                    bodies: vec![planar_body(first_body, "support", 10.0)],
+                    errors: vec![],
+                },
+            },
+            &std::collections::BTreeSet::new(),
+        )
+        .unwrap();
+    manager
+        .begin_sketch(PlaneRef::PlanarFace {
+            face_id: update.scene.bodies[0].faces[0].id,
+        })
+        .unwrap();
+    rectangle(&mut manager, Vec2::new(2.0, 2.0), Vec2::new(8.0, 7.0));
+    manager.end_sketch().unwrap();
+    let plan = manager.prepare_extrude(extrusion("Sketch2")).unwrap();
+    let second_body = result_body_id(&plan.jobs[1]);
+    let feature_id = plan.jobs[1].feature_id();
+    let sketch_id = manager.history_support_queries()[0].sketch_id;
+    manager
+        .commit_solid_with_verified_supports(
+            CommitKernelRequest {
+                transaction_id: plan.transaction_id,
+                scene: KernelSceneDto {
+                    bodies: vec![
+                        planar_body(first_body, "support", 10.0),
+                        planar_body(second_body, "top", 20.0),
+                    ],
+                    errors: vec![],
+                },
+            },
+            &std::collections::BTreeSet::from([sketch_id]),
+        )
+        .unwrap();
+    (
+        manager,
+        limo_cad_solid::EditExtrudeRequest {
+            feature_id,
+            extrude: extrusion("Sketch2"),
+        },
+    )
+}
+
+#[test]
+fn canceled_edit_preserves_verified_unchanged_support() {
+    let (mut manager, edit) = retained_face_support_manager();
+    let saved = manager.export_project_model().unwrap();
+    let plan = manager.prepare_edit_extrude(edit.clone()).unwrap();
+    manager.cancel_solid_recompute(plan.transaction_id);
+    assert_eq!(manager.export_project_model().unwrap(), saved);
+    let again = manager.prepare_edit_extrude(edit).unwrap();
+    manager.cancel_solid_recompute(again.transaction_id);
+}
+
+#[test]
+fn unrelated_sketch_preserves_verified_unchanged_support() {
+    let (mut manager, edit) = retained_face_support_manager();
+    manager.begin_sketch(XY).unwrap();
+    rectangle(&mut manager, Vec2::new(50.0, 50.0), Vec2::new(60.0, 60.0));
+    manager.end_sketch().unwrap();
+    let plan = manager.prepare_edit_extrude(edit).unwrap();
+    manager.cancel_solid_recompute(plan.transaction_id);
+}
+
+#[test]
+fn changed_upstream_sketch_cannot_reuse_verified_support() {
+    let (mut manager, edit) = retained_face_support_manager();
+    manager.edit_sketch("Sketch1").unwrap();
+    rectangle(&mut manager, Vec2::new(25.0, 25.0), Vec2::new(30.0, 30.0));
+    manager.end_sketch().unwrap();
+    assert!(manager
+        .prepare_edit_extrude(edit)
+        .unwrap_err()
+        .to_string()
+        .contains("no longer exists"));
 }

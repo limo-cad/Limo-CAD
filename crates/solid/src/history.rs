@@ -442,12 +442,6 @@ impl SolidDocument {
         &self.scene
     }
 
-    /// Runtime generation for owner-local historical support proofs. Every new
-    /// prepared transaction invalidates a proof, even if later canceled.
-    pub fn support_proof_generation(&self) -> u64 {
-        self.next_transaction_id
-    }
-
     /// Retain evaluated geometry without copying its topology or triangle buffers.
     /// Recompute publishes a new scene; readers keep an immutable previous scene.
     pub fn scene_snapshot(&self) -> Arc<SolidSceneDto> {
