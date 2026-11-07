@@ -192,6 +192,7 @@ pub struct ResolvedDrawingProjection {
 }
 
 mod drawing_snapshot;
+mod finish_deletion;
 #[path = "sketch_history.rs"]
 mod sketch_history;
 pub use drawing_snapshot::{
@@ -816,6 +817,7 @@ impl NativeEngineHost {
         match method {
             "solid_prepare_body_feature" => return self.solid_body_feature(payload),
             "solid_prepare_edit_body_feature" => return self.solid_edit_body_feature(payload),
+            "solid_prepare_delete_feature" => return self.solid_delete_feature(payload),
             _ => {}
         }
         self.execute(|manager| {
@@ -964,6 +966,9 @@ impl NativeEngineHost {
     }
 
     pub fn solid_delete_feature(&self, payload: &str) -> String {
+        if let Some(result) = self.delete_finish_with_survivor_proof(payload) {
+            return result;
+        }
         self.with_request(payload, |manager, request: DeleteFeatureRequest| {
             manager.prepare_delete_feature(request)
         })

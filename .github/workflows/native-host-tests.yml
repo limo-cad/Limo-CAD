@@ -296,6 +296,11 @@ jobs:
     if: ${{ !inputs.ime-probe-only && !inputs.ime-native-macos && inputs.input-family != 'windows-ime' && inputs.input-family != 'windows-print' && inputs.input-family != 'switching' }}
     runs-on: ubuntu-26.04
     timeout-minutes: 120
+    env:
+      # Full DWARF for both native feature graphs can exhaust hosted-runner
+      # storage at test linking. Keep source-line backtraces and dev assertions.
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
+      CARGO_PROFILE_TEST_DEBUG: line-tables-only
     strategy:
       fail-fast: false
       max-parallel: 3
@@ -333,7 +338,7 @@ jobs:
           workspaces: |
             . -> target
             desktop -> target
-          key: native-host-linux
+          key: native-host-linux-line-tables
           cache-workspace-crates: false
           # Retain completed dependency compilation even when a live check fails.
           cache-on-failure: true
@@ -599,6 +604,11 @@ jobs:
         uses: ./.github/actions/setup-unix-occt
       - name: Test concurrent first-use OCCT projection
         run: cargo test --locked -p limo-cad-occt --features native-occt --test concurrent_drawing_init
+
+      - name: Test historical topology regressions
+        env:
+          CARGO_TARGET_DIR: ${{ github.workspace }}/desktop/target
+        run: cargo test --locked -p limo-cad-native-engine --features native-occt --test issue536_delete --test issue537 -- --test-threads=1
 
       - name: Lint every native target and feature
         run: cargo clippy --locked --manifest-path desktop/Cargo.toml --all-targets --all-features --no-deps -- -D warnings

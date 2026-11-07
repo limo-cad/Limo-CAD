@@ -150,6 +150,16 @@ pub struct SketchManager {
     /// Armed only for an explicit history deletion. Rollback and ordinary
     /// recompute can hide a body temporarily and must retain assembly joints.
     pending_joint_body_deletion: Option<(u64, BTreeSet<BodyId>)>,
+    /// Runtime-only native proof, scoped to this manager's exact committed state.
+    historical_support_proof: Option<HistoricalSupportProof>,
+}
+
+#[derive(Debug)]
+struct HistoricalSupportProof {
+    scene: std::sync::Arc<SolidSceneDto>,
+    support_state: String,
+    verified: BTreeSet<FeatureId>,
+    face_sketches: BTreeSet<FeatureId>,
 }
 
 #[derive(Debug)]
@@ -233,6 +243,7 @@ impl SketchManager {
             project_intents: Vec::new(),
             pending_project: None,
             pending_joint_body_deletion: None,
+            historical_support_proof: None,
         }
     }
 
@@ -298,6 +309,7 @@ impl SketchManager {
             .iter()
             .position(|feature| feature.id == feature_id)
             .ok_or_else(|| SessionError::Solid("the history feature no longer exists".into()))?;
+        let renew_support_proof = self.current_historical_support_proof().is_some();
         match self.document.features().features[index].kind {
             FeatureKind::Sketch => self.rename_sketch(feature_id, name)?,
             FeatureKind::ConstructionPlane => {
@@ -313,6 +325,27 @@ impl SketchManager {
         let feature = &mut self.document.features_mut().features[index];
         feature.name.clear();
         feature.name.push_str(name);
+        // A validated metadata rename changes names in the exact fingerprint,
+        // but changes neither geometry nor historical support. Renew only an
+        // already-current native proof; stale or absent proof stays unusable.
+        if renew_support_proof {
+            match self.historical_support_state(
+                &self
+                    .historical_support_proof
+                    .as_ref()
+                    .unwrap()
+                    .face_sketches,
+            ) {
+                Ok(state) => {
+                    if let Some(proof) = self.historical_support_proof.as_mut().filter(|proof| {
+                        std::sync::Arc::ptr_eq(&proof.scene, &self.solids.scene_snapshot())
+                    }) {
+                        proof.support_state = state;
+                    }
+                }
+                Err(_) => self.historical_support_proof = None,
+            }
+        }
         Ok(self.document_dto())
     }
 
@@ -504,6 +537,7 @@ impl SketchManager {
             project_intents: Vec::new(),
             pending_project: None,
             pending_joint_body_deletion: None,
+            historical_support_proof: None,
         };
         candidate.sketch_count = candidate
             .sketch_count
@@ -4334,6 +4368,7 @@ impl SketchManager {
             .commit(request.transaction_id, request.scene)
             .map_err(|error| SessionError::Solid(error.to_string()))?
             .clone();
+        self.historical_support_proof = None;
         if issued_scene
             .as_ref()
             .is_some_and(|prior| prior.bodies != scene.bodies || prior.errors != scene.errors)
@@ -4514,6 +4549,27 @@ impl SketchManager {
             }
         }
 
+        // Only successful authoritative native replay can issue reusable proof.
+        // Serialization is a conservative equality fence, not persisted authority:
+        // any covered-prefix input change requires fresh kernel verification.
+        if let Some(verified) = verified_supports {
+            let face_sketches = self
+                .finished
+                .iter()
+                .filter_map(|finished| {
+                    matches!(finished.session.plane(), PlaneRef::PlanarFace { .. })
+                        .then_some(finished.feature_id)
+                })
+                .collect();
+            if let Ok(support_state) = self.historical_support_state(&face_sketches) {
+                self.historical_support_proof = Some(HistoricalSupportProof {
+                    scene: self.solids.scene_snapshot(),
+                    support_state,
+                    verified: verified.clone(),
+                    face_sketches,
+                });
+            }
+        }
         Ok(SolidUpdateDto {
             document: self.document_dto(),
             scene,
@@ -5091,14 +5147,93 @@ impl SketchManager {
             .collect()
     }
 
+    /// Exact inputs through the last covered face sketch. Appending unrelated
+    /// history or allocating/canceling a transaction cannot change this prefix.
+    /// A changed prefix or committed scene still requires native verification.
+    fn historical_support_state(
+        &self,
+        scope: &BTreeSet<FeatureId>,
+    ) -> Result<String, serde_json::Error> {
+        let through = self
+            .document
+            .features()
+            .features
+            .iter()
+            .rposition(|feature| scope.contains(&feature.id))
+            .map_or(0, |index| index + 1);
+        let features = self
+            .document
+            .features()
+            .features
+            .iter()
+            .take(through)
+            .collect::<Vec<_>>();
+        let ids = features
+            .iter()
+            .map(|feature| feature.id)
+            .collect::<BTreeSet<_>>();
+        macro_rules! prefix_definitions {
+            ($definitions:expr) => {
+                $definitions
+                    .iter()
+                    .filter(|definition| ids.contains(&definition.feature_id))
+                    .collect::<Vec<_>>()
+            };
+        }
+        serde_json::to_string(&(
+            features,
+            self.finished
+                .iter()
+                .filter(|finished| ids.contains(&finished.feature_id))
+                .map(|finished| finished.session.project_state(finished.feature_id))
+                .collect::<Vec<_>>(),
+            prefix_definitions!(&self.datum_planes),
+            prefix_definitions!(self.solids.definitions()),
+            prefix_definitions!(self.solids.revolve_definitions()),
+            prefix_definitions!(self.solids.sweep_definitions()),
+            prefix_definitions!(self.solids.loft_definitions()),
+            prefix_definitions!(self.solids.rib_definitions()),
+            prefix_definitions!(self.solids.fillet_definitions()),
+            prefix_definitions!(self.solids.chamfer_definitions()),
+            prefix_definitions!(self.solids.hole_definitions()),
+            self.solids
+                .body_feature_definitions()
+                .iter()
+                .filter(|definition| ids.contains(&definition.feature_id()))
+                .collect::<Vec<_>>(),
+        ))
+    }
+
+    fn current_historical_support_proof(&self) -> Option<&HistoricalSupportProof> {
+        self.historical_support_proof.as_ref().filter(|proof| {
+            self.pending_project.is_none()
+                && std::sync::Arc::ptr_eq(&proof.scene, &self.solids.scene_snapshot())
+                && self
+                    .historical_support_state(&proof.face_sketches)
+                    .is_ok_and(|state| state == proof.support_state)
+        })
+    }
+
     fn validate_active_sketch_references(&self) -> Result<(), SessionError> {
         let active = self.active_feature_ids();
+        let proof = self.current_historical_support_proof();
         for finished in &self.finished {
             if !active.contains(&finished.feature_id) {
                 continue;
             }
             if let PlaneRef::PlanarFace { face_id } = finished.session.plane() {
-                if !self.solids.has_face(face_id) {
+                let covered = self
+                    .historical_support_proof
+                    .as_ref()
+                    .is_some_and(|prior| prior.face_sketches.contains(&finished.feature_id));
+                // Cached authority applies only to sketches covered by that replay.
+                // New face sketches still need an actual face in the current scene.
+                let broken = if covered {
+                    proof.is_none_or(|proof| !proof.verified.contains(&finished.feature_id))
+                } else {
+                    !self.solids.has_face(face_id)
+                };
+                if broken {
                     return Err(SessionError::BrokenReference(format!(
                         "face {} used by {} no longer exists",
                         face_id.0,

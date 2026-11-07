@@ -862,6 +862,7 @@ fn check_mcp_provenance(source: &Value) -> Result<()> {
             "native geometry must survive MCP failure after successful native lint, but stop on cancellation"
         );
         requires_command(geometry, "cargo test --locked -p limo-cad-occt --features native-occt --tests -- --test-threads=1")?;
+        requires_command(geometry, "cargo test --locked -p limo-cad-native-engine --features native-occt --test issue536_delete --test issue537 -- --test-threads=1")?;
         ensure!(
             geometry["env"]["CARGO_TARGET_DIR"].as_str()
                 == Some("${{ github.workspace }}/mcp-server/target"),
@@ -1421,6 +1422,22 @@ fn package_gates_reject_dependencies_disabled_commands_and_foreign_artifacts() {
     foreign_artifact["jobs"]["publish_release"]["steps"][download_index]["with"]["run-id"] =
         Value::String("1234".into());
     assert!(check_package_gates(&foreign_artifact).is_err());
+}
+
+#[test]
+fn historical_topology_regressions_execute_on_macos() {
+    let native = workflow(".github/workflows/native-host-tests.yml");
+    let (_, step) = named_step(
+        &native["jobs"]["macos-native-host-tests"],
+        "Test historical topology regressions",
+    )
+    .unwrap();
+    assert!(step["if"].is_null() && step["continue-on-error"].is_null());
+    assert_eq!(
+        step["env"]["CARGO_TARGET_DIR"].as_str(),
+        Some("${{ github.workspace }}/desktop/target")
+    );
+    requires_command(step, "cargo test --locked -p limo-cad-native-engine --features native-occt --test issue536_delete --test issue537 -- --test-threads=1").unwrap();
 }
 
 #[test]
