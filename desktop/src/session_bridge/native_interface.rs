@@ -411,9 +411,11 @@ impl SessionBridgeState {
                 next_revision,
                 operation,
             )?;
-            let value = if operation == "drawing_set_document" {
+            // Native drawing commands share the owner fence and history without
+            // becoming public MCP inbox operations.
+            let value = if matches!(operation, "drawing_set_document" | "drawing_drafting_apply") {
                 super::parse_engine_envelope(engine.engine_call(
-                    "drawing_set_document",
+                    operation,
                     &serde_json::to_string(&arguments).map_err(|error| error.to_string())?,
                 ))?
             } else {
