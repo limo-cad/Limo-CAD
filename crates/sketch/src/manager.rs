@@ -150,6 +150,8 @@ pub struct SketchManager {
     /// Armed only for an explicit history deletion. Rollback and ordinary
     /// recompute can hide a body temporarily and must retain assembly joints.
     pending_joint_body_deletion: Option<(u64, BTreeSet<BodyId>)>,
+    /// History inserted by a not-yet-committed new solid operation.
+    pending_new_solid_history: Option<(u64, limo_cad_core::FeatureTree)>,
     /// Runtime-only native proof, scoped to this manager's exact committed state.
     historical_support_proof: Option<HistoricalSupportProof>,
 }
@@ -243,6 +245,7 @@ impl SketchManager {
             project_intents: Vec::new(),
             pending_project: None,
             pending_joint_body_deletion: None,
+            pending_new_solid_history: None,
             historical_support_proof: None,
         }
     }
@@ -537,6 +540,7 @@ impl SketchManager {
             project_intents: Vec::new(),
             pending_project: None,
             pending_joint_body_deletion: None,
+            pending_new_solid_history: None,
             historical_support_proof: None,
         };
         candidate.sketch_count = candidate
@@ -3643,6 +3647,7 @@ impl SketchManager {
             &BTreeSet<FeatureId>,
         ) -> Result<RecomputePlanDto, limo_cad_solid::SolidError>,
     {
+        let original_history = self.document.features().clone();
         let insertion_index = self
             .document
             .features()
@@ -3667,6 +3672,7 @@ impl SketchManager {
         match prepare(&mut self.solids, &catalog, &active) {
             Ok(plan) => {
                 self.document.features_mut().insert_at_rollback(feature);
+                self.pending_new_solid_history = Some((plan.transaction_id, original_history));
                 Ok(plan)
             }
             Err(error) => {
@@ -4275,6 +4281,24 @@ impl SketchManager {
         }
         self.solids.cancel_pending(transaction_id);
         if self
+            .pending_new_solid_history
+            .as_ref()
+            .is_some_and(|(id, _)| *id == transaction_id)
+        {
+            let (_, history) = self.pending_new_solid_history.take().unwrap();
+            let order = history
+                .features
+                .iter()
+                .map(|feature| feature.id)
+                .collect::<Vec<_>>();
+            // The matching pending transaction has just been canceled. No fallible
+            // geometry work occurs while restoring its previous ordered history.
+            self.solids
+                .set_feature_order(&order)
+                .expect("canceled solid transaction is idle");
+            *self.document.features_mut() = history;
+        }
+        if self
             .pending_joint_body_deletion
             .as_ref()
             .is_some_and(|(pending_id, _)| *pending_id == transaction_id)
@@ -4363,11 +4387,20 @@ impl SketchManager {
                     && !sheet.views.is_empty()
             }))
         .then(|| self.solids.scene_snapshot());
-        let scene = self
-            .solids
-            .commit(request.transaction_id, request.scene)
-            .map_err(|error| SessionError::Solid(error.to_string()))?
-            .clone();
+        let scene = match self.solids.commit(request.transaction_id, request.scene) {
+            Ok(scene) => scene.clone(),
+            Err(error) => {
+                self.cancel_solid_recompute(request.transaction_id);
+                return Err(SessionError::Solid(error.to_string()));
+            }
+        };
+        if self
+            .pending_new_solid_history
+            .as_ref()
+            .is_some_and(|(id, _)| *id == request.transaction_id)
+        {
+            self.pending_new_solid_history = None;
+        }
         self.historical_support_proof = None;
         if issued_scene
             .as_ref()

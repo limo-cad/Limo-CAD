@@ -1504,6 +1504,27 @@ impl NativeEngineHost {
         ) -> Result<RecomputePlanDto, limo_cad_sketch::SessionError>,
         reject_prepare: impl FnOnce(String) -> String,
     ) -> String {
+        self.execute_with_kernel(prepare, reject_prepare, OcctKernel::recompute_with_supports)
+    }
+
+    fn execute_with_kernel(
+        &self,
+        prepare: impl FnOnce(
+            &mut SketchManager,
+        ) -> Result<RecomputePlanDto, limo_cad_sketch::SessionError>,
+        reject_prepare: impl FnOnce(String) -> String,
+        recompute: impl FnOnce(
+            &mut OcctKernel,
+            &RecomputePlanDto,
+            &[limo_cad_solid::HistorySupportQuery],
+        ) -> Result<
+            (
+                limo_cad_solid::KernelSceneDto,
+                BTreeSet<limo_cad_core::FeatureId>,
+            ),
+            limo_cad_occt::OcctError,
+        >,
+    ) -> String {
         let mut workspace = self.inner.lock().expect("engine lock poisoned");
         let session_id = workspace.active_session_id.clone();
         let inner = workspace.active_mut();
@@ -1515,7 +1536,7 @@ impl NativeEngineHost {
         };
         let transaction_id = plan.transaction_id;
         let queries = inner.manager.history_support_queries();
-        let (kernel_scene, verified) = match inner.kernel.recompute_with_supports(&plan, &queries) {
+        let (kernel_scene, verified) = match recompute(&mut inner.kernel, &plan, &queries) {
             Ok(scene) => scene,
             Err(error) => {
                 inner.manager.cancel_solid_recompute(transaction_id);
@@ -1755,6 +1776,94 @@ mod tests {
         envelope["value"].clone()
     }
 
+    #[test]
+    fn failed_kernel_after_planning_restores_history_export_and_retry() {
+        let state = NativeEngineHost::new();
+        value(state.engine_call("begin_sketch", r#"{"type":"origin_plane","plane":"xy"}"#));
+        value(state.engine_call(
+            "add_rectangle",
+            r#"{"mode":"two_point","p1":{"x":0,"y":0},"p2":{"x":10,"y":10},"ctrl_held":false}"#,
+        ));
+        value(state.engine_call("end_sketch", ""));
+        for _ in 0..2 {
+            value(state.solid_extrude(r#"{"sketch_name":"Sketch1","profile_indices":[0],"operation":"new_body","extent":{"type":"distance","distance":10},"target_body_ids":[]}"#));
+        }
+        let before = serde_json::to_value(state.document_snapshot()).unwrap();
+        let scene = state.solid_scene_snapshot();
+        let model = state.project_model_projection().unwrap();
+        let stl = state
+            .export_stl(&serde_json::json!({"expected_model_json":model}).to_string())
+            .unwrap();
+        let request:BodyFeatureRequestDto=serde_json::from_value(serde_json::json!({"type":"combine","request":{"target_body_id":2,"tool_body_ids":[1],"operation":"cut","keep_tools":true}})).unwrap();
+        let reply = state.execute_with_kernel(
+            |manager| manager.prepare_body_feature(request),
+            err_json,
+            |_, plan, _| {
+                assert!(plan
+                    .jobs
+                    .iter()
+                    .any(|job| matches!(job, limo_cad_solid::KernelJobDto::Combine(_))));
+                Err(limo_cad_occt::OcctError(
+                    "injected result triangulation failure after history insertion".into(),
+                ))
+            },
+        );
+        let reply: serde_json::Value = serde_json::from_str(&reply).unwrap();
+        assert_eq!(reply["ok"], false);
+        assert!(reply["error"]
+            .as_str()
+            .unwrap()
+            .contains("injected result triangulation"));
+        assert_eq!(
+            serde_json::to_value(state.document_snapshot()).unwrap(),
+            before
+        );
+        assert!(Arc::ptr_eq(&scene, &state.solid_scene_snapshot()));
+        let after = state.project_model_projection().unwrap();
+        assert_eq!(
+            state
+                .export_stl(&serde_json::json!({"expected_model_json":after}).to_string())
+                .unwrap(),
+            stl
+        );
+        let saved = state.project_snapshot().unwrap();
+        let archive = limo_cad_project_file::ProjectArchive::new(
+            saved.model_json().to_owned(),
+            limo_cad_project_file::SaveMetadata {
+                application_version: "0.3.0-rc.3",
+                saved_at: "2026-11-07T00:00:00Z",
+            },
+        )
+        .unwrap();
+        let cold = NativeEngineHost::new();
+        value(
+            cold.project_load_snapshot(
+                &limo_cad_project_file::ProjectArchive::decode(archive.encode().unwrap())
+                    .unwrap()
+                    .snapshot()
+                    .unwrap(),
+            ),
+        );
+        assert_eq!(
+            cold.document_snapshot().features.len(),
+            before["features"].as_array().unwrap().len()
+        );
+        value(state.solid_recompute());
+        value(state.solid_body_feature(r#"{"type":"combine","request":{"target_body_id":2,"tool_body_ids":[1],"operation":"join","keep_tools":true}}"#));
+        assert_eq!(
+            state.document_snapshot().features.len(),
+            before["features"].as_array().unwrap().len() + 1
+        );
+        assert!(state.solid_scene_snapshot().errors.is_empty());
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&state.project_model_projection().unwrap())
+                .unwrap()["body_features"]
+                .as_array()
+                .unwrap()
+                .len(),
+            1
+        );
+    }
     #[test]
     fn rejected_project_prepare_marks_unchanged_and_preserves_native_export() {
         let state = NativeEngineHost::new();
