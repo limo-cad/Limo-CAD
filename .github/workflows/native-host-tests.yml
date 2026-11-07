@@ -606,6 +606,11 @@ jobs:
       - name: Test concurrent first-use OCCT projection
         run: cargo test --locked -p limo-cad-occt --features native-occt --test concurrent_drawing_init
 
+      - name: Test historical topology regressions
+        env:
+          CARGO_TARGET_DIR: ${{ github.workspace }}/desktop/target
+        run: cargo test --locked -p limo-cad-native-engine --features native-occt --lib --test issue536_delete --test issue537 -- --test-threads=1
+
       - name: Lint every native target and feature
         run: cargo clippy --locked --manifest-path desktop/Cargo.toml --all-targets --all-features --no-deps -- -D warnings
       - name: Test the native Bevy host
