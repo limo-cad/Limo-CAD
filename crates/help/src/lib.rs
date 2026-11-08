@@ -9,6 +9,8 @@
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap, HashSet};
 
+pub mod lessons;
+
 /// Default search hit count.
 pub const SEARCH_DEFAULT_LIMIT: usize = 5;
 /// Hard max search hits.
@@ -57,6 +59,8 @@ pub struct GetResult {
     pub related_recipes: Vec<String>,
     pub status: String,
     pub truncated: bool,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub demonstrations: Vec<lessons::Id>,
 }
 
 /// Pluggable full-text backend. v1 = BM25; scale path = Tantivy behind same trait.
@@ -281,7 +285,11 @@ impl HelpStore {
 
     /// Load the embedded knowledge corpus with BM25.
     pub fn bundled() -> Self {
-        let catalog = Catalog::from_pages(embedded_pages());
+        let catalog = Catalog::from_pages(
+            embedded_pages()
+                .into_iter()
+                .chain(lessons::ALL.into_iter().map(|id| lessons::page("en", id))),
+        );
         let index = Box::new(Bm25Index::build(&catalog));
         Self { catalog, index }
     }
@@ -319,7 +327,23 @@ impl HelpStore {
             related_recipes: page.related_recipes.clone(),
             status: page.status.clone(),
             truncated,
+            demonstrations: lessons::from_help(id).into_iter().collect(),
         })
+    }
+
+    /// Operation Help is authored by the same localized catalog as the demos.
+    pub fn get_localized(&self, id: &str, language: &str) -> Result<GetResult, String> {
+        if !lessons::LOCALES.contains(&language) {
+            return Err("Unsupported help language".into());
+        }
+        let mut result = self.get(id)?;
+        if let Some(lesson) = lessons::from_help(id) {
+            let page = lessons::page(language, lesson);
+            result.title = page.title;
+            result.description = page.description;
+            (result.body, result.truncated) = truncate_utf8(&page.body, GET_MAX_BYTES);
+        }
+        Ok(result)
     }
 
     pub fn topics(&self, offset: Option<usize>) -> serde_json::Value {

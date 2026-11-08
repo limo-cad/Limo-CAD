@@ -14,13 +14,43 @@ pub(crate) fn input(
     handle: &NativeInterfaceHandle,
     event: &NativeHostInput,
 ) -> Result<bool, String> {
-    if !world
-        .get_resource::<Files>()
-        .is_some_and(|files| files.scripts && files.script.preview.open)
-    {
+    if !world.get_resource::<Files>().is_some_and(|files| {
+        (files.scripts || files.script.preview.contextual()) && files.script.preview.open
+    }) {
         return Ok(false);
     }
+    if feature::help_input(world, handle, event)? {
+        return Ok(true);
+    }
     if let WindowEvent::KeyboardInput(key) = &event.event {
+        if key.state == ButtonState::Pressed
+            && key.logical_key == Key::Escape
+            && !event.modifiers.ctrl
+            && !event.modifiers.meta
+            && !event.modifiers.alt
+            && !event.modifiers.shift
+            && handle.focused_key().is_some_and(|key| {
+                world
+                    .get::<NativeCommandBinding>(Entity::from_bits(key.0))
+                    .is_some_and(|binding| {
+                        matches!(
+                            binding.command,
+                            NativeCommand::File(FileCommand::ScriptPreview(_))
+                        )
+                    })
+            })
+            && handle
+                .presented_pointer_context()
+                .is_some_and(|(owner, modal_empty, _)| {
+                    modal_empty && event.context.as_ref() == Some(&owner)
+                })
+        {
+            crate::native_viewport::winit_host::cancel_native_pointer(world, handle);
+            let preview = &world.resource::<Files>().script.preview;
+            let action = escape_action(preview.steps_open, preview.help);
+            command(world, handle, action, &ControlInput::Click)?;
+            return Ok(true);
+        }
         let preview_focused = handle.focused_key().is_some_and(|key| {
             world
                 .get::<NativeCommandBinding>(Entity::from_bits(key.0))
@@ -130,8 +160,7 @@ pub(crate) fn input(
         return Ok(false);
     }
     let preview = &mut world.resource_mut::<Files>().script.preview;
-    preview.playing = false;
-    preview.wake = None;
+    preview.pause();
     preview.drag = Some(Drag {
         owner: action.context,
         start: cursor,
@@ -139,12 +168,222 @@ pub(crate) fn input(
         pitch: preview.pitch,
         moved: false,
     });
+    handle.request_redraw();
     Ok(false)
+}
+
+fn escape_action(steps_open: bool, instructions_open: bool) -> Action {
+    if steps_open {
+        Action::Steps
+    } else if instructions_open {
+        Action::Help
+    } else {
+        Action::Close
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn guided_example_escape_collapses_instructions_before_closing() {
+        assert_eq!(escape_action(false, true), Action::Help);
+        assert_eq!(escape_action(true, true), Action::Steps);
+        assert_eq!(escape_action(false, false), Action::Close);
+    }
+
+    #[test]
+    fn native_script_preview_escape_dismisses_steps_before_closing_lesson() {
+        use bevy::input::keyboard::{KeyCode, KeyboardInput};
+        let (mut app, handle, entity, _) = interface_shell::tests::fixture();
+        initialize(
+            app.world_mut(),
+            Arc::new(Mutex::new(DocumentWorkspace::default())),
+        );
+        app.world_mut().resource_mut::<Files>().scripts = true;
+        {
+            let preview = &mut app.world_mut().resource_mut::<Files>().script.preview;
+            preview.open = true;
+            preview.steps_open = true;
+            preview.lesson = Some(lesson::Id::Fillet);
+            preview.retained = Some(
+                Retained::new(
+                    preview.service.clone(),
+                    vec![Frame {
+                        caption: "fillet.body".into(),
+                        scene: serde_json::from_value(json!({"bodies":[],"errors":[]})).unwrap(),
+                        ..default()
+                    }],
+                )
+                .unwrap(),
+            );
+        }
+        bind_command(
+            app.world_mut(),
+            entity,
+            NativeCommand::File(FileCommand::ScriptPreview(Action::Steps)),
+        )
+        .unwrap();
+        app.update();
+        assert!(handle.focus_next(false).unwrap());
+        let event = NativeHostInput {
+            ui_scale: 1.,
+            event: WindowEvent::KeyboardInput(KeyboardInput {
+                key_code: KeyCode::Escape,
+                logical_key: Key::Escape,
+                text: None,
+                state: ButtonState::Pressed,
+                repeat: false,
+                window: Entity::PLACEHOLDER,
+            }),
+            context: handle.presented_context(),
+            cursor: None,
+            consumed: false,
+            modifiers: default(),
+            actions: vec![],
+        };
+        assert!(input(app.world_mut(), &handle, &event).unwrap());
+        let preview = &app.world().resource::<Files>().script.preview;
+        assert!(preview.open && !preview.steps_open && preview.steps_return_focus);
+        assert!(preview.focus_owner.is_some());
+        feature::focus_control(app.world_mut(), entity);
+        assert_eq!(
+            handle.focused_key(),
+            Some(limo_cad_interface::ControlKey(entity.to_bits()))
+        );
+        assert!(app
+            .world()
+            .resource::<Files>()
+            .script
+            .preview
+            .focus_owner
+            .is_none());
+        assert!(input(app.world_mut(), &handle, &event).unwrap());
+        assert!(!app.world().resource::<Files>().script.preview.open);
+    }
+
+    #[test]
+    fn native_script_preview_navigation_cancels_drag_before_later_pointer_motion() {
+        use interface_shell::{PointerButton, PointerPhase};
+
+        let (mut app, handle, entity, _) = interface_shell::tests::fixture();
+        initialize(
+            app.world_mut(),
+            Arc::new(Mutex::new(DocumentWorkspace::default())),
+        );
+        {
+            let files = &mut app.world_mut().resource_mut::<Files>();
+            files.scripts = true;
+            files.script.preview.open = true;
+        }
+        bind_command(
+            app.world_mut(),
+            entity,
+            NativeCommand::File(FileCommand::ScriptPreview(Action::Model)),
+        )
+        .unwrap();
+        app.update();
+        let owner = handle.presented_context().unwrap();
+        let event = |event, cursor| NativeHostInput {
+            ui_scale: 1.,
+            event,
+            cursor: Some(cursor),
+            context: Some(owner.clone()),
+            consumed: false,
+            modifiers: default(),
+            actions: vec![],
+        };
+        let bounds = handle
+            .read_surface(|_, surface| {
+                surface
+                    .controls
+                    .iter()
+                    .find(|control| control.key.0 == entity.to_bits())
+                    .unwrap()
+                    .bounds
+            })
+            .unwrap();
+        let point = Vec2::new(
+            (bounds.x + bounds.width / 2.) as f32,
+            (bounds.y + bounds.height / 2.) as f32,
+        );
+        for action in [
+            Action::Help,
+            Action::Demo,
+            Action::Previous,
+            Action::Next,
+            Action::Replay,
+            Action::Stop,
+            Action::Fit,
+            Action::Left,
+            Action::Right,
+            Action::Up,
+            Action::Down,
+            Action::Close,
+        ] {
+            let pressed = event(
+                WindowEvent::MouseButtonInput(bevy::input::mouse::MouseButtonInput {
+                    window: Entity::PLACEHOLDER,
+                    button: MouseButton::Left,
+                    state: ButtonState::Pressed,
+                }),
+                point,
+            );
+            input(app.world_mut(), &handle, &pressed).unwrap();
+            assert!(handle
+                .pointer(
+                    PointerPhase::Down,
+                    point.as_dvec2().to_array(),
+                    PointerButton::Primary
+                )
+                .unwrap());
+            assert!(app
+                .world()
+                .resource::<Files>()
+                .script
+                .preview
+                .drag
+                .is_some());
+            command(app.world_mut(), &handle, action, &ControlInput::Click).unwrap();
+            assert!(app
+                .world()
+                .resource::<Files>()
+                .script
+                .preview
+                .drag
+                .is_none());
+            let preview = &app.world().resource::<Files>().script.preview;
+            let camera = (preview.yaw, preview.pitch);
+            let moved = point + Vec2::new(20., 10.);
+            assert!(!input(
+                app.world_mut(),
+                &handle,
+                &event(
+                    WindowEvent::CursorMoved(bevy::window::CursorMoved {
+                        window: Entity::PLACEHOLDER,
+                        position: moved,
+                        delta: None,
+                    }),
+                    moved,
+                ),
+            )
+            .unwrap());
+            let preview = &app.world().resource::<Files>().script.preview;
+            assert_eq!((preview.yaw, preview.pitch), camera);
+            handle
+                .pointer(
+                    PointerPhase::Up,
+                    point.as_dvec2().to_array(),
+                    PointerButton::Primary,
+                )
+                .unwrap();
+            assert!(
+                handle.take_actions().unwrap().is_empty(),
+                "A canceled drag must not activate its former model control on release"
+            );
+        }
+    }
 
     #[test]
     fn native_script_preview_drag_obeys_presented_not_pending_modal_without_turning_after_cancel() {
