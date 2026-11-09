@@ -307,7 +307,10 @@ pub(super) fn synchronize(
                     .find(|(kind, _)| *kind == item.kind)
                     .map_or(item.kind.as_str(), |(_, label)| label.as_str());
                 (
-                    format!("{} · {kind} {}", item.sketch, item.entity),
+                    format!(
+                        "{}:{} · {kind} · {}",
+                        item.source.feature.0, item.entity, item.sketch
+                    ),
                     Command::Add {
                         generation,
                         source: item.source,
@@ -468,7 +471,7 @@ mod tests {
         assert_eq!(world.resource::<Panel>().widgets.entity("row-0"), Some(row));
         let control = world.get::<InterfaceControl>(row).unwrap();
         assert_ne!(control.binding, first);
-        assert!(control.label.ends_with('8'));
+        assert!(control.label.starts_with("1:8 ·"));
         editor.projection = None;
         synchronize(&mut world, camera, &editor, canvas).unwrap();
         assert_eq!(world.query::<&InterfaceControl>().iter(&world).count(), 0);

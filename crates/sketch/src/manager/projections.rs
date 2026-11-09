@@ -65,6 +65,12 @@ impl SketchManager {
             .basis();
         let mut sources = Vec::new();
         for finished in &self.finished {
+            // Loaded model names can exceed interactive rename limits. Do not
+            // duplicate an unbounded name into every source choice.
+            let mut name: String = finished.session.name().chars().take(80).collect();
+            if finished.session.name().chars().nth(80).is_some() {
+                name.push('…');
+            }
             for (entity, geometry) in finished.session.sketch().entities() {
                 if matches!(geometry, crate::Entity::Point { .. }) {
                     continue;
@@ -82,7 +88,7 @@ impl SketchManager {
                         crate::Entity::Spline { .. } => "spline",
                         _ => unreachable!(),
                     };
-                    sources.push(serde_json::json!({"source":source,"sketch":finished.session.name(),"kind":kind,"entity":entity.0}));
+                    sources.push(serde_json::json!({"source":source,"sketch":&name,"kind":kind,"entity":entity.0}));
                 }
                 if sources.len() >= 512 {
                     break;
@@ -394,6 +400,36 @@ mod tests {
         let points = &target.dto().projected_edges[0].points;
         assert!(points[0].distance(expected.0) < 1e-8);
         assert!(points[1].distance(expected.1) < 1e-8);
+    }
+
+    #[test]
+    fn projection_source_choices_bound_loaded_names_without_changing_identity() {
+        let (mut manager, source, _) = fixture();
+        manager.end_sketch().unwrap();
+        let mut model: serde_json::Value =
+            serde_json::from_str(&manager.export_project_model().unwrap()).unwrap();
+        let name = "源草图".repeat(4096);
+        model["sketches"][0]["name"] = name.clone().into();
+        model["document"]["history"]["features"][0]["name"] = name.clone().into();
+        let mut reopened = SketchManager::new();
+        let plan = reopened.prepare_load_project(model.to_string()).unwrap();
+        reopened
+            .commit_solid(CommitKernelRequest {
+                transaction_id: plan.transaction_id,
+                scene: KernelSceneDto::default(),
+            })
+            .unwrap();
+        reopened.edit_sketch("Sketch2").unwrap();
+        let choices = reopened.projection_sources().unwrap();
+        assert_eq!(
+            choices["sources"][0]["source"],
+            serde_json::to_value(source).unwrap()
+        );
+        let display = choices["sources"][0]["sketch"].as_str().unwrap();
+        assert_eq!(display.chars().count(), 81);
+        assert!(display.ends_with('…'));
+        assert!(choices.to_string().len() < 1024);
+        assert_eq!(reopened.finished[0].session.name(), name);
     }
 
     fn fixture() -> (SketchManager, SketchCurveRef, EntityId) {

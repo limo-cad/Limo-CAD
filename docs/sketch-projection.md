@@ -24,7 +24,8 @@ The picker is scoped to the current document, sketch, engine revision and picker
 generation. Changing the document or sketch retires its choices. MCP uses the same
 commands: `sketch_projection_sources`, `sketch_project`, `sketch_projections`, and
 `sketch_projection_remove`. Source discovery returns at most 512 choices and each
-target can retain at most 128 references.
+target can retain at most 128 references. Source display names are shortened to
+80 Unicode characters; owning feature/entity IDs remain visible and authoritative.
 
 Project model schema 17 stores source identities and the ID high-water mark. It
 reads older projects; older applications reject the new schema rather than
