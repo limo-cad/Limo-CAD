@@ -39,6 +39,7 @@ mod native_lessons_test;
 mod native_lifecycle_test;
 mod native_mechanism_test;
 mod native_move_test;
+mod native_offset_plane_test;
 mod native_planes_test;
 mod native_platform_test;
 mod native_preferences_test;
