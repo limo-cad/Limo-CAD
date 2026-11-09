@@ -128,6 +128,9 @@ fn run() -> Result<()> {
         "cad-call" => replay::call(args),
         "verify-package-mcp" => package_mcp::run(args),
         "test-mcp" => test_mcp::run(args),
+        // An explicitly revision-checked package in a private owned registry;
+        // unlike managed local tests this must never redeploy the user's CAD.
+        "test-offset-plane" => native_offset_plane_test::run(args),
         "install-mcp" => {
             let options = install_mcp::Options::parse(args)?;
             install_mcp::run(options)
@@ -203,6 +206,7 @@ Commands:
                 Repeat --server-arg for additional executable arguments.
                 --timeout-seconds N bounds each request (default: 120).
                 --desktop also checks default stdio in one owned GUI, save, disconnect and guarded exit.
+  test-offset-plane  Inspect an owned revision-checked package with --server PATH --expected-revision SHA --out EMPTY_DIR
   test-mcp      Run Rust native scenarios: live, controls, native-lifecycle, native-sketch, native-support, native-build, native-refine, native-body, native-pattern, native-view, native-saved-views, native-print-layout, native-print-intent, native-print-modifier, native-print-height, native-bambu-project, native-bambu-repeated, native-thread, native-planes, playback, scripts-workspace, exit, bench, garden-bench, or drawing. Additional
                 arguments pass directly to the selected MCP test/demo driver.
                 Windows OS-input fixtures require xtask's native-control-harness Cargo feature.

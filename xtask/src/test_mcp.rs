@@ -91,9 +91,6 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
     if suite == "native-planes" {
         return crate::native_planes_test::run(args);
     }
-    if suite == "native-offset-plane" {
-        return crate::native_offset_plane_test::run(args);
-    }
     if suite == "native-drawing" {
         return crate::native_drawing_test::run(args);
     }
