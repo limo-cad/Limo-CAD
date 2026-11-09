@@ -85,6 +85,22 @@ impl WasmEngine {
         host::handle(&mut self.manager, "active_sketch", "")
     }
 
+    pub fn sketch_projection_sources(&mut self) -> String {
+        host::handle(&mut self.manager, "sketch_projection_sources", "")
+    }
+
+    pub fn sketch_projections(&mut self) -> String {
+        host::handle(&mut self.manager, "sketch_projections", "")
+    }
+
+    pub fn sketch_project(&mut self, payload: &str) -> String {
+        host::handle(&mut self.manager, "sketch_project", payload)
+    }
+
+    pub fn sketch_projection_remove(&mut self, payload: &str) -> String {
+        host::handle(&mut self.manager, "sketch_projection_remove", payload)
+    }
+
     pub fn profile_catalog(&mut self) -> String {
         host::handle(&mut self.manager, "profile_catalog", "")
     }

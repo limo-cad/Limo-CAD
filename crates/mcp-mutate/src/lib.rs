@@ -499,6 +499,18 @@ pub static MUTATES: &[MutateSpec] = &[
         execution: ExecutionKind::Direct,
     },
     MutateSpec {
+        name: "sketch_project",
+        engine_method: "sketch_project",
+        payload: PayloadKind::Object,
+        execution: ExecutionKind::Direct,
+    },
+    MutateSpec {
+        name: "sketch_projection_remove",
+        engine_method: "sketch_projection_remove",
+        payload: PayloadKind::Object,
+        execution: ExecutionKind::Direct,
+    },
+    MutateSpec {
         name: "sketch_add_line_locked",
         engine_method: "add_line_locked",
         payload: PayloadKind::Object,

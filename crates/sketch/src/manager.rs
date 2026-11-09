@@ -85,6 +85,7 @@ use crate::session::{
 mod print_heights;
 mod print_intent;
 mod print_modifiers;
+mod projections;
 mod retention;
 pub use retention::RetainedSketchSessions;
 
@@ -582,6 +583,7 @@ impl SketchManager {
             .set_feature_order(&feature_order)
             .map_err(|error| SessionError::Solid(error.to_string()))?;
         let active = candidate.active_feature_ids();
+        candidate.refresh_projection_references();
         let catalog = candidate.profile_catalog();
         let plan = candidate
             .solids
@@ -731,6 +733,7 @@ impl SketchManager {
                 .copied()
                 .unwrap_or(usize::MAX)
         });
+        self.refresh_projection_references();
         Ok(EndSketchResult {
             document: self.document_dto(),
         })
@@ -761,11 +764,11 @@ impl SketchManager {
         if self.scene_matches_history_stage(f.feature_id) {
             self.install_support_references(&mut f.session, plane, basis);
         }
-        let dto = f.session.dto();
         self.active_feature_id = Some(f.feature_id);
         self.active = Some(f.session);
         self.active_named_view = None;
-        Ok(dto)
+        self.refresh_projection_references();
+        Ok(self.active.as_ref().unwrap().dto())
     }
 
     pub fn active_snapshot(&self) -> Option<SketchDto> {
@@ -800,6 +803,20 @@ impl SketchManager {
         self.finished
             .iter()
             .filter(|finished| active.contains(&finished.feature_id))
+            .filter(|finished| {
+                finished
+                    .session
+                    .projection_bindings()
+                    .iter()
+                    .all(|binding| {
+                        self.resolve_projection(
+                            finished.feature_id,
+                            finished.session.basis(),
+                            binding,
+                        )
+                        .is_ok()
+                    })
+            })
             .map(|finished| finished.session.profile_catalog(finished.feature_id))
             .collect()
     }
@@ -4489,6 +4506,7 @@ impl SketchManager {
         let active = self.active_feature_ids();
         let datum_errors = self.refresh_datum_planes(&active);
         self.refresh_projected_face_boundaries(&active);
+        self.refresh_projection_references();
         for error in &scene.errors {
             self.document.set_feature_status(
                 error.feature_id,
@@ -4997,6 +5015,23 @@ impl SketchManager {
                 }
             }
         }
+        for (target, session) in self
+            .finished
+            .iter()
+            .map(|finished| (finished.feature_id, &finished.session))
+            .chain(
+                self.active
+                    .iter()
+                    .filter_map(|session| self.active_feature_id.map(|id| (id, session))),
+            )
+        {
+            for binding in session.projection_bindings() {
+                dependencies
+                    .entry(target)
+                    .or_default()
+                    .insert(binding.source.feature);
+            }
+        }
         (dependencies, last_writer)
     }
 
@@ -5048,6 +5083,7 @@ impl SketchManager {
             }
         }
         self.refresh_datum_sketch_bases();
+        self.refresh_projection_references();
         errors
     }
 
@@ -5738,11 +5774,19 @@ impl SketchManager {
     }
 
     pub fn undo(&mut self) -> Result<UndoResult, SessionError> {
-        self.active_mut()?.undo()
+        self.active_mut()?.undo()?;
+        self.refresh_projection_references();
+        Ok(UndoResult {
+            sketch: self.active.as_ref().unwrap().dto(),
+        })
     }
 
     pub fn redo(&mut self) -> Result<UndoResult, SessionError> {
-        self.active_mut()?.redo()
+        self.active_mut()?.redo()?;
+        self.refresh_projection_references();
+        Ok(UndoResult {
+            sketch: self.active.as_ref().unwrap().dto(),
+        })
     }
 }
 

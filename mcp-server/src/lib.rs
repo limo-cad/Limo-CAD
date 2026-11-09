@@ -2448,6 +2448,8 @@ fn is_read_safe_while_attached(name: &str) -> bool {
             | "bambu_project_preview"
             | "solid_export_bambu_project"
             | "sketch_active"
+            | "sketch_projection_sources"
+            | "sketch_projections"
             | "sketch_finished"
             | "sketch_profiles"
             | "sketch_preview_line"
@@ -3553,6 +3555,38 @@ fn build_tool_specs() -> Vec<ToolSpec> {
                 }),
                 &["entity", "distance_text", "cursor"],
             ),
+        ),
+        ToolSpec::direct(
+            "sketch_projection_sources",
+            "List projection sources",
+            "List eligible earlier sketch curves for associative references in the active sketch. Circular sources require parallel planes. Solid topology is not accepted.",
+            "sketch_projection_sources",
+            Payload::Empty,
+            empty_schema(),
+        ),
+        ToolSpec::direct(
+            "sketch_projections",
+            "Inspect sketch projections",
+            "List persistent projection identities and missing-source errors in the active sketch.",
+            "sketch_projections",
+            Payload::Empty,
+            empty_schema(),
+        ),
+        ToolSpec::direct(
+            "sketch_project",
+            "Project sketch curves",
+            "Create associative read-only references to selected earlier sketch curves. Sources are owning feature/entity IDs from sketch_projection_sources. Updates follow source edits; missing sources produce errors without cached-coordinate fallback. One undo entry per batch.",
+            "sketch_project",
+            Payload::Object,
+            object_schema(json!({"sources":{"type":"array","minItems":1,"maxItems":128,"uniqueItems":true,"items":{"type":"object","additionalProperties":false,"required":["feature","entity"],"properties":{"feature":{"type":"integer","minimum":1},"entity":{"type":"integer","minimum":1}}}}}), &["sources"]),
+        ),
+        ToolSpec::direct(
+            "sketch_projection_remove",
+            "Remove sketch projection",
+            "Remove a projection by its target-local ID. Remove constraints that use it first. Undo restores the association.",
+            "sketch_projection_remove",
+            Payload::Object,
+            object_schema(json!({"id":{"type":"integer","minimum":1,"maximum":65536}}), &["id"]),
         ),
         ToolSpec::direct(
             "sketch_trim",
@@ -5306,6 +5340,8 @@ fn records_in_script(name: &str) -> bool {
             | "cad_await_apply"
             | "cad_session_status"
             | "sketch_active"
+            | "sketch_projection_sources"
+            | "sketch_projections"
             | "sketch_finished"
             | "sketch_profiles"
             | "solid_scene"

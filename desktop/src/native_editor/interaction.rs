@@ -287,6 +287,7 @@ pub(super) fn execute(
     validate: impl FnOnce() -> Result<(), String>,
 ) -> Result<Value, String> {
     bridge.with_native_document_owner(engine, owner, validate)?;
+    editor.projection = None;
     if matches!(command, InteractionCommand::EditDimension(id) if annotations::editing_dimension(editor, id))
     {
         // Repeated activation belongs to the same retained edit: restore its

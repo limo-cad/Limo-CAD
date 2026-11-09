@@ -549,6 +549,10 @@ pub fn tags_for_tool(name: &str) -> (FocusPack, bool) {
         | "sketch_active"
         | "sketch_finished"
         | "sketch_profiles"
+        | "sketch_projection_sources"
+        | "sketch_projections"
+        | "sketch_project"
+        | "sketch_projection_remove"
         | "sketch_add_line"
         | "sketch_add_line_locked"
         | "sketch_add_midpoint_line"
@@ -962,6 +966,10 @@ mod tests {
             "sketch_finished",
             "sketch_profiles",
             "sketch_add_line",
+            "sketch_projection_sources",
+            "sketch_projections",
+            "sketch_project",
+            "sketch_projection_remove",
             "sketch_add_line_locked",
             "sketch_add_midpoint_line",
             "sketch_add_point",

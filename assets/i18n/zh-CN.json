@@ -1,4 +1,21 @@
 {
+  "projection": {
+    "title": "投影",
+    "instruction": "选择较早草图中的曲线。参考随源曲线更新；圆形曲线需要平行平面。",
+    "add": "添加",
+    "references": "参考",
+    "close": "关闭",
+    "previous": "上一页",
+    "next": "下一页",
+    "noReferences": "此草图没有投影参考。",
+    "noSources": "没有可用的早期曲线。请先完成源草图。",
+    "missing": "源已丢失",
+    "remove": "移除",
+    "line": "直线",
+    "arc": "圆弧",
+    "circle": "圆",
+    "spline": "样条"
+  },
   "namedViews": {
     "activate": "激活视图",
     "edit": "编辑已保存的视图 {name}",
@@ -426,6 +443,7 @@
       "simulateNc": "NC 仿真"
     },
     "sketch": {
+      "project": "投影",
       "line": "直线",
       "midpointLine": "中点直线",
       "rectangle": "矩形",
