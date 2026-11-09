@@ -325,6 +325,77 @@ mod tests {
             .contains("too many contact segments"));
     }
 
+    #[test]
+    fn projection_load_rebuilds_chains_from_sources_with_shuffled_records() {
+        let (mut manager, source, _) = fixture();
+        manager
+            .project_curves(ProjectCurvesRequest {
+                sources: vec![source],
+            })
+            .unwrap();
+        manager
+            .set_grid_snap(crate::SetGridSnapRequest { enabled: true })
+            .unwrap();
+        let line = manager
+            .active_mut()
+            .unwrap()
+            .add_line(Vec2::new(3., 22. / 7.), Vec2::new(3., 10.), false)
+            .unwrap();
+        let middle = SketchCurveRef {
+            feature: manager.active_feature_id.unwrap(),
+            entity: line.entity_id,
+        };
+        assert!(line
+            .sketch
+            .constraints
+            .iter()
+            .any(|constraint| matches!(constraint.constraint, Constraint::ReferenceOnEdge { .. })));
+        manager.end_sketch().unwrap();
+        manager
+            .begin_sketch(PlaneRef::OriginPlane {
+                plane: OriginPlane::Xy,
+            })
+            .unwrap();
+        manager
+            .project_curves(ProjectCurvesRequest {
+                sources: vec![middle],
+            })
+            .unwrap();
+        manager.end_sketch().unwrap();
+        let mut model: serde_json::Value =
+            serde_json::from_str(&manager.export_project_model().unwrap()).unwrap();
+        let sketches = model["sketches"].as_array_mut().unwrap();
+        for entry in sketches[0]["snapshot"]["entities"].as_array_mut().unwrap() {
+            if entry[1]["type"] == "point" {
+                let y = entry[1]["position"]["y"].as_f64().unwrap();
+                entry[1]["position"]["y"] = (y + 5.).into();
+            }
+        }
+        sketches.reverse();
+        let mut reopened = SketchManager::new();
+        reopened.prepare_load_project(model.to_string()).unwrap();
+        let candidate = &reopened.pending_project.as_ref().unwrap().manager;
+        let middle_session = &candidate
+            .finished
+            .iter()
+            .find(|finished| finished.feature_id == middle.feature)
+            .unwrap()
+            .session;
+        let expected = middle_session
+            .sketch()
+            .resolved_line(middle.entity)
+            .unwrap();
+        let target = &candidate
+            .finished
+            .iter()
+            .find(|finished| finished.session.name() == "Sketch3")
+            .unwrap()
+            .session;
+        let points = &target.dto().projected_edges[0].points;
+        assert!(points[0].distance(expected.0) < 1e-8);
+        assert!(points[1].distance(expected.1) < 1e-8);
+    }
+
     fn fixture() -> (SketchManager, SketchCurveRef, EntityId) {
         let mut manager = SketchManager::new();
         let plane = PlaneRef::OriginPlane {
