@@ -387,3 +387,132 @@ pub(super) fn synchronize(
     world.insert_resource(panel);
     result
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app_preferences::Locale;
+    use limo_cad_core::FeatureId;
+    use limo_cad_sketch::EntityId;
+
+    fn editor() -> Editor {
+        Editor {
+            stamp: Some(Stamp {
+                owner: DocumentContext {
+                    window_id: "projection-test".into(),
+                    document_id: "owned-scratch".into(),
+                    epoch: 1,
+                },
+                revision: 7,
+                sketch: Some("Sketch2".into()),
+                basis: None,
+            }),
+            projection: Some(Picker {
+                generation: 3,
+                sources: (1..=30)
+                    .map(|id| Source {
+                        source: SketchCurveRef {
+                            feature: FeatureId(1),
+                            entity: EntityId(id),
+                        },
+                        sketch: "Sketch1".into(),
+                        kind: "line".into(),
+                        entity: id,
+                    })
+                    .collect(),
+                references: vec![],
+                existing: false,
+                start: 0,
+            }),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn projection_picker_retires_on_every_owner_revision_or_sketch_change() {
+        for change in 0..4 {
+            let mut editor = editor();
+            let mut stamp = editor.stamp.clone().unwrap();
+            match change {
+                0 => stamp.owner.epoch += 1,
+                1 => stamp.owner.document_id = "other".into(),
+                2 => stamp.revision += 1,
+                _ => stamp.sketch = Some("Sketch3".into()),
+            }
+            assert!(synchronize_stamp(&mut editor, stamp));
+            assert!(editor.projection.is_none());
+        }
+        let mut editor = editor();
+        let stamp = editor.stamp.clone().unwrap();
+        assert!(!synchronize_stamp(&mut editor, stamp));
+        assert!(editor.projection.is_some());
+    }
+
+    #[test]
+    fn projection_picker_rebinds_paged_rows_and_retires_all_controls() {
+        let mut world = World::new();
+        world.init_resource::<ViewportUiAssets>();
+        let camera = world.spawn_empty().id();
+        let mut editor = editor();
+        let canvas = InterfaceRect {
+            x: 64.,
+            y: 120.,
+            width: 800.,
+            height: 500.,
+        };
+        synchronize(&mut world, camera, &editor, canvas).unwrap();
+        let row = world.resource::<Panel>().widgets.entity("row-0").unwrap();
+        let first = world.get::<InterfaceControl>(row).unwrap().binding;
+        editor.projection.as_mut().unwrap().start = 7;
+        synchronize(&mut world, camera, &editor, canvas).unwrap();
+        assert_eq!(world.resource::<Panel>().widgets.entity("row-0"), Some(row));
+        let control = world.get::<InterfaceControl>(row).unwrap();
+        assert_ne!(control.binding, first);
+        assert!(control.label.ends_with('8'));
+        editor.projection = None;
+        synchronize(&mut world, camera, &editor, canvas).unwrap();
+        assert_eq!(world.query::<&InterfaceControl>().iter(&world).count(), 0);
+    }
+
+    #[test]
+    fn projection_controls_fit_minimum_scaled_canvas_in_four_locales() {
+        let pixels = |value| match value {
+            Val::Px(value) => value,
+            _ => panic!("Expected pixels"),
+        };
+        for locale in [Locale::En, Locale::Es, Locale::De, Locale::ZhCn] {
+            for scale in [1., 1.75] {
+                let mut world = World::new();
+                world.init_resource::<ViewportUiAssets>();
+                localization::set_locale(&mut world, locale);
+                let camera = world.spawn_empty().id();
+                let editor = editor();
+                let canvas = InterfaceRect {
+                    x: 64.,
+                    y: 120.,
+                    width: 1200. / scale - 76.,
+                    height: 760. / scale - 168.,
+                };
+                synchronize(&mut world, camera, &editor, canvas).unwrap();
+                for (control, node) in world.query::<(&InterfaceControl, &Node)>().iter(&world) {
+                    assert!(
+                        pixels(node.left) >= canvas.x as f32 && pixels(node.top) >= canvas.y as f32,
+                        "{}",
+                        control.label
+                    );
+                    assert!(
+                        pixels(node.left) + pixels(node.width) <= (canvas.x + canvas.width) as f32,
+                        "{}",
+                        control.label
+                    );
+                    assert!(
+                        pixels(node.top) + pixels(node.height) <= (canvas.y + canvas.height) as f32,
+                        "{}",
+                        control.label
+                    );
+                    assert!(!control.label.starts_with("projection."));
+                }
+            }
+        }
+    }
+}

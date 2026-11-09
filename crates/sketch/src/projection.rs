@@ -233,8 +233,11 @@ pub(crate) fn project_sketch_curve(
                 })
                 .collect::<Result<Vec<_>, _>>()?
         }
-        Some(Entity::Spline { points }) if (2..=256).contains(&points.len()) => {
-            crate::geomops::spline::tessellate_spline(points, 16)
+        Some(Entity::Spline { points }) if (2..=250).contains(&points.len()) => {
+            // Profile provenance encodes curve*1000+piece. Stay within that
+            // curve's identity range instead of aliasing the next projection.
+            let per_span = (999 / (points.len() - 1)).min(16);
+            crate::geomops::spline::tessellate_spline(points, per_span)
                 .into_iter()
                 .map(project)
                 .collect::<Result<Vec<_>, _>>()?
@@ -303,6 +306,50 @@ mod tests {
         .unwrap();
         assert_eq!(result.start, Vec2::new(-18., 9.));
         assert_eq!(result.end, Vec2::new(-13., 5.));
+    }
+
+    #[test]
+    fn long_projected_splines_cannot_cross_the_profile_identity_stride() {
+        let (mut sketch, reference, _, basis) = fixture();
+        let binding = ProjectionBinding {
+            id: 7,
+            source: reference,
+        };
+        for count in [65, 250] {
+            *sketch.entity_mut(reference.entity).unwrap() = Entity::Spline {
+                points: (0..count)
+                    .map(|index| Vec2::new(index as f64, (index as f64 * 0.01).sin()))
+                    .collect(),
+            };
+            let result = project_sketch_curve(
+                reference,
+                FeatureId(1),
+                &sketch,
+                &basis,
+                FeatureId(2),
+                &basis,
+                &binding,
+            )
+            .unwrap();
+            assert!(result.points.len() > 2 && result.points.len() <= 1000);
+            assert!((0..result.points.len() - 1)
+                .all(|piece| (result.id * 1000 + piece as u64) / 1000 == result.id));
+        }
+        *sketch.entity_mut(reference.entity).unwrap() = Entity::Spline {
+            points: (0..251).map(|index| Vec2::new(index as f64, 0.)).collect(),
+        };
+        assert_eq!(
+            project_sketch_curve(
+                reference,
+                FeatureId(1),
+                &sketch,
+                &basis,
+                FeatureId(2),
+                &basis,
+                &binding
+            ),
+            Err(ProjectionError::UnsupportedCurve)
+        );
     }
 
     #[test]

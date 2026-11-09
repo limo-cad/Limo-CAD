@@ -980,6 +980,7 @@ pub(crate) fn process_one(
                             return Ok(json!({"handled":true,"closed_measure":true}));
                         }
                         editor.draft.escape();
+                        editor.projection = None;
                         if editor.stamp.as_ref().is_none_or(|stamp| stamp.sketch.is_none()) {
                             solid::clear(world, &presented_owner)?;
                         }

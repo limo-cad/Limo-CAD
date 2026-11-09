@@ -13,7 +13,8 @@ sketch-projection-remove-request = { id: 1..65536 }
 ; Source must be an earlier, unsuppressed, valid sketch in the same document.
 ; Sources resolve by feature/entity identity, never a name or a positional index.
 ; Circular references require parallel planes. Splines use the existing bounded
-; 16-samples-per-span display/profile approximation (2..256 fit points).
+; 4..16 samples per span (2..250 fit points), at most 999 segments per curve,
+; preserving the existing profile segment-identity stride.
 ; Derived geometry is read-only and absent from authored entity/DOF tables.
 ; Missing sources retain intent and an error, remove cached geometry, and block
 ; that sketch's profile catalog. Cached coordinates never repair a missing source.

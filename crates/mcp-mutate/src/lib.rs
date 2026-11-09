@@ -14,6 +14,8 @@ pub fn is_live_engine_query(method: &str) -> bool {
     matches!(
         method,
         "active_sketch"
+            | "sketch_projection_sources"
+            | "sketch_projections"
             | "project_visibility"
             | "named_views"
             | "named_view_solution"
@@ -1307,8 +1309,11 @@ mod tests {
             "fillet_preview",
             "offset_preview",
             "trim_preview",
+            "sketch_projection_sources",
+            "sketch_projections",
         ] {
             assert!(is_live_engine_query(method), "{method}");
+            assert!(is_routed_engine_query(method), "{method}");
             assert!(lookup_mutate(method).is_none(), "{method}");
         }
     }

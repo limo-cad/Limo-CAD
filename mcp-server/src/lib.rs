@@ -12833,75 +12833,101 @@ mod tests {
     #[test]
     fn attached_sketch_reads_use_the_live_engine_without_loading_a_stale_model() {
         let _guard = session::env_lock();
-        let unique = session::test_session_uuid();
-        let dir = std::env::temp_dir().join(format!("limo-cad-live-read-{unique}"));
-        std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
-        write_box_session(&unique);
-        let mut server = CadServer::new().unwrap();
-        server
-            .call_tool("cad_attach", json!({"session_id":unique}))
-            .unwrap();
-        assert!(server.manager.active_snapshot().is_none());
-        let peer = unique.clone();
-        let host = std::thread::spawn(move || {
-            let mut manager = SketchManager::new();
-            parse_engine_envelope(host::handle(
-                &mut manager,
-                "begin_sketch",
-                r#"{"plane":{"type":"origin_plane","plane":"xy"}}"#,
-            ))
-            .unwrap();
-            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
-            loop {
-                if let Ok(entries) =
-                    std::fs::read_dir(session::session_dir().join(&peer).join("controls"))
-                {
-                    for entry in entries.flatten() {
-                        if !entry
-                            .file_name()
-                            .to_string_lossy()
-                            .ends_with(".request.json")
-                        {
-                            continue;
+        for (tool, arguments) in [
+            ("sketch_eval_expression", json!({"text":"1200 / 5"})),
+            ("sketch_projection_sources", json!({})),
+            ("sketch_projections", json!({})),
+        ] {
+            let unique = session::test_session_uuid();
+            let dir = std::env::temp_dir().join(format!("limo-cad-live-read-{unique}"));
+            std::env::set_var("LIMO_CAD_SESSION_DIR", &dir);
+            write_box_session(&unique);
+            let mut server = CadServer::new().unwrap();
+            server
+                .call_tool("cad_attach", json!({"session_id":unique}))
+                .unwrap();
+            assert!(server.manager.active_snapshot().is_none());
+            let peer = unique.clone();
+            let host = std::thread::spawn(move || {
+                let mut manager = SketchManager::new();
+                parse_engine_envelope(host::handle(
+                    &mut manager,
+                    "begin_sketch",
+                    r#"{"plane":{"type":"origin_plane","plane":"xy"}}"#,
+                ))
+                .unwrap();
+                let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+                loop {
+                    if let Ok(entries) =
+                        std::fs::read_dir(session::session_dir().join(&peer).join("controls"))
+                    {
+                        for entry in entries.flatten() {
+                            if !entry
+                                .file_name()
+                                .to_string_lossy()
+                                .ends_with(".request.json")
+                            {
+                                continue;
+                            }
+                            let request: Value = serde_json::from_str(
+                                &std::fs::read_to_string(entry.path()).unwrap(),
+                            )
+                            .unwrap();
+                            let query = &request["sketch_query"];
+                            let method = query["method"].as_str().unwrap();
+                            assert!(limo_cad_mcp_mutate::is_live_engine_query(method));
+                            let value = parse_engine_envelope(host::handle(
+                                &mut manager,
+                                method,
+                                query["payload"].as_str().unwrap(),
+                            ))
+                            .unwrap();
+                            session::write_session(
+                                &peer,
+                                &format!(
+                                    "controls/{}.result.json",
+                                    request["id"].as_str().unwrap()
+                                ),
+                                &json!({"status":"applied","value":value}).to_string(),
+                            )
+                            .unwrap();
+                            return value;
                         }
-                        let request: Value =
-                            serde_json::from_str(&std::fs::read_to_string(entry.path()).unwrap())
-                                .unwrap();
-                        let query = &request["sketch_query"];
-                        let method = query["method"].as_str().unwrap();
-                        assert!(limo_cad_mcp_mutate::is_live_engine_query(method));
-                        let value = parse_engine_envelope(host::handle(
-                            &mut manager,
-                            method,
-                            query["payload"].as_str().unwrap(),
-                        ))
-                        .unwrap();
-                        session::write_session(
-                            &peer,
-                            &format!("controls/{}.result.json", request["id"].as_str().unwrap()),
-                            &json!({"status":"applied","value":value}).to_string(),
-                        )
-                        .unwrap();
-                        return value;
                     }
+                    assert!(std::time::Instant::now() < deadline);
+                    std::thread::sleep(std::time::Duration::from_millis(10));
                 }
-                assert!(std::time::Instant::now() < deadline);
-                std::thread::sleep(std::time::Duration::from_millis(10));
+            });
+            let result = server.call_tool(tool, arguments).unwrap();
+            assert_eq!(result, host.join().unwrap());
+            if tool == "sketch_eval_expression" {
+                assert_eq!(result["value"], 240.0);
             }
-        });
-        let result = server
-            .call_tool("sketch_eval_expression", json!({"text":"1200 / 5"}))
-            .unwrap();
-        assert_eq!(result["value"], host.join().unwrap()["value"]);
-        assert_eq!(result["value"], 240.0);
-        assert!(server.manager.active_snapshot().is_none());
-        for mutate in limo_cad_mcp_mutate::mutate_specs() {
-            assert!(!limo_cad_mcp_mutate::is_live_engine_query(
-                mutate.engine_method
-            ));
+            assert!(server.manager.active_snapshot().is_none());
+            for mutate in limo_cad_mcp_mutate::mutate_specs() {
+                assert!(!limo_cad_mcp_mutate::is_live_engine_query(
+                    mutate.engine_method
+                ));
+            }
+            std::env::remove_var("LIMO_CAD_SESSION_DIR");
+            let _ = std::fs::remove_dir_all(dir);
         }
-        std::env::remove_var("LIMO_CAD_SESSION_DIR");
-        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn projection_tools_share_catalog_mutation_and_live_read_contracts() {
+        for name in [
+            "sketch_projection_sources",
+            "sketch_projections",
+            "sketch_project",
+            "sketch_projection_remove",
+        ] {
+            assert_eq!(interface::group_for(name), Some("sketch/edit"));
+            let read = matches!(name, "sketch_projection_sources" | "sketch_projections");
+            assert_eq!(is_read_safe_while_attached(name), read);
+            assert_eq!(limo_cad_mcp_mutate::is_live_engine_query(name), read);
+            assert_eq!(limo_cad_mcp_mutate::lookup_mutate(name).is_some(), !read);
+        }
     }
 
     #[test]

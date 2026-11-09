@@ -45,6 +45,16 @@ fn projection_native_profile_archive_and_missing_source_are_consistent() {
     let before = host.solid_scene_snapshot();
     assert_eq!(before.bodies.len(), 1);
     assert!(before.errors.is_empty());
+    let before_model = host.project_model_projection().unwrap();
+    let rejected: Value =
+        serde_json::from_str(&host.solid_delete_feature(r#"{"feature_id":1}"#)).unwrap();
+    assert_eq!(rejected["ok"], false);
+    assert!(rejected["error"]
+        .as_str()
+        .unwrap()
+        .contains("projection references"));
+    assert!(Arc::ptr_eq(&before, &host.solid_scene_snapshot()));
+    assert_eq!(host.project_model_projection().unwrap(), before_model);
     let snapshot = host.project_snapshot().unwrap();
     let archive = limo_cad_project_file::ProjectArchive::new(
         snapshot.model_json().to_owned(),
@@ -76,6 +86,12 @@ fn projection_native_profile_archive_and_missing_source_are_consistent() {
         .unwrap()
         .iter()
         .any(|item| item["sketch_name"] == "Sketch2"));
+    value(cold.solid_recompute());
+    assert!(
+        cold.solid_scene_snapshot().bodies.is_empty(),
+        "a broken projection must not retain the former extrusion"
+    );
+    assert!(!cold.solid_scene_snapshot().errors.is_empty());
     value(cold.engine_call("edit_sketch", r#"{"name":"Sketch2"}"#));
     assert!(
         value(cold.engine_call("active_sketch", ""))["projected_edges"]
@@ -86,4 +102,40 @@ fn projection_native_profile_archive_and_missing_source_are_consistent() {
     assert!(
         value(cold.engine_call("sketch_projections", ""))["projections"][0]["error"].is_string()
     );
+}
+
+#[test]
+fn projection_native_long_spline_keeps_every_profile_piece() {
+    let host = NativeEngineHost::new();
+    let plane = r#"{"type":"origin_plane","plane":"xy"}"#;
+    value(host.engine_call("begin_sketch", plane));
+    value(host.engine_call("set_grid_snap", r#"{"enabled":false}"#));
+    let points: Vec<_> = (0..65)
+        .map(|index| {
+            let t = index as f64 / 64.;
+            json!({"x":t*20.,"y":(std::f64::consts::PI*t).sin()*6.})
+        })
+        .collect();
+    value(host.engine_call("add_spline", &json!({"points":points}).to_string()));
+    value(host.engine_call("end_sketch", ""));
+    value(host.engine_call("begin_sketch", plane));
+    let source =
+        value(host.engine_call("sketch_projection_sources", ""))["sources"][0]["source"].clone();
+    let projection =
+        value(host.engine_call("sketch_project", &json!({"sources":[source]}).to_string()));
+    assert!(
+        projection["projected_edges"][0]["points"]
+            .as_array()
+            .unwrap()
+            .len()
+            <= 1000
+    );
+    value(host.engine_call(
+        "add_line",
+        r#"{"from":{"x":20,"y":0},"to_raw":{"x":0,"y":0},"ctrl_held":true}"#,
+    ));
+    value(host.engine_call("end_sketch", ""));
+    value(host.solid_extrude(r#"{"sketch_name":"Sketch2","profile_indices":[0],"operation":"new_body","extent":{"type":"distance","distance":2},"target_body_ids":[]}"#));
+    assert_eq!(host.solid_scene_snapshot().bodies.len(), 1);
+    assert!(host.solid_scene_snapshot().errors.is_empty());
 }

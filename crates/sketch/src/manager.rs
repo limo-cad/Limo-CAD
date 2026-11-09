@@ -4140,6 +4140,17 @@ impl SketchManager {
         request: DeleteFeatureRequest,
     ) -> Result<RecomputePlanDto, SessionError> {
         self.ensure_no_active_sketch("deleting a history feature")?;
+        if self.finished.iter().any(|finished| {
+            finished
+                .session
+                .projection_bindings()
+                .iter()
+                .any(|binding| binding.source.feature == request.feature_id)
+        }) {
+            return Err(SessionError::Solid(
+                "Remove projection references to this feature before deleting it".into(),
+            ));
+        }
         let (index, feature) = self
             .document
             .features()

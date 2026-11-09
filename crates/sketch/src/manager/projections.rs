@@ -526,8 +526,6 @@ mod tests {
             .set_grid_snap(crate::SetGridSnapRequest { enabled: true })
             .unwrap();
         let point = manager
-            .active_mut()
-            .unwrap()
             .add_point(crate::PointRequest {
                 position: Vec2::new(3., 22. / 7.),
                 coincident_with: None,

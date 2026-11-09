@@ -18,6 +18,9 @@ impl SketchSession {
     }
 
     pub(crate) fn all_projection_bindings(&self) -> Vec<ProjectionBinding> {
+        if self.sketch.projection_id_high_water == 0 {
+            return Vec::new();
+        }
         let mut bindings = BTreeMap::new();
         for binding in
             self.projection_bindings()
