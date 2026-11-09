@@ -342,20 +342,32 @@ mod tests {
         manager
             .set_grid_snap(crate::SetGridSnapRequest { enabled: true })
             .unwrap();
+        let point = manager
+            .add_point(crate::PointRequest {
+                position: Vec2::new(3., 22. / 7.),
+                coincident_with: None,
+                ctrl_held: false,
+            })
+            .unwrap();
+        let attached = point.entities[0];
+        assert!(point.sketch.constraints.iter().any(|constraint|matches!(constraint.constraint,Constraint::ReferenceOnEdge{point,..} if point==attached)));
+        let start = manager
+            .active
+            .as_ref()
+            .unwrap()
+            .sketch()
+            .point_position(attached)
+            .unwrap();
         let line = manager
             .active_mut()
             .unwrap()
-            .add_line(Vec2::new(3., 22. / 7.), Vec2::new(3., 10.), false)
+            .add_line(start, Vec2::new(3., 10.), false)
             .unwrap();
+        assert_eq!(line.start_point_id, attached);
         let middle = SketchCurveRef {
             feature: manager.active_feature_id.unwrap(),
             entity: line.entity_id,
         };
-        assert!(line
-            .sketch
-            .constraints
-            .iter()
-            .any(|constraint| matches!(constraint.constraint, Constraint::ReferenceOnEdge { .. })));
         manager.end_sketch().unwrap();
         manager
             .begin_sketch(PlaneRef::OriginPlane {
