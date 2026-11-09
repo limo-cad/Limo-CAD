@@ -6792,17 +6792,23 @@ pub(crate) fn profile_catalog_item(
             _ => vec![],
         })
         .collect::<Vec<_>>();
+    let mut projected_error = None;
     for edge in sketch.projected_edges.iter() {
         debug_assert!(
             edge.id >= PROJECTED_EDGE_ID_BASE,
             "projected boundary ids must use the reserved range"
         );
         let projected_id = edge.id;
-        for (piece, pair) in edge
-            .profile_points(&contacts, PROFILE_TOLERANCE)
-            .windows(2)
-            .enumerate()
-        {
+        let points = edge.profile_points(&contacts, PROFILE_TOLERANCE);
+        // Contact insertion can expand a circular carrier beyond its source
+        // sampling. A piece must never enter a neighboring curve's ID range.
+        if points.len().saturating_sub(1) > SEGMENT_ID_STRIDE as usize {
+            projected_error = Some(
+                "Projected curve has too many contact segments; simplify the sketch".to_owned(),
+            );
+            break;
+        }
+        for (piece, pair) in points.windows(2).enumerate() {
             let a = Point2Dto::new(pair[0].x, pair[0].y);
             let b = Point2Dto::new(pair[1].x, pair[1].y);
             if point2_distance(a, b) <= PROFILE_TOLERANCE {
@@ -6814,7 +6820,9 @@ pub(crate) fn profile_catalog_item(
         }
     }
 
-    let (loops, profile_error) = if segments.is_empty() {
+    let (loops, profile_error) = if let Some(error) = projected_error {
+        (Vec::new(), Some(error))
+    } else if segments.is_empty() {
         (Vec::new(), None)
     } else {
         match extract_bounded_faces(&segments, PROFILE_TOLERANCE, &projected_segments) {

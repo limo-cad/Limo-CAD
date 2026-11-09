@@ -276,6 +276,55 @@ mod tests {
     use limo_cad_core::OriginPlane;
     use limo_cad_solid::{CommitKernelRequest, KernelSceneDto};
 
+    #[test]
+    fn circular_contacts_cannot_cross_projected_segment_identity_ranges() {
+        let (mut manager, source, _) = fixture();
+        manager
+            .project_curves(ProjectCurvesRequest {
+                sources: vec![source],
+            })
+            .unwrap();
+        let mut sketch = manager.active_snapshot().unwrap();
+        let edge = &mut sketch.projected_edges[0];
+        edge.circle = Some(crate::ProjectedCircleDto {
+            center: Vec2::ZERO,
+            radius: 10.,
+            closed: true,
+        });
+        edge.points = (0..=128)
+            .map(|index| {
+                let angle = std::f64::consts::TAU * index as f64 / 128.;
+                Vec2::new(10. * angle.cos(), 10. * angle.sin())
+            })
+            .collect();
+        sketch.entities = (0..1009)
+            .map(|index| {
+                let angle = std::f64::consts::TAU * index as f64 / 1009.;
+                crate::EntityDto::Point {
+                    id: EntityId(index + 1),
+                    position: Vec2::new(10. * angle.cos(), 10. * angle.sin()),
+                    fully_defined: false,
+                }
+            })
+            .collect();
+        sketch.entities.push(crate::EntityDto::Line {
+            id: EntityId(2000),
+            start_id: EntityId(1),
+            end_id: EntityId(2),
+            start: Vec2::new(-10., 0.),
+            end: Vec2::new(10., 0.),
+            fully_defined: false,
+            consumed: false,
+        });
+        let catalog = profile_catalog_item(&sketch, FeatureId(2));
+        assert!(catalog.profiles.is_empty());
+        assert!(catalog
+            .profile_error
+            .as_deref()
+            .unwrap()
+            .contains("too many contact segments"));
+    }
+
     fn fixture() -> (SketchManager, SketchCurveRef, EntityId) {
         let mut manager = SketchManager::new();
         let plane = PlaneRef::OriginPlane {

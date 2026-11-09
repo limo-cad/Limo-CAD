@@ -636,6 +636,7 @@ fn queue_mutation(
                         Completion::Primitive => editor.draft.accepted(&result.value),
                         Completion::Begin | Completion::Finish => {
                             editor.draft.select(None);
+                            editor.projection = None;
                             editor.interaction = Default::default();
                             editor.support = Default::default();
                             Ok(())
