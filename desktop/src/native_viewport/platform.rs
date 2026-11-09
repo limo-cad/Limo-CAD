@@ -698,6 +698,7 @@ pub(super) fn cad_render_plugin() -> RenderPlugin {
 
 /// The application viewport and immutable script previews run these exact systems
 /// in separate worlds. A preview never replaces the live model or camera.
+#[cfg(any(test, feature = "dev-ui-lab"))]
 pub(super) fn install_cad_scene(app: &mut bevy::app::App) {
     install_cad_renderer(app, true);
 }
@@ -3937,8 +3938,8 @@ fn grid_layout(
     }
 }
 
-fn draw_grid_on_basis(
-    gizmos: &mut Gizmos,
+fn draw_grid_on_basis<Config: GizmoConfigGroup>(
+    gizmos: &mut Gizmos<Config>,
     basis: &PlaneBasis,
     layout: GridLayout,
     camera: ViewportCamera,
@@ -5246,12 +5247,24 @@ pub(crate) fn interface_world_point(
     if world.resource::<ModelResource>().session_id != session_id {
         return Err("Native viewport has not bound the requested document".into());
     }
+    let size = world.resource::<ViewportSizeResource>();
+    project_world_point(
+        world.resource::<CameraResource>().camera,
+        [size.logical_width, size.logical_height],
+        point,
+    )
+}
+
+/// Read-only camera projection shared by live and isolated teaching annotations.
+pub(crate) fn project_world_point(
+    camera: ViewportCamera,
+    size: [f32; 2],
+    point: [f64; 3],
+) -> Result<Option<[f32; 2]>, String> {
     if point.iter().any(|value| !value.is_finite()) {
         return Err("World point must be finite".into());
     }
-    let size = world.resource::<ViewportSizeResource>();
-    let viewport = (size.logical_width, size.logical_height);
-    let camera = world.resource::<CameraResource>().camera;
+    let viewport = (size[0], size[1]);
     let Some(basis) = camera_projection(camera, viewport) else {
         return Ok(None);
     };

@@ -1,0 +1,589 @@
+{
+  "$schema": "./limo-cad-script.schema.json",
+  "version": 1,
+  "name": "Loft a tapered transition",
+  "starting_state": "empty",
+  "steps": [
+    {
+      "chapter": "Prepared inputs",
+      "note": "Three concentric rectangular sections are prepared on XY at Z=0, 12 and 24 mm: 20 x 16, 16 x 12 and 10 x 8 mm.",
+      "duration_ms": 1000
+    },
+    {
+      "id": "empty_scene",
+      "call": {
+        "group": "solid/check",
+        "operation": "solid_scene",
+        "arguments": {}
+      }
+    },
+    {
+      "id": "lower_begin",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_begin",
+        "arguments": {
+          "name": "lower",
+          "plane": {
+            "type": "origin_plane",
+            "plane": "xy"
+          }
+        }
+      }
+    },
+    {
+      "call": {
+        "group": "sketch/selection",
+        "operation": "sketch_set_grid_snap",
+        "arguments": {
+          "enabled": false
+        }
+      }
+    },
+    {
+      "id": "lower_rectangle",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_rectangle_locked",
+        "arguments": {
+          "mode": "two_point",
+          "anchor": {
+            "x": -10,
+            "y": -8
+          },
+          "corner_hint": {
+            "x": 10,
+            "y": 8
+          },
+          "width_mm": 20,
+          "height_mm": 16,
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "lower_locate",
+      "call": {
+        "group": "sketch/constrain",
+        "operation": "sketch_add_constraint",
+        "arguments": {
+          "type": "fix",
+          "entity": {
+            "$select": {
+              "from": {
+                "$ref": "lower_rectangle",
+                "pointer": "/sketch"
+              },
+              "path": "/entities",
+              "where": {
+                "/kind": "point",
+                "/position/x": -10,
+                "/position/y": -8
+              },
+              "take": "one",
+              "pointer": "/id"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "lower_finish",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_finish",
+        "arguments": {}
+      }
+    },
+    {
+      "id": "middle_plane",
+      "call": {
+        "group": "solid/reference",
+        "operation": "construction_plane_offset",
+        "arguments": {
+          "name": "middle section plane",
+          "reference": {
+            "type": "origin_plane",
+            "plane": "xy"
+          },
+          "distance": 12
+        }
+      }
+    },
+    {
+      "id": "middle_begin",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_begin",
+        "arguments": {
+          "name": "middle",
+          "plane": {
+            "type": "datum_plane",
+            "datum_id": {
+              "$ref": "middle_plane",
+              "pointer": "/planes/0/datum_id"
+            }
+          }
+        }
+      }
+    },
+    {
+      "call": {
+        "group": "sketch/selection",
+        "operation": "sketch_set_grid_snap",
+        "arguments": {
+          "enabled": false
+        }
+      }
+    },
+    {
+      "id": "middle_rectangle",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_rectangle_locked",
+        "arguments": {
+          "mode": "two_point",
+          "anchor": {
+            "x": -8,
+            "y": -6
+          },
+          "corner_hint": {
+            "x": 8,
+            "y": 6
+          },
+          "width_mm": 16,
+          "height_mm": 12,
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "middle_locate",
+      "call": {
+        "group": "sketch/constrain",
+        "operation": "sketch_add_constraint",
+        "arguments": {
+          "type": "fix",
+          "entity": {
+            "$select": {
+              "from": {
+                "$ref": "middle_rectangle",
+                "pointer": "/sketch"
+              },
+              "path": "/entities",
+              "where": {
+                "/kind": "point",
+                "/position/x": -8,
+                "/position/y": -6
+              },
+              "take": "one",
+              "pointer": "/id"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "middle_finish",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_finish",
+        "arguments": {}
+      }
+    },
+    {
+      "id": "upper_plane",
+      "call": {
+        "group": "solid/reference",
+        "operation": "construction_plane_offset",
+        "arguments": {
+          "name": "upper section plane",
+          "reference": {
+            "type": "origin_plane",
+            "plane": "xy"
+          },
+          "distance": 24
+        }
+      }
+    },
+    {
+      "id": "upper_begin",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_begin",
+        "arguments": {
+          "name": "upper",
+          "plane": {
+            "type": "datum_plane",
+            "datum_id": {
+              "$ref": "upper_plane",
+              "pointer": "/planes/1/datum_id"
+            }
+          }
+        }
+      }
+    },
+    {
+      "call": {
+        "group": "sketch/selection",
+        "operation": "sketch_set_grid_snap",
+        "arguments": {
+          "enabled": false
+        }
+      }
+    },
+    {
+      "id": "upper_rectangle",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_rectangle_locked",
+        "arguments": {
+          "mode": "two_point",
+          "anchor": {
+            "x": -5,
+            "y": -4
+          },
+          "corner_hint": {
+            "x": 5,
+            "y": 4
+          },
+          "width_mm": 10,
+          "height_mm": 8,
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "upper_locate",
+      "call": {
+        "group": "sketch/constrain",
+        "operation": "sketch_add_constraint",
+        "arguments": {
+          "type": "fix",
+          "entity": {
+            "$select": {
+              "from": {
+                "$ref": "upper_rectangle",
+                "pointer": "/sketch"
+              },
+              "path": "/entities",
+              "where": {
+                "/kind": "point",
+                "/position/x": -5,
+                "/position/y": -4
+              },
+              "take": "one",
+              "pointer": "/id"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "upper_finish",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_finish",
+        "arguments": {}
+      }
+    },
+    {
+      "chapter": "Loft",
+      "note": "Connect the lower and middle sections, then include the upper section in order. Ruled sections make a stepped taper with planar side panels.",
+      "duration_ms": 1000
+    },
+    {
+      "id": "preview",
+      "call": {
+        "group": "solid/build",
+        "operation": "solid_loft",
+        "arguments": {
+          "sections": [
+            {
+              "sketch_name": "lower",
+              "profile_index": 0
+            },
+            {
+              "sketch_name": "middle",
+              "profile_index": 0
+            }
+          ],
+          "ruled": true,
+          "operation": "new_body",
+          "target_body_ids": [],
+          "continuity": "g0",
+          "centerline": null,
+          "guide_rail": null
+        }
+      }
+    },
+    {
+      "let": {
+        "lesson_feature": {
+          "$select": {
+            "from": {
+              "$ref": "preview"
+            },
+            "path": "/document/features",
+            "where": {},
+            "take": "last",
+            "pointer": "/id"
+          }
+        }
+      }
+    },
+    {
+      "id": "result",
+      "call": {
+        "group": "solid/build",
+        "operation": "solid_edit_loft",
+        "arguments": {
+          "feature_id": {
+            "$ref": "lesson_feature"
+          },
+          "loft": {
+            "sections": [
+              {
+                "sketch_name": "lower",
+                "profile_index": 0
+              },
+              {
+                "sketch_name": "middle",
+                "profile_index": 0
+              },
+              {
+                "sketch_name": "upper",
+                "profile_index": 0
+              }
+            ],
+            "ruled": true,
+            "operation": "new_body",
+            "target_body_ids": [],
+            "continuity": "g0",
+            "centerline": null,
+            "guide_rail": null
+          }
+        }
+      }
+    }
+  ],
+  "checks": [
+    {
+      "id": "final_scene",
+      "call": {
+        "group": "solid/check",
+        "operation": "solid_scene",
+        "arguments": {}
+      },
+      "expect": {
+        "/errors": []
+      }
+    },
+    {
+      "assert": {
+        "$count": {
+          "$ref": "final_scene",
+          "pointer": "/bodies"
+        }
+      },
+      "equals": 1
+    },
+    {
+      "id": "definitions",
+      "call": {
+        "group": "solid/build",
+        "operation": "solid_loft_definitions",
+        "arguments": {}
+      }
+    },
+    {
+      "assert": {
+        "$count": {
+          "$ref": "definitions"
+        }
+      },
+      "equals": 1
+    },
+    {
+      "assert": {
+        "$ref": "definitions",
+        "pointer": "/0/sections"
+      },
+      "equals": [
+        {
+          "sketch_name": "lower",
+          "profile_index": 0
+        },
+        {
+          "sketch_name": "middle",
+          "profile_index": 0
+        },
+        {
+          "sketch_name": "upper",
+          "profile_index": 0
+        }
+      ]
+    },
+    {
+      "assert": {
+        "$ref": "definitions",
+        "pointer": "/0/ruled"
+      },
+      "equals": true
+    },
+    {
+      "assert": {
+        "$ref": "definitions",
+        "pointer": "/0/continuity"
+      },
+      "equals": "g0"
+    },
+    {
+      "assert": {
+        "$ref": "final_scene",
+        "pointer": "/bodies"
+      },
+      "equals": {
+        "$ref": "result",
+        "pointer": "/scene/bodies"
+      }
+    },
+    {
+      "let": {
+        "transition": {
+          "$select": {
+            "from": {
+              "$ref": "final_scene"
+            },
+            "path": "/bodies",
+            "where": {},
+            "take": "one"
+          }
+        }
+      }
+    },
+    {
+      "assert": {
+        "$count": {
+          "$select": {
+            "from": {
+              "$ref": "transition"
+            },
+            "path": "/faces",
+            "where": {
+              "/plane/normal/2": 1,
+              "/plane/origin/2": 24
+            },
+            "take": "all"
+          }
+        }
+      },
+      "equals": 1
+    }
+  ],
+  "exports": {
+    "lessons": {
+      "loft": [
+        {
+          "caption": "loft.inputs",
+          "scene": {
+            "$ref": "empty_scene"
+          },
+          "cue": "profile",
+          "duration_ms": 1400,
+          "finish": "satin_aluminum",
+          "profile": {
+            "$ref": "lower_locate",
+            "pointer": "/sketch"
+          }
+        },
+        {
+          "caption": "loft.preview",
+          "scene": {
+            "$ref": "preview",
+            "pointer": "/scene"
+          },
+          "cue": "profile",
+          "duration_ms": 1400,
+          "finish": "satin_aluminum",
+          "profile": {
+            "$ref": "upper_locate",
+            "pointer": "/sketch"
+          }
+        },
+        {
+          "caption": "loft.parameter",
+          "scene": {
+            "$ref": "result",
+            "pointer": "/scene"
+          },
+          "cue": "dimension",
+          "duration_ms": 1400,
+          "finish": "satin_aluminum"
+        },
+        {
+          "caption": "loft.apply",
+          "scene": {
+            "$ref": "result",
+            "pointer": "/scene"
+          },
+          "cue": "apply",
+          "duration_ms": 1400,
+          "finish": "satin_aluminum"
+        }
+      ]
+    },
+    "preview_frames": [
+      {
+        "caption": "loft.inputs",
+        "scene": {
+          "$ref": "empty_scene"
+        },
+        "cue": "profile",
+        "duration_ms": 1400,
+        "finish": "satin_aluminum",
+        "profile": {
+          "$ref": "lower_locate",
+          "pointer": "/sketch"
+        }
+      },
+      {
+        "caption": "loft.preview",
+        "scene": {
+          "$ref": "preview",
+          "pointer": "/scene"
+        },
+        "cue": "profile",
+        "duration_ms": 1400,
+        "finish": "satin_aluminum",
+        "profile": {
+          "$ref": "upper_locate",
+          "pointer": "/sketch"
+        }
+      },
+      {
+        "caption": "loft.parameter",
+        "scene": {
+          "$ref": "result",
+          "pointer": "/scene"
+        },
+        "cue": "dimension",
+        "duration_ms": 1400,
+        "finish": "satin_aluminum"
+      },
+      {
+        "caption": "loft.apply",
+        "scene": {
+          "$ref": "result",
+          "pointer": "/scene"
+        },
+        "cue": "apply",
+        "duration_ms": 1400,
+        "finish": "satin_aluminum"
+      }
+    ],
+    "final_scene": {
+      "$ref": "final_scene"
+    }
+  }
+}

@@ -20,3 +20,6 @@ pub use host::{
     PreparedSectionReview, PreparedStepExport, PreparedSweptCollisionReview,
     ResolvedDrawingProjection, SharedDrawingProjection, BOOTSTRAP_SESSION_ID,
 };
+
+#[cfg(feature = "native-occt")]
+pub mod teaching;

@@ -1,0 +1,487 @@
+{
+  "$schema": "./limo-cad-script.schema.json",
+  "version": 1,
+  "name": "Sweep a curved support rod",
+  "starting_state": "empty",
+  "steps": [
+    {
+      "chapter": "Prepared inputs",
+      "note": "A 4 mm circular section on XY and a connected two-arc semicircular path on YZ are prepared. The section crosses the path start at a right angle.",
+      "duration_ms": 1000
+    },
+    {
+      "id": "empty_scene",
+      "call": {
+        "group": "solid/check",
+        "operation": "solid_scene",
+        "arguments": {}
+      }
+    },
+    {
+      "id": "section_begin",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_begin",
+        "arguments": {
+          "name": "section",
+          "plane": {
+            "type": "origin_plane",
+            "plane": "xy"
+          }
+        }
+      }
+    },
+    {
+      "call": {
+        "group": "sketch/selection",
+        "operation": "sketch_set_grid_snap",
+        "arguments": {
+          "enabled": false
+        }
+      }
+    },
+    {
+      "id": "section_circle",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_circle_locked",
+        "arguments": {
+          "mode": "center_diameter",
+          "anchor": {
+            "x": 0,
+            "y": 0
+          },
+          "edge_hint": {
+            "x": 2,
+            "y": 0
+          },
+          "diameter_mm": 4,
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "section_finish",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_finish",
+        "arguments": {}
+      }
+    },
+    {
+      "id": "path_begin",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_begin",
+        "arguments": {
+          "name": "path",
+          "plane": {
+            "type": "origin_plane",
+            "plane": "yz"
+          }
+        }
+      }
+    },
+    {
+      "call": {
+        "group": "sketch/selection",
+        "operation": "sketch_set_grid_snap",
+        "arguments": {
+          "enabled": false
+        }
+      }
+    },
+    {
+      "id": "path_arc_0",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_arc_center",
+        "arguments": {
+          "center": {
+            "x": -20,
+            "y": 0
+          },
+          "start": {
+            "x": 0,
+            "y": 0
+          },
+          "sweep": {
+            "x": -20,
+            "y": 20
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "path_arc_1",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_arc_center",
+        "arguments": {
+          "center": {
+            "x": -20,
+            "y": 0
+          },
+          "start": {
+            "x": -20,
+            "y": 20
+          },
+          "sweep": {
+            "x": -40,
+            "y": 0
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "path_finish",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_finish",
+        "arguments": {}
+      }
+    },
+    {
+      "id": "paths",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_profiles",
+        "arguments": {}
+      }
+    },
+    {
+      "let": {
+        "path_curves": {
+          "$select": {
+            "from": {
+              "$ref": "paths"
+            },
+            "path": "",
+            "where": {
+              "/sketch_name": "path"
+            },
+            "take": "one"
+          }
+        }
+      }
+    },
+    {
+      "let": {
+        "path_ids": {
+          "$select": {
+            "from": {
+              "$ref": "path_curves"
+            },
+            "path": "/path_curves",
+            "where": {
+              "/kind": "arc"
+            },
+            "take": "all",
+            "pointer": "/entity_id"
+          }
+        }
+      }
+    },
+    {
+      "assert": {
+        "$count": {
+          "$ref": "path_ids"
+        }
+      },
+      "equals": 2
+    },
+    {
+      "chapter": "Sweep",
+      "note": "Use the first arc for a quarter-turn preview, then include both connected arcs to make a semicircular support rod.",
+      "duration_ms": 1000
+    },
+    {
+      "id": "preview",
+      "call": {
+        "group": "solid/build",
+        "operation": "solid_sweep",
+        "arguments": {
+          "profile": {
+            "sketch_name": "section",
+            "profile_index": 0
+          },
+          "path_sketch_name": "path",
+          "path_entity_ids": [
+            {
+              "$ref": "path_ids",
+              "pointer": "/0"
+            }
+          ],
+          "operation": "new_body",
+          "target_body_ids": [],
+          "guide_rail": null,
+          "orientation": "corrected_frenet",
+          "transition": "round_corner",
+          "force_c1": true
+        }
+      }
+    },
+    {
+      "let": {
+        "lesson_feature": {
+          "$select": {
+            "from": {
+              "$ref": "preview"
+            },
+            "path": "/document/features",
+            "where": {},
+            "take": "last",
+            "pointer": "/id"
+          }
+        }
+      }
+    },
+    {
+      "id": "result",
+      "call": {
+        "group": "solid/build",
+        "operation": "solid_edit_sweep",
+        "arguments": {
+          "feature_id": {
+            "$ref": "lesson_feature"
+          },
+          "sweep": {
+            "profile": {
+              "sketch_name": "section",
+              "profile_index": 0
+            },
+            "path_sketch_name": "path",
+            "path_entity_ids": {
+              "$ref": "path_ids"
+            },
+            "operation": "new_body",
+            "target_body_ids": [],
+            "guide_rail": null,
+            "orientation": "corrected_frenet",
+            "transition": "round_corner",
+            "force_c1": true
+          }
+        }
+      }
+    }
+  ],
+  "checks": [
+    {
+      "id": "final_scene",
+      "call": {
+        "group": "solid/check",
+        "operation": "solid_scene",
+        "arguments": {}
+      },
+      "expect": {
+        "/errors": []
+      }
+    },
+    {
+      "assert": {
+        "$count": {
+          "$ref": "final_scene",
+          "pointer": "/bodies"
+        }
+      },
+      "equals": 1
+    },
+    {
+      "id": "definitions",
+      "call": {
+        "group": "solid/build",
+        "operation": "solid_sweep_definitions",
+        "arguments": {}
+      }
+    },
+    {
+      "assert": {
+        "$count": {
+          "$ref": "definitions"
+        }
+      },
+      "equals": 1
+    },
+    {
+      "assert": {
+        "$ref": "definitions",
+        "pointer": "/0/path_entity_ids"
+      },
+      "equals": {
+        "$ref": "path_ids"
+      }
+    },
+    {
+      "assert": {
+        "$ref": "definitions",
+        "pointer": "/0/profile"
+      },
+      "equals": {
+        "sketch_name": "section",
+        "profile_index": 0
+      }
+    },
+    {
+      "assert": {
+        "$ref": "definitions",
+        "pointer": "/0/orientation"
+      },
+      "equals": "corrected_frenet"
+    },
+    {
+      "assert": {
+        "$ref": "definitions",
+        "pointer": "/0/transition"
+      },
+      "equals": "round_corner"
+    },
+    {
+      "assert": {
+        "$ref": "definitions",
+        "pointer": "/0/force_c1"
+      },
+      "equals": true
+    },
+    {
+      "assert": {
+        "$ref": "final_scene",
+        "pointer": "/bodies"
+      },
+      "equals": {
+        "$ref": "result",
+        "pointer": "/scene/bodies"
+      }
+    },
+    {
+      "let": {
+        "swept_rod": {
+          "$select": {
+            "from": {
+              "$ref": "final_scene"
+            },
+            "path": "/bodies",
+            "where": {},
+            "take": "one"
+          }
+        }
+      }
+    },
+    {
+      "assert": {
+        "$count": {
+          "$select": {
+            "from": {
+              "$ref": "swept_rod"
+            },
+            "path": "/faces",
+            "where": {
+              "/plane/normal/2": -1,
+              "/plane/origin/2": 0
+            },
+            "take": "all"
+          }
+        }
+      },
+      "equals": 2
+    }
+  ],
+  "exports": {
+    "lessons": {
+      "sweep": [
+        {
+          "caption": "sweep.inputs",
+          "scene": {
+            "$ref": "empty_scene"
+          },
+          "cue": "profile",
+          "duration_ms": 1400,
+          "finish": "satin_aluminum",
+          "profile": {
+            "$ref": "path_arc_1",
+            "pointer": "/sketch"
+          }
+        },
+        {
+          "caption": "sweep.preview",
+          "scene": {
+            "$ref": "preview",
+            "pointer": "/scene"
+          },
+          "cue": "profile",
+          "duration_ms": 1400,
+          "finish": "satin_aluminum"
+        },
+        {
+          "caption": "sweep.parameter",
+          "scene": {
+            "$ref": "result",
+            "pointer": "/scene"
+          },
+          "cue": "dimension",
+          "duration_ms": 1400,
+          "finish": "satin_aluminum"
+        },
+        {
+          "caption": "sweep.apply",
+          "scene": {
+            "$ref": "result",
+            "pointer": "/scene"
+          },
+          "cue": "apply",
+          "duration_ms": 1400,
+          "finish": "satin_aluminum"
+        }
+      ]
+    },
+    "preview_frames": [
+      {
+        "caption": "sweep.inputs",
+        "scene": {
+          "$ref": "empty_scene"
+        },
+        "cue": "profile",
+        "duration_ms": 1400,
+        "finish": "satin_aluminum",
+        "profile": {
+          "$ref": "path_arc_1",
+          "pointer": "/sketch"
+        }
+      },
+      {
+        "caption": "sweep.preview",
+        "scene": {
+          "$ref": "preview",
+          "pointer": "/scene"
+        },
+        "cue": "profile",
+        "duration_ms": 1400,
+        "finish": "satin_aluminum"
+      },
+      {
+        "caption": "sweep.parameter",
+        "scene": {
+          "$ref": "result",
+          "pointer": "/scene"
+        },
+        "cue": "dimension",
+        "duration_ms": 1400,
+        "finish": "satin_aluminum"
+      },
+      {
+        "caption": "sweep.apply",
+        "scene": {
+          "$ref": "result",
+          "pointer": "/scene"
+        },
+        "cue": "apply",
+        "duration_ms": 1400,
+        "finish": "satin_aluminum"
+      }
+    ],
+    "final_scene": {
+      "$ref": "final_scene"
+    }
+  }
+}

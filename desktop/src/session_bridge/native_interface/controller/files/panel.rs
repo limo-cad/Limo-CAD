@@ -548,7 +548,7 @@ pub(crate) fn synchronize(
             None,
             picker,
         )?;
-        let available = ((width - 286.) / 192.).floor().max(1.) as usize;
+        let available = ((width - 358.) / 192.).floor().max(1.) as usize;
         let active = tabs.iter().position(|t| t.active).unwrap_or(0);
         let start = active.saturating_sub(available - 1);
         for (offset, tab) in tabs.iter().skip(start).take(available).enumerate() {
@@ -1428,6 +1428,19 @@ pub(crate) fn synchronize(
             )?;
         }
         let presence = limo_cad_mcp::desktop_mcp_presence();
+        let help =
+            limo_cad_mcp::lessons::text(dictionary::code(localization::locale(world)), "ui.help");
+        state.chrome.button(
+            world,
+            camera,
+            "help",
+            InterfaceControl::button("document/session", help),
+            Some(help),
+            NativeCommand::File(FileCommand::ScriptPreview(scripts::PreviewAction::Index)),
+            node(width - 290., 0., 72., 28.),
+            Some(interface_shell::ribbon::Icon::Book),
+            42,
+        )?;
         let (mcp_label, mcp_selected) = match presence {
             limo_cad_mcp::DesktopMcpPresence::Attached => ("MCP attached", Some(true)),
             limo_cad_mcp::DesktopMcpPresence::Waiting => ("MCP waiting", None),
@@ -1474,7 +1487,10 @@ pub(crate) fn synchronize(
             Some(interface_shell::ribbon::Icon::Book),
             42,
         )?;
-        if world.resource::<Files>().scripts {
+        let preview = &world.resource::<Files>().script.preview;
+        if preview.open && preview.contextual() {
+            scripts::paint_preview(world, camera, &mut state.chrome, width, height, theme)?;
+        } else if world.resource::<Files>().scripts {
             paint_scripts((world, camera), &mut state, width, height, theme)?;
         }
         state.chrome.finish(world);
