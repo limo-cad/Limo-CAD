@@ -36,6 +36,7 @@ pub use named_view_history::normalize_named_view_history_ids;
 mod params;
 mod plane;
 mod profile_identity;
+pub mod projection;
 mod project;
 pub use project::PROJECT_SCHEMA_VERSION;
 mod session;
