@@ -572,3 +572,95 @@ fn staged_intents_obey_count_and_expanded_archive_limits() {
     assert!(archive.encode_bounded(MAX_FILE_BYTES, 1000).is_err());
     assert!(archive.encode().is_ok());
 }
+
+#[test]
+fn caller_decode_limits_reject_stored_and_expanded_content() {
+    let archive = ProjectArchive::new(model(14), metadata()).unwrap();
+    let bytes = archive.encode().unwrap();
+    let size = bytes.len() as u64;
+    assert!(
+        ProjectArchive::decode_with_limits(bytes.clone(), size - 1, MAX_EXPANDED_BYTES).is_err()
+    );
+    let error = ProjectArchive::decode_with_limits(bytes.clone(), size, 1)
+        .err()
+        .unwrap()
+        .to_string();
+    assert!(error.contains("expanded project"), "{error}");
+    let retained =
+        ProjectArchive::decode_with_limits(bytes.clone(), size, MAX_EXPANDED_BYTES).unwrap();
+    assert_eq!(retained.encode().unwrap(), bytes);
+    assert!(ProjectArchive::decode_with_limits(bytes, u64::MAX, u64::MAX).is_ok());
+}
+
+#[test]
+fn caller_entry_limits_report_the_exact_bound_without_large_payloads() {
+    let archive = ProjectArchive::new(model(14), metadata()).unwrap();
+    let bytes = archive.encode().unwrap();
+    let mut zip = ZipArchive::new(Cursor::new(&bytes)).unwrap();
+    let limit = archive.model_json().len() as u64 - 1;
+    let failure = read_entry(&mut zip, "model.json", limit)
+        .unwrap_err()
+        .to_string();
+    assert_eq!(
+        failure,
+        format!("expanded project exceeds the {limit} byte safety limit")
+    );
+    let size = archive.model_json().len() as u64;
+    assert_eq!(
+        read_entry(&mut zip, "model.json", size).unwrap(),
+        archive.model_json()
+    );
+}
+
+#[test]
+fn caller_expanded_encode_limits_cover_model_retained_and_staged_payloads() {
+    let base = ProjectArchive::new(model(14), metadata()).unwrap();
+    let base_size = serde_json::to_vec_pretty(base.manifest()).unwrap().len() as u64
+        + 1
+        + base.model_json().len() as u64;
+    let retained_bytes = fixture(
+        base.manifest(),
+        base.model_json().as_bytes(),
+        &[("preview.png", b"retained")],
+    );
+    let retained = ProjectArchive::decode(retained_bytes).unwrap();
+    let mut staged = base.clone();
+    staged
+        .set_intent("intent/small.cbor", Some(vec![1; 8]))
+        .unwrap();
+    for (archive, limit) in [
+        (&base, base_size - 1),
+        (&retained, base_size + 7),
+        (&staged, base_size + 7),
+    ] {
+        let failure = archive
+            .encode_bounded(MAX_FILE_BYTES, limit)
+            .unwrap_err()
+            .to_string();
+        assert_eq!(
+            failure,
+            format!("expanded project exceeds the {limit} byte safety limit")
+        );
+        assert!(
+            archive.encode().is_ok(),
+            "A failed bounded save must retain the original candidate"
+        );
+    }
+    assert!(base.encode_bounded(MAX_FILE_BYTES, base_size).is_ok());
+    assert!(retained
+        .encode_bounded(MAX_FILE_BYTES, base_size + 8)
+        .is_ok());
+    assert!(staged.encode_bounded(MAX_FILE_BYTES, base_size + 8).is_ok());
+}
+
+#[test]
+fn caller_archive_write_limit_reports_the_actual_bound_and_does_not_append() {
+    let mut output = BoundedOutput {
+        cursor: Cursor::new(Vec::new()),
+        limit: 7,
+    };
+    output.write_all(b"1234567").unwrap();
+    let failure = output.write_all(b"8").unwrap_err().to_string();
+    assert_eq!(failure, "project archive exceeds the 7 byte safety limit");
+    assert_eq!(output.cursor.into_inner(), b"1234567");
+}
