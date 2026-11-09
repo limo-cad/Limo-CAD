@@ -12898,7 +12898,14 @@ mod tests {
                     std::thread::sleep(std::time::Duration::from_millis(10));
                 }
             });
-            let result = server.call_tool(tool, arguments).unwrap();
+            let mut result = server.call_tool(tool, arguments).unwrap();
+            let disclosure = result
+                .as_object_mut()
+                .unwrap()
+                .remove("_disclosure")
+                .unwrap();
+            assert_eq!(disclosure["pack"], "sketch");
+            assert_eq!(disclosure["advertised"], true);
             assert_eq!(result, host.join().unwrap());
             if tool == "sketch_eval_expression" {
                 assert_eq!(result["value"], 240.0);
