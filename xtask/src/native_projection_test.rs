@@ -63,6 +63,30 @@ fn focused(state: &Value, label: &str) -> bool {
     controls(state).any(|v| v["id"] == state["ui"]["focused_control"] && v["label"] == label)
 }
 
+fn scaled_minimum_client(state: &Value) -> bool {
+    [("width", 1200.), ("height", 760.)]
+        .into_iter()
+        .all(|(axis, physical)| {
+            state["ui"]["client"][axis]
+                .as_f64()
+                .is_some_and(|actual| actual.is_finite() && (actual * 1.75 - physical).abs() < 1.)
+        })
+}
+
+fn minimum_capture(c: &mut Client, out: &Path, name: &str) -> Result<()> {
+    let captured = ui(
+        c,
+        json!({"action":"capture","path":out.join(format!("{name}.png"))}),
+    )?;
+    ensure!(
+        captured["value"]["width"].as_u64() == Some(1200)
+            && captured["value"]["height"].as_u64() == Some(760),
+        "Native minimum PNG dimensions disagree: {}",
+        captured["value"]
+    );
+    Ok(())
+}
+
 fn tab_to(c: &mut Client, label: &str) -> Result<()> {
     // Traverse actual retained ribbon/menu/picker controls, never a fabricated pair.
     let mut visited = Vec::new();
@@ -168,7 +192,11 @@ fn exercise(c: &mut Client, out: &Path, config: &Path) -> Result<Value> {
         "Preview changed authored sketch"
     );
     shot(c, out, "01-preview", &mut recording)?;
-    key(c, "Escape")?;
+    let cancelled = key(c, "Escape")?;
+    ensure!(
+        !controls(&cancelled).any(|v| v["surface"] == "sketch/projection"),
+        "OS Escape did not close the Projection picker"
+    );
     ensure!(
         active(c)? == before && count(c)? == 0,
         "OS Escape changed sketch"
@@ -234,23 +262,18 @@ fn exercise(c: &mut Client, out: &Path, config: &Path) -> Result<Value> {
         let deadline = Instant::now() + Duration::from_secs(10);
         let state = loop {
             let state = ui(c, json!({"action":"inspect"}))?;
-            if controls(&state)
-                .any(|v| v["surface"] == "sketch/projection" && v["label"] == confirm)
+            if scaled_minimum_client(&state)
+                && controls(&state)
+                    .any(|v| v["surface"] == "sketch/projection" && v["label"] == confirm)
             {
                 break state;
             }
             ensure!(Instant::now() < deadline, "Locale did not settle: {locale}");
             std::thread::sleep(Duration::from_millis(50));
         };
-        ensure!(
-            state["ui"]["client"]["width"].as_f64() == Some(1200.)
-                && state["ui"]["client"]["height"].as_f64() == Some(760.),
-            "Minimum native client not applied: {}",
-            state["ui"]["client"]
-        );
-        capture(c, out, &format!("locale-{locale}-minimum"))?;
+        minimum_capture(c, out, &format!("locale-{locale}-minimum"))?;
         control(c, next, None)?;
-        capture(c, out, &format!("locale-{locale}-minimum-next"))?;
+        minimum_capture(c, out, &format!("locale-{locale}-minimum-next"))?;
         control(c, previous, None)?;
         layouts.push(json!({"locale":locale,"client":state["ui"]["client"],"scale":1.75}));
     }
@@ -333,4 +356,24 @@ pub(super) fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
         serde_json::to_vec_pretty(&report)?,
     )?;
     checked.map(|_| ())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn minimum_layout_waits_for_real_scaled_client_coordinates() {
+        assert!(scaled_minimum_client(
+            &json!({"ui":{"client":{"width":1200./1.75,"height":760./1.75}}})
+        ));
+        for client in [
+            json!({"width":1200.,"height":760.}),
+            json!({"width":1360./1.75,"height":860./1.75}),
+            json!({"width":1200./1.75}),
+            json!({"width":null,"height":760./1.75}),
+        ] {
+            assert!(!scaled_minimum_client(&json!({"ui":{"client":client}})));
+        }
+    }
 }
