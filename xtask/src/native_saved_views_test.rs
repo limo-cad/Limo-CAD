@@ -13,7 +13,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-mod recording;
+pub(super) mod recording;
 
 fn recorded_capture(
     c: &mut Client,
@@ -83,7 +83,7 @@ fn preferences(config: &Path, locale: &str, scale: f64) -> Result<()> {
     Ok(())
 }
 
-fn minimum_window(c: &Client) -> Result<()> {
+pub(super) fn minimum_window(c: &Client) -> Result<()> {
     crate::linux_fixture::verify_private_display()?;
     let read =
         |command: &mut Command| crate::linux_fixture::output(command, Duration::from_secs(5));

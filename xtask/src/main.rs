@@ -47,6 +47,7 @@ mod native_print_intent_test;
 mod native_print_layout_test;
 mod native_print_modifier_test;
 mod native_profile_export_test;
+mod native_projection_test;
 mod native_refine_test;
 mod native_saved_views_test;
 mod native_sketch_test;
