@@ -314,12 +314,16 @@ mod tests {
     #[test]
     fn projection_preview_does_not_allocate_bindings_or_history() {
         let (mut manager, source, _) = fixture();
-        let before = manager.export_project_model().unwrap();
+        let state = |manager: &SketchManager| {
+            serde_json::to_value((manager.document_dto(), manager.active_snapshot().unwrap()))
+                .unwrap()
+        };
+        let before = state(&manager);
         let undo = manager.active.as_ref().unwrap().can_undo();
         let next = manager.active.as_ref().unwrap().next_projection_id();
         let edge = manager.projection_preview(source).unwrap();
         assert!(!edge.points.is_empty());
-        assert_eq!(manager.export_project_model().unwrap(), before);
+        assert_eq!(state(&manager), before);
         assert_eq!(manager.active.as_ref().unwrap().can_undo(), undo);
         assert_eq!(manager.active.as_ref().unwrap().next_projection_id(), next);
         assert!(manager
@@ -328,7 +332,7 @@ mod tests {
                 ..source
             })
             .is_err());
-        assert_eq!(manager.export_project_model().unwrap(), before);
+        assert_eq!(state(&manager), before);
         manager
             .project_curves(ProjectCurvesRequest {
                 sources: vec![source],
