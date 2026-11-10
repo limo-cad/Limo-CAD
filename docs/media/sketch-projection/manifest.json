@@ -71,7 +71,7 @@
                                            "delay_ms":  2500
                                        }
                                    ],
-                        "gif_sha256":  "24ccc14421d04931f30ffce1307de816cb2cd7648bf1627befb7d11806a5f036",
+                        "gif_sha256":  "57be1b71a79f7a571a58634a960f5cd1c355113f48f7dab0f47c6bcd41ff78f2",
                         "gif_bytes":  4091280,
                         "decoded_frames":  10
                     },
@@ -114,7 +114,7 @@
                   {
                       "name":  "projection-checkpoints.gif",
                       "bytes":  4091280,
-                      "sha256":  "24ccc14421d04931f30ffce1307de816cb2cd7648bf1627befb7d11806a5f036"
+                      "sha256":  "57be1b71a79f7a571a58634a960f5cd1c355113f48f7dab0f47c6bcd41ff78f2"
                   }
               ],
     "binary_bytes":  7504666
