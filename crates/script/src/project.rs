@@ -1,9 +1,15 @@
 //! Explicit project-backed replay. Baseline data and document ownership remain
 //! with the host; this module orders preflight, baseline commit and normal steps.
-use crate::{run_steps, RunOptions, RunProgress, Script};
+use crate::evaluation::ExecutionHost;
+use crate::{run_steps, EvaluationLimits, RunOptions, RunProgress, Script};
 use serde_json::Value;
 
 pub trait ProjectReplayHost {
+    /// Cooperative cancellation/deadline check, also used during bounded data
+    /// evaluation when no CAD operation runs. It must be cheap and nonblocking.
+    fn checkpoint(&mut self) -> Result<(), String> {
+        Ok(())
+    }
     /// Check catalog membership/availability without mutating the document.
     fn validate_call(&mut self, group: &str, operation: &str) -> Result<(), String>;
     /// Validate and commit the associated package archive transactionally.
@@ -41,17 +47,65 @@ impl ProjectScript {
         host: &mut impl ProjectReplayHost,
         options: RunOptions,
     ) -> Result<Value, String> {
+        self.run_inner(host, options, None)
+    }
+    /// Opt into cumulative allocation/work bounds in the existing interpreter.
+    /// Calls `host.checkpoint()` during steps, reference copying, predicates and
+    /// exports. Synchronous host/kernel calls remain cooperatively cancellable
+    /// only at their boundaries; hosts must limit their own result allocations.
+    pub fn run_bounded(
+        &self,
+        host: &mut impl ProjectReplayHost,
+        options: RunOptions,
+        limits: EvaluationLimits,
+    ) -> Result<Value, String> {
+        self.run_inner(host, options, Some(limits))
+    }
+    fn run_inner(
+        &self,
+        host: &mut impl ProjectReplayHost,
+        options: RunOptions,
+        limits: Option<EvaluationLimits>,
+    ) -> Result<Value, String> {
+        if let Some(limits) = limits {
+            host.checkpoint()?;
+            if !(1..=128).contains(&limits.max_depth) {
+                return Err("Evaluation depth limit must be in 1..=128".into());
+            }
+            if !self.script.document["verification"].is_null() {
+                return Err(
+                    "Bounded evaluation does not support the manufacturing verification gate"
+                        .into(),
+                );
+            }
+        }
         self.script.validate_options(options)?;
-        self.script
-            .validate_calls(|group, operation| host.validate_call(group, operation))?;
+        self.script.validate_calls(|group, operation| {
+            if limits.is_some() {
+                host.checkpoint()?;
+            }
+            host.validate_call(group, operation)
+        })?;
+        if limits.is_some() {
+            host.checkpoint()?;
+        }
         host.load_project_baseline()?;
-        let mut report = run_steps(
-            &self.script,
-            |name, args, progress| host.call(name, args, progress),
-            options,
-        )?;
+        let mut report = run_steps(&self.script, &mut ReplayExecution(host), options, limits)?;
+        if limits.is_some() {
+            host.checkpoint()?;
+        }
         report["project_baseline_loaded"] = Value::Bool(true);
         Ok(report)
+    }
+}
+
+struct ReplayExecution<'a, H>(&'a mut H);
+impl<H: ProjectReplayHost> ExecutionHost for ReplayExecution<'_, H> {
+    fn checkpoint(&mut self) -> Result<(), String> {
+        self.0.checkpoint()
+    }
+    fn call(&mut self, name: &str, args: Value, progress: RunProgress) -> Result<Value, String> {
+        self.0.call(name, args, progress)
     }
 }
 

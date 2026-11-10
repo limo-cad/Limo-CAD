@@ -8,8 +8,10 @@ guide linked from that release's notes on the
 [published releases page](https://github.com/limo-cad/Limo-CAD/releases).
 
 This is pre-alpha software. Keep an original copy of important CAD projects.
-The `.limo` container remains version 1; the current model schema is 15. The app
-also reads legacy `.nbcad` projects; older builds may reject newer saved models.
+The `.limo` container remains version 1. Every save writes model schema 16,
+including projects without drafting content. The app reads supported schemas
+1–16 and legacy `.nbcad` projects; older schema-15 readers reject newly saved
+files. Keep the original project when upgrading.
 
 | Platform | Package |
 | --- | --- |

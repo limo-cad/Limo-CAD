@@ -6896,6 +6896,85 @@ mod tests {
     }
 
     #[test]
+    fn offset_plane_first_mesh_update_needs_no_unrelated_model_operation() {
+        use bevy::ecs::system::RunSystemOnce;
+        let state = crate::state::AppState::new();
+        let mut app = interface_scene_fixture();
+        app.world_mut()
+            .init_resource::<Assets<ReferencePlaneMaterial>>();
+        apply_interface_model(
+            app.world_mut(),
+            crate::session_bridge::native_interface::model_snapshot(&state),
+        )
+        .unwrap();
+        interface_geometry_fixture_snapshot(app.world_mut());
+        assert_eq!(
+            app.world_mut()
+                .query::<&NativeDatumPlane>()
+                .iter(app.world())
+                .count(),
+            0
+        );
+
+        assert_engine_ok(state.engine_call(
+            "datum_plane_create",
+            r#"{"source":{"type":"offset","reference":{"type":"origin_plane","plane":"xy"},"distance":25}}"#,
+        ));
+        let frame = crate::session_bridge::native_interface::model_snapshot(&state);
+        let datum_id = frame.document.datum_planes[0].datum_id.0;
+        apply_interface_model(app.world_mut(), frame).unwrap();
+        interface_geometry_fixture_snapshot(app.world_mut());
+        app.world_mut()
+            .run_system_once(apply_native_presentation_styles)
+            .unwrap();
+        let mut query = app
+            .world_mut()
+            .query::<(&NativeDatumPlane, &Visibility, &Mesh3d)>();
+        let rows: Vec<_> = query.iter(app.world()).collect();
+        assert_eq!(
+            rows.len(),
+            1,
+            "First mesh update must publish the new plane"
+        );
+        assert_eq!(rows[0].0.datum_id, datum_id);
+        assert_eq!(*rows[0].1, Visibility::Inherited);
+        let mesh = app
+            .world()
+            .resource::<Assets<Mesh>>()
+            .get(&rows[0].2 .0)
+            .unwrap();
+        let Some(bevy::mesh::VertexAttributeValues::Float32x3(points)) =
+            mesh.attribute(Mesh::ATTRIBUTE_POSITION)
+        else {
+            panic!("Construction plane must contain actual vertex positions")
+        };
+        assert!(!points.is_empty());
+        assert!(points.iter().all(|p| (p[2] - 25.).abs() < 1e-5));
+        let entity_count = rows.len();
+
+        for hidden in [true, false] {
+            app.world_mut()
+                .resource_mut::<PresentationResource>()
+                .0
+                .hidden_datum_plane_ids = if hidden { vec![datum_id] } else { vec![] };
+            app.world_mut()
+                .run_system_once(apply_native_presentation_styles)
+                .unwrap();
+            let mut query = app.world_mut().query::<(&NativeDatumPlane, &Visibility)>();
+            let rows: Vec<_> = query.iter(app.world()).collect();
+            assert_eq!(rows.len(), entity_count);
+            assert_eq!(
+                *rows[0].1,
+                if hidden {
+                    Visibility::Hidden
+                } else {
+                    Visibility::Inherited
+                }
+            );
+        }
+    }
+
+    #[test]
     fn visible_sketch_points_use_the_persistent_always_on_top_layer() {
         let point: EntityDto = serde_json::from_str(
             r#"{
