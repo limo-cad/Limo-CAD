@@ -8,6 +8,70 @@ fn value(response: String) -> Value {
 }
 
 #[test]
+fn offset_plane_first_frame_refreshes_a_warm_document_without_rebuilding_solids() {
+    let host = NativeEngineHost::new();
+    let before = host.viewport_frame();
+    assert!(Arc::ptr_eq(
+        &before.document,
+        &host.viewport_frame().document
+    ));
+    value(host.engine_call(
+        "datum_plane_create",
+        r#"{"source":{"type":"offset","reference":{"type":"origin_plane","plane":"xy"},"distance":25}}"#,
+    ));
+    let first = host.viewport_frame();
+    assert!(first.geometry_revision > before.geometry_revision);
+    assert!(!Arc::ptr_eq(&first.document, &before.document));
+    assert!(Arc::ptr_eq(&first.document.scene, &before.document.scene));
+    assert!(before.document.datum_planes.is_empty());
+    let [plane] = first.document.datum_planes.as_slice() else {
+        panic!("The first frame after creation must contain exactly one plane");
+    };
+    assert_eq!(plane.basis.origin, [0., 0., 25.]);
+    assert!(Arc::ptr_eq(
+        &first.document,
+        &host.viewport_frame().document
+    ));
+
+    value(
+        host.engine_call(
+            "datum_plane_edit",
+            &json!({"feature_id":plane.feature_id,"plane":{"source":{
+            "type":"offset","reference":{"type":"origin_plane","plane":"xy"},
+            "distance":-12.5}}})
+            .to_string(),
+        ),
+    );
+    let edited = host.viewport_frame();
+    assert!(edited.geometry_revision > first.geometry_revision);
+    assert_eq!(edited.document.datum_planes[0].datum_id, plane.datum_id);
+    assert_eq!(
+        edited.document.datum_planes[0].basis.origin,
+        [0., 0., -12.5]
+    );
+    assert_eq!(first.document.datum_planes[0].basis.origin, [0., 0., 25.]);
+    assert!(Arc::ptr_eq(&edited.document.scene, &before.document.scene));
+
+    let rejected: Value = serde_json::from_str(
+        &host.engine_call(
+            "datum_plane_edit",
+            &json!({"feature_id":plane.feature_id,"plane":{"source":{
+            "type":"offset","reference":{"type":"datum_plane","datum_id":999},
+            "distance":7}}})
+            .to_string(),
+        ),
+    )
+    .unwrap();
+    assert_eq!(rejected["ok"], false);
+    let after_rejection = host.viewport_frame();
+    assert_eq!(after_rejection.geometry_revision, edited.geometry_revision);
+    assert_eq!(
+        after_rejection.document.datum_planes,
+        edited.document.datum_planes
+    );
+}
+
+#[test]
 fn shared_drawing_snapshot_reuses_reads_and_invalidates_only_drawing_intent() {
     let host = NativeEngineHost::new();
     let empty = host.shared_drawing_snapshot();
