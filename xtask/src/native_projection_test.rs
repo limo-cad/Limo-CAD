@@ -155,7 +155,7 @@ fn exercise(c: &mut Client, out: &Path, config: &Path) -> Result<Value> {
     let plane = c.call(
         "construction_plane_offset",
         json!({"name":"Projection target plane",
-        "reference":{"type":"origin_plane","plane":"xy"},"distance":25.}),
+        "reference":{"type":"origin_plane","plane":"xy"},"distance":15.}),
     )?;
     ensure!(
         plane["planes"][0]["datum_id"].is_u64(),
@@ -172,7 +172,11 @@ fn exercise(c: &mut Client, out: &Path, config: &Path) -> Result<Value> {
         "Fixture sources missing"
     );
     let before = active(c)?;
-    let mut recording = Recording::start(out)?;
+    let preview_out = out.join("preview-cancel");
+    let confirm_out = out.join("confirm-history");
+    fs::create_dir(&preview_out)?;
+    fs::create_dir(&confirm_out)?;
+    let mut recording = Recording::start(&preview_out)?;
     shot(c, out, "00-target", &mut recording)?;
     open(c)?;
     let state = ui(c, json!({"action":"inspect"}))?;
@@ -202,6 +206,12 @@ fn exercise(c: &mut Client, out: &Path, config: &Path) -> Result<Value> {
         "OS Escape changed sketch"
     );
     shot(c, out, "02-cancel", &mut recording)?;
+    // Keep each operation independently readable and within the existing
+    // recorder's 40-second/8-MiB bounds, including slow software-rendered RPCs.
+    recording.hold("cancel-preserved-readable")?;
+    recording.hold("cancel-preserved-ending")?;
+    recording.finish()?;
+    let mut recording = Recording::start(&confirm_out)?;
     open(c)?;
     tab_to(c, &row)?;
     key(c, "Return")?;
@@ -283,7 +293,7 @@ fn exercise(c: &mut Client, out: &Path, config: &Path) -> Result<Value> {
         "qualified_os_keys":["Tab","Shift+Tab","Enter","Escape"],
         "model_setup_and_reference_removal":"native control API and shared MCP",
         "preview_and_cancel_preserve_sketch":true,"confirm_undo_redo_remove":true,
-        "layouts":layouts,"recording":"saved-views.gif",
+        "layouts":layouts,"recordings":["preview-cancel/saved-views.gif","confirm-history/saved-views.gif"],
         "not_proven":["OS pointer delivery","Windows/macOS OS input","performance","solid-body edge projection"]}),
     )
 }

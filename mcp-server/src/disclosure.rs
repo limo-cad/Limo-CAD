@@ -1089,7 +1089,17 @@ mod tests {
             "cam_simulate_gcode",
             "cam_post_events",
         ];
-        assert_eq!(modeling.len(), 129);
+        // The four associative Projection tools extend the prior 129-tool list.
+        assert_eq!(modeling.len(), 133);
+        assert_eq!(
+            modeling
+                .iter()
+                .copied()
+                .collect::<std::collections::HashSet<_>>()
+                .len(),
+            modeling.len(),
+            "modeling tool coverage must not contain duplicate entries"
+        );
         for name in modeling {
             let (pack, spine) = tags_for_tool(name);
             assert!(
@@ -1098,6 +1108,9 @@ mod tests {
             );
             if name.starts_with("assembly_") {
                 assert_eq!(pack, FocusPack::Assembly, "{name}");
+            }
+            if name.starts_with("sketch_") {
+                assert_eq!(pack, FocusPack::Sketch, "{name}");
             }
             let _ = spine;
         }
