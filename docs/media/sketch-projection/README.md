@@ -1,41 +1,52 @@
 # Associative Sketch Projection — native evidence
 
-![Preview, Cancel, Confirm, Undo/Redo and reference removal](projection-checkpoints.gif)
+![Preview and Escape cancellation](preview-cancel.gif)
 
-This is a ten-checkpoint walkthrough from the real Windows native application,
-with equal 2.5-second reading holds. It is **not continuous video, measured action
-timing, or OS pointer/keyboard evidence**. Full-resolution PNGs retain readable
-text without GIF palette dithering.
+![Confirm, Undo/Redo and reference removal](confirm-history.gif)
 
-The fixture creates eight source curves, a small extruded body and an offset
-target sketch. The blue line is the uncommitted candidate; the purple line is
-the confirmed associative reference. Cancel returns to the original sketch.
-The accompanying state assertions verify unchanged sketch data on preview and
-Cancel, rejection of a retired Confirm target after changing the candidate,
-exactly one confirmed reference, Undo/Redo, and removal followed by Undo.
+These are continuous captures of the real native Linux application on one owned
+private Xvfb display. The fixture uses actual XTEST Tab, Shift+Tab, Enter and
+Escape events through the production ribbon/menu/picker hierarchy. Model setup,
+Undo/Redo and reference removal use the native control API and shared MCP.
+Reading pauses are fixture delays, not performance measurements.
 
-- [Preview and Confirm controls](02-preview.png)
-- [Confirmed reference](05-confirmed.png)
-- [References and removal](08-references.png)
-- 175% layout: [English](locale-en-preview.png), [Spanish](locale-es-preview.png),
-  [German](locale-de-preview.png), [Chinese](locale-zh-preview.png)
+The fixture creates eight source curves, a small cylinder and an offset target
+sketch. The blue circle is a preview; the purple circle is a confirmed reference.
+Assertions verify preview/Cancel preserve the sketch, confirmation adds exactly
+one reference, and Undo/Redo and removal change the expected association count.
+Each recording retains its independent40-second/8MiB limit. The completed clips
+contain130 and217frames at6fps, respectively.
 
-All captures use the clean `035db7a8808755d2f09e6a2afb93c7f0a0d6d4d4`
-desktop and embedded MCP pair, development channel `0.3.0-rc.3`, in one fresh
-owned document. The Windows client is 1360×860. The localized captures qualify
-the new picker text and controls; the high-scale panel obscures part of the model
-and does not qualify whole-application layout. [Manifest](manifest.json) records
-all published bytes, source-frame hashes, OS build and encoding scope.
+- [Full-resolution preview](01-preview.png)
+- Actual1200×760 client at175%: [English](locale-en-minimum.png),
+  [Spanish](locale-es-minimum.png), [German](locale-de-minimum.png),
+  [Chinese](locale-zh-CN-minimum.png)
 
-The native control API delivered the fixture actions, including Enter/Escape on
-production controls. Two computer-use connectors refused to bind the private
-test window with an ownership error; no OS input was sent through them. Actual
-minimum-window rendering, OS keyboard traversal, and continuous recording remain
-pending the disposable Linux `native-projection` fixture. Unit bounds at
-1200×760/175% do not substitute for those captures. The broad UI survey remains
-paused. No deployed CAD, user document or global preference was changed.
+[Run42745011023](https://github.com/limo-cad/Limo-CAD/actions/runs/42745011023)
+passed on clean matched desktop/MCP source
+`9ea82339d04aa89495b3256b9b93b7437c6bbc74`, development0.3.0-rc.3.
+The native test binary is a hosted debug build; this is functional evidence.
+The locale captures qualify the new picker text, glyphs, paging and fixed actions.
+The high-scale panel obscures much of the model and does not qualify whole-app
+layout. Original next-page captures, videos, logs and receipts remain in
+[artifact13731610751](https://github.com/limo-cad/Limo-CAD/actions/runs/42745011023/artifacts/13731610751).
+The archive digest in the manifest is GitHub's reported value; the whole archive
+was not independently rehashed. Published file hashes are computed from the
+retained original entries. GIF names were shortened for publication; the manifest
+maps each name to its original recording metadata.
 
-To reproduce the remaining finite acceptance on an owned Linux Xvfb display:
+[Manifest](manifest.json) and [Linux functional result](linux-functional-result.json)
+record the exact scope. OS pointer delivery, physical hardware input,
+Windows/macOS OS input and performance remain unqualified. Broad UI coverage is
+still paused. No installed CAD, user document or global preference was changed.
+The separate macOS packaged shutdown failure remains tracked in#374.
+
+Earlier clean Windows035db7a8 evidence, including stale Confirm rejection and
+remove/Undo, remains available in [the preceding evidence snapshot](https://github.com/limo-cad/Limo-CAD/tree/9ea82339d04aa89495b3256b9b93b7437c6bbc74/docs/media/sketch-projection).
+The retained [Windows functional result](functional-result.json) belongs to that
+recorded build; it is not a Linux receipt.
+
+Reproduce the finite acceptance with an exact-source binary on a private Linux display:
 
 ```sh
 GITHUB_SHA=$(git rev-parse HEAD) dbus-run-session -- \
@@ -45,5 +56,6 @@ GITHUB_SHA=$(git rev-parse HEAD) dbus-run-session -- \
   --out /absolute/fresh/evidence-root
 ```
 
-The opt-in `projection-proof` input on the native-host workflow builds that
-source and retains partial evidence on failure. Its result is not claimed here.
+The native-host workflow's opt-in `projection-proof` input builds that source
+and retains partial evidence on failure. A successful receipt requires subsequent
+inspection of the actual native media before review readiness.
