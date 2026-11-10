@@ -24,6 +24,7 @@ pub(crate) enum Command {
     },
     Confirm {
         generation: u64,
+        source: Option<SketchCurveRef>,
     },
     Remove {
         generation: u64,
@@ -128,7 +129,7 @@ pub(super) fn execute(
         Command::Tab { generation, .. }
         | Command::Page { generation, .. }
         | Command::Select { generation, .. }
-        | Command::Confirm { generation }
+        | Command::Confirm { generation, .. }
         | Command::Remove { generation, .. } => generation,
         _ => unreachable!(),
     };
@@ -192,7 +193,10 @@ pub(super) fn execute(
             })?;
             picker.selected = Some(source);
         }
-        Command::Confirm { .. } => {
+        Command::Confirm { source, .. } => {
+            if source != picker.selected {
+                return Err("The projection selection changed; confirm the current preview".into());
+            }
             let source = picker
                 .selected
                 .filter(|_| !picker.existing)
@@ -458,7 +462,10 @@ pub(super) fn synchronize(
             "confirm",
             control,
             None,
-            NativeCommand::Sketch(EditorCommand::Projection(Command::Confirm { generation })),
+            NativeCommand::Sketch(EditorCommand::Projection(Command::Confirm {
+                generation,
+                source: picker.selected,
+            })),
             rect(left + 10., top + height - 34., width / 2. - 12., 26.),
             None,
             41,
@@ -594,6 +601,32 @@ mod tests {
                 world.get::<InterfaceControl>(confirm).unwrap().disabled,
                 disabled
             );
+        }
+    }
+
+    #[test]
+    fn projection_source_change_retires_the_previous_confirmation_binding() {
+        let mut world = World::new();
+        world.init_resource::<ViewportUiAssets>();
+        let camera = world.spawn_empty().id();
+        let mut editor = editor();
+        let canvas = InterfaceRect {
+            x: 64.,
+            y: 120.,
+            width: 800.,
+            height: 500.,
+        };
+        let mut previous = None;
+        for index in [0, 1] {
+            let picker = editor.projection.as_mut().unwrap();
+            picker.selected = Some(picker.sources[index].source);
+            synchronize(&mut world, camera, &editor, canvas).unwrap();
+            let confirm = world.resource::<Panel>().widgets.entity("confirm").unwrap();
+            let binding = world.get::<InterfaceControl>(confirm).unwrap().binding;
+            if let Some(previous) = previous {
+                assert_ne!(binding, previous);
+            }
+            previous = Some(binding);
         }
     }
 
