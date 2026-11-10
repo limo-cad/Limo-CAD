@@ -1,0 +1,12 @@
+{
+  "preview_no_model_change": true,
+  "cancel_preserves_sketch": true,
+  "stale_confirm_rejected": true,
+  "confirm_adds_reference": true,
+  "undo_redo": true,
+  "remove_undo": true,
+  "source": {
+    "feature": 1,
+    "entity": 3
+  }
+}

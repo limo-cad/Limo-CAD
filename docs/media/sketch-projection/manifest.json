@@ -1,0 +1,121 @@
+{
+    "schema_version":  1,
+    "captured_revision":  "035db7a8808755d2f09e6a2afb93c7f0a0d6d4d4",
+    "modified":  false,
+    "platform":  "Windows 11 Pro",
+    "os_build":  "26200",
+    "profile":  "release with opt-level1 for desktop and embedded MCP; functional evidence only",
+    "input":  "native production control API; not OS input",
+    "client_size":  [
+                        1360,
+                        860
+                    ],
+    "locale_scale":  1.75,
+    "walkthrough":  {
+                        "scope":  "Native Windows control-API checkpoint walkthrough; equal readable holds, not continuous video or measured timings",
+                        "source_revision":  "035db7a8808755d2f09e6a2afb93c7f0a0d6d4d4",
+                        "modified":  false,
+                        "size":  [
+                                     1360,
+                                     860
+                                 ],
+                        "frames":  [
+                                       {
+                                           "name":  "00-target-before.png",
+                                           "sha256":  "7b573a0b23c99c9b60693d9bfad2232fe57346df09088bf5e061ed6fd625637c",
+                                           "delay_ms":  2500
+                                       },
+                                       {
+                                           "name":  "01-picker.png",
+                                           "sha256":  "6fd9e80a073b33592c723423bdebbf0c0ee439e44dce44d8c4f0e853570f509d",
+                                           "delay_ms":  2500
+                                       },
+                                       {
+                                           "name":  "02-preview.png",
+                                           "sha256":  "432a1388da251ae89459d7c0bad2fba11acacdfac4a8ff6083cf05478f19fccb",
+                                           "delay_ms":  2500
+                                       },
+                                       {
+                                           "name":  "03-cancelled.png",
+                                           "sha256":  "7b573a0b23c99c9b60693d9bfad2232fe57346df09088bf5e061ed6fd625637c",
+                                           "delay_ms":  2500
+                                       },
+                                       {
+                                           "name":  "04-preview-before-confirm.png",
+                                           "sha256":  "432a1388da251ae89459d7c0bad2fba11acacdfac4a8ff6083cf05478f19fccb",
+                                           "delay_ms":  2500
+                                       },
+                                       {
+                                           "name":  "05-confirmed.png",
+                                           "sha256":  "bff0cf50073198c0ede09dc3e5a1b8004dc49b6527cc29b4d6d6d2f3226f7f89",
+                                           "delay_ms":  2500
+                                       },
+                                       {
+                                           "name":  "06-undo.png",
+                                           "sha256":  "60e18908e159f40172d8e99b48de7fa851df832918cd697888ad7c1bc1ace3d0",
+                                           "delay_ms":  2500
+                                       },
+                                       {
+                                           "name":  "07-redo.png",
+                                           "sha256":  "bff0cf50073198c0ede09dc3e5a1b8004dc49b6527cc29b4d6d6d2f3226f7f89",
+                                           "delay_ms":  2500
+                                       },
+                                       {
+                                           "name":  "08-references.png",
+                                           "sha256":  "ad4fc8708069d8dae109cbc660790a1798a843dd0d6aa6dcf77babe9be338fc1",
+                                           "delay_ms":  2500
+                                       },
+                                       {
+                                           "name":  "09-removed.png",
+                                           "sha256":  "bb51c3adc2f61a687deb830127ab344bf9a28992372f5b35adacbdb7fe60715e",
+                                           "delay_ms":  2500
+                                       }
+                                   ],
+                        "gif_sha256":  "24ccc14421d04931f30ffce1307de816cb2cd7648bf1627befb7d11806a5f036",
+                        "gif_bytes":  4091280,
+                        "decoded_frames":  10
+                    },
+    "files":  [
+                  {
+                      "name":  "02-preview.png",
+                      "bytes":  780402,
+                      "sha256":  "432a1388da251ae89459d7c0bad2fba11acacdfac4a8ff6083cf05478f19fccb"
+                  },
+                  {
+                      "name":  "05-confirmed.png",
+                      "bytes":  794151,
+                      "sha256":  "bff0cf50073198c0ede09dc3e5a1b8004dc49b6527cc29b4d6d6d2f3226f7f89"
+                  },
+                  {
+                      "name":  "08-references.png",
+                      "bytes":  763971,
+                      "sha256":  "ad4fc8708069d8dae109cbc660790a1798a843dd0d6aa6dcf77babe9be338fc1"
+                  },
+                  {
+                      "name":  "locale-de-preview.png",
+                      "bytes":  275582,
+                      "sha256":  "5a9d51432a5a2b62f84c7061a1da52c963e516372b35956c7507ed38fb929a37"
+                  },
+                  {
+                      "name":  "locale-en-preview.png",
+                      "bytes":  264441,
+                      "sha256":  "933f125936f76aab2a27042e222a600a1392d0fd2d1ad47c463bed25475422a1"
+                  },
+                  {
+                      "name":  "locale-es-preview.png",
+                      "bytes":  273239,
+                      "sha256":  "f8ef890a15b1472201c7f14dd760227239cdd7fe5dfce98cca84e6c6ccca3e94"
+                  },
+                  {
+                      "name":  "locale-zh-preview.png",
+                      "bytes":  261600,
+                      "sha256":  "5040a0efa65782f75bd0f3619d3e3f3d81fd7c6eb83c6ddcf837ffaa8b5c80a1"
+                  },
+                  {
+                      "name":  "projection-checkpoints.gif",
+                      "bytes":  4091280,
+                      "sha256":  "24ccc14421d04931f30ffce1307de816cb2cd7648bf1627befb7d11806a5f036"
+                  }
+              ],
+    "binary_bytes":  7504666
+}
