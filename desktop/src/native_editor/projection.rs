@@ -18,9 +18,12 @@ pub(crate) enum Command {
         generation: u64,
         start: usize,
     },
-    Add {
+    Select {
         generation: u64,
         source: SketchCurveRef,
+    },
+    Confirm {
+        generation: u64,
     },
     Remove {
         generation: u64,
@@ -49,6 +52,7 @@ pub(super) struct Picker {
     references: Vec<Reference>,
     existing: bool,
     start: usize,
+    selected: Option<SketchCurveRef>,
 }
 
 fn query(engine: &AppState, method: &str) -> Result<Value, String> {
@@ -78,6 +82,7 @@ pub(super) fn execute(
         Ok(())
     })?;
     if command == Command::Close {
+        clear_preview(world, engine, bridge, owner)?;
         editor.projection = None;
         return Ok(json!({"closed":true}));
     }
@@ -111,6 +116,7 @@ pub(super) fn execute(
             references,
             existing: false,
             start: 0,
+            selected: None,
         });
         return Ok(json!({"projection_picker":true}));
     }
@@ -121,7 +127,8 @@ pub(super) fn execute(
     let generation = match command {
         Command::Tab { generation, .. }
         | Command::Page { generation, .. }
-        | Command::Add { generation, .. }
+        | Command::Select { generation, .. }
+        | Command::Confirm { generation }
         | Command::Remove { generation, .. } => generation,
         _ => unreachable!(),
     };
@@ -130,8 +137,10 @@ pub(super) fn execute(
     }
     match command {
         Command::Tab { existing, .. } => {
+            clear_preview(world, engine, bridge, owner)?;
             picker.existing = existing;
             picker.start = 0;
+            picker.selected = None;
         }
         Command::Page { start, .. } => {
             let count = if picker.existing {
@@ -143,11 +152,51 @@ pub(super) fn execute(
                 return Err("Projection page no longer exists".into());
             }
             picker.start = start;
+            picker.selected = None;
+            clear_preview(world, engine, bridge, owner)?;
         }
-        Command::Add { source, .. } => {
-            if !picker.sources.iter().any(|item| item.source == source) {
+        Command::Select { source, .. } => {
+            if picker.existing
+                || !picker.sources.iter().any(|item| item.source == source)
+                || picker
+                    .references
+                    .iter()
+                    .any(|reference| reference.source == source)
+            {
                 return Err("Projection source is no longer available".into());
             }
+            picker.selected = None;
+            clear_preview(world, engine, bridge, owner)?;
+            let preview = bridge
+                .with_native_document_receipt(engine, owner, |revision| {
+                    if revision != expected.revision {
+                        return Err("The sketch changed; reopen Project".into());
+                    }
+                    let value = crate::session_bridge::parse_engine_envelope(engine.engine_call(
+                        "sketch_projection_preview",
+                        &serde_json::to_string(&source).map_err(|error| error.to_string())?,
+                    ))?;
+                    let edge: limo_cad_sketch::ProjectedEdgeDto =
+                        serde_json::from_value(value).map_err(|error| error.to_string())?;
+                    preview_layer(
+                        expected.basis.ok_or("Projection target has no plane")?,
+                        &edge,
+                    )
+                })
+                .map_err(|_| localization::translate(world, "projection.unavailable").to_owned())?;
+            bridge.with_native_document_receipt(engine, owner, |revision| {
+                if revision != expected.revision {
+                    return Err("The sketch changed; reopen Project".into());
+                }
+                native_viewport::apply_interface_preview(world, &owner.document_id, preview)
+            })?;
+            picker.selected = Some(source);
+        }
+        Command::Confirm { .. } => {
+            let source = picker
+                .selected
+                .filter(|_| !picker.existing)
+                .ok_or("Select a source to preview first")?;
             return queue_mutation(
                 world,
                 expected,
@@ -173,6 +222,34 @@ pub(super) fn execute(
     Ok(json!({"projection_picker":true}))
 }
 
+fn preview_layer(
+    basis: PlaneBasis,
+    edge: &limo_cad_sketch::ProjectedEdgeDto,
+) -> Result<ViewportPreview, String> {
+    if !(2..=1000).contains(&edge.points.len()) {
+        return Err("Projection preview exceeds its geometry budget".into());
+    }
+    let segments: Vec<_> = edge
+        .points
+        .windows(2)
+        .flat_map(|pair| pair.iter())
+        .flat_map(|point| basis.to_3d([point.x, point.y]).map(|value| value as f32))
+        .collect();
+    if segments.iter().any(|value| !value.is_finite()) {
+        return Err("Projection preview is outside the renderer range".into());
+    }
+    Ok(ViewportPreview {
+        lines: vec![native_viewport::ViewportLineLayer {
+            segments: segments.into(),
+            width: 3.,
+            color: [1.; 4],
+            color_role: native_viewport::ViewportColorRole::SketchPreview,
+            ..default()
+        }],
+        ..default()
+    })
+}
+
 #[derive(Resource, Default)]
 struct Panel {
     widgets: Widgets,
@@ -196,6 +273,7 @@ pub(super) fn synchronize(
         let add = tr("projection.add");
         let references = tr("projection.references");
         let close = tr("projection.close");
+        let confirm = tr("projection.confirm");
         let previous = tr("projection.previous");
         let next = tr("projection.next");
         let empty = tr(if picker.existing {
@@ -212,7 +290,7 @@ pub(super) fn synchronize(
             ("spline", tr("projection.spline")),
         ];
         let width = (canvas.width as f32 - 8.).clamp(220., 320.);
-        let height = (canvas.height as f32 - 8.).clamp(188., 372.);
+        let height = (canvas.height as f32 - 8.).clamp(236., 372.);
         let left = (canvas.x + canvas.width) as f32 - width - 4.;
         let top = canvas.y as f32 + 4.;
         let theme = crate::native_viewport::ui::theme(world);
@@ -237,7 +315,7 @@ pub(super) fn synchronize(
             world,
             camera,
             "instruction",
-            rect(left + 10., top + 32., width - 20., 48.),
+            rect(left + 10., top + 32., width - 20., 64.),
             &instruction,
             11.,
             41,
@@ -259,7 +337,7 @@ pub(super) fn synchronize(
                     generation,
                     existing,
                 })),
-                rect(x, top + 82., width / 2. - 12., 26.),
+                rect(x, top + 98., width / 2. - 12., 26.),
                 None,
                 41,
             )?;
@@ -269,13 +347,13 @@ pub(super) fn synchronize(
         } else {
             picker.sources.len()
         };
-        let per_page = ((height - 156.) / 28.).floor().max(1.) as usize;
+        let per_page = ((height - 204.) / 28.).floor().max(1.) as usize;
         if count == 0 {
             panel.widgets.text(
                 world,
                 camera,
                 "empty",
-                rect(left + 10., top + 114., width - 20., height - 154.),
+                rect(left + 10., top + 128., width - 20., height - 204.),
                 &empty,
                 11.,
                 41,
@@ -311,7 +389,7 @@ pub(super) fn synchronize(
                         "{}:{} · {kind} · {}",
                         item.source.feature.0, item.entity, item.sketch
                     ),
-                    Command::Add {
+                    Command::Select {
                         generation,
                         source: item.source,
                     },
@@ -322,6 +400,10 @@ pub(super) fn synchronize(
                 )
             };
             let mut control = InterfaceControl::button("sketch/projection", &caption);
+            control.selected = match &command {
+                Command::Select { source, .. } => Some(picker.selected == Some(*source)),
+                _ => None,
+            };
             control.disabled = disabled;
             panel.widgets.button(
                 world,
@@ -330,7 +412,7 @@ pub(super) fn synchronize(
                 control,
                 None,
                 NativeCommand::Sketch(EditorCommand::Projection(command)),
-                rect(left + 10., top + 112. + row as f32 * 28., width - 20., 26.),
+                rect(left + 10., top + 128. + row as f32 * 28., width - 20., 26.),
                 None,
                 41,
             )?;
@@ -348,7 +430,7 @@ pub(super) fn synchronize(
                 next,
                 picker.start + per_page,
                 picker.start + per_page >= count,
-                left + width / 3.,
+                left + width / 2.,
             ),
         ] {
             let mut control = InterfaceControl::button("sketch/projection", &label);
@@ -363,11 +445,24 @@ pub(super) fn synchronize(
                     generation,
                     start,
                 })),
-                rect(x, top + height - 34., width / 3. - 12., 26.),
+                rect(x, top + height - 66., width / 2. - 12., 26.),
                 None,
                 41,
             )?;
         }
+        let mut control = InterfaceControl::button("sketch/projection", &confirm);
+        control.disabled = picker.existing || picker.selected.is_none();
+        panel.widgets.button(
+            world,
+            camera,
+            "confirm",
+            control,
+            None,
+            NativeCommand::Sketch(EditorCommand::Projection(Command::Confirm { generation })),
+            rect(left + 10., top + height - 34., width / 2. - 12., 26.),
+            None,
+            41,
+        )?;
         panel.widgets.button(
             world,
             camera,
@@ -375,12 +470,7 @@ pub(super) fn synchronize(
             InterfaceControl::button("sketch/projection", &close),
             None,
             NativeCommand::Sketch(EditorCommand::Projection(Command::Close)),
-            rect(
-                left + width * 2. / 3.,
-                top + height - 34.,
-                width / 3. - 10.,
-                26.,
-            ),
+            rect(left + width / 2., top + height - 34., width / 2. - 10., 26.),
             None,
             41,
         )?;
@@ -426,6 +516,7 @@ mod tests {
                 references: vec![],
                 existing: false,
                 start: 0,
+                selected: None,
             }),
             ..Default::default()
         }
@@ -475,6 +566,60 @@ mod tests {
         editor.projection = None;
         synchronize(&mut world, camera, &editor, canvas).unwrap();
         assert_eq!(world.query::<&InterfaceControl>().iter(&world).count(), 0);
+    }
+
+    #[test]
+    fn projection_confirmation_requires_a_selected_candidate() {
+        let mut world = World::new();
+        world.init_resource::<ViewportUiAssets>();
+        let camera = world.spawn_empty().id();
+        let mut editor = editor();
+        let canvas = InterfaceRect {
+            x: 64.,
+            y: 120.,
+            width: 800.,
+            height: 500.,
+        };
+        for (selected, existing, disabled) in [
+            (false, false, true),
+            (true, false, false),
+            (true, true, true),
+        ] {
+            let picker = editor.projection.as_mut().unwrap();
+            picker.selected = selected.then_some(picker.sources[0].source);
+            picker.existing = existing;
+            synchronize(&mut world, camera, &editor, canvas).unwrap();
+            let confirm = world.resource::<Panel>().widgets.entity("confirm").unwrap();
+            assert_eq!(
+                world.get::<InterfaceControl>(confirm).unwrap().disabled,
+                disabled
+            );
+        }
+    }
+
+    #[test]
+    fn projection_preview_is_a_bounded_target_plane_overlay() {
+        let basis = PlaneBasis {
+            origin: [10., 20., 30.],
+            u: [1., 0., 0.],
+            v: [0., 1., 0.],
+            normal: [0., 0., 1.],
+        };
+        let mut edge = limo_cad_sketch::ProjectedEdgeDto {
+            id: 1,
+            edge_id: limo_cad_core::EdgeId(1),
+            points: vec![SketchPoint::new(0., 0.), SketchPoint::new(2., 3.)],
+            circle: None,
+        };
+        let preview = preview_layer(basis, &edge).unwrap();
+        assert_eq!(
+            preview.lines[0].segments.as_slice(),
+            &[10., 20., 30., 12., 23., 30.]
+        );
+        edge.points[1].x = f64::MAX;
+        assert!(preview_layer(basis, &edge).is_err());
+        edge.points = vec![SketchPoint::ZERO; 1001];
+        assert!(preview_layer(basis, &edge).is_err());
     }
 
     #[test]

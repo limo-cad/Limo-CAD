@@ -56,6 +56,35 @@ impl SketchManager {
         .map_err(|error| format!("Projection source cannot be resolved: {error:?}"))
     }
 
+    /// Resolve a candidate without allocating a binding or changing history.
+    pub fn projection_preview(
+        &self,
+        source: SketchCurveRef,
+    ) -> Result<ProjectedEdgeDto, SessionError> {
+        let target = self.active_feature_id.ok_or(SessionError::NoActiveSketch)?;
+        let active = self.active.as_ref().ok_or(SessionError::NoActiveSketch)?;
+        if active.projection_bindings().len() >= MAX_PROJECTIONS
+            || active.next_projection_id() > MAX_PROJECTION_ID
+            || active
+                .projection_bindings()
+                .iter()
+                .any(|binding| binding.source == source)
+        {
+            return Err(SessionError::Solid(
+                "Projection is already present or its budget is exhausted".into(),
+            ));
+        }
+        self.resolve_projection(
+            target,
+            active.basis(),
+            &ProjectionBinding {
+                id: active.next_projection_id(),
+                source,
+            },
+        )
+        .map_err(SessionError::Solid)
+    }
+
     pub fn projection_sources(&self) -> Result<serde_json::Value, SessionError> {
         let target = self.active_feature_id.ok_or(SessionError::NoActiveSketch)?;
         let basis = self
@@ -281,6 +310,32 @@ mod tests {
     use crate::{DragPhase, Vec2};
     use limo_cad_core::OriginPlane;
     use limo_cad_solid::{CommitKernelRequest, KernelSceneDto};
+
+    #[test]
+    fn projection_preview_does_not_allocate_bindings_or_history() {
+        let (mut manager, source, _) = fixture();
+        let before = manager.export_project_model().unwrap();
+        let undo = manager.active.as_ref().unwrap().can_undo();
+        let next = manager.active.as_ref().unwrap().next_projection_id();
+        let edge = manager.projection_preview(source).unwrap();
+        assert!(!edge.points.is_empty());
+        assert_eq!(manager.export_project_model().unwrap(), before);
+        assert_eq!(manager.active.as_ref().unwrap().can_undo(), undo);
+        assert_eq!(manager.active.as_ref().unwrap().next_projection_id(), next);
+        assert!(manager
+            .projection_preview(SketchCurveRef {
+                entity: EntityId(u64::MAX),
+                ..source
+            })
+            .is_err());
+        assert_eq!(manager.export_project_model().unwrap(), before);
+        manager
+            .project_curves(ProjectCurvesRequest {
+                sources: vec![source],
+            })
+            .unwrap();
+        assert!(manager.projection_preview(source).is_err());
+    }
 
     #[test]
     fn circular_contacts_cannot_cross_projected_segment_identity_ranges() {

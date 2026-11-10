@@ -1,10 +1,12 @@
 {
   "projection": {
     "title": "投影",
-    "instruction": "选择较早草图中的曲线。参考随源曲线更新；圆形曲线需要平行平面。",
+    "instruction": "选择较早草图中的曲线以预览，再确认添加。取消不会更改草图。圆形曲线需要平行平面。",
     "add": "添加",
     "references": "参考",
-    "close": "关闭",
+    "close": "取消",
+    "confirm": "确认",
+    "unavailable": "此源不可用。请重新打开投影或修复源草图。",
     "previous": "上一页",
     "next": "下一页",
     "noReferences": "此草图没有投影参考。",

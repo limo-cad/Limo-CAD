@@ -1,10 +1,12 @@
 {
   "projection": {
     "title": "Project",
-    "instruction": "Choose a curve from an earlier sketch. References follow source edits; circular curves need parallel planes.",
+    "instruction": "Choose an earlier sketch curve to preview, then confirm. Cancel leaves the sketch unchanged. Circular curves need parallel planes.",
     "add": "Add",
     "references": "References",
-    "close": "Close",
+    "close": "Cancel",
+    "confirm": "Confirm",
+    "unavailable": "This source is unavailable. Reopen Project or repair the source sketch.",
     "previous": "Previous",
     "next": "Next",
     "noReferences": "No references in this sketch.",

@@ -1,7 +1,9 @@
 # Associative sketch Projection
 
 While editing a sketch, open **Edit → Project**. Choose a curve from an earlier
-finished sketch to add a read-only reference. Use **References** to inspect or
+finished sketch to preview its projection, then choose **Confirm** to add the
+read-only reference. **Cancel** or Escape clears the preview without changing
+the sketch or its Undo history. Use **References** to inspect or
 remove an association. Undo and Redo operate on a whole projection batch.
 
 References follow the source feature and entity IDs when their geometry changes.

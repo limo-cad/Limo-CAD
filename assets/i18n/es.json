@@ -1,10 +1,12 @@
 {
   "projection": {
     "title": "Proyectar",
-    "instruction": "Elija una curva de un croquis anterior. La referencia sigue sus cambios; los círculos requieren planos paralelos.",
+    "instruction": "Elija una curva anterior para previsualizar y confirmar. Cancelar no cambia el croquis. Los círculos requieren planos paralelos.",
     "add": "Añadir",
     "references": "Referencias",
-    "close": "Cerrar",
+    "close": "Cancelar",
+    "confirm": "Confirmar",
+    "unavailable": "Origen no disponible. Abra Proyectar de nuevo o repare el croquis de origen.",
     "previous": "Anterior",
     "next": "Siguiente",
     "noReferences": "Este croquis no tiene referencias.",

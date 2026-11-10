@@ -388,7 +388,10 @@ pub(crate) fn execute(
         world.resource::<Editor>().stamp.as_ref(),
     )?;
     world.resource_scope(|world, mut editor: Mut<Editor>| {
-        synchronize_stamp(&mut editor, next);
+        let had_projection = editor.projection.is_some();
+        if synchronize_stamp(&mut editor, next) && had_projection {
+            clear_preview(world, engine, bridge, owner)?;
+        }
         match command {
             EditorCommand::Support(command) => {
                 support::execute(world, engine, bridge, owner, &mut editor, command, validate)
@@ -893,13 +896,29 @@ pub(crate) fn process_one(
         world.resource::<Editor>().stamp.as_ref(),
     )?;
     world.resource_scope(|world, mut editor: Mut<Editor>| {
-        synchronize_stamp(&mut editor, next);
+        let had_projection = editor.projection.is_some();
+        if synchronize_stamp(&mut editor, next) && had_projection {
+            clear_preview(world, &services.engine, &services.bridge, &presented_owner)?;
+        }
         let mut result = json!({"handled":false});
         if !modal_empty {
             editor.press = None;
             return Ok(result);
         }
         if event.context.as_ref() != Some(&presented_owner) {
+            editor.press = None;
+            return Ok(result);
+        }
+        if editor.projection.is_some() {
+            if matches!(&event.event, WindowEvent::KeyboardInput(key)
+                if key.state == ButtonState::Pressed && key.key_code == KeyCode::Escape)
+                && !event.modifiers.ctrl && !event.modifiers.meta && !event.modifiers.alt {
+                clear_preview(world, &services.engine, &services.bridge, &presented_owner)?;
+                editor.projection = None;
+                return Ok(json!({"handled":true,"cancelled":true}));
+            }
+            // A read-only candidate owns its preview until Confirm or Cancel;
+            // ordinary canvas hover must not replace it or edit geometry.
             editor.press = None;
             return Ok(result);
         }
@@ -1140,7 +1159,10 @@ pub(crate) fn synchronize_controls(
     let assets = world.resource::<ViewportUiAssets>().clone();
     let theme = crate::native_viewport::ui::theme(world);
     world.resource_scope(|world, mut editor: Mut<Editor>| {
-        synchronize_stamp(&mut editor, next);
+        let had_projection = editor.projection.is_some();
+        if synchronize_stamp(&mut editor, next) && had_projection {
+            clear_preview(world, &services.engine, &services.bridge, owner)?;
+        }
         support::present(world, owner, &editor.support)?;
         interaction::present(world, owner, &editor.interaction)?;
         let rows: Vec<(String, EditorCommand)> =

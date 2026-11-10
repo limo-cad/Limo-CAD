@@ -1,10 +1,12 @@
 {
   "projection": {
     "title": "Projizieren",
-    "instruction": "Kurve aus einer früheren Skizze wählen. Referenzen folgen Quelländerungen; Kreiskurven brauchen parallele Ebenen.",
+    "instruction": "Frühere Skizzenkurve für die Vorschau wählen, dann bestätigen. Abbrechen ändert nichts. Kreiskurven brauchen parallele Ebenen.",
     "add": "Hinzufügen",
     "references": "Referenzen",
-    "close": "Schließen",
+    "close": "Abbrechen",
+    "confirm": "Bestätigen",
+    "unavailable": "Quelle nicht verfügbar. Projizieren erneut öffnen oder Quellskizze reparieren.",
     "previous": "Zurück",
     "next": "Weiter",
     "noReferences": "Keine Referenzen in dieser Skizze.",

@@ -149,6 +149,9 @@ pub fn handle_read_only(manager: &SketchManager, method: &str, payload: &str) ->
         _ => {}
     }
     Some(match method {
+        "sketch_projection_preview" => {
+            with_payload(payload, |source| manager.projection_preview(source))
+        }
         "sketch_projection_sources" => match manager.projection_sources() {
             Ok(value) => ok_json(value),
             Err(error) => err_json(error.to_string()),
