@@ -43,6 +43,11 @@ Technology to 8.0.1, the same OCCT line used by the macOS build. The manifest
 selects the reviewed storage fix from `native/occt-overlay` at port revision 2.
 Native SDK qualification compiles a bounded allocation/copy probe against the
 actual `TKMath` runtime; an unchanged header or runtime fails before packaging.
+The same overlay selects zlib **1.3.2#3**, backporting the upstream fix for
+CVE-2026-85091 while retaining `z.dll` and the existing registry baseline.
+Its [source regression](../native/occt-overlay/zlib/README.md) checks stalled
+write retries with AddressSanitizer. Changes to the overlay invalidate both
+installed SDK and binary cache keys; Windows package checks remain required.
 The Rust task discovers the host's MSVC compiler and Windows SDK and supplies
 them to both CMake configuration and compilation. A fresh shell does not need a
 prior developer-shell setup, and an ambient MinGW compiler cannot qualify an
