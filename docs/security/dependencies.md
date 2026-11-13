@@ -25,16 +25,25 @@ one leading `**/` to absorb the scanner's extraction prefix:
 - `**/Limo-CAD-0.3.0-rc.3-windows-x64/z.dll`
 - `**/Limo-CAD-0.3.0-rc.3-windows-arm64/z.dll`
 
-The [upstream zlib commit `df84af25dc1942490e1d1c899a07619152a46148`](https://github.com/madler/zlib/commit/df84af25dc1942490e1d1c899a07619152a46148)
-and [zlib PR #1320](https://github.com/madler/zlib/pull/1320) are unverified
-investigation inputs. Verify a proposed fix against the shipped source and add
-a regression before adopting it; these references alone do not justify a
-backport or a remediation claim. The native SBOM currently reports `1.3.2`
-without the vcpkg port revision. A verified patched `1.3.2#N` port can therefore
-retain the same scanner identity and may need a renewed, scoped decision until
-that identity changes. Remove the exception and review only after reassessment
-shows they are no longer needed, and retain the investigation record. No new
-VEX claim is made; the package-build check is the per-build reachability evidence.
+The Windows overlay now selects **zlib 1.3.2#3**, copied from
+[vcpkg commit `520c3b78`](https://github.com/microsoft/vcpkg/commit/520c3b781ac2abf391887d286d569f74ae6bf752).
+It backports [upstream zlib commit `df84af25`](https://github.com/madler/zlib/commit/df84af25dc1942490e1d1c899a07619152a46148),
+which fixes CVE-2026-85091 and is also included in
+[zlib 1.4](https://github.com/madler/zlib/releases/tag/v1.4). The vcpkg patch keeps
+its upstream filename `CVE-2026-76844.patch`; its contents identify CVE-2026-85091.
+The [regression and provenance record](../../native/occt-overlay/zlib/README.md)
+checks the pinned source archive's SHA512 and exercises stalled compressed and
+direct writes. Both modes pass with the patch and fail under AddressSanitizer
+without it; zlib's upstream example also passes. CI repeats this source check.
+The existing Windows DLL consumer guard remains in force. Fresh Windows x64 and
+ARM64 builds and inspections are still required to qualify the shipped repair.
+
+The native SBOM reports `1.3.2` without the vcpkg port revision. This backport
+therefore retains the vulnerable release's scanner identity. The four rc-only
+exceptions and their **2026-11-06** review deadline remain unchanged and expired;
+they do not cover final 0.3.0 packages. Reassess the exact packaged binaries and
+scanner findings before replacing or removing those rules through owner review.
+No new VEX claim or release acceptance is made by this source repair.
 
 Local cargo-audit 0.22.2 checks of the engine, desktop and MCP lockfiles reported
 zero known RustSec vulnerabilities and the two warnings above, using RustSec DB
