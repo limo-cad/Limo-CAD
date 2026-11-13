@@ -136,7 +136,8 @@ pub(super) fn synchronize(
         state.widgets.begin();
         state.area = None;
         if let Some(sketch) = state.sketch.as_ref().filter(|_| {
-            editor.interaction.form.is_none()
+            editor.projection.is_none()
+                && editor.interaction.form.is_none()
                 && editor.interaction.dimension.is_none()
                 && editor.interaction.constraint.is_none()
         }) {

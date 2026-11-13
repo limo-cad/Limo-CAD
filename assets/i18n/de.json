@@ -1,4 +1,23 @@
 {
+  "projection": {
+    "title": "Projizieren",
+    "instruction": "Frühere Skizzenkurve für die Vorschau wählen, dann bestätigen. Abbrechen ändert nichts. Kreiskurven brauchen parallele Ebenen.",
+    "add": "Hinzufügen",
+    "references": "Referenzen",
+    "close": "Abbrechen",
+    "confirm": "Bestätigen",
+    "unavailable": "Quelle nicht verfügbar. Projizieren erneut öffnen oder Quellskizze reparieren.",
+    "previous": "Zurück",
+    "next": "Weiter",
+    "noReferences": "Keine Referenzen in dieser Skizze.",
+    "noSources": "Keine geeigneten früheren Kurven. Quellskizze zuerst abschließen.",
+    "missing": "Quelle fehlt",
+    "remove": "Entfernen",
+    "line": "Linie",
+    "arc": "Bogen",
+    "circle": "Kreis",
+    "spline": "Spline"
+  },
   "namedViews": {
     "activate": "Ansicht aktivieren",
     "edit": "Gespeicherte Ansicht {name} bearbeiten",
@@ -426,6 +445,7 @@
       "simulateNc": "NC-Simulation"
     },
     "sketch": {
+      "project": "Projizieren",
       "line": "Linie",
       "midpointLine": "Mittelpunktlinie",
       "rectangle": "Rechteck",

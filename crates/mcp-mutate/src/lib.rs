@@ -14,6 +14,8 @@ pub fn is_live_engine_query(method: &str) -> bool {
     matches!(
         method,
         "active_sketch"
+            | "sketch_projection_sources"
+            | "sketch_projections"
             | "project_visibility"
             | "named_views"
             | "named_view_solution"
@@ -495,6 +497,18 @@ pub static MUTATES: &[MutateSpec] = &[
     MutateSpec {
         name: "sketch_add_line",
         engine_method: "add_line",
+        payload: PayloadKind::Object,
+        execution: ExecutionKind::Direct,
+    },
+    MutateSpec {
+        name: "sketch_project",
+        engine_method: "sketch_project",
+        payload: PayloadKind::Object,
+        execution: ExecutionKind::Direct,
+    },
+    MutateSpec {
+        name: "sketch_projection_remove",
+        engine_method: "sketch_projection_remove",
         payload: PayloadKind::Object,
         execution: ExecutionKind::Direct,
     },
@@ -1295,8 +1309,11 @@ mod tests {
             "fillet_preview",
             "offset_preview",
             "trim_preview",
+            "sketch_projection_sources",
+            "sketch_projections",
         ] {
             assert!(is_live_engine_query(method), "{method}");
+            assert!(is_routed_engine_query(method), "{method}");
             assert!(lookup_mutate(method).is_none(), "{method}");
         }
     }

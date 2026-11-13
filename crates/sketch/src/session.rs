@@ -33,6 +33,7 @@ mod creation;
 mod dims;
 mod line_snaps;
 mod mods;
+mod projections;
 
 /// Snap distance tolerance in sketch mm (screen-relative scaling is a
 /// UI concern; the engine works on a fixed modeling tolerance).
@@ -818,8 +819,7 @@ impl SketchSession {
     /// the sketch was created from: the projection is reference geometry, so
     /// creation tools persist the acquired edge as a sliding reference.
     fn nearest_projected_edge_point(&self, raw: Vec2) -> Option<(EdgeId, Vec2)> {
-        self.projected_edges
-            .iter()
+        self.reference_edges_iter()
             .filter_map(|edge| {
                 let position = edge.closest_point(raw)?;
                 let distance = position.distance(raw);
@@ -5781,7 +5781,12 @@ impl SketchSession {
                     position: *position,
                 })
                 .collect(),
-            projected_edges: self.projected_edges.clone(),
+            projected_edges: self
+                .projected_edges
+                .iter()
+                .cloned()
+                .chain(self.sketch.projection_edges())
+                .collect(),
             dimensions: self.dimension_dtos(),
             dimension_style: self.dimension_style,
             grid_snap: self.grid_snap,

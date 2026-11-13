@@ -1,4 +1,23 @@
 {
+  "projection": {
+    "title": "Project",
+    "instruction": "Choose an earlier sketch curve to preview, then confirm. Cancel leaves the sketch unchanged. Circular curves need parallel planes.",
+    "add": "Add",
+    "references": "References",
+    "close": "Cancel",
+    "confirm": "Confirm",
+    "unavailable": "This source is unavailable. Reopen Project or repair the source sketch.",
+    "previous": "Previous",
+    "next": "Next",
+    "noReferences": "No references in this sketch.",
+    "noSources": "No eligible earlier curves. Finish the source sketch first.",
+    "missing": "Missing source",
+    "remove": "Remove",
+    "line": "Line",
+    "arc": "Arc",
+    "circle": "Circle",
+    "spline": "Spline"
+  },
   "namedViews": {
     "activate": "Activate view",
     "edit": "Edit saved view {name}",
@@ -426,6 +445,7 @@
       "simulateNc": "NC Sim"
     },
     "sketch": {
+      "project": "Project",
       "line": "Line",
       "midpointLine": "Midpoint Line",
       "rectangle": "Rectangle",

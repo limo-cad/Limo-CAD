@@ -12,6 +12,7 @@ pub(crate) mod support;
 pub(crate) use dynamic::SizeField;
 mod modify_preview;
 mod palette;
+mod projection;
 pub(crate) use palette::PaletteCommand;
 mod constraints;
 pub(crate) use constraints::Relation;
@@ -64,6 +65,7 @@ pub(crate) enum EditorCommand {
     Complete,
     Interaction(InteractionCommand),
     Palette(PaletteCommand),
+    Projection(projection::Command),
     Size {
         generation: u64,
         field: SizeField,
@@ -90,6 +92,7 @@ struct Editor {
     interaction: interaction::Interaction,
     form_serial: u64,
     support: support::Picker,
+    projection: Option<projection::Picker>,
 }
 
 fn initialize(world: &mut World) {
@@ -137,6 +140,7 @@ fn synchronize_stamp(editor: &mut Editor, next: Stamp) -> bool {
     editor.creation_error = None;
     editor.interaction = Default::default();
     editor.support = Default::default();
+    editor.projection = None;
     editor.stamp = Some(next);
     true
 }
@@ -384,7 +388,10 @@ pub(crate) fn execute(
         world.resource::<Editor>().stamp.as_ref(),
     )?;
     world.resource_scope(|world, mut editor: Mut<Editor>| {
-        synchronize_stamp(&mut editor, next);
+        let had_projection = editor.projection.is_some();
+        if synchronize_stamp(&mut editor, next) && had_projection {
+            clear_preview(world, engine, bridge, owner)?;
+        }
         match command {
             EditorCommand::Support(command) => {
                 support::execute(world, engine, bridge, owner, &mut editor, command, validate)
@@ -463,6 +470,7 @@ pub(crate) fn execute(
                     return Err("Start or edit a sketch to draw geometry".into());
                 }
                 editor.draft.select(Some(tool));
+                editor.projection = None;
                 editor.interaction = Default::default();
                 editor.error.clear();
                 clear_preview(world, engine, bridge, owner)?;
@@ -481,6 +489,7 @@ pub(crate) fn execute(
                 editor.error.clear();
                 editor.press = None;
                 editor.support = Default::default();
+                editor.projection = None;
                 support::present(world, owner, &editor.support)?;
                 editor.interaction = Default::default();
                 interaction::present(world, owner, &editor.interaction)?;
@@ -503,6 +512,9 @@ pub(crate) fn execute(
             }
             EditorCommand::Palette(command) => {
                 palette::execute(world, engine, bridge, owner, &mut editor, command, validate)
+            }
+            EditorCommand::Projection(command) => {
+                projection::execute(world, engine, bridge, owner, &mut editor, command, validate)
             }
             EditorCommand::Size {
                 generation,
@@ -579,6 +591,7 @@ enum Completion {
     Primitive,
     Modify,
     Settings,
+    Projection,
 }
 
 fn queue_mutation(
@@ -619,9 +632,14 @@ fn queue_mutation(
                 let accepted = if same_gesture {
                     match kind {
                         Completion::Settings => Ok(()),
+                        Completion::Projection => {
+                            editor.projection = None;
+                            Ok(())
+                        }
                         Completion::Primitive => editor.draft.accepted(&result.value),
                         Completion::Begin | Completion::Finish => {
                             editor.draft.select(None);
+                            editor.projection = None;
                             editor.interaction = Default::default();
                             editor.support = Default::default();
                             Ok(())
@@ -878,13 +896,29 @@ pub(crate) fn process_one(
         world.resource::<Editor>().stamp.as_ref(),
     )?;
     world.resource_scope(|world, mut editor: Mut<Editor>| {
-        synchronize_stamp(&mut editor, next);
+        let had_projection = editor.projection.is_some();
+        if synchronize_stamp(&mut editor, next) && had_projection {
+            clear_preview(world, &services.engine, &services.bridge, &presented_owner)?;
+        }
         let mut result = json!({"handled":false});
         if !modal_empty {
             editor.press = None;
             return Ok(result);
         }
         if event.context.as_ref() != Some(&presented_owner) {
+            editor.press = None;
+            return Ok(result);
+        }
+        if editor.projection.is_some() {
+            if matches!(&event.event, WindowEvent::KeyboardInput(key)
+                if key.state == ButtonState::Pressed && key.key_code == KeyCode::Escape)
+                && !event.modifiers.ctrl && !event.modifiers.meta && !event.modifiers.alt {
+                clear_preview(world, &services.engine, &services.bridge, &presented_owner)?;
+                editor.projection = None;
+                return Ok(json!({"handled":true,"cancelled":true}));
+            }
+            // A read-only candidate owns its preview until Confirm or Cancel;
+            // ordinary canvas hover must not replace it or edit geometry.
             editor.press = None;
             return Ok(result);
         }
@@ -966,6 +1000,7 @@ pub(crate) fn process_one(
                             return Ok(json!({"handled":true,"closed_measure":true}));
                         }
                         editor.draft.escape();
+                        editor.projection = None;
                         if editor.stamp.as_ref().is_none_or(|stamp| stamp.sketch.is_none()) {
                             solid::clear(world, &presented_owner)?;
                         }
@@ -1124,7 +1159,10 @@ pub(crate) fn synchronize_controls(
     let assets = world.resource::<ViewportUiAssets>().clone();
     let theme = crate::native_viewport::ui::theme(world);
     world.resource_scope(|world, mut editor: Mut<Editor>| {
-        synchronize_stamp(&mut editor, next);
+        let had_projection = editor.projection.is_some();
+        if synchronize_stamp(&mut editor, next) && had_projection {
+            clear_preview(world, &services.engine, &services.bridge, owner)?;
+        }
         support::present(world, owner, &editor.support)?;
         interaction::present(world, owner, &editor.interaction)?;
         let rows: Vec<(String, EditorCommand)> =
@@ -1168,6 +1206,10 @@ pub(crate) fn synchronize_controls(
                     rows.push((label.into(), EditorCommand::Interaction(command)));
                 }
                 rows.push(("Finish sketch".into(), EditorCommand::Finish));
+                rows.push((
+                    "Project".into(),
+                    EditorCommand::Projection(projection::Command::Open),
+                ));
                 if editor.draft.tool.is_some() {
                     rows.push(("Cancel tool".into(), EditorCommand::Cancel));
                 }
@@ -1293,6 +1335,7 @@ pub(crate) fn synchronize_controls(
         support::synchronize(world, camera, &editor, canvas)?;
         dynamic::synchronize(world, camera, &services.engine, owner, &editor, canvas)?;
         palette::synchronize(world, camera, services, owner, &editor, canvas)?;
+        projection::synchronize(world, camera, &editor, canvas)?;
         annotations::synchronize(world, camera, services, owner, &editor, canvas)
     })
 }

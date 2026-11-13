@@ -38,6 +38,7 @@ mod params;
 mod plane;
 mod profile_identity;
 mod project;
+pub mod projection;
 pub use project::PROJECT_SCHEMA_VERSION;
 mod session;
 mod sketch;

@@ -28,9 +28,9 @@ pub const PROJECT_FORMAT: &str = "limo-cad-project";
 pub const LEGACY_PROJECT_FORMAT: &str = "tfcad-project";
 pub const PREVIOUS_PROJECT_FORMAT: &str = "nbcad-project";
 
-/// Schema 16 adds authored drafting graphs linked to technical sheet IDs.
+/// Schema 17 retains associative sketch projections; schema 16 added drafting.
 /// Older readers reject the schema instead of editing sheets without those links.
-pub const PROJECT_SCHEMA_VERSION: u32 = 16;
+pub const PROJECT_SCHEMA_VERSION: u32 = 17;
 
 mod profile_selection;
 
@@ -166,13 +166,29 @@ pub(crate) fn decode_project(json: &str) -> Result<ProjectModelV9, String> {
             migrate_v2_to_v3(&mut header);
         }
         2 => migrate_v2_to_v3(&mut header),
-        3..=15 => {}
+        3..=16 => {}
         version if version == u64::from(PROJECT_SCHEMA_VERSION) => {}
         _ => {
             return Err(format!(
                 "project schema {schema_version} is not supported by this build (latest: {PROJECT_SCHEMA_VERSION})"
             ));
         }
+    }
+
+    if schema_version < 17
+        && header
+            .get("sketches")
+            .and_then(|value| value.as_array())
+            .is_some_and(|sketches| {
+                sketches.iter().any(|sketch| {
+                    sketch
+                        .pointer("/snapshot/projection_bindings")
+                        .and_then(|value| value.as_array())
+                        .is_some_and(|bindings| !bindings.is_empty())
+                })
+            })
+    {
+        return Err("Older project schema cannot contain associative sketch projections".into());
     }
 
     if schema_version < 16

@@ -110,7 +110,7 @@ impl SketchSession {
                 candidates.push((point, target));
             }
         }
-        for edge in &self.projected_edges {
+        for edge in self.reference_edges_iter() {
             let points: Vec<_> = if let Some(circle) = edge.circle {
                 trimext::line_circle(
                     &ray,

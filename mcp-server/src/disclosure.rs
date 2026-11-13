@@ -549,6 +549,10 @@ pub fn tags_for_tool(name: &str) -> (FocusPack, bool) {
         | "sketch_active"
         | "sketch_finished"
         | "sketch_profiles"
+        | "sketch_projection_sources"
+        | "sketch_projections"
+        | "sketch_project"
+        | "sketch_projection_remove"
         | "sketch_add_line"
         | "sketch_add_line_locked"
         | "sketch_add_midpoint_line"
@@ -962,6 +966,10 @@ mod tests {
             "sketch_finished",
             "sketch_profiles",
             "sketch_add_line",
+            "sketch_projection_sources",
+            "sketch_projections",
+            "sketch_project",
+            "sketch_projection_remove",
             "sketch_add_line_locked",
             "sketch_add_midpoint_line",
             "sketch_add_point",
@@ -1081,7 +1089,17 @@ mod tests {
             "cam_simulate_gcode",
             "cam_post_events",
         ];
-        assert_eq!(modeling.len(), 129);
+        // The four associative Projection tools extend the prior 129-tool list.
+        assert_eq!(modeling.len(), 133);
+        assert_eq!(
+            modeling
+                .iter()
+                .copied()
+                .collect::<std::collections::HashSet<_>>()
+                .len(),
+            modeling.len(),
+            "modeling tool coverage must not contain duplicate entries"
+        );
         for name in modeling {
             let (pack, spine) = tags_for_tool(name);
             assert!(
@@ -1090,6 +1108,9 @@ mod tests {
             );
             if name.starts_with("assembly_") {
                 assert_eq!(pack, FocusPack::Assembly, "{name}");
+            }
+            if name.starts_with("sketch_") {
+                assert_eq!(pack, FocusPack::Sketch, "{name}");
             }
             let _ = spine;
         }
