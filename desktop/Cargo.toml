@@ -111,8 +111,8 @@ bevy = { version = "=0.20.0", default-features = false, features = [
   # Keep compressed KTX2/tonemapping support using the native zstd backend.
   "zstd_c",
 ] }
-bevy_ecs = "=0.20.0"
-bevy_gizmos = "=0.20.0"
+bevy_ecs = "=0.20.1"
+bevy_gizmos = "=0.20.1"
 bevy_reflect = "=0.20.1"
 # Native renderers share a device across threads. Bevy disables wgpu's default
 # features; std is required for wgpu's documented thread-local error scopes.
@@ -123,11 +123,11 @@ raw-window-handle = "0.6.2"
 accesskit = { version = "=0.24.1" }
 svg2pdf = { version = "=0.13.0", default-features = false }
 winit = { version = "=0.30.13", default-features = false }
-rfd = { version = "0.17.2", default-features = false, features = ["xdg-portal", "wayland"] }
+rfd = { version = "0.18.0", default-features = false, features = ["xdg-portal", "wayland"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 tokio = { version = "1.53.3", features = ["time", "rt"] }
-ashpd = { version = "=0.13.13", default-features = false, features = ["tokio", "print", "raw_handle", "wayland"] }
+ashpd = { version = "=0.14.0", default-features = false, features = ["tokio", "print", "raw_handle", "wayland"] }
 hidapi = { version = "2.6.7", default-features = false, features = ["linux-static-hidraw"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
