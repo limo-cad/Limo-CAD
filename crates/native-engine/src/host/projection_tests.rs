@@ -43,6 +43,14 @@ fn explicit_closed_projection_case(rectangle: bool, hole: bool) {
     let catalog = value(host.engine_call("profile_catalog", ""));
     let profiles = catalog[1]["profiles"].as_array().unwrap();
     assert_eq!(profiles.len(), if hole { 2 } else { 1 }, "{catalog}");
+    if !rectangle {
+        let circle = profiles
+            .iter()
+            .find(|profile| profile["curves"][0]["kind"] == "circle")
+            .unwrap();
+        assert_eq!(circle["curves"].as_array().unwrap().len(), 1);
+        assert_eq!(circle["curves"][0]["radius"], 5.);
+    }
     if hole {
         assert_eq!(
             profiles.iter().filter(|p| p["nesting_depth"] == 1).count(),
@@ -92,12 +100,15 @@ fn explicit_closed_projection_case(rectangle: bool, hole: bool) {
             })
             .sum::<f64>()
             .abs();
+        // This measures the displayed mesh, whose circular tessellation is
+        // approximate. Profile curves above separately retain the exact circle.
         assert!(
-            (volume - expected_volume).abs() < expected_volume * 0.005,
+            (volume - expected_volume).abs() < expected_volume * 0.01,
             "volume {volume}, expected {expected_volume}"
         );
+        volume
     };
-    check(&host);
+    let volume = check(&host);
     let snapshot = host.project_snapshot().unwrap();
     let archive = limo_cad_project_file::ProjectArchive::new(
         snapshot.model_json().to_owned(),
@@ -118,7 +129,7 @@ fn explicit_closed_projection_case(rectangle: bool, hole: bool) {
                 .unwrap(),
         ),
     );
-    check(&cold);
+    assert!((check(&cold) - volume).abs() < 1e-9);
     assert_eq!(
         value(cold.engine_call("profile_catalog", ""))[1]["profiles"],
         catalog[1]["profiles"]
