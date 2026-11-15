@@ -363,6 +363,7 @@ fn invalid_saved_boundaries_and_point_ownership_are_rejected_atomically() {
         "radius",
         "origin_plane",
         "generated_point",
+        "explicit_origin",
     ] {
         let mut model: serde_json::Value = serde_json::from_str(&original).unwrap();
         let face = model["sketches"]
@@ -372,6 +373,11 @@ fn invalid_saved_boundaries_and_point_ownership_are_rejected_atomically() {
             .find(|s| s["name"] == "Sketch2")
             .unwrap();
         match invalid {
+            "explicit_origin" => {
+                for edge in face["support_boundary"].as_array_mut().unwrap() {
+                    edge["origin"] = "explicit_projection".into();
+                }
+            }
             "entity_id" => face["support_boundary"][0]["id"] = 1.into(),
             "duplicate" => {
                 let first = face["support_boundary"][0].clone();

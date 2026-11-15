@@ -411,7 +411,8 @@ pub(crate) fn validate_project(model: &ProjectModelV9) -> Result<(), String> {
             let mut ids = HashSet::new();
             let mut edges = HashSet::new();
             for edge in boundary {
-                if !(1_u64 << 40..1_u64 << 41).contains(&edge.id)
+                if edge.origin != crate::ProjectedEdgeOrigin::SupportBoundary
+                    || !(1_u64 << 40..1_u64 << 41).contains(&edge.id)
                     || !ids.insert(edge.id)
                     || !edges.insert(edge.edge_id)
                     || edge.points.len() < 2
