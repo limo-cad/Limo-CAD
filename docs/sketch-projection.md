@@ -36,6 +36,8 @@ Project model schema 17 stores source identities and the ID high-water mark. It
 reads older projects; older applications reject the new schema rather than
 discarding associations. The native composite snapshot remains CBOR v1.
 
-This branch depends on the shared project-format foundation in PR #516. Native
-rendering, pointer/keyboard acceptance and cross-platform qualification must be
-recorded before this development draft is marked ready.
+The shared project-format foundation was merged in PR #516. The
+[native evidence and provenance](media/sketch-projection/README.md) record the
+qualified rendering, Linux keyboard traversal and minimum-window locale cases.
+OS pointer delivery, other-platform OS input and whole-app layout/performance
+remain unqualified. The broad UI/MCP survey remains paused.
