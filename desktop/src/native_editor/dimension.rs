@@ -193,6 +193,7 @@ mod tests {
     #[test]
     fn support_edge_picking_is_finite_zoom_independent_and_returns_stable_topology() {
         let edges = [ProjectedEdgeDto {
+            origin: Default::default(),
             id: 1 << 40,
             edge_id: EdgeId(8),
             points: vec![SketchPoint::new(0., 10.), SketchPoint::new(100., 10.)],

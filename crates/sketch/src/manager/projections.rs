@@ -342,6 +342,36 @@ mod tests {
     }
 
     #[test]
+    fn projection_origin_roundtrips_and_legacy_support_remains_passive() {
+        let (mut manager, source, _) = fixture();
+        let dto = manager
+            .project_curves(ProjectCurvesRequest {
+                sources: vec![source],
+            })
+            .unwrap();
+        let explicit = &dto.projected_edges[0];
+        assert_eq!(
+            explicit.origin,
+            crate::ProjectedEdgeOrigin::ExplicitProjection
+        );
+        let mut wire = serde_json::to_value(explicit).unwrap();
+        assert_eq!(wire["origin"], "explicit_projection");
+        assert_eq!(
+            serde_json::from_value::<ProjectedEdgeDto>(wire.clone()).unwrap(),
+            *explicit
+        );
+        wire.as_object_mut().unwrap().remove("origin");
+        let legacy: ProjectedEdgeDto = serde_json::from_value(wire.clone()).unwrap();
+        assert_eq!(legacy.origin, crate::ProjectedEdgeOrigin::SupportBoundary);
+        assert_eq!(serde_json::to_value(legacy).unwrap(), wire);
+        assert_eq!(manager.undo().unwrap().sketch.projected_edges.len(), 0);
+        assert_eq!(
+            manager.redo().unwrap().sketch.projected_edges,
+            dto.projected_edges
+        );
+    }
+
+    #[test]
     fn circular_contacts_cannot_cross_projected_segment_identity_ranges() {
         let (mut manager, source, _) = fixture();
         manager

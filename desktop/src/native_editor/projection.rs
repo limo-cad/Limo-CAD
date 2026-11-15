@@ -639,6 +639,7 @@ mod tests {
             normal: [0., 0., 1.],
         };
         let mut edge = limo_cad_sketch::ProjectedEdgeDto {
+            origin: Default::default(),
             id: 1,
             edge_id: limo_cad_core::EdgeId(1),
             points: vec![SketchPoint::new(0., 0.), SketchPoint::new(2., 3.)],

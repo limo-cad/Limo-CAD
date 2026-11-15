@@ -253,6 +253,7 @@ pub(crate) fn project_sketch_curve(
         return Err(ProjectionError::CollapsedLine);
     }
     Ok(crate::ProjectedEdgeDto {
+        origin: crate::ProjectedEdgeOrigin::ExplicitProjection,
         id: binding.curve_id(),
         edge_id: binding.edge_id(),
         points,

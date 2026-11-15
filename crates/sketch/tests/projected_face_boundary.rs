@@ -319,6 +319,7 @@ fn geometry_snaps_exactly_onto_the_projected_boundary() {
         false,
     );
     session.set_projected_edges(vec![ProjectedEdgeDto {
+        origin: Default::default(),
         id: RESERVED_ID_FLOOR,
         edge_id: EdgeId(7),
         points: vec![Vec2::new(0.0, 10.0), Vec2::new(20.0, 10.0)],

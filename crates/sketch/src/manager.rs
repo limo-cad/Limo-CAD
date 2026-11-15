@@ -5932,6 +5932,7 @@ fn projected_face_boundary_edges(
                 )
             });
             Some(ProjectedEdgeDto {
+                origin: Default::default(),
                 id: PROJECTED_EDGE_ID_BASE + index as u64,
                 edge_id: edge.id,
                 points,
@@ -6815,7 +6816,9 @@ pub(crate) fn profile_catalog_item(
                 continue;
             }
             let id = projected_id * SEGMENT_ID_STRIDE + piece as u64;
-            projected_segments.insert(id);
+            if edge.origin == crate::ProjectedEdgeOrigin::SupportBoundary {
+                projected_segments.insert(id);
+            }
             segments.push(Segment2 { id, a, b });
         }
     }

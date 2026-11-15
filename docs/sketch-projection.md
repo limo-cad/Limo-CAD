@@ -13,8 +13,11 @@ Splines use the existing sampled profile representation, bounded to 2–250 fit
 points and 999 segments per projected curve. Solid-body edges and
 oblique circular-to-ellipse conversion are outside this first implementation.
 
-Projected curves can bound a profile and participate in the existing external
-reference constraints. They add no authored sketch entities or independent DOF.
+Explicitly projected curves can form a closed profile by themselves, close a
+region together with drawn geometry, and form holes inside another profile.
+Automatic support-face boundaries still cannot form a selectable profile alone.
+Both participate in the existing external reference constraints and add no
+authored sketch entities or independent DOF.
 Remove constraints using a reference before removing it. Deleting a source leaves
 an identifiable broken reference for repair; it does not silently reuse cached
 geometry or bind another curve. A broken reference blocks that sketch's downstream
