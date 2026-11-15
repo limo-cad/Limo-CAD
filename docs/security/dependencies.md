@@ -25,29 +25,25 @@ one leading `**/` to absorb the scanner's extraction prefix:
 - `**/Limo-CAD-0.3.0-rc.3-windows-x64/z.dll`
 - `**/Limo-CAD-0.3.0-rc.3-windows-arm64/z.dll`
 
-**Upstream follow-up, 2026-11-10:** [zlib 1.4](https://github.com/madler/zlib/releases/tag/v1.4)
-includes [the CVE-2026-85091 repair `df84af25`](https://github.com/madler/zlib/commit/df84af25dc1942490e1d1c899a07619152a46148).
-The fix resets `avail_in` and `next_in` when a direct non-blocking write fails;
-the released tag contains that commit. Microsoft vcpkg also ships the identical
-patch in **1.3.2#3**, introduced by [commit `520c3b78`](https://github.com/microsoft/vcpkg/commit/520c3b781ac2abf391887d286d569f74ae6bf752).
-Its file is named `CVE-2026-76844.patch`, but the patch header and contents
-explicitly identify the upstream CVE-2026-85091 repair. This verifies published
-source availability, not remediation of the current CAD packages.
+The Windows overlay now selects **zlib 1.3.2#3**, copied from
+[vcpkg commit `520c3b78`](https://github.com/microsoft/vcpkg/commit/520c3b781ac2abf391887d286d569f74ae6bf752).
+It backports [upstream zlib commit `df84af25`](https://github.com/madler/zlib/commit/df84af25dc1942490e1d1c899a07619152a46148),
+which fixes CVE-2026-85091 and is also included in
+[zlib 1.4](https://github.com/madler/zlib/releases/tag/v1.4). The vcpkg patch keeps
+its upstream filename `CVE-2026-76844.patch`; its contents identify CVE-2026-85091.
+The [regression and provenance record](../../native/occt-overlay/zlib/README.md)
+checks the pinned source archive's SHA512 and exercises stalled compressed and
+direct writes. Both modes pass with the patch and fail under AddressSanitizer
+without it; zlib's upstream example also passes. CI repeats this source check.
+The existing Windows DLL consumer guard remains in force. Fresh Windows x64 and
+ARM64 builds and inspections are still required to qualify the shipped repair.
 
-The pinned [vcpkg baseline `716b4204`](https://github.com/microsoft/vcpkg/blob/716b42043743cdceabed9c8e2e6cf80ddae1e0c1/ports/zlib/portfile.cmake)
-still builds **1.3.2#1** without that patch. Adopting the backport requires a
-controlled dependency update, a regression against the shipped source, and new
-Windows x64/ARM64 package/consumer checks. A full 1.4 update additionally needs
-review of its Windows library-name and offset-type changes. [Upstream PR #1320](https://github.com/madler/zlib/pull/1320)
-is closed without merging; it is not the basis of this fix assessment.
-
-The native SBOM currently reports `1.3.2` without the vcpkg port revision. A
-verified patched `1.3.2#3` port can retain that scanner identity and may need a
-new reviewed, package-specific decision. The rc-only exceptions above expired
-on 2026-11-06 and do not cover final 0.3.0 packages. No exception deadline,
-package scope or VEX claim is changed by this investigation. Remove or replace
-the old rules only after the exact final packages have been reassessed, retaining
-the investigation record and normal release scans.
+The native SBOM reports `1.3.2` without the vcpkg port revision. This backport
+therefore retains the vulnerable release's scanner identity. The four rc-only
+exceptions and their **2026-11-06** review deadline remain unchanged and expired;
+they do not cover final 0.3.0 packages. Reassess the exact packaged binaries and
+scanner findings before replacing or removing those rules through owner review.
+No new VEX claim or release acceptance is made by this source repair.
 
 Local cargo-audit 0.22.2 checks of the engine, desktop and MCP lockfiles reported
 zero known RustSec vulnerabilities and the two warnings above, using RustSec DB

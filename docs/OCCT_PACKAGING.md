@@ -161,7 +161,8 @@ Windows targets are x64 and ARM64 on Windows 10 version 1803 or newer and
 Windows 11. They require Microsoft's
 centrally installed matching Visual C++ v14 Redistributable.
 
-The root `vcpkg.json` pins both the vcpkg registry and OCCT 8.0.1. The Windows
+The root `vcpkg.json` pins the vcpkg registry, OCCT 8.0.1 and the reviewed
+[zlib 1.3.2#3 backport](../native/occt-overlay/zlib/README.md). The Windows
 packager compiles the native Cargo executable, copies the complete
 DLL set from the isolated vcpkg prefix beside the executable, adds licenses,
 and creates a ZIP plus SHA-256 file:
