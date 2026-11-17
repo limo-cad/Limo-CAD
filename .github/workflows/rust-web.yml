@@ -47,6 +47,10 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-rust
+      - name: Verify the zlib non-blocking write backport
+        env:
+          CC: clang
+        run: python3 native/occt-overlay/zlib/verify.py
       - name: Check private workspace boundary (offline)
         run: |
           rustc --edition=2021 -D warnings scripts/ci/check-workspace-policy.rs -o "$RUNNER_TEMP/check-workspace-policy"

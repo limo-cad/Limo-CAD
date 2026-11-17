@@ -1,0 +1,53 @@
+{
+    "passed_checks":  [
+                          "blank owned design",
+                          "first API capture after Apply",
+                          "25 to35 mm edit with identity retained",
+                          "Undo and Redo",
+                          "hide and show",
+                          "save close and reopen"
+                      ],
+    "schema_version":  1,
+    "application":  {
+                        "reviewed_head":  "de965ef506d038d184d0e3b77f26d8b372993acf",
+                        "artifact_id":  "13652597436",
+                        "git_tree":  "7f6b4d3fae7f0d881ca9e327f1664d07f2102b2f",
+                        "version":  "0.3.0",
+                        "run":  "https://github.com/limo-cad/Limo-CAD/actions/runs/42551927883",
+                        "modified":  false,
+                        "package_sha256":  "2b3e488f2d2a5037281402e79a9290b14ebffe9091f92a94c72c9cd5fa4985e2",
+                        "executable_sha256":  "5fdd17da13821c03d2198e0d9d5564c64a8611f0d84be6628e50d93a2aa0ef27",
+                        "compiled_revision":  "fa2f3240a34e79425bc584ac8a09f3342f8d8554"
+                    },
+    "fixture_revision":  "00d15d4cb8d55addfe148a4333d3591b12b8178a",
+    "platform":  {
+                     "architecture":  "64-bit",
+                     "name":  "Microsoft Windows 11 Pro",
+                     "version":  "10.0.26200",
+                     "build":  "26200"
+                 },
+    "images":  [
+                   {
+                       "file":  "02-immediate-after-apply.png",
+                       "bytes":  868461,
+                       "sha256":  "26a8397fac1c087a5022f0629d65986220b9ecd65efddf73482a24e7703fce9e"
+                   },
+                   {
+                       "file":  "06-hidden.png",
+                       "bytes":  853317,
+                       "sha256":  "674c0afe99ea52329d9bc4909c3884cc0026f97080f61e5e7b79054ab478e232"
+                   },
+                   {
+                       "file":  "08-reopened.png",
+                       "bytes":  858671,
+                       "sha256":  "d3993556de541940614552ee41476a19a8f06ce4a398a046c95eb23f7c657968"
+                   }
+               ],
+    "limitations":  [
+                        "API capture can request redraw",
+                        "no passive wake or physical OS input claim",
+                        "no original reporter build/steps",
+                        "no Kubuntu coverage"
+                    ],
+    "issue":  383
+}

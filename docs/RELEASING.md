@@ -16,7 +16,7 @@ agree with it:
 
 | Carrier | Why it exists |
 | --- | --- |
-| `Cargo.toml` (`[workspace.package]`) | the one Rust version; all eleven engine crates and `xtask` inherit it with `version.workspace = true` |
+| `Cargo.toml` (`[workspace.package]`) | the shared Rust version; workspace members inherit it with `version.workspace = true` |
 | `desktop/Cargo.toml`, `mcp-server/Cargo.toml` | separate workspaces, so they declare the version themselves |
 | `Cargo.lock`, `desktop/Cargo.lock`, `mcp-server/Cargo.lock` | lockfiles record the version of every local package |
 | `vcpkg.json` | native dependency manifest identity |
@@ -39,6 +39,9 @@ Adding a new carrier means adding it to `inventory()` in
 `xtask/src/release_tooling/version.rs` and, when it is a file, to the table above. The notes
 in [`release-notes/`](release-notes/README.md) are deliberately **not** carriers:
 they record what one release contained, so a later bump must never rewrite them.
+The four `README*.md` entrances and `knowledge/home*.html` pages are also not
+carriers: their download links describe published packages. Version sync leaves
+them unchanged; update every language together after publication in step 5.
 
 ## Choosing the number
 
@@ -68,6 +71,12 @@ carriers disagree with `VERSION`.
    cargo xtask version --check
    cargo metadata --offline --locked --format-version 1 > /dev/null
    ```
+
+   The Version guard also validates advisory review deadlines before packaging.
+   When a pull request builds all five packages, the package workflow verifies
+   their unsigned inventories and scans current advisories before review. Tag
+   builds additionally require signed release evidence; PR scans do not replace
+   those publication checks.
 
 2. **Merge** after review. `main` requires an approving review, and the author
    cannot approve their own PR.
