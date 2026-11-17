@@ -320,6 +320,9 @@ unsafe impl Send for ffi::Kernel {}
 
 pub struct OcctKernel {
     inner: UniquePtr<ffi::Kernel>,
+    /// Limo CAD's own kernel, selected with `LIMO_CAD_KERNEL=limo`. It then
+    /// evaluates every recompute; `inner` stays empty.
+    limo: Option<Box<limo_cad_kernel::Kernel>>,
     geometry_owner: u64,
     /// Only a fully successful replay may seed the next append. The jobs
     /// include all resolved geometry inputs, not just feature IDs/revisions.
@@ -469,7 +472,44 @@ impl std::fmt::Debug for OcctKernel {
     }
 }
 
+/// The modelling kernel is chosen per process: `LIMO_CAD_KERNEL=limo` selects
+/// Limo CAD's own analytic kernel, anything else Open CASCADE.
+pub fn limo_kernel_selected() -> bool {
+    std::env::var("LIMO_CAD_KERNEL").is_ok_and(|value| value.eq_ignore_ascii_case("limo"))
+}
+
+/// Opt-in kernel benchmarking: `LIMO_CAD_KERNEL_TIMING=<file>` appends one
+/// line per recompute. Unset in normal use.
+fn kernel_timing_log() -> Option<&'static std::path::Path> {
+    static LOG: std::sync::OnceLock<Option<std::path::PathBuf>> = std::sync::OnceLock::new();
+    LOG.get_or_init(|| {
+        std::env::var_os("LIMO_CAD_KERNEL_TIMING")
+            .filter(|value| !value.is_empty())
+            .map(std::path::PathBuf::from)
+    })
+    .as_deref()
+}
+
+const LIMO_SERVICE_UNAVAILABLE: &str =
+    "This operation still runs on Open CASCADE and is not available with the Limo kernel yet";
+
 impl OcctKernel {
+    /// True when Limo CAD's own kernel evaluates this document.
+    pub fn uses_limo_kernel(&self) -> bool {
+        self.limo.is_some()
+    }
+
+    /// Exact OCCT shapes behind the read-only services (drawings, sections,
+    /// interference, measurement, STEP).
+    fn shapes(&self) -> Result<&ffi::Kernel, OcctError> {
+        if self.limo.is_some() {
+            return Err(OcctError(LIMO_SERVICE_UNAVAILABLE.into()));
+        }
+        self.inner
+            .as_ref()
+            .ok_or_else(|| OcctError("OCCT kernel was released".into()))
+    }
+
     pub(crate) fn section_geometry(
         &self,
         request: &crate::section_review::SectionReviewRequest,
@@ -483,7 +523,7 @@ impl OcctKernel {
     ) -> Result<crate::section_review::SectionGeometry, OcctError> {
         request.validate().map_err(OcctError)?;
         let raw = self
-            .inner
+            .shapes()?
             .section_geometry(
                 request.body_id.0,
                 &ffi::FfiSectionOptions {
@@ -529,6 +569,7 @@ impl OcctKernel {
         }
         Ok(Self {
             inner,
+            limo: limo_kernel_selected().then(|| Box::new(limo_cad_kernel::Kernel::new())),
             geometry_owner,
             successful_jobs: None,
             support_cache: BTreeMap::new(),
@@ -554,9 +595,7 @@ impl OcctKernel {
     ) -> Result<DetachedDrawingKernel, OcctError> {
         let ids = ids.iter().map(|id| id.0).collect();
         let inner = self
-            .inner
-            .as_ref()
-            .ok_or_else(|| OcctError("OCCT kernel was released".into()))?
+            .shapes()?
             .drawing_snapshot(&ids)
             .map_err(|error| OcctError(error.to_string()))?;
         let mut result = Self::new()?;
@@ -597,6 +636,13 @@ impl OcctKernel {
     }
 
     pub fn active_body_ids(&self) -> Result<Vec<limo_cad_core::BodyId>, OcctError> {
+        if let Some(limo) = &self.limo {
+            return Ok(limo
+                .body_ids()
+                .into_iter()
+                .map(limo_cad_core::BodyId)
+                .collect());
+        }
         let kernel = self
             .inner
             .as_ref()
@@ -616,6 +662,21 @@ impl OcctKernel {
     pub fn body_geometry_identities(
         &self,
     ) -> Result<BTreeMap<limo_cad_core::BodyId, crate::KernelBodyGeometryIdentity>, OcctError> {
+        if let Some(limo) = &self.limo {
+            return Ok(limo
+                .generations()
+                .into_iter()
+                .map(|(id, generation)| {
+                    (
+                        limo_cad_core::BodyId(id),
+                        crate::KernelBodyGeometryIdentity {
+                            kernel_owner: self.geometry_owner,
+                            generation,
+                        },
+                    )
+                })
+                .collect());
+        }
         let generations = self
             .inner
             .as_ref()
@@ -649,6 +710,9 @@ impl OcctKernel {
         &self,
         feature: limo_cad_core::FeatureId,
     ) -> Result<(Self, limo_cad_core::FeatureId, Vec<String>), OcctError> {
+        if self.limo.is_some() {
+            return Err(OcctError(LIMO_SERVICE_UNAVAILABLE.into()));
+        }
         let jobs = self
             .successful_jobs
             .as_ref()
@@ -707,6 +771,48 @@ impl OcctKernel {
         plan: &RecomputePlanDto,
         queries: &[limo_cad_solid::HistorySupportQuery],
     ) -> Result<(KernelSceneDto, BTreeSet<limo_cad_core::FeatureId>), OcctError> {
+        let Some(log) = kernel_timing_log() else {
+            return self.recompute_untimed(plan, queries);
+        };
+        let started = std::time::Instant::now();
+        let result = self.recompute_untimed(plan, queries);
+        let elapsed = started.elapsed().as_nanos();
+        // One line per recompute: kernel, jobs, feature errors, nanoseconds.
+        if let Ok(mut file) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(log)
+        {
+            use std::io::Write as _;
+            let errors = result
+                .as_ref()
+                .map_or(usize::MAX, |(scene, _)| scene.errors.len());
+            let _ = writeln!(
+                file,
+                "{}\t{}\t{errors}\t{elapsed}",
+                if self.limo.is_some() { "limo" } else { "occt" },
+                plan.jobs.len(),
+            );
+        }
+        result
+    }
+
+    fn recompute_untimed(
+        &mut self,
+        plan: &RecomputePlanDto,
+        queries: &[limo_cad_solid::HistorySupportQuery],
+    ) -> Result<(KernelSceneDto, BTreeSet<limo_cad_core::FeatureId>), OcctError> {
+        if let Some(limo) = &mut self.limo {
+            let (scene, verified) = limo.recompute_with_supports(plan, queries);
+            self.projection_cache.get_mut().unwrap().clear();
+            self.support_cache.clear();
+            self.successful_jobs = scene.errors.is_empty().then(|| plan.jobs.clone());
+            #[cfg(test)]
+            {
+                self.last_applied_jobs = limo.last_applied_jobs;
+            }
+            return Ok((scene, verified));
+        }
         let queries = queries
             .iter()
             .filter_map(|query| {
@@ -881,9 +987,7 @@ impl OcctKernel {
                 }
             }
         }
-        self.inner
-            .as_ref()
-            .ok_or_else(|| OcctError("OCCT kernel was released".to_string()))?
+        self.shapes()?
             .export_step(&body_ids, &thread_metadata_hex, &occurrence_placements_hex)
             .map_err(|error| OcctError(error.to_string()))
     }
@@ -965,9 +1069,7 @@ impl OcctKernel {
         self.projection_calculations
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let raw = self
-            .inner
-            .as_ref()
-            .ok_or_else(|| OcctError("OCCT kernel was released".to_string()))?
+            .shapes()?
             .drawing_projection(
                 &body_ids,
                 &occurrences,
@@ -1039,9 +1141,7 @@ impl OcctKernel {
         b: PlacedBodyQueryDto,
     ) -> Result<ExactInterferenceResultDto, OcctError> {
         let raw = self
-            .inner
-            .as_ref()
-            .ok_or_else(|| OcctError("OCCT kernel was released".to_string()))?
+            .shapes()?
             .exact_interference(
                 &ffi::FfiBodyPlacement {
                     body_id: a.body_id.0,
@@ -1076,10 +1176,10 @@ impl OcctKernel {
         &self,
         request: &MeshExportRequest,
     ) -> Result<Vec<TriangleMesh>, OcctError> {
-        let kernel = self
-            .inner
-            .as_ref()
-            .ok_or_else(|| OcctError("OCCT kernel was released".to_string()))?;
+        if let Some(limo) = &self.limo {
+            return limo_tessellate_bodies(limo, request);
+        }
+        let kernel = self.shapes()?;
         let available = kernel.body_ids();
         if available.is_empty() {
             return Err(OcctError(
@@ -1140,6 +1240,54 @@ impl OcctKernel {
         limo_cad_export::ExportFacade::export_3mf(&meshes, appearances, request)
             .map_err(|error| OcctError(error.to_string()))
     }
+}
+
+/// Export meshes straight from the Limo kernel's exact bodies.
+fn limo_tessellate_bodies(
+    limo: &limo_cad_kernel::Kernel,
+    request: &MeshExportRequest,
+) -> Result<Vec<TriangleMesh>, OcctError> {
+    let available = limo.body_ids();
+    if available.is_empty() {
+        return Err(OcctError(
+            "There are no active bodies to export.".to_string(),
+        ));
+    }
+    let selected: Vec<u64> = if request.body_ids.is_empty() {
+        available
+    } else {
+        let mut ids = request.body_ids.iter().map(|id| id.0).collect::<Vec<_>>();
+        ids.sort_unstable();
+        ids.dedup();
+        for body_id in &ids {
+            if !available.contains(body_id) {
+                return Err(OcctError(format!("Selected body {body_id} is not active.")));
+            }
+        }
+        ids
+    };
+    selected
+        .into_iter()
+        .map(|body_id| {
+            let mesh = limo
+                .tessellate(
+                    body_id,
+                    request.linear_deflection,
+                    request.angular_deflection,
+                )
+                .ok_or_else(|| OcctError(format!("Selected body {body_id} is not active.")))?;
+            Ok(TriangleMesh {
+                body_id: limo_cad_core::BodyId(body_id),
+                name: format!("Body{body_id}"),
+                positions: mesh
+                    .positions
+                    .iter()
+                    .flat_map(|point| [point.x, point.y, point.z])
+                    .collect(),
+                indices: mesh.indices,
+            })
+        })
+        .collect()
 }
 
 fn validate_projection_basis(direction: [f64; 3], up: [f64; 3]) -> Result<(), OcctError> {

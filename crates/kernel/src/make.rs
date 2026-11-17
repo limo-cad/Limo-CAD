@@ -480,3 +480,112 @@ pub fn cylinder(base: V3, axis: V3, radius: f64, height: f64) -> Result<Body, St
     };
     extrude(&region, n, 0.0, height)
 }
+
+/// Solid of revolution of a closed polygon in the half-plane `(ρ, h)` about
+/// the axis through `origin` (full turn). Points with `ρ = 0` lie on the
+/// axis. No Booleans and no seam edges: every face is bounded by full
+/// circles only.
+pub fn lathe(origin: V3, axis: V3, profile: &[(f64, f64)]) -> Result<Body, String> {
+    let a = axis.unit();
+    if a.len2() < 0.5 {
+        return Err("revolve axis is degenerate".into());
+    }
+    // Drop repeated points and normalise to counter-clockwise (material on
+    // the left, outward to the right of travel).
+    let mut pts: Vec<(f64, f64)> = Vec::with_capacity(profile.len());
+    for &p in profile {
+        if p.0 < -TOL {
+            return Err("revolve profile crosses its axis".into());
+        }
+        let p = (p.0.max(0.0), p.1);
+        if pts
+            .last()
+            .is_none_or(|q: &(f64, f64)| (q.0 - p.0).hypot(q.1 - p.1) > TOL)
+        {
+            pts.push(p);
+        }
+    }
+    if pts.len() > 1 {
+        let (f, l) = (pts[0], pts[pts.len() - 1]);
+        if (f.0 - l.0).hypot(f.1 - l.1) <= TOL {
+            pts.pop();
+        }
+    }
+    let n = pts.len();
+    if n < 3 {
+        return Err("revolve profile needs at least three points".into());
+    }
+    let mut area2 = 0.0;
+    for i in 0..n {
+        let (p, q) = (pts[i], pts[(i + 1) % n]);
+        area2 += p.0 * q.1 - q.0 * p.1;
+    }
+    if area2.abs() < 1.0e-18 {
+        return Err("revolve profile encloses no area".into());
+    }
+    if area2 < 0.0 {
+        pts.reverse();
+    }
+
+    let r_hat = a.any_perp();
+    let mut body = Body::new();
+    // One closed circular edge per off-axis profile point.
+    let rings: Vec<Option<u32>> = pts
+        .iter()
+        .map(|&(rho, h)| {
+            (rho > TOL).then(|| {
+                let centre = origin + a * h;
+                let v = body.add_vert(centre + r_hat * rho);
+                let c = body.add_curve(Curve::circle(centre, a, r_hat, rho));
+                body.add_edge(c, 0.0, TAU, v, v)
+            })
+        })
+        .collect();
+    for i in 0..n {
+        let j = (i + 1) % n;
+        let ((r0, h0), (r1, h1)) = (pts[i], pts[j]);
+        let (dr, dh) = (r1 - r0, h1 - h0);
+        let mut loops: Vec<Vec<u32>> = Vec::new();
+        // Travelling counter-clockwise about the axis keeps the face on the
+        // left at the start ring; the end ring runs the other way.
+        if let Some(e) = rings[i] {
+            loops.push(vec![2 * e]);
+        }
+        if let Some(e) = rings[j] {
+            loops.push(vec![2 * e + 1]);
+        }
+        if loops.is_empty() {
+            // The segment runs along the axis: it bounds nothing.
+            continue;
+        }
+        let (surf, sense) = if dh.abs() <= TOL {
+            // Flat ring or disc; outward is to the right of travel.
+            let normal = a * (-dr.signum());
+            (Surface::plane(origin + a * h0, normal), true)
+        } else if dr.abs() <= TOL {
+            (
+                Surface {
+                    f: Frame::from_zx(origin + a * h0.min(h1), a, r_hat),
+                    ..Surface::cylinder(origin, a, r0)
+                },
+                dh > 0.0,
+            )
+        } else {
+            let apex_h = h0 - r0 * dh / dr;
+            let toward = if r0 > TOL { h0 - apex_h } else { h1 - apex_h };
+            let cone_axis = a * toward.signum();
+            let half_angle = (dr / dh).abs().atan();
+            (
+                Surface {
+                    f: Frame::from_zx(origin + a * apex_h, cone_axis, r_hat),
+                    ..Surface::cone(origin, cone_axis, half_angle)
+                },
+                dh > 0.0,
+            )
+        };
+        let s = body.add_surf(surf);
+        body.add_face(s, sense, &loops);
+    }
+    body.check()?;
+    Ok(body)
+}

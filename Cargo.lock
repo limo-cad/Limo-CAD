@@ -860,6 +860,7 @@ dependencies = [
  "limo-cad-assembly",
  "limo-cad-core",
  "limo-cad-export",
+ "limo-cad-kernel",
  "limo-cad-sketch",
  "limo-cad-solid",
  "resvg",
