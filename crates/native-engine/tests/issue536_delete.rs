@@ -425,6 +425,16 @@ fn connected_kept_tool_prefix_rejects_atomically() {
     let reply: Value =
         serde_json::from_str(&h.solid_delete_feature(&json!({"feature_id":id}).to_string()))
             .unwrap();
+    if limo_cad_occt::limo_kernel_selected() {
+        // Bodies of the Limo kernel share nothing, so a kept tool does not
+        // tie the two outputs together: the delete goes through, and the
+        // chamfer after it still ends on the upper flange.
+        assert_eq!(reply["ok"], true, "{reply}");
+        correct(&h);
+        assert!(model(&h)["fillets"].as_array().unwrap().is_empty());
+        assert_eq!(h.solid_scene_snapshot().bodies.len(), 2);
+        return;
+    }
     assert_eq!(reply["ok"], false, "{reply}");
     assert!(
         reply.to_string().contains("connected retained bodies"),
