@@ -22,7 +22,9 @@ use crate::roots::{curve_curve, curve_surface, Hits};
 use crate::simplify::unify;
 use crate::ssi::{intersect, Ssi};
 use crate::topo::{Body, NONE};
-use crate::trim::{classify, edge_closest, loop_points, EdgeMesh, FaceTrim, PtClass, TrimLoop};
+use crate::trim::{
+    classify, edge_closest, image, loop_points, EdgeMesh, FaceTrim, PtClass, TrimLoop,
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Op {
@@ -113,6 +115,8 @@ struct Side<'a> {
     body: &'a Body,
     trims: Vec<FaceTrim>,
     boxes: Vec<Aabb>,
+    /// Bounds of every edge.
+    eboxes: Vec<Aabb>,
     bbox: Aabb,
     /// Per face: faces of the other body on the same surface, and whether
     /// the outward normals agree.
@@ -136,10 +140,20 @@ impl<'a> Side<'a> {
         for b in &boxes {
             bbox.union(b);
         }
+        let eboxes: Vec<Aabb> = (0..body.edge_count() as u32)
+            .map(|e| {
+                let mut b = Aabb::EMPTY;
+                for p in mesh.edge(e) {
+                    b.add(*p);
+                }
+                b.grown(SAG + 10.0 * TOL)
+            })
+            .collect();
         Side {
             body,
             trims,
             boxes,
+            eboxes,
             bbox,
             partners: vec![Vec::new(); body.face_count()],
             sub: Vec::new(),
@@ -174,6 +188,22 @@ enum Cls {
 }
 
 pub fn boolean(a: &Body, b: &Body, op: Op) -> Result<Body, String> {
+    let result = evaluate(a, b, op);
+    if let (Err(error), Some(dir)) = (&result, std::env::var_os("LIMO_CAD_KERNEL_DUMP")) {
+        // Opt-in bug capture: keep the operands of a failed operation.
+        static NEXT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+        let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let dir = std::path::PathBuf::from(dir);
+        let stem = format!("fail-{}-{n}-{op:?}", std::process::id());
+        let _ = std::fs::create_dir_all(&dir);
+        let _ = std::fs::write(dir.join(format!("{stem}-a.body")), a.to_text());
+        let _ = std::fs::write(dir.join(format!("{stem}-b.body")), b.to_text());
+        let _ = std::fs::write(dir.join(format!("{stem}.txt")), error);
+    }
+    result
+}
+
+fn evaluate(a: &Body, b: &Body, op: Op) -> Result<Body, String> {
     if a.is_empty() {
         return match op {
             Op::Union => Ok(b.clone()),
@@ -186,11 +216,20 @@ pub fn boolean(a: &Body, b: &Body, op: Op) -> Result<Body, String> {
             _ => Ok(a.clone()),
         };
     }
+    let timing = std::env::var_os("LIMO_CAD_KERNEL_PROFILE").is_some();
+    let mut clock = std::time::Instant::now();
+    let mut lap = |name: &str| {
+        if timing {
+            eprintln!("  {name}: {:?}", clock.elapsed());
+            clock = std::time::Instant::now();
+        }
+    };
     let mut sa = Side::new(a);
     let mut sb = Side::new(b);
     if !sa.bbox.overlaps(&sb.bbox) {
         return disjoint(a, b, op);
     }
+    lap("trims");
 
     // 1. Intersection curves and coincident faces.
     let mut segs: Vec<Seg> = Vec::new();
@@ -234,6 +273,7 @@ pub fn boolean(a: &Body, b: &Body, op: Op) -> Result<Body, String> {
         }
     }
 
+    lap("intersect");
     // 2. One registry for every vertex and edge.
     let mut arr = Arr::new();
     let va: Vec<(u32, V3)> = a.verts.iter().map(|p| (arr.vert(*p), *p)).collect();
@@ -291,11 +331,14 @@ pub fn boolean(a: &Body, b: &Body, op: Op) -> Result<Body, String> {
     }
     let gmesh = EdgeMesh::build(&arr.g, SAG, PER_TURN);
 
+    lap("arrange");
     // 3-4. Split and classify.
     let pieces_a = pieces(&arr, &gmesh, &sa)?;
     let pieces_b = pieces(&arr, &gmesh, &sb)?;
+    lap("split");
     let cls_a = classify_pieces(&arr, &gmesh, &pieces_a, &sa, &sb)?;
     let cls_b = classify_pieces(&arr, &gmesh, &pieces_b, &sb, &sa)?;
+    lap("classify");
 
     // 5. Select and sew.
     let keep_a = |c: Cls| match op {
@@ -307,6 +350,23 @@ pub fn boolean(a: &Body, b: &Body, op: Op) -> Result<Body, String> {
         Op::Union => c == Cls::Out,
         Op::Cut | Op::Intersect => c == Cls::In,
     };
+    if std::env::var_os("LIMO_CAD_KERNEL_TRACE").is_some() {
+        for (name, list, cls) in [("A", &pieces_a, &cls_a), ("B", &pieces_b, &cls_b)] {
+            for (piece, c) in list.iter().zip(cls.iter()) {
+                eprintln!("{name} face {} -> {c:?}", piece.orig);
+                for lp in &piece.loops {
+                    let text: Vec<String> = lp
+                        .iter()
+                        .map(|&h| {
+                            let p = arr.g.verts[arr.g.h_origin(h) as usize];
+                            format!("h{h}({:.3},{:.3},{:.3})", p.x, p.y, p.z)
+                        })
+                        .collect();
+                    eprintln!("    {}", text.join(" "));
+                }
+            }
+        }
+    }
     let mut out = Body::new();
     let mut edge_map: Vec<u32> = vec![NONE; arr.g.edge_count()];
     let mut vert_map: Vec<u32> = vec![NONE; arr.g.verts.len()];
@@ -370,6 +430,7 @@ pub fn boolean(a: &Body, b: &Body, op: Op) -> Result<Body, String> {
     }
     out.check()
         .map_err(|e| format!("the result is not a closed solid ({e})"))?;
+    lap("sew");
     let result = unify(&out);
     result
         .check()
@@ -433,12 +494,18 @@ fn boundary_params(
     f: u32,
     other: &Surface,
     other_id: u32,
+    other_box: &Aabb,
     c: &Curve,
     out: &mut Vec<f64>,
 ) {
     let body = side.body;
     for h in body.face_hes(f) {
         let e = h >> 1;
+        // An edge that stays clear of the other face cannot bound the curve
+        // inside it.
+        if !side.eboxes[e as usize].overlaps(other_box) {
+            continue;
+        }
         let hits = side.hits.entry((e, other_id)).or_insert_with(|| {
             let [t0, t1] = body.e_t[e as usize];
             curve_surface(body.e_curve_ref(e), t0, t1, other)
@@ -469,13 +536,18 @@ fn boundary_params(
 fn section(sa: &mut Side, fa: u32, sb: &mut Side, fb: u32, c: &Curve, segs: &mut Vec<Seg>) {
     let (surf_a, surf_b) = (*sa.body.f_surface(fa), *sb.body.f_surface(fb));
     let mut params: Vec<f64> = Vec::new();
-    boundary_params(sa, fa, &surf_b, sb.body.f_surf[fb as usize], c, &mut params);
-    boundary_params(sb, fb, &surf_a, sa.body.f_surf[fa as usize], c, &mut params);
+    let (box_a, box_b) = (sa.boxes[fa as usize], sb.boxes[fb as usize]);
+    boundary_params(sa, fa, &surf_b, sb.body.f_surf[fb as usize], &box_b, c, &mut params);
+    boundary_params(sb, fb, &surf_a, sa.body.f_surf[fa as usize], &box_a, c, &mut params);
     let periodic = c.periodic();
     if periodic {
         for p in &mut params {
             *p = wrap_from(*p, 0.0);
         }
+    }
+    // A bounded curve also ends where it ends.
+    if let Some((lo, hi)) = c.bounds() {
+        params.extend([lo, hi]);
     }
     dedup_params(c, &mut params);
     if periodic && params.len() > 1 {
@@ -502,8 +574,23 @@ fn section(sa: &mut Side, fa: u32, sb: &mut Side, fb: u32, c: &Curve, segs: &mut
             spans.push((w[0], w[1]));
         }
     }
+    let tracing = std::env::var_os("LIMO_CAD_KERNEL_TRACE").is_some();
+    if tracing {
+        eprintln!(
+            "section A{fa} x B{fb} {:?} at {:?}: params {params:?}",
+            c.kind,
+            c.point(0.0)
+        );
+    }
     for (t0, t1) in spans {
         let mid = c.point(0.5 * (t0 + t1));
+        if tracing {
+            eprintln!(
+                "   span {t0}..{t1} mid {mid:?}: A {:?} B {:?}",
+                classify(sa.body, &sa.trims[fa as usize], fa, mid),
+                classify(sb.body, &sb.trims[fb as usize], fb, mid)
+            );
+        }
         let ca = classify(sa.body, &sa.trims[fa as usize], fa, mid);
         if ca == PtClass::Out {
             continue;
@@ -536,8 +623,14 @@ fn imprint(src: &Side, fs: u32, dst: &Side, fd: u32, dst_is_b: bool, segs: &mut 
         let c = *src.body.e_curve_ref(e);
         let [t0, t1] = src.body.e_t[e as usize];
         let mut params = vec![t0, t1];
+        if !src.eboxes[e as usize].overlaps(&dst.boxes[fd as usize]) {
+            continue;
+        }
         for hd in dst.body.face_hes(fd) {
             let ed = hd >> 1;
+            if !src.eboxes[e as usize].overlaps(&dst.eboxes[ed as usize]) {
+                continue;
+            }
             match curve_curve(&c, t0, t1, dst.body.e_curve_ref(ed), surf) {
                 Hits::Coincident => {
                     for v in dst.body.e_v[ed as usize] {
@@ -590,12 +683,15 @@ fn split(arr: &mut Arr, c: &Curve, t0: f64, t1: f64, cands: &[(u32, V3)]) -> Vec
     ];
     if !cands.is_empty() {
         let mut bounds = Aabb::EMPTY;
-        let n = if c.periodic() { 12 } else { 1 };
+        let curved = c.kind != crate::geom::CurveKind::Line;
+        let n = if curved { 16 } else { 1 };
         for i in 0..=n {
             bounds.add(c.point(t0 + (t1 - t0) * i as f64 / n as f64));
         }
-        let bulge = if c.periodic() {
-            c.r.max(c.s) * (1.0 - (0.5 * (t1 - t0) / n as f64).cos())
+        let bulge = if curved {
+            // Chord sag of one sampling step, with a margin for curves that
+            // bend faster than a circle of their radius.
+            2.0 * c.r.abs().max(c.s.abs()) * (1.0 - (0.5 * (t1 - t0) / n as f64).cos())
         } else {
             0.0
         };
@@ -767,13 +863,13 @@ fn inside_polygon(uv: &[V2], q: V2) -> bool {
 
 /// Height of a u-winding loop at parameter `u`.
 fn v_at(lp: &TrimLoop, u: f64) -> Option<f64> {
+    let x = image(u, lp.lo.x);
     for w in lp.uv.windows(2) {
         let (a, b) = (w[0], w[1]);
         let (lo, hi) = if a.x < b.x { (a.x, b.x) } else { (b.x, a.x) };
         if lo == hi {
             continue;
         }
-        let x = u + ((lo - u) / TAU).ceil() * TAU;
         if x >= lo && x < hi {
             return Some(a.y + (x - a.x) / (b.x - a.x) * (b.y - a.y));
         }
@@ -785,8 +881,9 @@ fn v_at(lp: &TrimLoop, u: f64) -> Option<f64> {
 enum Kind {
     /// Inside one counter-clockwise loop.
     Disk(usize),
-    /// Between two u-winding loops.
-    Band(usize, usize),
+    /// Between two u-winding loops; the upper one may sit a period higher
+    /// when the band runs through the parameter seam of a torus tube.
+    Band(usize, usize, f64),
     /// From a u-winding loop to the pole or apex above / below it.
     Above(usize),
     Below(usize),
@@ -836,12 +933,27 @@ fn group(
             vx.total_cmp(&vy)
         }
     });
+    let mut lift: Vec<f64> = vec![0.0; winding.len()];
+    if surf.kind == SurfKind::Torus {
+        let leading = winding
+            .iter()
+            .take_while(|&&i| polys[i].shift.x < 0.0)
+            .count();
+        if leading > 0 && leading < winding.len() {
+            winding.rotate_left(leading);
+            let n = winding.len();
+            for slot in &mut lift[n - leading..] {
+                *slot = TAU;
+            }
+        }
+    }
     let mut k = 0;
     while k < winding.len() {
         let i = winding[k];
         if polys[i].shift.x > 0.0 {
             if k + 1 < winding.len() && polys[winding[k + 1]].shift.x < 0.0 {
-                regions.push((Kind::Band(i, winding[k + 1]), vec![i, winding[k + 1]]));
+                let j = winding[k + 1];
+                regions.push((Kind::Band(i, j, lift[k + 1] - lift[k]), vec![i, j]));
                 k += 2;
                 continue;
             }
@@ -867,8 +979,15 @@ fn group(
             Kind::Disk(i) => shifts
                 .iter()
                 .any(|s| inside_polygon(&polys[i].uv, v2(q.x + s, q.y))),
-            Kind::Band(lo, hi) => match (v_at(&polys[lo], q.x), v_at(&polys[hi], q.x)) {
-                (Some(a), Some(b)) => q.y > a && q.y < b,
+            Kind::Band(lo, hi, rise) => match (v_at(&polys[lo], q.x), v_at(&polys[hi], q.x)) {
+                (Some(a), Some(b)) => {
+                    let turns: &[f64] = if surf.v_periodic() {
+                        &[0.0, TAU, -TAU]
+                    } else {
+                        &[0.0]
+                    };
+                    turns.iter().any(|t| q.y + t > a && q.y + t < b + rise)
+                }
                 _ => false,
             },
             Kind::Above(i) => v_at(&polys[i], q.x).is_some_and(|a| q.y > a),
@@ -957,6 +1076,13 @@ fn split_face(
                 }
             }
         }
+        if std::env::var_os("LIMO_CAD_KERNEL_TRACE").is_some() {
+            eprintln!("split {:?} sense {sense}: inner {inner:?}", surf.kind);
+            for (i, lp) in loops.iter().enumerate() {
+                eprintln!("  loop {i}: {lp:?}");
+            }
+            eprintln!("  regions {regions:?}");
+        }
         // An edge with the same region on both sides separates nothing.
         let slits: Vec<u32> = inner
             .iter()
@@ -1031,7 +1157,6 @@ fn classify_pieces(
     this: &Side,
     other: &Side,
 ) -> Result<Vec<Cls>, String> {
-    let _ = arr;
     let mut out = Vec::with_capacity(list.len());
     for piece in list {
         let f = piece.orig;
@@ -1062,6 +1187,27 @@ fn classify_pieces(
             if let Some(inside) = point_in_solid(other, p) {
                 decided = Some(if inside { Cls::In } else { Cls::Out });
                 break;
+            }
+        }
+        if decided.is_none() && std::env::var_os("LIMO_CAD_KERNEL_TRACE").is_some() {
+            eprintln!(
+                "undecided piece of face {f} ({:?}), {} loops, candidates:",
+                this.body.f_surface(f).kind,
+                piece.loops.len()
+            );
+            for (q, score) in trim.interior_points() {
+                let p = trim.point(q);
+                eprintln!("   {p:?} clearance {score:.4} -> {:?}", point_in_solid(other, p));
+            }
+            for lp in &piece.loops {
+                let text: Vec<String> = lp
+                    .iter()
+                    .map(|&h| {
+                        let p = arr.g.verts[arr.g.h_origin(h) as usize];
+                        format!("({:.4},{:.4},{:.4})", p.x, p.y, p.z)
+                    })
+                    .collect();
+                eprintln!("   loop {}", text.join(" "));
             }
         }
         out.push(decided.ok_or_else(|| {

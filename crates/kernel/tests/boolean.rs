@@ -171,3 +171,83 @@ fn chained_operations_stay_valid() {
     assert_eq!(count(&body, SurfKind::Cylinder), 4);
     close(volume(&body), expected, 1e-5);
 }
+
+/// Simpson integration of `f` over `[a, b]`.
+fn integrate(f: impl Fn(f64) -> f64, a: f64, b: f64) -> f64 {
+    let n = 20_000;
+    let h = (b - a) / n as f64;
+    let mut sum = f(a) + f(b);
+    for i in 1..n {
+        sum += f(a + h * i as f64) * if i % 2 == 1 { 4.0 } else { 2.0 };
+    }
+    sum * h / 3.0
+}
+
+#[test]
+fn cross_drilled_shaft() {
+    // A hole of radius 3 straight through a shaft of radius 10.
+    let shaft = make::cylinder(v3(0.0, 0.0, -20.0), V3::Z, 10.0, 40.0).unwrap();
+    let drill = make::cylinder(v3(-15.0, 0.0, 0.0), V3::X, 3.0, 30.0).unwrap();
+    let r = boolean(&shaft, &drill, Op::Cut).unwrap();
+    // Wall, two caps and the bore; the wall now has two holes in it.
+    assert_eq!((r.face_count(), count(&r, SurfKind::Cylinder)), (4, 2));
+    let removed = integrate(
+        |y| 4.0 * (100.0 - y * y).sqrt() * (9.0 - y * y).max(0.0).sqrt(),
+        -3.0,
+        3.0,
+    );
+    close(volume(&r), PI * 100.0 * 40.0 - removed, 2e-4);
+    r.check().unwrap();
+}
+
+#[test]
+fn drill_breaking_out_of_the_side() {
+    // The drill axis misses the shaft axis by 8, so the hole is open along
+    // the shaft's flank: the intersection curve has turning points.
+    let shaft = make::cylinder(v3(0.0, 0.0, -20.0), V3::Z, 10.0, 40.0).unwrap();
+    let drill = make::cylinder(v3(-15.0, 8.0, 0.0), V3::X, 4.0, 30.0).unwrap();
+    let r = boolean(&shaft, &drill, Op::Cut).unwrap();
+    // Chord of the shaft at offset y, weighted by the drill's width there.
+    let removed = integrate(
+        |y| {
+            let chord = 2.0 * (100.0 - y * y).max(0.0).sqrt();
+            let width = 2.0 * (16.0 - (y - 8.0) * (y - 8.0)).max(0.0).sqrt();
+            chord * width
+        },
+        4.0,
+        10.0,
+    );
+    close(volume(&r), PI * 100.0 * 40.0 - removed, 5e-4);
+    r.check().unwrap();
+}
+
+#[test]
+fn hole_into_a_ball() {
+    let ball = make::revolve(
+        &[vec![
+            make::PSeg::Line {
+                a: v2(0.0, 12.0),
+                b: v2(0.0, -12.0),
+            },
+            make::PSeg::Arc {
+                a: v2(0.0, -12.0),
+                b: v2(0.0, 12.0),
+                c: v2(0.0, 0.0),
+                ccw: true,
+            },
+        ]],
+        V3::ZERO,
+        V3::Z,
+        V3::X,
+        TAU,
+    )
+    .unwrap();
+    // Off-centre, so the rim is not a circle.
+    let drill = make::cylinder(v3(5.0, 0.0, -20.0), V3::Z, 3.0, 40.0).unwrap();
+    let r = boolean(&ball, &drill, Op::Cut).unwrap();
+    assert_eq!(count(&r, SurfKind::Sphere), 1);
+    assert_eq!(count(&r, SurfKind::Cylinder), 1);
+    let coarse = tessellate(&r, &TessOptions::default()).volume();
+    assert!(coarse < 4.0 / 3.0 * PI * 1728.0 && coarse > 0.9 * 4.0 / 3.0 * PI * 1728.0);
+    r.check().unwrap();
+}

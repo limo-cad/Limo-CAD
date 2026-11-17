@@ -15,8 +15,10 @@
 //!
 //! The crate has no native dependencies and builds for WebAssembly.
 
+pub mod blend;
 pub mod boolean;
 pub mod geom;
+pub mod io;
 pub mod make;
 pub mod math;
 pub mod props;

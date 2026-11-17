@@ -19,6 +19,7 @@ use limo_cad_solid::{
     RecomputePlanDto,
 };
 
+use crate::blend;
 use crate::boolean::{boolean, Op};
 use crate::geom::{CurveKind, SurfKind};
 use crate::make::{self, Region, Seg};
@@ -340,11 +341,38 @@ impl Kernel {
                     .map(|_| ()),
                 HoleThreadRepresentation::Modeled => Err(unsupported("A modeled thread")),
             },
-            KernelJobDto::Revolve(_) => Err(unsupported("Revolve")),
+            KernelJobDto::Revolve(j) => {
+                let (origin, axis) = (p3(&j.axis_origin), p3(&j.axis_direction));
+                let tools = j
+                    .profiles
+                    .iter()
+                    .map(|p| make::revolve_region(&region_of(p), origin, axis, j.angle_rad))
+                    .collect::<Result<Vec<_>, _>>()?;
+                self.profile_job(
+                    j.operation,
+                    j.require_single_solid,
+                    tools,
+                    &j.target_body_ids,
+                    &j.result_body_ids,
+                )
+            }
+            KernelJobDto::Fillet(j) => {
+                let target = self.get(j.target_body_id, "edge refinement target")?;
+                let edges = edge_indices(&j.edge_keys)?;
+                let result = blend::fillet(&target, &edges, j.radius).map_err(|e| format!("Fillet: {e}"))?;
+                self.put(j.target_body_id.0, result);
+                Ok(())
+            }
+            KernelJobDto::Chamfer(j) => {
+                let target = self.get(j.target_body_id, "edge refinement target")?;
+                let edges = edge_indices(&j.edge_keys)?;
+                let result = blend::chamfer(&target, &edges, j.distance, j.angle_deg)
+                    .map_err(|e| format!("Chamfer: {e}"))?;
+                self.put(j.target_body_id.0, result);
+                Ok(())
+            }
             KernelJobDto::Sweep(_) => Err(unsupported("Sweep")),
             KernelJobDto::Loft(_) => Err(unsupported("Loft")),
-            KernelJobDto::Fillet(_) => Err(unsupported("Fillet")),
-            KernelJobDto::Chamfer(_) => Err(unsupported("Chamfer")),
             KernelJobDto::Shell(_) => Err(unsupported("Shell")),
             KernelJobDto::ImportStep(_) => Err(unsupported("STEP import")),
         }
@@ -457,6 +485,21 @@ impl Kernel {
         let region = face_region(&body, face)?;
         make::extrude(&region, normal, start, end)
     }
+}
+
+/// Edge ordinals from topology keys of the form `edge:N`.
+fn edge_indices(keys: &[String]) -> Result<Vec<u32>, String> {
+    keys.iter()
+        .map(|key| {
+            key.strip_prefix("edge:")
+                .and_then(|v| v.parse::<u32>().ok())
+                .ok_or_else(|| {
+                    format!(
+                        "Invalid edge topology reference '{key}'; reselect the edge on the feature input body"
+                    )
+                })
+        })
+        .collect()
 }
 
 fn xform(t: &KernelTransformDto) -> Result<Xform, String> {
@@ -584,7 +627,7 @@ fn face_region(body: &Body, f: u32) -> Result<Region, String> {
                     m: c.point(0.5 * (t0 + t1)),
                     b,
                 }),
-                CurveKind::Ellipse => {
+                CurveKind::Ellipse | CurveKind::Trace => {
                     return Err(unsupported("Extruding a face with an elliptical edge"))
                 }
             }

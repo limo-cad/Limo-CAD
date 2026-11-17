@@ -286,20 +286,39 @@ pub enum CurveKind {
     Line,
     Circle,
     Ellipse,
+    /// Where a cylinder meets another quadric: see [`Curve::trace`].
+    Trace,
 }
 
-/// Analytic curve.
+/// Curve as plain data.
 ///
 /// * Line: `o + t·x` (`t` is arc length).
 /// * Circle: `o + r(cos t·x + sin t·y)`.
 /// * Ellipse: `o + r cos t·x + s sin t·y`.
+/// * Trace: the intersection of the cylinder (`f`, `r`) with the quadric
+///   `other`, written in closed form over the cylinder's angle `θ`: the
+///   height along the axis is a root of a quadratic, and `s = ±1` selects
+///   which. A branch that exists for every `θ` is closed and uses `t = θ`.
+///   Otherwise the curve is the piece between two turning points
+///   `span = [θa, θb]`, parametrised over `t ∈ [0, π]` so that it stays
+///   smooth where the two roots merge.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Curve {
     pub kind: CurveKind,
     pub f: Frame,
     pub r: f64,
     pub s: f64,
+    /// Trace only.
+    pub other: Surface,
+    pub span: [f64; 2],
 }
+
+const NO_SURFACE: Surface = Surface {
+    kind: SurfKind::Plane,
+    f: Frame::WORLD,
+    r: 0.0,
+    s: 0.0,
+};
 
 impl Curve {
     pub fn line(o: V3, dir: V3) -> Curve {
@@ -308,6 +327,8 @@ impl Curve {
             f: Frame::from_zx(o, dir.unit().any_perp(), dir),
             r: 0.0,
             s: 0.0,
+            other: NO_SURFACE,
+            span: [0.0; 2],
         }
     }
     /// Circle whose parameter runs counter-clockwise about `normal`, with
@@ -318,6 +339,8 @@ impl Curve {
             f: Frame::from_zx(centre, normal, x_hint),
             r: radius,
             s: radius,
+            other: NO_SURFACE,
+            span: [0.0; 2],
         }
     }
     pub fn ellipse(centre: V3, normal: V3, major_dir: V3, major: f64, minor: f64) -> Curve {
@@ -326,7 +349,57 @@ impl Curve {
             f: Frame::from_zx(centre, normal, major_dir),
             r: major,
             s: minor,
+            other: NO_SURFACE,
+            span: [0.0; 2],
         }
+    }
+    /// Intersection of `cylinder` with `other` (a cylinder or sphere) on the
+    /// branch `sign`, either closed (`span = [0, 2π]`) or between two turning
+    /// points.
+    pub fn trace(cylinder: &Surface, other: &Surface, sign: f64, span: [f64; 2]) -> Curve {
+        Curve {
+            kind: CurveKind::Trace,
+            f: cylinder.f,
+            r: cylinder.r,
+            s: sign,
+            other: *other,
+            span,
+        }
+    }
+
+    /// Coefficients of the quadratic in the axial height `h` for a point of
+    /// the trace's cylinder at `foot + h·z`.
+    pub fn trace_quadratic(other: &Surface, foot: V3, z: V3) -> (f64, f64, f64) {
+        let w = foot - other.f.o;
+        match other.kind {
+            SurfKind::Cylinder => {
+                let a = other.f.z;
+                let (wp, zp) = (w - a * w.dot(a), z - a * z.dot(a));
+                (zp.len2(), 2.0 * wp.dot(zp), wp.len2() - other.r * other.r)
+            }
+            _ => (1.0, 2.0 * w.dot(z), w.len2() - other.r * other.r),
+        }
+    }
+
+    #[inline]
+    fn trace_closed(&self) -> bool {
+        self.span[1] - self.span[0] >= TAU - 1.0e-12
+    }
+
+    /// Cylinder angle at parameter `t` of a trace.
+    #[inline]
+    fn trace_angle(&self, t: f64) -> f64 {
+        if self.trace_closed() {
+            t
+        } else {
+            self.span[0] + (self.span[1] - self.span[0]) * 0.5 * (1.0 - t.cos())
+        }
+    }
+
+    /// Parameter range of a bounded curve.
+    #[inline]
+    pub fn bounds(&self) -> Option<(f64, f64)> {
+        (self.kind == CurveKind::Trace && !self.trace_closed()).then_some((0.0, PI))
     }
 
     #[inline]
@@ -341,6 +414,13 @@ impl Curve {
             CurveKind::Ellipse => {
                 let (s, c) = t.sin_cos();
                 f.o + f.x * (self.r * c) + f.y * (self.s * s)
+            }
+            CurveKind::Trace => {
+                let (s, c) = self.trace_angle(t).sin_cos();
+                let foot = f.o + (f.x * c + f.y * s) * self.r;
+                let (qa, qb, qc) = Curve::trace_quadratic(&self.other, foot, f.z);
+                let disc = (qb * qb - 4.0 * qa * qc).max(0.0);
+                foot + f.z * ((-qb + self.s * disc.sqrt()) / (2.0 * qa))
             }
         }
     }
@@ -359,43 +439,67 @@ impl Curve {
                 let (s, c) = t.sin_cos();
                 f.y * (self.s * c) - f.x * (self.r * s)
             }
+            CurveKind::Trace => {
+                let h = 1.0e-6;
+                let (lo, hi) = match self.bounds() {
+                    Some((a, b)) => ((t - h).max(a), (t + h).min(b)),
+                    None => (t - h, t + h),
+                };
+                (self.point(hi) - self.point(lo)) / (hi - lo)
+            }
         }
     }
 
     #[inline]
     pub fn periodic(&self) -> bool {
-        self.kind != CurveKind::Line
+        match self.kind {
+            CurveKind::Line => false,
+            CurveKind::Trace => self.trace_closed(),
+            _ => true,
+        }
     }
 
     /// Parameter of the point on the curve closest to `p` (exact for lines and
-    /// circles; for ellipses exact when `p` lies on the curve, refined by a
-    /// few Newton steps otherwise). Angles are in `(-π, π]`.
+    /// circles; refined by a few Newton steps otherwise). Angles are in
+    /// `(-π, π]`.
     pub fn param(&self, p: V3) -> f64 {
         let l = self.f.local(p);
-        match self.kind {
-            CurveKind::Line => l.x,
-            CurveKind::Circle => l.y.atan2(l.x),
-            CurveKind::Ellipse => {
-                let mut t = (l.y / self.s).atan2(l.x / self.r);
-                for _ in 0..4 {
-                    let d = self.point(t) - p;
-                    let d1 = self.deriv(t);
-                    let (s, c) = t.sin_cos();
-                    let d2 = -(self.f.x * (self.r * c) + self.f.y * (self.s * s));
-                    let g = d.dot(d1);
-                    let h = d1.dot(d1) + d.dot(d2);
-                    if h.abs() < 1.0e-30 {
-                        break;
+        let mut t = match self.kind {
+            CurveKind::Line => return l.x,
+            CurveKind::Circle => return l.y.atan2(l.x),
+            CurveKind::Ellipse => (l.y / self.s).atan2(l.x / self.r),
+            CurveKind::Trace => {
+                let theta = l.y.atan2(l.x);
+                if self.trace_closed() {
+                    theta
+                } else {
+                    let [a, b] = self.span;
+                    let mut u = wrap_from(theta, a);
+                    if u > b {
+                        // Outside the piece: the nearer turning point.
+                        u = if u - b < a + TAU - u { b } else { a };
                     }
-                    let step = g / h;
-                    t -= step;
-                    if step.abs() < 1.0e-14 {
-                        break;
-                    }
+                    (1.0 - 2.0 * (u - a) / (b - a)).clamp(-1.0, 1.0).acos()
                 }
-                t
+            }
+        };
+        for _ in 0..4 {
+            let d = self.point(t) - p;
+            let d1 = self.deriv(t);
+            let h = d1.dot(d1);
+            if h < 1.0e-30 {
+                break;
+            }
+            let step = d.dot(d1) / h;
+            t -= step;
+            if let Some((a, b)) = self.bounds() {
+                t = t.clamp(a, b);
+            }
+            if step.abs() < 1.0e-14 {
+                break;
             }
         }
+        t
     }
 
     /// Distance from `p` to the (unbounded) curve.
@@ -446,14 +550,36 @@ impl Curve {
                 let flipped_x = self.f.x.dot(o.f.x) < 0.0;
                 Some((sign, if flipped_x { PI } else { 0.0 }))
             }
+            CurveKind::Trace => {
+                // Only the identical construction counts as the same curve.
+                let frames = self.f.o.dist(o.f.o) < TOL
+                    && self.f.x.dist(o.f.x) < ANG_TOL * 10.0
+                    && self.f.z.dist(o.f.z) < ANG_TOL * 10.0;
+                (frames
+                    && (self.r - o.r).abs() < TOL
+                    && self.s == o.s
+                    && self.other.same(&o.other).is_some()
+                    && (self.span[0] - o.span[0]).abs() < 1.0e-9
+                    && (self.span[1] - o.span[1]).abs() < 1.0e-9)
+                    .then_some((1.0, 0.0))
+            }
         }
     }
 
     pub fn transformed(&self, x: &Xform) -> Curve {
-        Curve {
+        let mut out = Curve {
             f: x.frame_xy(&self.f),
             ..*self
+        };
+        if self.kind == CurveKind::Trace {
+            out.other = self.other.transformed(x);
+            // Keeping x and y under a reflection reverses the axis, so the
+            // two roots of the height swap.
+            if x.mirror {
+                out.s = -self.s;
+            }
         }
+        out
     }
 
     /// Arc length of the parameter span `[t0, t1]`.
@@ -461,8 +587,8 @@ impl Curve {
         match self.kind {
             CurveKind::Line => (t1 - t0).abs(),
             CurveKind::Circle => (t1 - t0).abs() * self.r,
-            CurveKind::Ellipse => {
-                let n = 16;
+            CurveKind::Ellipse | CurveKind::Trace => {
+                let n = 24;
                 let mut len = 0.0;
                 let mut prev = self.point(t0);
                 for i in 1..=n {
@@ -478,18 +604,18 @@ impl Curve {
     /// Number of straight segments that approximate `[t0, t1]` within the
     /// chord tolerance `sag`, with at least `min_per_turn` segments per turn.
     pub fn segments(&self, t0: f64, t1: f64, sag: f64, min_per_turn: f64) -> usize {
-        match self.kind {
-            CurveKind::Line => 1,
-            CurveKind::Circle | CurveKind::Ellipse => {
-                let r = self.r.max(self.s);
-                let step = if sag >= r {
-                    PI
-                } else {
-                    2.0 * (1.0 - sag / r).clamp(-1.0, 1.0).acos()
-                };
-                let step = step.min(TAU / min_per_turn).max(1.0e-3);
-                (((t1 - t0).abs() / step).ceil() as usize).max(1)
-            }
-        }
+        let (r, per_turn) = match self.kind {
+            CurveKind::Line => return 1,
+            CurveKind::Circle | CurveKind::Ellipse => (self.r.max(self.s), min_per_turn),
+            // The curve bends with the tighter of its two surfaces.
+            CurveKind::Trace => (self.r.min(self.other.r), 2.0 * min_per_turn),
+        };
+        let step = if sag >= r {
+            PI
+        } else {
+            2.0 * (1.0 - sag / r).clamp(-1.0, 1.0).acos()
+        };
+        let step = step.min(TAU / per_turn).max(1.0e-3);
+        (((t1 - t0).abs() / step).ceil() as usize).max(1)
     }
 }

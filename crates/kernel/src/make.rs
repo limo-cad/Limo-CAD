@@ -481,111 +481,475 @@ pub fn cylinder(base: V3, axis: V3, radius: f64, height: f64) -> Result<Body, St
     extrude(&region, n, 0.0, height)
 }
 
-/// Solid of revolution of a closed polygon in the half-plane `(ρ, h)` about
-/// the axis through `origin` (full turn). Points with `ρ = 0` lie on the
-/// axis. No Booleans and no seam edges: every face is bounded by full
-/// circles only.
-pub fn lathe(origin: V3, axis: V3, profile: &[(f64, f64)]) -> Result<Body, String> {
+/// One boundary segment of a revolve profile in the half-plane of the axis:
+/// `x` is the distance from the axis, `y` the height along it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum PSeg {
+    Line { a: V2, b: V2 },
+    /// Circular arc from `a` to `b` about `c`.
+    Arc { a: V2, b: V2, c: V2, ccw: bool },
+    /// Full circle (a tube section).
+    Circle { c: V2, r: f64 },
+}
+
+impl PSeg {
+    fn start(&self) -> V2 {
+        match *self {
+            PSeg::Line { a, .. } | PSeg::Arc { a, .. } => a,
+            PSeg::Circle { c, r } => v2(c.x + r, c.y),
+        }
+    }
+    fn end(&self) -> V2 {
+        match *self {
+            PSeg::Line { b, .. } | PSeg::Arc { b, .. } => b,
+            PSeg::Circle { c, r } => v2(c.x + r, c.y),
+        }
+    }
+    fn reversed(&self) -> PSeg {
+        match *self {
+            PSeg::Line { a, b } => PSeg::Line { a: b, b: a },
+            PSeg::Arc { a, b, c, ccw } => PSeg::Arc {
+                a: b,
+                b: a,
+                c,
+                ccw: !ccw,
+            },
+            circle => circle,
+        }
+    }
+    /// Sweep angle of an arc, in `(0, 2π]`.
+    fn sweep(&self) -> f64 {
+        match *self {
+            PSeg::Arc { a, b, c, ccw } => {
+                let (u, w) = (a - c, b - c);
+                let turn = u.cross(w).atan2(u.dot(w));
+                let turn = if ccw { turn } else { -turn };
+                wrap_from(turn, 1.0e-12)
+            }
+            _ => 0.0,
+        }
+    }
+}
+
+/// Twice the signed area of a profile loop.
+fn profile_area2(lp: &[PSeg]) -> f64 {
+    let mut pts: Vec<V2> = Vec::new();
+    for seg in lp {
+        match *seg {
+            PSeg::Line { a, .. } => pts.push(a),
+            PSeg::Arc { a, c, ccw, .. } => {
+                let sweep = seg.sweep();
+                let base = (a - c).y.atan2((a - c).x);
+                let r = (a - c).len();
+                let k = 12;
+                for i in 0..k {
+                    let t = base + sweep * i as f64 / k as f64 * if ccw { 1.0 } else { -1.0 };
+                    pts.push(v2(c.x + r * t.cos(), c.y + r * t.sin()));
+                }
+            }
+            // A lone circle is counter-clockwise by convention.
+            PSeg::Circle { r, .. } => return r * r,
+        }
+    }
+    let mut sum = 0.0;
+    for i in 0..pts.len() {
+        sum += pts[i].cross(pts[(i + 1) % pts.len()]);
+    }
+    sum
+}
+
+/// Revolve closed profile loops (`loops[0]` outer, the rest holes) about the
+/// axis through `origin`. `zero` gives the direction of the profile's
+/// half-plane; the sweep runs counter-clockwise about `axis` through
+/// `angle` radians (a full turn when `angle ≥ 2π`).
+///
+/// A full turn has no seam edges: every face is bounded by complete circles.
+pub fn revolve(
+    loops: &[Vec<PSeg>],
+    origin: V3,
+    axis: V3,
+    zero: V3,
+    angle: f64,
+) -> Result<Body, String> {
     let a = axis.unit();
-    if a.len2() < 0.5 {
+    let x0 = zero - a * zero.dot(a);
+    if a.len2() < 0.5 || x0.len2() < 1.0e-18 {
         return Err("revolve axis is degenerate".into());
     }
-    // Drop repeated points and normalise to counter-clockwise (material on
-    // the left, outward to the right of travel).
-    let mut pts: Vec<(f64, f64)> = Vec::with_capacity(profile.len());
-    for &p in profile {
-        if p.0 < -TOL {
-            return Err("revolve profile crosses its axis".into());
-        }
-        let p = (p.0.max(0.0), p.1);
-        if pts
-            .last()
-            .is_none_or(|q: &(f64, f64)| (q.0 - p.0).hypot(q.1 - p.1) > TOL)
-        {
-            pts.push(p);
-        }
+    if !(angle.is_finite() && angle > 1.0e-9) {
+        return Err("revolve angle must be greater than zero".into());
     }
-    if pts.len() > 1 {
-        let (f, l) = (pts[0], pts[pts.len() - 1]);
-        if (f.0 - l.0).hypot(f.1 - l.1) <= TOL {
-            pts.pop();
-        }
-    }
-    let n = pts.len();
-    if n < 3 {
-        return Err("revolve profile needs at least three points".into());
-    }
-    let mut area2 = 0.0;
-    for i in 0..n {
-        let (p, q) = (pts[i], pts[(i + 1) % n]);
-        area2 += p.0 * q.1 - q.0 * p.1;
-    }
-    if area2.abs() < 1.0e-18 {
-        return Err("revolve profile encloses no area".into());
-    }
-    if area2 < 0.0 {
-        pts.reverse();
+    let x0 = x0.unit();
+    let full = angle >= TAU - 1.0e-9;
+    let angle = angle.min(TAU);
+    let t0 = a.cross(x0);
+    let x1 = x0 * angle.cos() + t0 * angle.sin();
+    let t1 = a.cross(x1);
+    if loops.is_empty() {
+        return Err("revolve needs at least one profile loop".into());
     }
 
-    let r_hat = a.any_perp();
+    // Material on the left: outer counter-clockwise, holes clockwise.
+    let mut profile: Vec<Vec<PSeg>> = Vec::with_capacity(loops.len());
+    for (i, lp) in loops.iter().enumerate() {
+        if lp.is_empty() {
+            return Err("revolve profile loop has no boundary curves".into());
+        }
+        for seg in lp {
+            let low = match *seg {
+                PSeg::Line { a, b } => a.x.min(b.x),
+                PSeg::Arc { a, b, .. } => a.x.min(b.x),
+                PSeg::Circle { c, r } => c.x - r - TOL,
+            };
+            if low < -TOL {
+                return Err("revolve profile crosses its axis".into());
+            }
+        }
+        let area = profile_area2(lp);
+        if area.abs() < 1.0e-18 {
+            return Err("revolve profile encloses no area".into());
+        }
+        let mut lp = lp.clone();
+        if (area > 0.0) != (i == 0) {
+            lp.reverse();
+            for seg in &mut lp {
+                *seg = seg.reversed();
+            }
+        }
+        profile.push(lp);
+    }
+
+    let place = |q: V2, x: V3| origin + a * q.y + x * q.x.max(0.0);
     let mut body = Body::new();
-    // One closed circular edge per off-axis profile point.
-    let rings: Vec<Option<u32>> = pts
-        .iter()
-        .map(|&(rho, h)| {
-            (rho > TOL).then(|| {
-                let centre = origin + a * h;
-                let v = body.add_vert(centre + r_hat * rho);
-                let c = body.add_curve(Curve::circle(centre, a, r_hat, rho));
-                body.add_edge(c, 0.0, TAU, v, v)
-            })
-        })
-        .collect();
-    for i in 0..n {
-        let j = (i + 1) % n;
-        let ((r0, h0), (r1, h1)) = (pts[i], pts[j]);
-        let (dr, dh) = (r1 - r0, h1 - h0);
-        let mut loops: Vec<Vec<u32>> = Vec::new();
-        // Travelling counter-clockwise about the axis keeps the face on the
-        // left at the start ring; the end ring runs the other way.
-        if let Some(e) = rings[i] {
-            loops.push(vec![2 * e]);
-        }
-        if let Some(e) = rings[j] {
-            loops.push(vec![2 * e + 1]);
-        }
-        if loops.is_empty() {
-            // The segment runs along the axis: it bounds nothing.
+    let mut start_cap: Vec<Vec<u32>> = Vec::new();
+    let mut end_cap: Vec<Vec<u32>> = Vec::new();
+    struct Swept {
+        surf: Surface,
+        sense: bool,
+        loops: Vec<Vec<u32>>,
+    }
+    let mut swept: Vec<Swept> = Vec::new();
+
+    for (li, lp) in profile.iter().enumerate() {
+        let n = lp.len();
+        let outer = li == 0;
+        if let [PSeg::Circle { c, r }] = lp[..] {
+            if c.x - r <= TOL {
+                return Err("a revolved circle must not touch the axis".into());
+            }
+            // After normalisation an outer circle bounds material inside.
+            let surf = Surface {
+                f: Frame::from_zx(origin + a * c.y, a, x0),
+                ..Surface::torus(origin, a, c.x, r)
+            };
+            let mut face_loops = Vec::new();
+            if !full {
+                let section = |body: &mut Body, x: V3, t: V3| {
+                    let centre = place(c, x);
+                    let normal = if outer { -t } else { t };
+                    let v = body.add_vert(centre + x * r);
+                    let curve = body.add_curve(Curve::circle(centre, normal, x, r));
+                    body.add_edge(curve, 0.0, TAU, v, v)
+                };
+                let s = section(&mut body, x0, t0);
+                let e = section(&mut body, x1, t1);
+                face_loops = vec![vec![2 * e], vec![2 * s + 1]];
+                start_cap.push(vec![2 * s]);
+                end_cap.push(vec![2 * e + 1]);
+            }
+            swept.push(Swept {
+                surf,
+                sense: outer,
+                loops: face_loops,
+            });
             continue;
         }
-        let (surf, sense) = if dh.abs() <= TOL {
-            // Flat ring or disc; outward is to the right of travel.
-            let normal = a * (-dr.signum());
-            (Surface::plane(origin + a * h0, normal), true)
-        } else if dr.abs() <= TOL {
-            (
-                Surface {
-                    f: Frame::from_zx(origin + a * h0.min(h1), a, r_hat),
-                    ..Surface::cylinder(origin, a, r0)
-                },
-                dh > 0.0,
-            )
-        } else {
-            let apex_h = h0 - r0 * dh / dr;
-            let toward = if r0 > TOL { h0 - apex_h } else { h1 - apex_h };
-            let cone_axis = a * toward.signum();
-            let half_angle = (dr / dh).abs().atan();
-            (
-                Surface {
-                    f: Frame::from_zx(origin + a * apex_h, cone_axis, r_hat),
-                    ..Surface::cone(origin, cone_axis, half_angle)
-                },
-                dh > 0.0,
-            )
+        if lp.iter().any(|s| matches!(s, PSeg::Circle { .. })) {
+            return Err("a full circle cannot share a profile loop with other curves".into());
+        }
+        let pts: Vec<V2> = lp.iter().map(PSeg::start).collect();
+        for i in 0..n {
+            if (lp[i].end() - pts[(i + 1) % n]).len() > CHAIN_TOL {
+                return Err("revolve profile loop is not connected end to end".into());
+            }
+        }
+        let on_axis: Vec<bool> = pts.iter().map(|q| q.x <= TOL).collect();
+        let vs: Vec<u32> = pts.iter().map(|q| body.add_vert(place(*q, x0))).collect();
+        let ve: Vec<u32> = (0..n)
+            .map(|i| {
+                if full || on_axis[i] {
+                    vs[i]
+                } else {
+                    body.add_vert(place(pts[i], x1))
+                }
+            })
+            .collect();
+        // The path each profile point sweeps.
+        let rails: Vec<Option<u32>> = (0..n)
+            .map(|i| {
+                (!on_axis[i]).then(|| {
+                    let curve = body.add_curve(Curve::circle(origin + a * pts[i].y, a, x0, pts[i].x));
+                    body.add_edge(curve, 0.0, angle, vs[i], ve[i])
+                })
+            })
+            .collect();
+        let mut starts: Vec<u32> = Vec::new();
+        let mut ends: Vec<u32> = Vec::new();
+        for (i, seg) in lp.iter().enumerate() {
+            let j = (i + 1) % n;
+            // Copies of the segment in the start and end half-planes.
+            let mut copies: Option<(u32, u32)> = None;
+            if !full {
+                let copy = |body: &mut Body, x: V3, t: V3, v: &[u32]| -> u32 {
+                    match *seg {
+                        PSeg::Line { .. } => body.add_line_edge(v[i], v[j]),
+                        PSeg::Arc { c, ccw, .. } => {
+                            let centre = place(c, x);
+                            let normal = if ccw { -t } else { t };
+                            let from = body.verts[v[i] as usize] - centre;
+                            let curve =
+                                body.add_curve(Curve::circle(centre, normal, from, from.len()));
+                            body.add_edge(curve, 0.0, seg.sweep(), v[i], v[j])
+                        }
+                        PSeg::Circle { .. } => unreachable!(),
+                    }
+                };
+                let s = copy(&mut body, x0, t0, &vs);
+                // A straight segment on the axis is its own copy.
+                let e = if on_axis[i] && on_axis[j] && matches!(seg, PSeg::Line { .. }) {
+                    s
+                } else {
+                    copy(&mut body, x1, t1, &ve)
+                };
+                starts.push(2 * s);
+                ends.push(2 * e + 1);
+                copies = Some((s, e));
+            }
+            if on_axis[i] && on_axis[j] && matches!(seg, PSeg::Line { .. }) {
+                continue;
+            }
+            let (pa, pb) = (pts[i], pts[j]);
+            let (dr, dh) = (pb.x - pa.x, pb.y - pa.y);
+            let (surf, sense) = match *seg {
+                PSeg::Line { .. } => {
+                    let len = dr.hypot(dh);
+                    if len <= TOL {
+                        return Err("revolve profile contains a zero-length line".into());
+                    }
+                    if dh.abs() <= 1.0e-9 * len {
+                        (Surface::plane(origin + a * pa.y, a * (-dr.signum())), true)
+                    } else if dr.abs() <= 1.0e-9 * len {
+                        (
+                            Surface {
+                                f: Frame::from_zx(origin + a * pa.y.min(pb.y), a, x0),
+                                ..Surface::cylinder(origin, a, pa.x)
+                            },
+                            dh > 0.0,
+                        )
+                    } else {
+                        let apex = pa.y - pa.x * dh / dr;
+                        let toward = if pa.x > TOL { pa.y - apex } else { pb.y - apex };
+                        let cone_axis = a * toward.signum();
+                        (
+                            Surface {
+                                f: Frame::from_zx(origin + a * apex, cone_axis, x0),
+                                ..Surface::cone(origin, cone_axis, (dr / dh).abs().atan())
+                            },
+                            dh > 0.0,
+                        )
+                    }
+                }
+                PSeg::Arc { c, ccw, .. } => {
+                    let radius = (pa - c).len();
+                    let surf = if c.x <= TOL {
+                        Surface {
+                            f: Frame::from_zx(origin + a * c.y, a, x0),
+                            ..Surface::sphere(origin, radius)
+                        }
+                    } else {
+                        Surface {
+                            f: Frame::from_zx(origin + a * c.y, a, x0),
+                            ..Surface::torus(origin, a, c.x, radius)
+                        }
+                    };
+                    (surf, ccw)
+                }
+                PSeg::Circle { .. } => unreachable!(),
+            };
+            // Travelling with the sweep keeps the face on the left at the
+            // segment's start; its end rail runs the other way.
+            let face_loops = match copies {
+                None => {
+                    let mut out = Vec::new();
+                    if let Some(e) = rails[i] {
+                        out.push(vec![2 * e]);
+                    }
+                    if let Some(e) = rails[j] {
+                        out.push(vec![2 * e + 1]);
+                    }
+                    out
+                }
+                Some((s, e)) => {
+                    let mut cycle = Vec::with_capacity(4);
+                    if let Some(rail) = rails[i] {
+                        cycle.push(2 * rail);
+                    }
+                    cycle.push(2 * e);
+                    if let Some(rail) = rails[j] {
+                        cycle.push(2 * rail + 1);
+                    }
+                    cycle.push(2 * s + 1);
+                    vec![cycle]
+                }
+            };
+            swept.push(Swept {
+                surf,
+                sense,
+                loops: face_loops,
+            });
+        }
+        if !full {
+            ends.reverse();
+            start_cap.push(starts);
+            end_cap.push(ends);
+        }
+    }
+
+    for face in &swept {
+        let s = body.add_surf(face.surf);
+        body.add_face(s, face.sense, &face.loops);
+    }
+    if !full {
+        let cap = |normal: V3| {
+            let x = reference_x(normal);
+            Surface::plane_frame(Frame {
+                o: origin,
+                x,
+                y: normal.cross(x),
+                z: normal,
+            })
         };
-        let s = body.add_surf(surf);
-        body.add_face(s, sense, &loops);
+        let s = body.add_surf(cap(-t0));
+        body.add_face(s, true, &start_cap);
+        let s = body.add_surf(cap(t1));
+        body.add_face(s, true, &end_cap);
     }
     body.check()?;
     Ok(body)
+}
+
+/// Revolve a planar region given in model space. The profile plane must
+/// contain the axis.
+pub fn revolve_region(
+    region: &Region,
+    origin: V3,
+    axis: V3,
+    angle: f64,
+) -> Result<Body, String> {
+    let mut a = axis.unit();
+    if a.len2() < 0.5 {
+        return Err("revolve axis is degenerate".into());
+    }
+    let mut angle = angle;
+    if angle < 0.0 {
+        // Sweeping backwards is sweeping forwards about the opposite axis.
+        a = -a;
+        angle = -angle;
+    }
+    // The half-plane direction: towards the profile point farthest out.
+    let radial = |p: V3| {
+        let d = p - origin;
+        d - a * d.dot(a)
+    };
+    let mut zero = V3::ZERO;
+    for segs in &region.loops {
+        for seg in segs {
+            let candidates = match *seg {
+                Seg::Line { a, b } => [a, b, b],
+                Seg::Arc { a, m, b } => [a, m, b],
+                Seg::Circle { c, p, .. } => [c, p, p],
+            };
+            for p in candidates {
+                let w = radial(p);
+                if w.len2() > zero.len2() {
+                    zero = w;
+                }
+            }
+        }
+    }
+    if zero.len2() < 1.0e-18 {
+        return Err("revolve profile lies on its axis".into());
+    }
+    let x0 = zero.unit();
+    let flat = |p: V3| -> Result<V2, String> {
+        let d = p - origin;
+        let w = radial(p);
+        if (w - x0 * w.dot(x0)).len() > 1.0e-6 * (1.0 + w.len()) {
+            return Err("revolve profile is not in a plane through its axis".into());
+        }
+        Ok(v2(w.dot(x0), d.dot(a)))
+    };
+    let mut loops: Vec<Vec<PSeg>> = Vec::with_capacity(region.loops.len());
+    for segs in &region.loops {
+        let mut out = Vec::with_capacity(segs.len());
+        for placed in chain(segs)? {
+            let seg = match placed.seg {
+                Seg::Line { .. } => PSeg::Line {
+                    a: flat(placed.start())?,
+                    b: flat(placed.end())?,
+                },
+                Seg::Arc { a: sa, m, b: sb } => {
+                    let (c, _, _) = arc_circle(sa, m, sb)
+                        .ok_or_else(|| "profile arc is degenerate".to_string())?;
+                    let (qa, qm, qb) = (flat(sa)?, flat(m)?, flat(sb)?);
+                    let ccw = (qm - qa).cross(qb - qm) > 0.0;
+                    let arc = PSeg::Arc {
+                        a: qa,
+                        b: qb,
+                        c: flat(c)?,
+                        ccw,
+                    };
+                    if placed.reversed {
+                        arc.reversed()
+                    } else {
+                        arc
+                    }
+                }
+                Seg::Circle { c, p, .. } => PSeg::Circle {
+                    c: flat(c)?,
+                    r: c.dist(p),
+                },
+            };
+            out.push(seg);
+        }
+        loops.push(out);
+    }
+    revolve(&loops, origin, a, x0, angle)
+}
+
+/// Solid of revolution of a closed polygon in the half-plane `(ρ, h)` about
+/// the axis through `origin` (full turn). Points with `ρ = 0` lie on the
+/// axis.
+pub fn lathe(origin: V3, axis: V3, profile: &[(f64, f64)]) -> Result<Body, String> {
+    let mut pts: Vec<V2> = Vec::with_capacity(profile.len());
+    for &(rho, h) in profile {
+        let q = v2(rho, h);
+        if pts.last().is_none_or(|p: &V2| (*p - q).len() > TOL) {
+            pts.push(q);
+        }
+    }
+    if pts.len() > 1 && (pts[0] - pts[pts.len() - 1]).len() <= TOL {
+        pts.pop();
+    }
+    if pts.len() < 3 {
+        return Err("revolve profile needs at least three points".into());
+    }
+    let n = pts.len();
+    let lp: Vec<PSeg> = (0..n)
+        .map(|i| PSeg::Line {
+            a: pts[i],
+            b: pts[(i + 1) % n],
+        })
+        .collect();
+    revolve(&[lp], origin, axis, axis.unit().any_perp(), TAU)
 }

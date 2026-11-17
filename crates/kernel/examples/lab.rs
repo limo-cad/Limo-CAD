@@ -279,9 +279,12 @@ fn compare(reference: &[BodySummary], candidate: &[BodySummary]) -> Vec<String> 
                 r.id, c.volume, r.volume
             ));
         }
+        // A faceted circle reaches its radius only where a vertex happens to
+        // point along the axis.
+        let slack = if curved { 1.0e-2 } else { 1.0e-6 };
         for k in 0..3 {
             let span = (r.hi[k] - r.lo[k]).abs().max(1.0);
-            if (r.lo[k] - c.lo[k]).abs() > 2.0e-3 * span || (r.hi[k] - c.hi[k]).abs() > 2.0e-3 * span
+            if (r.lo[k] - c.lo[k]).abs() > slack * span || (r.hi[k] - c.hi[k]).abs() > slack * span
             {
                 issues.push(format!("body {} bounds differ on axis {k}", r.id));
                 break;

@@ -72,6 +72,8 @@ pub struct TrimLoop {
     pub shift: V2,
     /// Signed parameter-space area; meaningful when `shift` is zero.
     pub area: f64,
+    /// Smallest `u` and `v` of the polyline.
+    pub lo: V2,
 }
 
 impl TrimLoop {
@@ -109,6 +111,17 @@ pub struct FaceTrim {
     south_in: bool,
     /// Chord tolerance the polylines were built with.
     pub sag: f64,
+}
+
+/// The period image of `x` in `[base, base + 2π)`.
+#[inline]
+pub fn image(x: f64, base: f64) -> f64 {
+    let w = wrap_from(x, base);
+    if w >= base + TAU {
+        base
+    } else {
+        w
+    }
 }
 
 /// Parameter-space point is at a pole or apex, where `u` is undefined.
@@ -225,11 +238,16 @@ impl FaceTrim {
                 trim.lo = v2(trim.lo.x.min(q.x), trim.lo.y.min(q.y));
                 trim.hi = v2(trim.hi.x.max(q.x), trim.hi.y.max(q.y));
             }
+            let mut lo = v2(f64::INFINITY, f64::INFINITY);
+            for q in &uv {
+                lo = v2(lo.x.min(q.x), lo.y.min(q.y));
+            }
             trim.loops.push(TrimLoop {
                 uv,
                 p3,
                 shift,
                 area: 0.5 * area,
+                lo,
             });
         }
         if surf.kind == SurfKind::Sphere {
@@ -294,19 +312,14 @@ impl FaceTrim {
     pub fn cross_vertical(&self, x: f64, mut visit: impl FnMut(f64, f64)) {
         let periodic = self.surf.u_periodic();
         for lp in &self.loops {
+            // One period image per loop, chosen once: deciding it per segment
+            // would let rounding count the seam twice.
+            let xs = if periodic { image(x, lp.lo.x) } else { x };
             for w in lp.uv.windows(2) {
                 let (a, b) = (w[0], w[1]);
                 let (lo, hi) = if a.x < b.x { (a.x, b.x) } else { (b.x, a.x) };
-                if lo == hi {
-                    continue;
-                }
-                let xs = if periodic {
-                    x + ((lo - x) / TAU).ceil() * TAU
-                } else {
-                    x
-                };
                 // Half-open so a vertex on the line is counted exactly once.
-                if xs < lo || xs >= hi {
+                if lo == hi || xs < lo || xs >= hi {
                     continue;
                 }
                 let t = (xs - a.x) / (b.x - a.x);
@@ -320,18 +333,11 @@ impl FaceTrim {
     pub fn cross_horizontal(&self, y: f64, mut visit: impl FnMut(f64, f64)) {
         let periodic = self.surf.v_periodic();
         for lp in &self.loops {
+            let ys = if periodic { image(y, lp.lo.y) } else { y };
             for w in lp.uv.windows(2) {
                 let (a, b) = (w[0], w[1]);
                 let (lo, hi) = if a.y < b.y { (a.y, b.y) } else { (b.y, a.y) };
-                if lo == hi {
-                    continue;
-                }
-                let ys = if periodic {
-                    y + ((lo - y) / TAU).ceil() * TAU
-                } else {
-                    y
-                };
-                if ys < lo || ys >= hi {
+                if lo == hi || ys < lo || ys >= hi {
                     continue;
                 }
                 let t = (ys - a.y) / (b.y - a.y);
@@ -389,7 +395,7 @@ impl FaceTrim {
     }
 
     /// Model-space length of a parameter step at `q`.
-    fn metric(&self, q: V2) -> V2 {
+    pub fn metric(&self, q: V2) -> V2 {
         let s = &self.surf;
         match s.kind {
             SurfKind::Plane => v2(1.0, 1.0),
@@ -474,19 +480,23 @@ impl FaceTrim {
                 found.push(candidate);
             }
         }
-        found.sort_by(|a, b| b.1.total_cmp(&a.1));
-        found
-    }
-
-    /// Rough model-space size of the face.
-    fn extent(&self) -> f64 {
-        let mut b = Aabb::EMPTY;
-        for lp in &self.loops {
-            for p in &lp.p3 {
-                b.add(*p);
+        // Mechanical parts are symmetric, so every scanline's midpoint can
+        // land on one line where another body just touches. Offer points off
+        // that line too, at a lower rank.
+        let mut extra: Vec<(V2, f64)> = Vec::new();
+        for &(q, score) in &found {
+            let m = self.metric(q);
+            if !score.is_finite() || m.y <= 0.0 {
+                continue;
+            }
+            let dv = 0.4 * score / m.y;
+            for sign in [1.0, -1.0] {
+                extra.push((v2(q.x, q.y + sign * dv), 0.6 * score));
             }
         }
-        b.diagonal().max(TOL)
+        found.extend(extra);
+        found.sort_by(|a, b| b.1.total_cmp(&a.1));
+        found
     }
 
     /// Conservative model-space bounds.

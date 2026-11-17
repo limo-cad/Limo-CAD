@@ -32,9 +32,8 @@ pub fn intersect(a: &Surface, b: &Surface) -> Ssi {
         _ => match coaxial(a, b) {
             Some(result) => result,
             None => Ssi::Unsupported(match (a.kind, b.kind) {
-                (Cylinder, Sphere) | (Sphere, Cylinder) => {
-                    "a cylinder and a sphere that is not centred on its axis"
-                }
+                (Cylinder, Sphere) => return trace(a, b),
+                (Sphere, Cylinder) => return trace(b, a),
                 (Cylinder, Cone) | (Cone, Cylinder) => "a cylinder and a cone on different axes",
                 (Cone, Cone) => "two cones on different axes",
                 (Torus, _) | (_, Torus) => "a torus and a surface on a different axis",
@@ -238,7 +237,64 @@ fn cylinder_cylinder(a: &Surface, b: &Surface) -> Ssi {
     if gap >= a.r + b.r - TOL {
         return Ssi::None;
     }
-    Ssi::Unsupported("two cylinders whose axes are neither parallel nor crossing at equal radius")
+    // The general case in closed form over the angle of the thinner
+    // cylinder, which the thicker one is more likely to pass right through.
+    if a.r <= b.r {
+        trace(a, b)
+    } else {
+        trace(b, a)
+    }
+}
+
+/// Intersection of cylinder `base` with the cylinder or sphere `other`,
+/// written over the angle `θ` of `base`. At each `θ` the height along the
+/// axis solves a quadratic; where its discriminant is positive there are two
+/// points, and where it changes sign the two branches meet in a turning
+/// point.
+fn trace(base: &Surface, other: &Surface) -> Ssi {
+    // Squared half-distance between the two roots, in model units.
+    let reach = |theta: f64| {
+        let (s, c) = theta.sin_cos();
+        let foot = base.f.o + (base.f.x * c + base.f.y * s) * base.r;
+        let (qa, qb, qc) = Curve::trace_quadratic(other, foot, base.f.z);
+        (qb * qb - 4.0 * qa * qc) / (4.0 * qa * qa)
+    };
+    let mut turns: Vec<f64> = crate::roots::solve(&reach, 0.0, TAU, 720, 0.0)
+        .into_iter()
+        .filter(|r| !r.tangent)
+        .map(|r| r.t)
+        .collect();
+    if turns.len() > 1 && turns[0] < 1.0e-9 && turns[turns.len() - 1] > TAU - 1.0e-9 {
+        turns.pop();
+    }
+    let mut curves = Vec::new();
+    if turns.is_empty() {
+        if reach(0.0) > TOL * TOL {
+            for sign in [1.0, -1.0] {
+                curves.push(Curve::trace(base, other, sign, [0.0, TAU]));
+            }
+        }
+    } else {
+        for i in 0..turns.len() {
+            let from = turns[i];
+            let to = if i + 1 < turns.len() {
+                turns[i + 1]
+            } else {
+                turns[0] + TAU
+            };
+            if (to - from) * base.r < 10.0 * TOL || reach(0.5 * (from + to)) <= 0.0 {
+                continue;
+            }
+            for sign in [1.0, -1.0] {
+                curves.push(Curve::trace(base, other, sign, [from, to]));
+            }
+        }
+    }
+    if curves.is_empty() {
+        Ssi::None
+    } else {
+        Ssi::Curves(curves)
+    }
 }
 
 /// Profile of a surface of revolution in the `(ρ, h)` half-plane of a shared

@@ -250,8 +250,8 @@ pub fn curve_surface(c: &Curve, t0: f64, t1: f64, s: &Surface) -> Hits {
         }
         _ => {
             let samples = match c.kind {
-                CurveKind::Line => 48,
-                _ => (((t1 - t0) / TAU * 96.0).ceil() as usize).max(12),
+                CurveKind::Line => 24,
+                _ => (((t1 - t0) / TAU * 64.0).ceil() as usize).max(8),
             };
             Hits::Roots(solve(
                 &|t| s.sdist(c.point(t)),
@@ -268,6 +268,47 @@ pub fn curve_surface(c: &Curve, t0: f64, t1: f64, s: &Surface) -> Hits {
 /// The distance is signed by the side of `other` within the surface, so a
 /// crossing is a sign change.
 pub fn curve_curve(c: &Curve, t0: f64, t1: f64, other: &Curve, s: &Surface) -> Hits {
+    if c.kind == CurveKind::Line && other.kind == CurveKind::Line {
+        // Two lines in one surface: parallel, the same, or meeting once.
+        let (d1, d2) = (c.f.x, other.f.x);
+        let n = d1.cross(d2);
+        let w = other.f.o - c.f.o;
+        if n.len2() < ANG_TOL * ANG_TOL {
+            let off = (w - d2 * w.dot(d2)).len();
+            return if off < TOL {
+                Hits::Coincident
+            } else {
+                Hits::Roots(Vec::new())
+            };
+        }
+        let t = w.cross(d2).dot(n) / n.len2();
+        if other.dist(c.point(t)) >= 10.0 * TOL {
+            return Hits::Roots(Vec::new());
+        }
+        return Hits::Roots(in_span(&[(t, false)], t0, t1, false));
+    }
+    if c.kind == CurveKind::Line && other.kind == CurveKind::Circle {
+        // A line in the circle's plane meets it like a chord.
+        let w = c.f.o - other.f.o;
+        let z = other.f.z;
+        if c.f.x.dot(z).abs() < ANG_TOL && w.dot(z).abs() < TOL {
+            let t_mid = -w.dot(c.f.x);
+            let closest = (w + c.f.x * t_mid).len();
+            if (closest - other.r).abs() < TOL {
+                return Hits::Roots(in_span(&[(t_mid, true)], t0, t1, false));
+            }
+            if closest > other.r {
+                return Hits::Roots(Vec::new());
+            }
+            let half = (other.r * other.r - closest * closest).sqrt();
+            return Hits::Roots(in_span(
+                &[(t_mid - half, false), (t_mid + half, false)],
+                t0,
+                t1,
+                false,
+            ));
+        }
+    }
     let side = |t: f64| {
         let p = c.point(t);
         let u = other.param(p);
@@ -283,8 +324,8 @@ pub fn curve_curve(c: &Curve, t0: f64, t1: f64, other: &Curve, s: &Surface) -> H
         return Hits::Coincident;
     }
     let samples = match c.kind {
-        CurveKind::Line => 48,
-        _ => (((t1 - t0) / TAU * 96.0).ceil() as usize).max(12),
+        CurveKind::Line => 24,
+        _ => (((t1 - t0) / TAU * 64.0).ceil() as usize).max(8),
     };
     let mut roots = solve(&side, t0, t1, samples, TOL);
     // The side function also vanishes where the foot point jumps to the far

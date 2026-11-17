@@ -232,7 +232,7 @@ impl Body {
         // Curved edges and faces bulge beyond their vertices.
         for e in 0..self.edge_count() as u32 {
             let c = self.e_curve_ref(e);
-            if c.periodic() {
+            if c.kind != crate::geom::CurveKind::Line {
                 let [t0, t1] = self.e_t[e as usize];
                 let n = 16;
                 for i in 0..=n {
