@@ -3,6 +3,7 @@
 
 use crate::geom::{Curve, Surface};
 use crate::math::*;
+use crate::name::Role;
 use crate::topo::Body;
 
 /// One boundary segment of a planar profile, in model space.
@@ -92,6 +93,8 @@ pub fn arc_circle(a: V3, m: V3, b: V3) -> Option<(V3, f64, V3)> {
 struct Placed {
     seg: Seg,
     reversed: bool,
+    /// Which segment of the loop this is, as the caller gave them.
+    index: u32,
 }
 
 impl Placed {
@@ -125,6 +128,7 @@ fn chain(segs: &[Seg]) -> Result<Vec<Placed>, String> {
             Seg::Circle { .. } => Ok(vec![Placed {
                 seg: segs[0],
                 reversed: false,
+                index: 0,
             }]),
             _ => Err("profile loop is not closed".into()),
         };
@@ -133,6 +137,7 @@ fn chain(segs: &[Seg]) -> Result<Vec<Placed>, String> {
     let mut first = Placed {
         seg: segs[0],
         reversed: false,
+        index: 0,
     };
     let (sa, sb) = segs[1].ends();
     let touches = |p: V3| p.dist(sa) < CHAIN_TOL || p.dist(sb) < CHAIN_TOL;
@@ -140,7 +145,7 @@ fn chain(segs: &[Seg]) -> Result<Vec<Placed>, String> {
         first.reversed = true;
     }
     out.push(first);
-    for seg in &segs[1..] {
+    for (index, seg) in segs.iter().enumerate().skip(1) {
         if matches!(seg, Seg::Circle { .. }) {
             return Err("a full circle cannot share a profile loop with other curves".into());
         }
@@ -156,6 +161,7 @@ fn chain(segs: &[Seg]) -> Result<Vec<Placed>, String> {
         out.push(Placed {
             seg: *seg,
             reversed,
+            index: index as u32,
         });
     }
     if out.last().unwrap().end().dist(out[0].start()) >= CHAIN_TOL {
@@ -319,10 +325,12 @@ pub fn extrude(region: &Region, normal: V3, start: f64, end: f64) -> Result<Body
         surf: u32,
         sense: bool,
         loops: Vec<Vec<u32>>,
+        tag: u64,
     }
     let mut sides: Vec<Side> = Vec::new();
 
-    for lp in &loops {
+    for (li, lp) in loops.iter().enumerate() {
+        let side = |seg: u32| Role::Side { lp: li as u32, seg }.tag();
         if let [Placed {
             seg: Seg::Circle { c, p, n: cn },
             ..
@@ -347,6 +355,7 @@ pub fn extrude(region: &Region, normal: V3, start: f64, end: f64) -> Result<Body
                 // Counter-clockwise about `n` bounds material inside.
                 sense: axis.dot(n) > 0.0,
                 loops: vec![vec![2 * e0], vec![2 * e1 + 1]],
+                tag: side(0),
             });
             bottom_loops.push(vec![2 * e0 + 1]);
             top_loops.push(vec![2 * e1]);
@@ -422,6 +431,7 @@ pub fn extrude(region: &Region, normal: V3, start: f64, end: f64) -> Result<Body
                     2 * et + 1,
                     2 * vertical[i] + 1,
                 ]],
+                tag: side(placed.index),
             });
             bottom.push(2 * eb + 1);
             top.push(2 * et);
@@ -432,10 +442,247 @@ pub fn extrude(region: &Region, normal: V3, start: f64, end: f64) -> Result<Body
     }
 
     for side in &sides {
-        body.add_face(side.surf, side.sense, &side.loops);
+        body.add_tagged_face(side.surf, side.sense, &side.loops, side.tag);
     }
-    body.add_face(bottom_surf, !cap_up, &bottom_loops);
-    body.add_face(top_surf, cap_up, &top_loops);
+    // The lower cap is where the extrusion starts unless it runs downwards.
+    let (low, high) = if start <= end {
+        (Role::Start, Role::End)
+    } else {
+        (Role::End, Role::Start)
+    };
+    body.add_tagged_face(bottom_surf, !cap_up, &bottom_loops, low.tag());
+    body.add_tagged_face(top_surf, cap_up, &top_loops, high.tag());
+    body.check()?;
+    Ok(body)
+}
+
+/// Extrude a planar region while scaling it about `centre`, a point of its
+/// plane: at signed offset `o` along `normal` the region is `1 + rate·o`
+/// times its own size. `start` and `end` are offsets as for [`extrude`].
+///
+/// Every point of the region then travels a straight line, and all those
+/// lines meet in one point, so the result is a slice of a cone over the
+/// region. Straight sides stay flat. A circle or arc about `centre` sweeps
+/// a right circular cone; one about any other point would sweep a slanted
+/// cone, which this kernel has no surface for.
+pub fn taper(
+    region: &Region,
+    normal: V3,
+    start: f64,
+    end: f64,
+    centre: V3,
+    rate: f64,
+) -> Result<Body, String> {
+    if rate.abs() < 1.0e-15 {
+        return extrude(region, normal, start, end);
+    }
+    let n = normal.unit();
+    if !n.is_finite() || n.len2() < 0.5 {
+        return Err("extrude direction is degenerate".into());
+    }
+    if !(start.is_finite() && end.is_finite()) || (end - start).abs() <= TOL {
+        return Err("extrude extent must have non-zero depth".into());
+    }
+    if region.loops.is_empty() {
+        return Err("extrude needs at least one profile loop".into());
+    }
+    let (lo, hi) = (start.min(end), start.max(end));
+    let scale = |offset: f64| 1.0 + rate * offset;
+    if !(scale(lo).is_finite() && scale(hi).is_finite())
+        || scale(lo) <= 1.0e-6
+        || scale(hi) <= 1.0e-6
+    {
+        return Err("taper collapses or inverts the profile".into());
+    }
+    // Where a point of the profile plane is at a given offset.
+    let place = |p: V3, offset: f64| centre + (p - centre) * scale(offset) + n * offset;
+    // The point all the travel lines meet in, and the way from it to the
+    // solid.
+    let apex = centre - n / rate;
+    let opening = n * rate.signum();
+    let centred = |c: V3, r: f64| {
+        let off = c - centre;
+        (off - n * off.dot(n)).len() <= 1.0e-6 * (1.0 + r)
+    };
+    let slanted = || {
+        "a tapered extrusion needs every arc and circle of the profile to be centred on it;          others would sweep a slanted cone, which is not supported yet"
+            .to_string()
+    };
+
+    let mut loops = Vec::with_capacity(region.loops.len());
+    for segs in &region.loops {
+        loops.push(chain(segs)?);
+    }
+    let given_area = signed_area2(&loops[0], n);
+    if given_area.abs() < 1.0e-18 {
+        return Err("profile encloses no area".into());
+    }
+    let cap_normal = n * given_area.signum();
+    let barycentre = wire_barycentre(&loops[0]);
+    for (i, lp) in loops.iter_mut().enumerate() {
+        let area = signed_area2(lp, n);
+        if area.abs() < 1.0e-18 {
+            return Err("profile loop encloses no area".into());
+        }
+        if (area > 0.0) != (i == 0) {
+            reverse_loop(lp);
+        }
+    }
+
+    let mut body = Body::new();
+    let cap_x = reference_x(cap_normal);
+    let cap = |offset: f64| {
+        Surface::plane_frame(Frame {
+            o: barycentre + n * offset,
+            x: cap_x,
+            y: cap_normal.cross(cap_x),
+            z: cap_normal,
+        })
+    };
+    let bottom_surf = body.add_surf(cap(lo));
+    let top_surf = body.add_surf(cap(hi));
+    let cap_up = cap_normal.dot(n) > 0.0;
+    let cone = |r: f64, reference: V3| Surface {
+        f: Frame::from_zx(apex, opening, reference),
+        ..Surface::cone(apex, opening, (r * rate.abs()).atan())
+    };
+
+    let mut bottom_loops: Vec<Vec<u32>> = Vec::new();
+    let mut top_loops: Vec<Vec<u32>> = Vec::new();
+    struct Side {
+        surf: u32,
+        sense: bool,
+        loops: Vec<Vec<u32>>,
+        tag: u64,
+    }
+    let mut sides: Vec<Side> = Vec::new();
+
+    for (li, lp) in loops.iter().enumerate() {
+        let side = |seg: u32| Role::Side { lp: li as u32, seg }.tag();
+        if let [Placed {
+            seg: Seg::Circle { c, p, n: cn },
+            ..
+        }] = lp[..]
+        {
+            let r = c.dist(p);
+            if r <= TOL {
+                return Err("profile circle has zero radius".into());
+            }
+            if !centred(c, r) {
+                return Err(slanted());
+            }
+            let axis = cn.unit();
+            let (v0, v1) = (body.add_vert(place(p, lo)), body.add_vert(place(p, hi)));
+            let ring = |body: &mut Body, offset: f64| {
+                body.add_curve(Curve::circle(
+                    place(c, offset),
+                    axis,
+                    p - c,
+                    r * scale(offset),
+                ))
+            };
+            let (c0, c1) = (ring(&mut body, lo), ring(&mut body, hi));
+            let e0 = body.add_edge(c0, 0.0, TAU, v0, v0);
+            let e1 = body.add_edge(c1, 0.0, TAU, v1, v1);
+            let surf = body.add_surf(cone(r, p - c));
+            sides.push(Side {
+                surf,
+                sense: axis.dot(n) > 0.0,
+                loops: vec![vec![2 * e0], vec![2 * e1 + 1]],
+                tag: side(0),
+            });
+            bottom_loops.push(vec![2 * e0 + 1]);
+            top_loops.push(vec![2 * e1]);
+            continue;
+        }
+
+        let count = lp.len();
+        let pts: Vec<V3> = lp.iter().map(Placed::start).collect();
+        let vb: Vec<u32> = pts.iter().map(|p| body.add_vert(place(*p, lo))).collect();
+        let vt: Vec<u32> = pts.iter().map(|p| body.add_vert(place(*p, hi))).collect();
+        let upright: Vec<u32> = (0..count)
+            .map(|i| body.add_line_edge(vb[i], vt[i]))
+            .collect();
+        let mut bottom = Vec::with_capacity(count);
+        let mut top = Vec::with_capacity(count);
+        for (i, placed) in lp.iter().enumerate() {
+            let j = (i + 1) % count;
+            let (eb, et, surf, sense) = match placed.seg {
+                Seg::Line { .. } => {
+                    let (p0, p1) = (body.verts[vb[i] as usize], body.verts[vb[j] as usize]);
+                    if p0.dist(p1) <= TOL {
+                        return Err("profile contains a zero-length line".into());
+                    }
+                    let eb = body.add_line_edge(vb[i], vb[j]);
+                    let et = body.add_line_edge(vt[i], vt[j]);
+                    // Outward is to the right of travel, seen along the
+                    // way the side leans.
+                    let along = (p1 - p0).unit();
+                    let up = body.verts[vt[i] as usize] - p0;
+                    let outward = along.cross(up).unit();
+                    let surf = body.add_surf(Surface::plane_frame(Frame {
+                        o: p0,
+                        x: along,
+                        y: outward.cross(along),
+                        z: outward,
+                    }));
+                    (eb, et, surf, true)
+                }
+                Seg::Arc { a, m, b } => {
+                    let (c, r, given_axis) = arc_circle(a, m, b)
+                        .ok_or_else(|| "profile arc is degenerate".to_string())?;
+                    if !centred(c, r) {
+                        return Err(slanted());
+                    }
+                    let axis = if placed.reversed {
+                        -given_axis
+                    } else {
+                        given_axis
+                    };
+                    let (p0, p1) = (pts[i], pts[j]);
+                    let frame = Frame::from_zx(c, axis, p0 - c);
+                    let l1 = frame.local(p1);
+                    let sweep = wrap_from(l1.y.atan2(l1.x), 1.0e-12);
+                    let ring = |body: &mut Body, offset: f64| {
+                        body.add_curve(Curve::circle(
+                            place(c, offset),
+                            axis,
+                            p0 - c,
+                            r * scale(offset),
+                        ))
+                    };
+                    let (cb, ct) = (ring(&mut body, lo), ring(&mut body, hi));
+                    let eb = body.add_edge(cb, 0.0, sweep, vb[i], vb[j]);
+                    let et = body.add_edge(ct, 0.0, sweep, vt[i], vt[j]);
+                    let surf = body.add_surf(cone(r, a - c));
+                    (eb, et, surf, axis.dot(n) > 0.0)
+                }
+                Seg::Circle { .. } => unreachable!("circles are single-segment loops"),
+            };
+            sides.push(Side {
+                surf,
+                sense,
+                loops: vec![vec![2 * eb, 2 * upright[j], 2 * et + 1, 2 * upright[i] + 1]],
+                tag: side(placed.index),
+            });
+            bottom.push(2 * eb + 1);
+            top.push(2 * et);
+        }
+        bottom.reverse();
+        bottom_loops.push(bottom);
+        top_loops.push(top);
+    }
+
+    for side in &sides {
+        body.add_tagged_face(side.surf, side.sense, &side.loops, side.tag);
+    }
+    let (low, high) = if start <= end {
+        (Role::Start, Role::End)
+    } else {
+        (Role::End, Role::Start)
+    };
+    body.add_tagged_face(bottom_surf, !cap_up, &bottom_loops, low.tag());
+    body.add_tagged_face(top_surf, cap_up, &top_loops, high.tag());
     body.check()?;
     Ok(body)
 }
@@ -602,6 +849,7 @@ pub fn revolve(
 
     // Material on the left: outer counter-clockwise, holes clockwise.
     let mut profile: Vec<Vec<PSeg>> = Vec::with_capacity(loops.len());
+    let mut order: Vec<Vec<u32>> = Vec::with_capacity(loops.len());
     for (i, lp) in loops.iter().enumerate() {
         if lp.is_empty() {
             return Err("revolve profile loop has no boundary curves".into());
@@ -621,13 +869,17 @@ pub fn revolve(
             return Err("revolve profile encloses no area".into());
         }
         let mut lp = lp.clone();
+        // Where each segment was in the loop as given.
+        let mut given: Vec<u32> = (0..lp.len() as u32).collect();
         if (area > 0.0) != (i == 0) {
             lp.reverse();
+            given.reverse();
             for seg in &mut lp {
                 *seg = seg.reversed();
             }
         }
         profile.push(lp);
+        order.push(given);
     }
 
     let place = |q: V2, x: V3| origin + a * q.y + x * q.x.max(0.0);
@@ -638,12 +890,20 @@ pub fn revolve(
         surf: Surface,
         sense: bool,
         loops: Vec<Vec<u32>>,
+        tag: u64,
     }
     let mut swept: Vec<Swept> = Vec::new();
 
     for (li, lp) in profile.iter().enumerate() {
         let n = lp.len();
         let outer = li == 0;
+        let side = |k: usize| {
+            Role::Side {
+                lp: li as u32,
+                seg: order[li][k],
+            }
+            .tag()
+        };
         if let [PSeg::Circle { c, r }] = lp[..] {
             if c.x - r <= TOL {
                 return Err("a revolved circle must not touch the axis".into());
@@ -672,6 +932,7 @@ pub fn revolve(
                 surf,
                 sense: outer,
                 loops: face_loops,
+                tag: side(0),
             });
             continue;
         }
@@ -818,6 +1079,7 @@ pub fn revolve(
                 surf,
                 sense,
                 loops: face_loops,
+                tag: side(i),
             });
         }
         if !full {
@@ -829,7 +1091,7 @@ pub fn revolve(
 
     for face in &swept {
         let s = body.add_surf(face.surf);
-        body.add_face(s, face.sense, &face.loops);
+        body.add_tagged_face(s, face.sense, &face.loops, face.tag);
     }
     if !full {
         let cap = |normal: V3| {
@@ -842,9 +1104,9 @@ pub fn revolve(
             })
         };
         let s = body.add_surf(cap(-t0));
-        body.add_face(s, true, &start_cap);
+        body.add_tagged_face(s, true, &start_cap, Role::Start.tag());
         let s = body.add_surf(cap(t1));
-        body.add_face(s, true, &end_cap);
+        body.add_tagged_face(s, true, &end_cap, Role::End.tag());
     }
     body.check()?;
     Ok(body)

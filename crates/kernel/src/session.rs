@@ -24,6 +24,7 @@ use crate::boolean::{boolean, Op};
 use crate::geom::{CurveKind, SurfKind};
 use crate::make::{self, Region, Seg};
 use crate::math::*;
+use crate::name::{mix, tag_of, Names, Role};
 use crate::props::planar_props;
 use crate::tess::{edge_polyline, tessellate, Mesh, TessOptions};
 use crate::topo::Body;
@@ -167,9 +168,14 @@ impl Kernel {
                     continue;
                 };
                 let found = state.iter().any(|(id, slot)| {
+                    let names = Names::of(&slot.body);
                     (0..slot.body.face_count() as u32).any(|f| {
+                        // By name, or by the index older documents kept.
                         slot.body.f_surface(f).is_plane()
-                            && stable_face_id(BodyId(*id), &format!("face:{f}")) == query.face_id
+                            && (stable_face_id(BodyId(*id), &names.faces[f as usize])
+                                == query.face_id
+                                || stable_face_id(BodyId(*id), &format!("face:{f}"))
+                                    == query.face_id)
                     })
                 });
                 if found {
@@ -248,11 +254,16 @@ impl Kernel {
 
     /// Apply one job. The state changes only when the whole job succeeds.
     pub fn apply(&mut self, job: &KernelJobDto) -> Result<(), String> {
+        // Every face this job makes is tagged with the feature it belongs
+        // to and its part in it, so that it can be found again by name
+        // however the faces around it are renumbered.
+        let feature = mix(0xfea7, job.feature_id().0);
         match job {
             KernelJobDto::Extrude(j) => {
                 let normal = p3(&j.normal);
                 let tools = match &j.source_face {
                     Some(source) => vec![self.face_tool(
+                        feature,
                         source,
                         normal,
                         j.start_offset,
@@ -263,9 +274,16 @@ impl Kernel {
                         .profiles
                         .iter()
                         .map(|p| {
-                            profile_tool(p, normal, j.start_offset, j.end_offset, j.taper_angle_deg)
+                            let tool = profile_tool(
+                                p,
+                                normal,
+                                j.start_offset,
+                                j.end_offset,
+                                j.taper_angle_deg,
+                            )?;
+                            Ok(stamped(tool, feature, p))
                         })
-                        .collect::<Result<Vec<_>, _>>()?,
+                        .collect::<Result<Vec<_>, String>>()?,
                 };
                 self.profile_job(
                     j.operation,
@@ -280,8 +298,11 @@ impl Kernel {
                 let tools = j
                     .profiles
                     .iter()
-                    .map(|p| profile_tool(p, normal, j.start_offset, j.end_offset, 0.0))
-                    .collect::<Result<Vec<_>, _>>()?;
+                    .map(|p| {
+                        let tool = profile_tool(p, normal, j.start_offset, j.end_offset, 0.0)?;
+                        Ok(stamped(tool, feature, p))
+                    })
+                    .collect::<Result<Vec<_>, String>>()?;
                 self.profile_job(
                     j.operation,
                     false,
@@ -292,7 +313,9 @@ impl Kernel {
             }
             KernelJobDto::Hole(j) => {
                 let target = self.get(j.target_body_id, "hole target")?;
-                let cutter = hole_cutter(j, &target)?;
+                let mut cutter = hole_cutter(j, &target)?;
+                // Named by their place down the hole: mouth, wall, floor.
+                cutter.retag(|tag| mix(feature, tag));
                 let result =
                     boolean(&target, &cutter, Op::Cut).map_err(|e| format!("Hole: {e}"))?;
                 self.put(j.target_body_id.0, result);
@@ -306,10 +329,19 @@ impl Kernel {
                     return Err("body transform buffers are malformed".into());
                 }
                 let mut results = Vec::with_capacity(j.result_body_ids.len());
-                for transform in &j.transforms {
+                for (nth, transform) in j.transforms.iter().enumerate() {
                     let x = xform(transform)?;
                     for source in &j.source_body_ids {
-                        results.push(self.get(*source, "body transform source")?.transformed(&x));
+                        let mut copy = self.get(*source, "body transform source")?.transformed(&x);
+                        // A body moved in place keeps its faces' names. A
+                        // copy gets names of its own, so that copies joined
+                        // into one body later can still be told apart.
+                        let moved = j.result_body_ids.get(results.len()) == Some(source);
+                        if !moved {
+                            let instance = mix(feature, nth as u64);
+                            copy.retag(|tag| mix(instance, tag));
+                        }
+                        results.push(copy);
                     }
                 }
                 for (id, body) in j.result_body_ids.iter().zip(results) {
@@ -349,7 +381,8 @@ impl Kernel {
                 let origin = p3(&j.plane_origin);
                 let reach = target.bbox().diagonal() + origin.dist(target.bbox().lo) + 1.0;
                 let half = |sign: f64| -> Result<Body, String> {
-                    let space = half_space(origin, normal.unit() * sign, reach)?;
+                    let mut space = half_space(origin, normal.unit() * sign, reach)?;
+                    space.retag(|tag| mix(feature, tag));
                     boolean(&target, &space, Op::Intersect)
                 };
                 let not_divided = "Split Body plane does not divide the target into two bodies";
@@ -371,8 +404,11 @@ impl Kernel {
                 let tools = j
                     .profiles
                     .iter()
-                    .map(|p| make::revolve_region(&region_of(p), origin, axis, j.angle_rad))
-                    .collect::<Result<Vec<_>, _>>()?;
+                    .map(|p| {
+                        let tool = make::revolve_region(&region_of(p), origin, axis, j.angle_rad)?;
+                        Ok(stamped(tool, feature, p))
+                    })
+                    .collect::<Result<Vec<_>, String>>()?;
                 self.profile_job(
                     j.operation,
                     j.require_single_solid,
@@ -383,16 +419,21 @@ impl Kernel {
             }
             KernelJobDto::Fillet(j) => {
                 let target = self.get(j.target_body_id, "edge refinement target")?;
-                let edges = edge_indices(&j.edge_keys)?;
-                let result =
-                    blend::fillet(&target, &edges, j.radius).map_err(|e| format!("Fillet: {e}"))?;
+                let names = Names::of(&target);
+                let edges = edge_indices(&names, &j.edge_keys)?;
+                // A round is named after the edge it replaces.
+                let tag = |e: u32| mix(feature, tag_of(&names.edges[e as usize]));
+                let result = blend::fillet_as(&target, &edges, j.radius, &tag)
+                    .map_err(|e| format!("Fillet: {e}"))?;
                 self.put(j.target_body_id.0, result);
                 Ok(())
             }
             KernelJobDto::Chamfer(j) => {
                 let target = self.get(j.target_body_id, "edge refinement target")?;
-                let edges = edge_indices(&j.edge_keys)?;
-                let result = blend::chamfer(&target, &edges, j.distance, j.angle_deg)
+                let names = Names::of(&target);
+                let edges = edge_indices(&names, &j.edge_keys)?;
+                let tag = |e: u32| mix(feature, tag_of(&names.edges[e as usize]));
+                let result = blend::chamfer_as(&target, &edges, j.distance, j.angle_deg, &tag)
                     .map_err(|e| format!("Chamfer: {e}"))?;
                 self.put(j.target_body_id.0, result);
                 Ok(())
@@ -474,15 +515,13 @@ impl Kernel {
     /// Extrusion tool from an existing planar face.
     fn face_tool(
         &self,
+        feature: u64,
         source: &KernelPlanarFaceSourceDto,
         normal: V3,
         start: f64,
         end: f64,
         taper: f64,
     ) -> Result<Body, String> {
-        if taper.abs() >= 1.0e-12 {
-            return Err(unsupported("A tapered extrusion of a face"));
-        }
         let body = self.get(source.body_id, "Extrude source")?;
         let matches = |f: u32| {
             let Some(props) = planar_props(&body, f) else {
@@ -497,12 +536,9 @@ impl Kernel {
                 && props.centroid.dist(p3(&s.centroid)) <= 1.0e-6 * props.perimeter.max(1.0)
                 && n.dot(p3(&s.normal).unit()) > 1.0 - 1.0e-9
         };
-        // The saved ordinal is only a hint; the signature is the reference.
-        let hinted = source
-            .face_key
-            .strip_prefix("face:")
-            .and_then(|v| v.parse::<u32>().ok())
-            .filter(|f| (*f as usize) < body.face_count() && matches(*f));
+        // The saved name is only a hint; the signature is the reference.
+        let names = Names::of(&body);
+        let hinted = names.face(&source.face_key).filter(|f| matches(*f));
         let face = match hinted {
             Some(f) => f,
             None => {
@@ -517,24 +553,108 @@ impl Kernel {
                 found[0]
             }
         };
-        let region = face_region(&body, face)?;
-        make::extrude(&region, normal, start, end)
+        let (region, edges) = face_region(&body, face)?;
+        let mut tool = if taper.abs() < 1.0e-12 {
+            make::extrude(&region, normal, start, end)?
+        } else {
+            // Scaled about the middle of the face, by its corners' mean
+            // distance from there, as the reference adapter does.
+            let centre = planar_props(&body, face)
+                .ok_or("Extrude source face is not planar")?
+                .centroid;
+            let corners: Vec<V3> = body
+                .face_hes(face)
+                .map(|h| body.verts[body.h_origin(h) as usize])
+                .collect();
+            make::taper(
+                &region,
+                normal,
+                start,
+                end,
+                centre,
+                taper_rate(taper, centre, &corners),
+            )?
+        };
+        // Each side is named after the edge of the face it rises from, the
+        // two ends after the face itself.
+        let from_face = tag_of(&names.faces[face as usize]);
+        tool.retag(|tag| match Role::of(tag) {
+            Role::Side { lp, seg } => {
+                let e = edges[lp as usize][seg as usize];
+                mix(mix(feature, SIDE), tag_of(&names.edges[e as usize]))
+            }
+            Role::Start => mix(mix(feature, START), from_face),
+            Role::End => mix(mix(feature, END), from_face),
+            Role::Other => mix(feature, tag),
+        });
+        Ok(tool)
     }
 }
 
-/// Edge ordinals from topology keys of the form `edge:N`.
-fn edge_indices(keys: &[String]) -> Result<Vec<u32>, String> {
-    keys.iter()
-        .map(|key| {
-            key.strip_prefix("edge:")
-                .and_then(|v| v.parse::<u32>().ok())
-                .ok_or_else(|| {
-                    format!(
-                        "Invalid edge topology reference '{key}'; reselect the edge on the feature input body"
-                    )
-                })
-        })
-        .collect()
+/// Parts a face can play in the feature that made it.
+const START: u64 = 1;
+const END: u64 = 2;
+const SIDE: u64 = 3;
+
+/// Tag the faces of a tool built from a sketch profile: each side after
+/// the sketch entity it was swept from, so that it keeps its name when
+/// other entities come and go, and the ends after the profile.
+fn stamped(mut tool: Body, feature: u64, profile: &KernelProfileDto) -> Body {
+    // Entity behind every segment, loop by loop as `region_of` lists them.
+    let entities = |p: &KernelProfileDto| -> Vec<u64> {
+        if p.curves.is_empty() {
+            return (0..p.points.len() as u64)
+                .map(|i| mix(0x90117, i))
+                .collect();
+        }
+        let mut out = Vec::with_capacity(p.curves.len());
+        for curve in &p.curves {
+            match curve {
+                KernelCurveDto::Line { entity_id, .. }
+                | KernelCurveDto::Arc { entity_id, .. }
+                | KernelCurveDto::Circle { entity_id, .. } => out.push(*entity_id),
+                KernelCurveDto::Polyline { entity_id, points } => {
+                    out.extend((1..points.len() as u64).map(|piece| mix(*entity_id, piece)))
+                }
+            }
+        }
+        out
+    };
+    let mut loops = vec![entities(profile)];
+    loops.extend(profile.holes.iter().map(entities));
+    // The profile is whichever its outline's entities say it is; its place
+    // in the sketch's list of profiles shifts when the sketch is edited.
+    let outline = loops[0].iter().copied().min().unwrap_or(0);
+    tool.retag(|tag| match Role::of(tag) {
+        Role::Side { lp, seg } => {
+            let entity = loops
+                .get(lp as usize)
+                .and_then(|l| l.get(seg as usize))
+                .copied()
+                .unwrap_or_else(|| mix(u64::from(lp), u64::from(seg)));
+            mix(mix(feature, SIDE), entity)
+        }
+        Role::Start => mix(mix(feature, START), outline),
+        Role::End => mix(mix(feature, END), outline),
+        Role::Other => mix(feature, tag),
+    });
+    tool
+}
+
+/// The edges of a body that the given names refer to. A name can stand for
+/// several: the pieces of an edge that something has since cut through.
+fn edge_indices(names: &Names, keys: &[String]) -> Result<Vec<u32>, String> {
+    let mut edges = Vec::with_capacity(keys.len());
+    for key in keys {
+        let found = names.edges_named(key);
+        if found.is_empty() {
+            return Err(format!(
+                "Invalid edge topology reference '{key}'; reselect the edge on the feature input body"
+            ));
+        }
+        edges.extend(found);
+    }
+    Ok(edges)
 }
 
 fn xform(t: &KernelTransformDto) -> Result<Xform, String> {
@@ -627,14 +747,36 @@ fn profile_tool(
     end: f64,
     taper: f64,
 ) -> Result<Body, String> {
-    if taper.abs() >= 1.0e-12 {
-        return Err(unsupported("A tapered extrusion"));
+    if taper.abs() < 1.0e-12 {
+        return make::extrude(&region_of(profile), normal, start, end);
     }
-    make::extrude(&region_of(profile), normal, start, end)
+    // Scaled about the middle of the outline's points.
+    let points: Vec<V3> = profile.points.iter().map(p3).collect();
+    if points.is_empty() {
+        return Err("a tapered extrusion needs the outline of its profile".into());
+    }
+    let centre = points.iter().fold(V3::ZERO, |sum, p| sum + *p) / points.len() as f64;
+    make::taper(
+        &region_of(profile),
+        normal,
+        start,
+        end,
+        centre,
+        taper_rate(taper, centre, &points),
+    )
 }
 
-/// The boundary of a planar face as an extrusion region, outer loop first.
-fn face_region(body: &Body, f: u32) -> Result<Region, String> {
+/// How fast a tapered profile grows per unit of offset: the tangent of the
+/// taper angle over the mean distance of `points` from `centre`, so that a
+/// side at that distance leans by exactly the angle.
+fn taper_rate(taper_deg: f64, centre: V3, points: &[V3]) -> f64 {
+    let reach = points.iter().map(|p| p.dist(centre)).sum::<f64>() / points.len().max(1) as f64;
+    taper_deg.to_radians().tan() / reach.max(1.0e-6)
+}
+
+/// The boundary of a planar face as an extrusion region, outer loop first,
+/// and the edge behind every segment of it.
+fn face_region(body: &Body, f: u32) -> Result<(Region, Vec<Vec<u32>>), String> {
     if !body.f_surface(f).is_plane() {
         return Err("Extrude source face is not planar".into());
     }
@@ -644,8 +786,10 @@ fn face_region(body: &Body, f: u32) -> Result<Region, String> {
     order.sort_by(|&a, &b| trim.loops[b].area.total_cmp(&trim.loops[a].area));
     let loops: Vec<u32> = body.face_loops(f).collect();
     let mut region = Region::default();
+    let mut edges: Vec<Vec<u32>> = Vec::new();
     for i in order {
         let mut segs = Vec::new();
+        edges.push(body.loop_hes(loops[i]).map(|h| h >> 1).collect());
         for h in body.loop_hes(loops[i]) {
             let e = h >> 1;
             let c = body.e_curve_ref(e);
@@ -669,7 +813,7 @@ fn face_region(body: &Body, f: u32) -> Result<Region, String> {
         }
         region.loops.push(segs);
     }
-    Ok(region)
+    Ok((region, edges))
 }
 
 /// A block covering everything on the `normal` side of a plane within
@@ -870,6 +1014,7 @@ fn topology_signature(body: &Body) -> String {
 /// Display data and exact metadata of one body.
 pub fn body_dto(id: u64, body: &Body, options: &TessOptions) -> KernelBodyDto {
     let mesh = tessellate(body, options);
+    let names = Names::of(body);
     let mut positions = Vec::with_capacity(mesh.positions.len() * 3);
     let mut normals = Vec::with_capacity(mesh.normals.len() * 3);
     for p in &mesh.positions {
@@ -906,7 +1051,7 @@ pub fn body_dto(id: u64, body: &Body, options: &TessOptions) -> KernelBodyDto {
                 let e = h >> 1;
                 if !seen.contains(&e) {
                     seen.push(e);
-                    edge_keys.push(format!("edge:{e}"));
+                    edge_keys.push(names.edges[e as usize].clone());
                 }
             }
             // A full circle that is not the only loop is the mouth of a hole.
@@ -917,7 +1062,7 @@ pub fn body_dto(id: u64, body: &Body, options: &TessOptions) -> KernelBodyDto {
                 && body.e_closed(hes[0] >> 1)
                 && body.e_curve_ref(hes[0] >> 1).kind == CurveKind::Circle
             {
-                rings.push(format!("edge:{}", hes[0] >> 1));
+                rings.push(names.edges[(hes[0] >> 1) as usize].clone());
             }
         }
         // The outer boundary of a disc-shaped face is not a hole mouth.
@@ -943,7 +1088,7 @@ pub fn body_dto(id: u64, body: &Body, options: &TessOptions) -> KernelBodyDto {
         });
         let [first_index, index_count] = mesh.faces[f as usize];
         faces.push(KernelFaceDto {
-            key: format!("face:{f}"),
+            key: names.faces[f as usize].clone(),
             first_index,
             index_count,
             plane,
@@ -972,7 +1117,7 @@ pub fn body_dto(id: u64, body: &Body, options: &TessOptions) -> KernelBodyDto {
         let [t0, t1] = body.e_t[e as usize];
         let refinable = body.e_sharp(e);
         edges.push(KernelEdgeDto {
-            key: format!("edge:{e}"),
+            key: names.edges[e as usize].clone(),
             points,
             circle: (c.kind == CurveKind::Circle).then(|| CircularCurveDto {
                 center: dto(c.f.o),

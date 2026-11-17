@@ -42,6 +42,10 @@ pub struct Body {
     pub f_sense: Vec<bool>,
     /// `[start, end)` range of loop indices.
     pub f_loops: Vec<[u32; 2]>,
+    /// Where each face came from: a number set by whatever made the face
+    /// and handed on by every operation, to every piece when a face is cut
+    /// up. Zero when nothing is known. See [`crate::name`].
+    pub f_tag: Vec<u64>,
 }
 
 impl Body {
@@ -123,7 +127,22 @@ impl Body {
         self.f_surf.push(surf);
         self.f_sense.push(sense);
         self.f_loops.push([start, self.l_first.len() as u32]);
+        self.f_tag.push(0);
         face
+    }
+
+    /// Add a face as [`Body::add_face`] does, and say where it comes from.
+    pub fn add_tagged_face(&mut self, surf: u32, sense: bool, loops: &[Vec<u32>], tag: u64) -> u32 {
+        let face = self.add_face(surf, sense, loops);
+        self.f_tag[face as usize] = tag;
+        face
+    }
+
+    /// Replace every face's tag by `to(tag)`.
+    pub fn retag(&mut self, to: impl Fn(u64) -> u64) {
+        for tag in &mut self.f_tag {
+            *tag = to(*tag);
+        }
     }
 
     #[inline]
@@ -306,6 +325,7 @@ impl Body {
         self.f_sense.extend_from_slice(&other.f_sense);
         self.f_loops
             .extend(other.f_loops.iter().map(|l| [l[0] + dl, l[1] + dl]));
+        self.f_tag.extend_from_slice(&other.f_tag);
     }
 
     /// Structural and geometric consistency. A body that passes is a closed,

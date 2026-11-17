@@ -83,10 +83,11 @@ impl Body {
         out += &format!("faces {}\n", self.face_count());
         for f in 0..self.face_count() as u32 {
             out += &format!(
-                "{} {} {}\n",
+                "{} {} {} {:x}\n",
                 self.f_surf[f as usize],
                 u8::from(self.f_sense[f as usize]),
-                self.face_loops(f).len()
+                self.face_loops(f).len(),
+                self.f_tag[f as usize]
             );
             for l in self.face_loops(f) {
                 let hes: Vec<String> = self.loop_hes(l).map(|h| h.to_string()).collect();
@@ -191,7 +192,20 @@ impl Body {
             body.add_edge(v[0] as u32, v[1], v[2], v[3] as u32, v[4] as u32);
         }
         for _ in 0..count(next()?, "faces")? {
-            let v = floats(next()?)?;
+            // Surface, sense and number of loops; then, since faces have
+            // them, the tag in hexadecimal.
+            let line = next()?;
+            let tag = match line.split_whitespace().nth(3) {
+                Some(tag) => u64::from_str_radix(tag, 16).map_err(|e| e.to_string())?,
+                None => 0,
+            };
+            let v = floats(
+                &line
+                    .split_whitespace()
+                    .take(3)
+                    .collect::<Vec<_>>()
+                    .join(" "),
+            )?;
             if v.len() != 3 {
                 return Err("malformed face".into());
             }
@@ -203,7 +217,7 @@ impl Body {
                     .collect::<Result<_, _>>()?;
                 loops.push(hes);
             }
-            body.add_face(v[0] as u32, v[1] != 0.0, &loops);
+            body.add_tagged_face(v[0] as u32, v[1] != 0.0, &loops, tag);
         }
         Ok(body)
     }

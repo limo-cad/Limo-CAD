@@ -13,6 +13,7 @@ use crate::boolean::{boolean, Op};
 use crate::geom::{Curve, CurveKind, SurfKind, Surface};
 use crate::make::{self, PSeg, Region, Seg};
 use crate::math::*;
+use crate::name::mix;
 use crate::topo::Body;
 
 /// Blends smaller than this are below what the Booleans resolve reliably.
@@ -34,13 +35,30 @@ struct Tool {
 
 /// Round the given edges with a constant radius.
 pub fn fillet(body: &Body, edges: &[u32], radius: f64) -> Result<Body, String> {
+    fillet_as(body, edges, radius, &by_index)
+}
+
+/// The tag of an edge when the caller has none to give: its index.
+fn by_index(e: u32) -> u64 {
+    mix(0xb1e2d, u64::from(e))
+}
+
+/// As [`fillet`], with a tag for each edge that the faces of its round are
+/// named after (see [`crate::name`]). `tag` is asked about every edge that
+/// gets rounded, the ones a picked edge runs on into as well.
+pub fn fillet_as(
+    body: &Body,
+    edges: &[u32],
+    radius: f64,
+    tag: &dyn Fn(u32) -> u64,
+) -> Result<Body, String> {
     if !(radius.is_finite() && radius > TOL) {
         return Err("fillet radius must be greater than zero".into());
     }
     if radius < SMALLEST {
         return Err(format!("fillet radius must be at least {SMALLEST} mm"));
     }
-    apply(body, edges, Shape::Round(radius))
+    apply(body, edges, Shape::Round(radius), tag)
 }
 
 /// Bevel the given edges. Without an angle both faces lose `distance`; with
@@ -51,6 +69,17 @@ pub fn chamfer(
     edges: &[u32],
     distance: f64,
     angle_deg: Option<f64>,
+) -> Result<Body, String> {
+    chamfer_as(body, edges, distance, angle_deg, &by_index)
+}
+
+/// As [`chamfer`], with a tag for each edge that its bevel is named after.
+pub fn chamfer_as(
+    body: &Body,
+    edges: &[u32],
+    distance: f64,
+    angle_deg: Option<f64>,
+    tag: &dyn Fn(u32) -> u64,
 ) -> Result<Body, String> {
     if !(distance.is_finite() && distance > TOL) {
         return Err("chamfer distance must be greater than zero".into());
@@ -67,10 +96,16 @@ pub fn chamfer(
         body,
         edges,
         Shape::Bevel(distance, angle_deg.map(f64::to_radians)),
+        tag,
     )
 }
 
-fn apply(body: &Body, edges: &[u32], shape: Shape) -> Result<Body, String> {
+fn apply(
+    body: &Body,
+    edges: &[u32],
+    shape: Shape,
+    tag: &dyn Fn(u32) -> u64,
+) -> Result<Body, String> {
     if edges.is_empty() {
         return Err("edge refinement needs at least one edge".into());
     }
@@ -92,12 +127,25 @@ fn apply(body: &Body, edges: &[u32], shape: Shape) -> Result<Body, String> {
     if !matches!(shape, Shape::Bevel(_, Some(_))) {
         chain(body, &mut picked);
     }
+    // Every face of a tool is named after the edge the tool is for: what
+    // is left of them in the end is the blend on that edge.
+    let named = |mut tool: Tool, from: u64| {
+        for (f, slot) in tool.body.f_tag.iter_mut().enumerate() {
+            *slot = mix(from, f as u64);
+        }
+        tool
+    };
     let mut tools: Vec<Tool> = Vec::with_capacity(picked.len());
     for &e in &picked {
-        tools.push(edge_tool(body, e, shape)?);
+        tools.push(named(edge_tool(body, e, shape)?, tag(e)));
     }
     if let Shape::Round(radius) = shape {
-        tools.extend(corner_tools(body, &picked, radius));
+        for (tool, around) in corner_tools(body, &picked, radius) {
+            // A corner belongs to the three edges that meet in it.
+            let mut tags = around.map(tag);
+            tags.sort_unstable();
+            tools.push(named(tool, mix(mix(tags[0], tags[1]), tags[2])));
+        }
     }
     let mut result = body.clone();
     for tool in &tools {
@@ -349,8 +397,8 @@ fn unsupported_edge() -> String {
 /// Corner pieces: where three rounded edges meet at a square outside corner,
 /// the rolling ball leaves a sphere. The piece is the corner cube minus that
 /// ball.
-fn corner_tools(body: &Body, edges: &[u32], radius: f64) -> Vec<Tool> {
-    let mut at: HashMap<u32, Vec<V3>> = HashMap::new();
+fn corner_tools(body: &Body, edges: &[u32], radius: f64) -> Vec<(Tool, [u32; 3])> {
+    let mut at: HashMap<u32, Vec<(V3, u32)>> = HashMap::new();
     for &e in edges {
         let c = body.e_curve_ref(e);
         let straight = c.kind == CurveKind::Line
@@ -360,13 +408,15 @@ fn corner_tools(body: &Body, edges: &[u32], radius: f64) -> Vec<Tool> {
             continue;
         }
         let [v0, v1] = body.e_v[e as usize];
-        at.entry(v0).or_default().push(c.f.x);
-        at.entry(v1).or_default().push(-c.f.x);
+        at.entry(v0).or_default().push((c.f.x, e));
+        at.entry(v1).or_default().push((-c.f.x, e));
     }
-    let mut corners: Vec<(u32, Vec<V3>)> = at.into_iter().filter(|(_, d)| d.len() == 3).collect();
+    let mut corners: Vec<(u32, Vec<(V3, u32)>)> =
+        at.into_iter().filter(|(_, d)| d.len() == 3).collect();
     corners.sort_by_key(|(v, _)| *v);
     let mut tools = Vec::new();
-    for (v, d) in corners {
+    for (v, met) in corners {
+        let d = [met[0].0, met[1].0, met[2].0];
         let square = d[0].dot(d[1]).abs() < 1.0e-9
             && d[1].dot(d[2]).abs() < 1.0e-9
             && d[0].dot(d[2]).abs() < 1.0e-9;
@@ -374,10 +424,13 @@ fn corner_tools(body: &Body, edges: &[u32], radius: f64) -> Vec<Tool> {
             continue;
         }
         if let Ok(piece) = corner_piece(body.verts[v as usize], d[0], d[1], d[2], radius) {
-            tools.push(Tool {
-                body: piece,
-                add: false,
-            });
+            tools.push((
+                Tool {
+                    body: piece,
+                    add: false,
+                },
+                [met[0].1, met[1].1, met[2].1],
+            ));
         }
     }
     tools

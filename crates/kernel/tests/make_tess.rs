@@ -160,3 +160,93 @@ fn mirror_and_rotate_keep_a_valid_solid() {
     }
     assert!(mirrored.bbox().hi.x < 0.0);
 }
+
+fn disc(c: V3, r: f64) -> Vec<Seg> {
+    vec![Seg::Circle {
+        c,
+        p: c + v3(r, 0.0, 0.0),
+        n: V3::Z,
+    }]
+}
+
+#[test]
+fn tapered_block_is_a_pyramid_slice() {
+    // Half the size at the top: a frustum, every face still flat.
+    let region = Region {
+        loops: vec![rect(-10.0, -10.0, 10.0, 10.0)],
+    };
+    let body = make::taper(&region, V3::Z, 0.0, 10.0, V3::ZERO, -0.05).unwrap();
+    assert_eq!(
+        (body.face_count(), body.edge_count(), body.verts.len()),
+        (6, 12, 8)
+    );
+    assert!((0..6).all(|f| body.f_surface(f).is_plane()));
+    let mesh = tessellate(&body, &TessOptions::default());
+    let exact = 10.0 / 3.0 * (400.0 + 100.0 + 200.0);
+    assert!((mesh.volume() - exact).abs() < 1e-9, "{}", mesh.volume());
+    mesh.check(&body, &TessOptions::default()).unwrap();
+
+    // Downwards and with the outline the other way round: the same solid
+    // mirrored, growing as it goes.
+    let mut backwards = rect(-10.0, -10.0, 10.0, 10.0);
+    backwards.reverse();
+    let region = Region {
+        loops: vec![backwards],
+    };
+    let body = make::taper(&region, V3::Z, 0.0, -10.0, V3::ZERO, -0.05).unwrap();
+    let mesh = tessellate(&body, &TessOptions::default());
+    let exact = 10.0 / 3.0 * (400.0 + 900.0 + 600.0);
+    assert!((mesh.volume() - exact).abs() < 1e-9, "{}", mesh.volume());
+}
+
+#[test]
+fn tapered_disc_is_a_cone_slice() {
+    use limo_cad_kernel::SurfKind;
+    let centre = v3(3.0, -2.0, 0.0);
+    let region = Region {
+        loops: vec![disc(centre, 10.0)],
+    };
+    let body = make::taper(&region, V3::Z, 2.0, 12.0, centre, 0.05).unwrap();
+    let kinds: Vec<SurfKind> = (0..3).map(|f| body.f_surface(f).kind).collect();
+    assert_eq!(kinds, [SurfKind::Cone, SurfKind::Plane, SurfKind::Plane]);
+    // Radius 11 at the bottom, 16 at the top.
+    let exact = PI * 10.0 / 3.0 * (11.0 * 11.0 + 11.0 * 16.0 + 16.0 * 16.0);
+    let mesh = tessellate(&body, &fine());
+    assert!(
+        (mesh.volume() - exact).abs() < 1e-3 * exact,
+        "{} vs {exact}",
+        mesh.volume()
+    );
+    mesh.check(&body, &fine()).unwrap();
+
+    // A plate with a round hole through its middle: both taper together.
+    let region = Region {
+        loops: vec![rect(-20.0, -15.0, 20.0, 15.0), disc(V3::ZERO, 5.0)],
+    };
+    let body = make::taper(&region, V3::Z, 0.0, 8.0, V3::ZERO, 0.02).unwrap();
+    let grown = |a: f64| 8.0 / 3.0 * a * (1.0 + 1.16 + 1.16 * 1.16);
+    let exact = grown(40.0 * 30.0) - grown(PI * 25.0);
+    let mesh = tessellate(&body, &fine());
+    assert!(
+        (mesh.volume() - exact).abs() < 1e-3 * exact,
+        "{} vs {exact}",
+        mesh.volume()
+    );
+    mesh.check(&body, &fine()).unwrap();
+}
+
+#[test]
+fn a_taper_that_would_need_a_slanted_cone_says_so() {
+    // The circle is not where the profile is scaled about.
+    let region = Region {
+        loops: vec![disc(v3(4.0, 0.0, 0.0), 10.0)],
+    };
+    let refused = make::taper(&region, V3::Z, 0.0, 10.0, V3::ZERO, 0.05).unwrap_err();
+    assert!(refused.contains("centred"), "{refused}");
+    // Shrinking through nothing is refused too.
+    let region = Region {
+        loops: vec![rect(-10.0, -10.0, 10.0, 10.0)],
+    };
+    let refused = make::taper(&region, V3::Z, 0.0, 30.0, V3::ZERO, -0.05).unwrap_err();
+    assert!(refused.contains("collapses"), "{refused}");
+}

@@ -536,7 +536,7 @@ fn evaluate(a: &Body, b: &Body, op: Op) -> Result<Body, String> {
             loops.push(mapped);
         }
         // Reserve the half-edges immediately so a later duplicate is caught.
-        out.add_face(surf, sense, &loops);
+        out.add_tagged_face(surf, sense, &loops, src.f_tag[piece.orig as usize]);
         Ok(())
     };
     for (piece, &c) in pieces_a.iter().zip(&cls_a) {

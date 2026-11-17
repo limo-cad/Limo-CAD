@@ -24,6 +24,7 @@ pub mod io;
 pub mod make;
 pub mod math;
 pub mod meet;
+pub mod name;
 pub mod props;
 pub mod roots;
 #[cfg(feature = "dto")]

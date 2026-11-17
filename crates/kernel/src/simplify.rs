@@ -183,7 +183,15 @@ pub fn unify(body: &Body) -> Body {
             }
             loops.push(mapped);
         }
-        out.add_face(surf_map[s], body.f_sense[f as usize], &loops);
+        // Faces that became one keep the tag of the first of them: in the
+        // result of a Boolean that is the one from the body worked on,
+        // rather than the tool's.
+        out.add_tagged_face(
+            surf_map[s],
+            body.f_sense[f as usize],
+            &loops,
+            body.f_tag[f as usize],
+        );
     }
     out
 }
