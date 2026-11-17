@@ -211,7 +211,7 @@ fn on_edge(body: &Body, e: u32, p: V3) -> (f64, V3) {
         return (d, c.point(t));
     }
     let length = body.e_length(e);
-    let steps = 24;
+    let steps = steps(body, e).max(24);
     match lowest(t0, t1, steps, length / steps as f64, f64::INFINITY, |t| {
         c.point(t).dist(p)
     }) {
@@ -249,6 +249,7 @@ fn steps(body: &Body, e: u32) -> usize {
         CurveKind::Circle | CurveKind::Ellipse => {
             (((t1 - t0).abs() / (PI / 12.0)).ceil() as usize).clamp(6, 48)
         }
+        CurveKind::Helix => (((t1 - t0).abs() / (PI / 12.0)).ceil() as usize).max(6),
         _ => 32,
     }
 }

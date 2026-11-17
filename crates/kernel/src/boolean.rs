@@ -242,6 +242,11 @@ fn face_bounds(body: &Body, eboxes: &[Aabb], f: u32) -> Aabb {
         }
         SurfKind::Sphere => around([s.f.o, s.f.o], v3(s.r, s.r, s.r)),
         SurfKind::Torus => around([s.f.o, s.f.o], disc(s.r + s.s, s.s)),
+        // A helicoid is made of straight lines that run from edge to
+        // edge of the face, so the face stays within its edges. A coil
+        // can bulge beyond them, by its tube at most.
+        SurfKind::Helicoid => return edges.grown(10.0 * TOL),
+        SurfKind::Coil => return edges.grown(2.0 * s.s.abs() + 10.0 * TOL),
     };
     if !edges.is_empty() {
         bounds.union(&edges);
@@ -559,6 +564,32 @@ fn evaluate(a: &Body, b: &Body, op: Op) -> Result<Body, String> {
             Op::Union => "the union is empty".into(),
         });
     }
+    if let (Err(_), true) = (out.check(), crate::diag::trace()) {
+        // Which edges are left with one side: where the skin is open.
+        for e in 0..out.edge_count() as u32 {
+            let used = [
+                out.h_loop[(2 * e) as usize],
+                out.h_loop[(2 * e + 1) as usize],
+            ];
+            if used[0] != NONE && used[1] != NONE {
+                continue;
+            }
+            let side = if used[0] != NONE { 2 * e } else { 2 * e + 1 };
+            let on = if used[0] == NONE && used[1] == NONE {
+                "nothing".to_string()
+            } else {
+                format!("{:?}", out.f_surface(out.h_face(side)).kind)
+            };
+            let [t0, t1] = out.e_t[e as usize];
+            let c = out.e_curve_ref(e);
+            eprintln!(
+                "open edge {e}: {:?} from {:?} to {:?}, on a {on} face only",
+                c.kind,
+                c.point(t0),
+                c.point(t1)
+            );
+        }
+    }
     out.check()
         .map_err(|e| format!("the result is not a closed solid ({e})"))?;
     lap("sew");
@@ -633,6 +664,12 @@ fn boundary_params(
                     let p = body.e_point(e, r.t);
                     if c.dist(p) < ON_CURVE {
                         out.push(c.param(p));
+                    } else if crate::diag::trace() && c.dist(p) < 0.05 {
+                        eprintln!(
+                            "   near miss: edge {e} meets the other surface at {p:?}, {:.3e} from the curve (parameter {})",
+                            c.dist(p),
+                            c.param(p)
+                        );
                     }
                 }
             }
@@ -652,11 +689,15 @@ fn crossings(curves: &[Curve], on: &Surface) -> Vec<Vec<f64>> {
             (-1.0e6, 1.0e6)
         })
     };
-    // The branches of a traced curve only meet where they end.
-    if curves
-        .iter()
-        .any(|c| matches!(c.kind, CurveKind::Trace | CurveKind::Meet))
-    {
+    // The branches of a traced curve only meet where they end, and the
+    // helices in which a cylinder cuts a screw surface run side by side
+    // for ever.
+    if curves.iter().any(|c| {
+        matches!(
+            c.kind,
+            CurveKind::Trace | CurveKind::Meet | CurveKind::Helix
+        )
+    }) {
         return cuts;
     }
     for i in 0..curves.len() {
@@ -1236,23 +1277,30 @@ fn group(
         let uv = &polys[h].uv;
         let n = uv.len() - 1;
         // Probe just to the left of the loop, strictly inside its region: the
-        // same curve travelled the other way bounds a different region.
-        let probes: Vec<V2> = [0, n / 3, 2 * n / 3]
-            .iter()
-            .map(|&i| {
-                let (p, q) = (uv[i], uv[(i + 1).min(n)]);
-                let along = q - p;
-                (p + q) * 0.5 + v2(-along.y, along.x) * 1.0e-3
-            })
-            .collect();
+        // same curve travelled the other way bounds a different region. A
+        // region can be a sliver far thinner than any fixed step, so the
+        // step shrinks until the probes land in one.
         let mut best: Option<(f64, usize)> = None;
-        for (r, (kind, _)) in regions.iter().enumerate() {
-            if matches!(kind, Kind::Whole) {
-                continue;
+        for step in [1.0e-3, 1.0e-4, 1.0e-5, 1.0e-6, 1.0e-7] {
+            let probes: Vec<V2> = [0, n / 3, 2 * n / 3]
+                .iter()
+                .map(|&i| {
+                    let (p, q) = (uv[i], uv[(i + 1).min(n)]);
+                    let along = q - p;
+                    (p + q) * 0.5 + v2(-along.y, along.x) * step
+                })
+                .collect();
+            for (r, (kind, _)) in regions.iter().enumerate() {
+                if matches!(kind, Kind::Whole) {
+                    continue;
+                }
+                let votes = probes.iter().filter(|q| holds(*kind, **q)).count();
+                if votes * 2 > probes.len() && best.is_none_or(|(s, _)| size(*kind) < s) {
+                    best = Some((size(*kind), r));
+                }
             }
-            let votes = probes.iter().filter(|q| holds(*kind, **q)).count();
-            if votes * 2 > probes.len() && best.is_none_or(|(s, _)| size(*kind) < s) {
-                best = Some((size(*kind), r));
+            if best.is_some() {
+                break;
             }
         }
         match best {
@@ -1327,6 +1375,21 @@ fn split_face(
                 .map(|members| members.into_iter().map(|l| loops[l].clone()).collect())
                 .collect());
         }
+        if crate::diag::trace() {
+            // Where a chain of section edges stops short: a loose end.
+            let mut ends: HashMap<u32, u32> = HashMap::default();
+            for &e in inner.iter().chain(rim.iter()) {
+                for v in arr.g.e_v[e as usize] {
+                    *ends.entry(v).or_insert(0) += 1;
+                }
+            }
+            for (v, uses) in ends {
+                if uses == 1 {
+                    eprintln!("  loose end at {:?}", arr.g.verts[v as usize]);
+                }
+            }
+            eprintln!("  {} edges bound nothing and are dropped", slits.len());
+        }
         inner.retain(|e| !slits.contains(e));
     }
 }
@@ -1382,6 +1445,69 @@ pub(crate) fn point_in_solid(side: &Side, p: V3) -> Option<bool> {
     None
 }
 
+/// Points just inside a piece of a face: beside the middle of each of its
+/// longest edges, a quarter of the way to the nearest other edge.
+fn beside_edges(g: &Body, this: &Side, piece: &Piece) -> Vec<V3> {
+    let f = piece.orig;
+    let surf = this.body.f_surface(f);
+    let mut hes: Vec<u32> = piece.loops.iter().flatten().copied().collect();
+    // A slit is no boundary: the piece is on both sides of it.
+    let both: Vec<u32> = hes
+        .iter()
+        .copied()
+        .filter(|h| hes.contains(&(h ^ 1)))
+        .collect();
+    hes.retain(|h| !both.contains(h));
+    let mut longest = hes.clone();
+    longest.sort_by(|a, b| g.e_length(b >> 1).total_cmp(&g.e_length(a >> 1)));
+    let mut probes = Vec::new();
+    for &h in longest.iter().take(4) {
+        let e = h >> 1;
+        let c = g.e_curve_ref(e);
+        let [t0, t1] = g.e_t[e as usize];
+        let middle = 0.5 * (t0 + t1);
+        let foot = c.point(middle);
+        let mut travel = c.deriv(middle).unit();
+        if h & 1 == 1 {
+            travel = -travel;
+        }
+        // The piece lies to the left of its boundary, seen from outside.
+        let into = this.body.f_normal(f, foot).cross(travel);
+        if !(into.is_finite() && into.len2() > 0.25) {
+            continue;
+        }
+        // No further than the edge itself bends back, or the surface.
+        let mut room = 0.5 * g.e_length(e);
+        if c.kind == CurveKind::Circle {
+            room = room.min(c.r);
+        }
+        let from_axis = {
+            let l = surf.f.local(foot);
+            l.x.hypot(l.y)
+        };
+        room = room.min(match surf.kind {
+            SurfKind::Plane => f64::INFINITY,
+            SurfKind::Cylinder | SurfKind::Sphere => 0.2 * surf.r,
+            SurfKind::Torus | SurfKind::Coil => 0.2 * surf.s.abs(),
+            SurfKind::Cone => 0.2 * from_axis,
+            SurfKind::Helicoid => 0.2 * from_axis.min(PI * surf.t.abs()),
+        });
+        for &k in &hes {
+            if k >> 1 != e {
+                room = room.min(edge_closest(g, k >> 1, foot).1);
+            }
+        }
+        let step = 0.25 * room;
+        if step.is_finite() && step > 1.0e-7 {
+            let p = surf.project(foot + into * step);
+            if p.is_finite() {
+                probes.push(p);
+            }
+        }
+    }
+    probes
+}
+
 fn classify_pieces(
     arr: &Arr,
     gmesh: &EdgeMesh,
@@ -1409,8 +1535,15 @@ fn classify_pieces(
             SAG,
         );
         let mut decided: Option<Cls> = None;
-        for (q, _) in trim.interior_points() {
-            let p = trim.point(q);
+        // Points found from the exact edges come first: a piece thinner
+        // than the chords its outline is drawn with has no inside to
+        // speak of in the outline, but it has one beside its edges.
+        let candidates = beside_edges(&arr.g, this, piece).into_iter().chain(
+            trim.interior_points()
+                .into_iter()
+                .map(|(q, _)| trim.point(q)),
+        );
+        for p in candidates {
             let mut on: Option<Cls> = None;
             for &(partner, agree) in &this.partners[f as usize] {
                 if classify(other.body, other.trim(partner), partner, p) != PtClass::Out {

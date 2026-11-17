@@ -509,7 +509,11 @@ impl FaceTrim {
                 // crossings alone would go on through the tip for ever.
                 false
             }
-            SurfKind::Plane | SurfKind::Cylinder | SurfKind::Cone => {
+            SurfKind::Plane
+            | SurfKind::Cylinder
+            | SurfKind::Cone
+            | SurfKind::Helicoid
+            | SurfKind::Coil => {
                 let mut odd = false;
                 self.cross_vertical(q.x, |v, _| {
                     if v > q.y {

@@ -10,13 +10,14 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Arc;
 
 use limo_cad_core::{BodyId, FeatureId, PlaneBasis};
+use limo_cad_solid::{iso_metric_thread_envelope, rounded_thread_diameters, ThreadFit};
 use limo_cad_solid::{
     stable_face_id, CircularCurveDto, CombineOperation, ConicalSurfaceDto, CylindricalSurfaceDto,
-    ExtrudeOperation, HistorySupportQuery, HoleBottomStyle, HoleExtent, HoleStyle,
-    HoleThreadRepresentation, KernelBodyDto, KernelCurveDto, KernelEdgeDto, KernelFaceDto,
-    KernelFeatureErrorDto, KernelHoleJobDto, KernelJobDto, KernelPlanarFaceSourceDto,
-    KernelProfileDto, KernelSceneDto, KernelTransformDto, PlanarFaceSignatureDto, Point3Dto,
-    RecomputePlanDto,
+    ExtrudeOperation, HistorySupportQuery, HoleBottomStyle, HoleExtent, HoleStyle, HoleThreadDto,
+    HoleThreadHand, HoleThreadRepresentation, KernelBodyDto, KernelCurveDto, KernelEdgeDto,
+    KernelFaceDto, KernelFeatureErrorDto, KernelHoleJobDto, KernelJobDto,
+    KernelPlanarFaceSourceDto, KernelProfileDto, KernelSceneDto, KernelTransformDto,
+    PlanarFaceSignatureDto, Point3Dto, RecomputePlanDto,
 };
 
 use crate::blend;
@@ -27,6 +28,7 @@ use crate::math::*;
 use crate::name::{mix, tag_of, Names, Role};
 use crate::props::planar_props;
 use crate::tess::{edge_polyline, tessellate, Mesh, TessOptions};
+use crate::thread;
 use crate::topo::Body;
 use crate::trim::{EdgeMesh, FaceTrim};
 
@@ -354,11 +356,80 @@ impl Kernel {
             }
             KernelJobDto::Hole(j) => {
                 let target = self.get(j.target_body_id, "hole target")?;
-                let mut cutter = hole_cutter(j, &target)?;
+                let modeled = j
+                    .thread
+                    .as_ref()
+                    .filter(|t| t.representation == HoleThreadRepresentation::Modeled);
+                let form = match modeled {
+                    Some(thread) => Some(thread_form(thread, ThreadFit::Internal, j.diameter)?),
+                    None => None,
+                };
+                let (mut cutter, depth) = hole_cutter(j, &target, form.as_ref())?;
                 // Named by their place down the hole: mouth, wall, floor.
                 cutter.retag(|tag| mix(feature, tag));
-                let result =
-                    boolean(&target, &cutter, Op::Cut).map_err(|e| format!("Hole: {e}"))?;
+                let cut = |body: &Body, tool: &Body| {
+                    boolean(body, tool, Op::Cut).map_err(|e| format!("Hole: {e}"))
+                };
+                let result = match (modeled, form) {
+                    (Some(thread), Some(form)) => {
+                        let along = p3(&j.direction).unit();
+                        let start = p3(&j.center);
+                        let through = matches!(j.extent, HoleExtent::ThroughAll);
+                        // As far as the body goes that way, or the hole.
+                        let available = if through {
+                            let bounds = crate::props::bounds(&target);
+                            let mut far: f64 = 0.0;
+                            for corner in 0..8 {
+                                let p = v3(
+                                    if corner & 1 == 0 {
+                                        bounds.lo.x
+                                    } else {
+                                        bounds.hi.x
+                                    },
+                                    if corner & 2 == 0 {
+                                        bounds.lo.y
+                                    } else {
+                                        bounds.hi.y
+                                    },
+                                    if corner & 4 == 0 {
+                                        bounds.lo.z
+                                    } else {
+                                        bounds.hi.z
+                                    },
+                                );
+                                far = far.max((p - start).dot(along));
+                            }
+                            if !(far.is_finite() && far > 0.0) {
+                                return Err("threaded-hole target depth is degenerate".into());
+                            }
+                            far
+                        } else {
+                            depth
+                        };
+                        let wanted = thread.depth.filter(|d| *d > 0.0);
+                        let run = thread::Run {
+                            start,
+                            along,
+                            zero: make::reference_x(along),
+                            pitch: thread.pitch,
+                            depth: wanted.map_or(available, |d| d.min(available)),
+                            left_hand: thread.hand == HoleThreadHand::Left,
+                        };
+                        let mut groove = thread::cutter(&form.internal()?, &run)?;
+                        if !through || wanted.is_some_and(|d| d < available - 1.0e-7) {
+                            groove = thread::clipped(&groove, &run, 0.5 * form.major, false)?;
+                        }
+                        groove.retag(|tag| mix(mix(feature, THREAD), tag));
+                        if form.rounded.is_some() {
+                            // The rounds of this form run into the bore
+                            // without a corner: the bore comes first.
+                            cut(&cut(&target, &cutter)?, &groove)?
+                        } else {
+                            cut(&cut(&target, &groove)?, &cutter)?
+                        }
+                    }
+                    _ => cut(&target, &cutter)?,
+                };
                 self.put(j.target_body_id.0, result);
                 Ok(())
             }
@@ -433,13 +504,132 @@ impl Kernel {
                 self.put(j.new_body_id.0, negative);
                 Ok(())
             }
-            KernelJobDto::ExternalThread(j) => match j.thread.representation {
-                // A simplified thread is annotation only.
-                HoleThreadRepresentation::Simplified => self
-                    .get(j.target_body_id, "external thread target")
-                    .map(|_| ()),
-                HoleThreadRepresentation::Modeled => Err(unsupported("A modeled thread")),
-            },
+            KernelJobDto::ExternalThread(j) => {
+                let target = self.get(j.target_body_id, "external thread target")?;
+                if j.thread.nominal_diameter <= 0.0
+                    || j.thread.pitch <= 0.0
+                    || j.thread.depth.is_some_and(|d| d < 0.0)
+                {
+                    return Err("external thread parameters are malformed".into());
+                }
+                let names = Names::of(&target);
+                let f = names
+                    .face(&j.face_key)
+                    .ok_or("referenced external-thread cylinder no longer exists")?;
+                let surface = *target.f_surface(f);
+                if surface.kind != SurfKind::Cylinder {
+                    return Err("External Thread requires a cylindrical face".into());
+                }
+                let across = 2.0 * surface.r;
+                if (across - j.thread.nominal_diameter).abs()
+                    > (0.002 * j.thread.nominal_diameter).max(0.01)
+                {
+                    return Err("selected cylinder does not match the thread major diameter".into());
+                }
+                // All the way round: the face lies between two loops that
+                // each go once about the axis, whatever else they do on the
+                // way (a rim with a notch in it still goes round).
+                let around = |l: u32| {
+                    let mut turned = 0.0;
+                    let mut last: Option<f64> = None;
+                    for h in target.loop_hes(l) {
+                        let (t0, t1) = target.h_span(h);
+                        for k in 0..=8 {
+                            let p = target.e_point(h >> 1, t0 + (t1 - t0) * k as f64 / 8.0);
+                            let local = surface.f.local(p);
+                            let angle = local.y.atan2(local.x);
+                            if let Some(before) = last {
+                                let step = angle - before;
+                                turned += step - TAU * (step / TAU).round();
+                            }
+                            last = Some(angle);
+                        }
+                    }
+                    (turned / TAU).round() != 0.0
+                };
+                let whole = target.face_loops(f).filter(|l| around(*l)).count() >= 2;
+                if !whole {
+                    return Err(
+                        "External Thread requires a complete 360-degree cylindrical face".into(),
+                    );
+                }
+                if !target.f_sense[f as usize] {
+                    return Err(
+                        "External Thread requires an outward-facing cylindrical surface".into(),
+                    );
+                }
+                // How far along its axis the face runs.
+                let (mut lower, mut upper) = (f64::INFINITY, f64::NEG_INFINITY);
+                for h in target.face_hes(f) {
+                    let e = h >> 1;
+                    let [t0, t1] = target.e_t[e as usize];
+                    for k in 0..=8 {
+                        let p = target.e_point(e, t0 + (t1 - t0) * k as f64 / 8.0);
+                        let height = surface.f.local(p).z;
+                        lower = lower.min(height);
+                        upper = upper.max(height);
+                    }
+                }
+                let available = upper - lower;
+                if !(available.is_finite() && available > 1.0e-7) {
+                    return Err("external thread cylinder has no axial length".into());
+                }
+                let wanted = j.thread.depth.filter(|d| *d > 0.0).unwrap_or(available);
+                if wanted > available + 1.0e-6 {
+                    return Err(
+                        "external thread length exceeds the selected cylindrical face".into(),
+                    );
+                }
+                if j.thread.representation == HoleThreadRepresentation::Simplified {
+                    // A simplified thread is annotation only.
+                    return Ok(());
+                }
+                let form = thread_form(&j.thread, ThreadFit::External, 0.0)?;
+                let (along, from) = if j.flip {
+                    (-surface.f.z, upper)
+                } else {
+                    (surface.f.z, lower)
+                };
+                let run = thread::Run {
+                    start: surface.f.o + surface.f.z * from,
+                    along,
+                    zero: surface.f.x,
+                    pitch: j.thread.pitch,
+                    depth: wanted,
+                    left_hand: j.thread.hand == HoleThreadHand::Left,
+                };
+                let mut result = (*target).clone();
+                // A tolerance class that keeps the crest below the face it
+                // is cut in: turn the face down to it first.
+                if across - form.major > 1.0e-7 {
+                    let over = (1.0e-4 * j.thread.pitch).max(1.0e-4);
+                    let mut sleeve = make::lathe(
+                        run.start - along * over,
+                        along,
+                        &[
+                            (0.5 * form.major, 0.0),
+                            (0.5 * across + over, 0.0),
+                            (0.5 * across + over, wanted + 2.0 * over),
+                            (0.5 * form.major, wanted + 2.0 * over),
+                        ],
+                    )?;
+                    sleeve.retag(|tag| mix(mix(feature, CREST), tag));
+                    result = boolean(&result, &sleeve, Op::Cut)
+                        .map_err(|e| format!("External Thread: {e}"))?;
+                }
+                let mut groove = thread::cutter(&form.external()?, &run)?;
+                groove = thread::clipped(&groove, &run, 0.5 * form.major, true)?;
+                groove.retag(|tag| mix(mix(feature, THREAD), tag));
+                let before = crate::props::volume(&result);
+                let result = boolean(&result, &groove, Op::Cut)
+                    .map_err(|e| format!("External Thread: {e}"))?;
+                let removed = before - crate::props::volume(&result);
+                if !(removed.is_finite() && removed > (1.0e-8 * before.abs()).max(1.0e-8)) {
+                    return Err("modeled external thread did not remove material".into());
+                }
+                self.put(j.target_body_id.0, result);
+                Ok(())
+            }
             KernelJobDto::Revolve(j) => {
                 let (origin, axis) = (p3(&j.axis_origin), p3(&j.axis_direction));
                 let tools = j
@@ -1106,7 +1296,7 @@ fn face_region(body: &Body, f: u32) -> Result<(Region, Vec<Vec<u32>>), String> {
                     m: c.point(0.5 * (t0 + t1)),
                     b,
                 }),
-                CurveKind::Ellipse | CurveKind::Trace | CurveKind::Meet => {
+                CurveKind::Ellipse | CurveKind::Trace | CurveKind::Meet | CurveKind::Helix => {
                     return Err(unsupported("Extruding a face with an elliptical edge"))
                 }
             }
@@ -1139,7 +1329,91 @@ fn half_space(origin: V3, normal: V3, reach: f64) -> Result<Body, String> {
 }
 
 /// Cutter for a hole: one solid of revolution, built without Booleans.
-fn hole_cutter(j: &KernelHoleJobDto, target: &Body) -> Result<Body, String> {
+/// Tags of the faces a thread leaves: its groove, and the crest it was
+/// turned down to.
+const THREAD: u64 = 0x0741_2ead;
+const CREST: u64 = 0x000c_2e57;
+
+/// The diameters a modeled thread is cut to, and its rounds if it has any.
+struct ThreadForm {
+    major: f64,
+    pitch_diameter: f64,
+    minor: f64,
+    pitch: f64,
+    /// Corner radius and clearance along the axis of the rounded form.
+    rounded: Option<(f64, f64)>,
+}
+
+impl ThreadForm {
+    fn internal(&self) -> Result<Vec<make::PSeg>, String> {
+        match self.rounded {
+            Some((radius, clearance)) => {
+                thread::rounded(self.major, self.minor, self.pitch, radius, clearance, true)
+            }
+            None => thread::iso_internal(self.major, self.pitch_diameter, self.minor, self.pitch),
+        }
+    }
+    fn external(&self) -> Result<Vec<make::PSeg>, String> {
+        match self.rounded {
+            Some((radius, _)) => {
+                thread::rounded(self.major, self.minor, self.pitch, radius, 0.0, false)
+            }
+            None => thread::iso_external(self.major, self.pitch_diameter, self.minor, self.pitch),
+        }
+    }
+}
+
+/// The form of a modeled thread: the rounded profile's own diameters, the
+/// maximum-material limits of an ISO metric class, or the basic profile.
+/// `drill` is the diameter of the hole an internal thread is cut in.
+fn thread_form(thread: &HoleThreadDto, fit: ThreadFit, drill: f64) -> Result<ThreadForm, String> {
+    let mut form = ThreadForm {
+        major: thread.nominal_diameter,
+        pitch_diameter: thread.nominal_diameter - 0.649_519_052_838_329 * thread.pitch,
+        minor: match fit {
+            ThreadFit::Internal => drill,
+            ThreadFit::External => thread.nominal_diameter - 1.226_869_322_027_954 * thread.pitch,
+        },
+        pitch: thread.pitch,
+        rounded: None,
+    };
+    if let Some([major, pitch_diameter, minor]) = rounded_thread_diameters(thread, fit)? {
+        let profile = thread
+            .rounded_profile
+            .as_ref()
+            .ok_or("custom trapezoidal threads require rounded_profile")?;
+        if fit == ThreadFit::Internal && drill > minor + 1.0e-9 {
+            return Err("predrill exceeds rounded thread minor diameter".into());
+        }
+        form.major = major;
+        form.pitch_diameter = pitch_diameter;
+        form.minor = minor;
+        form.rounded = Some((
+            profile.corner_radius,
+            if fit == ThreadFit::Internal {
+                profile.axial_clearance
+            } else {
+                0.0
+            },
+        ));
+    } else if let Some(limits) = iso_metric_thread_envelope(thread, fit)? {
+        form.major = limits.modeled_major;
+        form.pitch_diameter = limits.modeled_pitch;
+        form.minor = limits.modeled_minor;
+    }
+    if !(form.major > form.pitch_diameter && form.pitch_diameter > form.minor && form.minor > 0.0) {
+        return Err("modeled thread tolerance limits are malformed".into());
+    }
+    Ok(form)
+}
+
+/// The solid a hole removes, and how deep it goes. A modeled thread is cut
+/// in a hole of its minor diameter.
+fn hole_cutter(
+    j: &KernelHoleJobDto,
+    target: &Body,
+    form: Option<&ThreadForm>,
+) -> Result<(Body, f64), String> {
     if j.diameter.is_nan() || j.diameter <= 0.0 {
         return Err("hole parameters are malformed".into());
     }
@@ -1154,9 +1428,12 @@ fn hole_cutter(j: &KernelHoleJobDto, target: &Body) -> Result<Body, String> {
         if thread.nominal_diameter <= j.diameter || thread.pitch <= 0.0 {
             return Err("thread parameters are malformed".into());
         }
-        if thread.representation == HoleThreadRepresentation::Modeled {
-            return Err(unsupported("A modeled thread"));
+        if thread.depth.is_some_and(|d| d < 0.0) {
+            return Err("thread parameters are malformed".into());
         }
+    }
+    if let Some(form) = form {
+        radius = 0.5 * form.minor;
     }
     // Start just outside the support face; a through cut also clears the far
     // side. The blind stop stays at the requested depth from the face.
@@ -1213,7 +1490,7 @@ fn hole_cutter(j: &KernelHoleJobDto, target: &Body) -> Result<Body, String> {
     } else {
         profile.push((0.0, depth));
     }
-    make::lathe(p3(&j.center), direction, &profile)
+    Ok((make::lathe(p3(&j.center), direction, &profile)?, depth))
 }
 
 /// Connected shells of a body as face lists.

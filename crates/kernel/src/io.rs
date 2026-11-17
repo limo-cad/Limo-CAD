@@ -22,6 +22,8 @@ fn surf_kind(code: f64) -> Result<SurfKind, String> {
         2 => SurfKind::Cone,
         3 => SurfKind::Sphere,
         4 => SurfKind::Torus,
+        5 => SurfKind::Helicoid,
+        6 => SurfKind::Coil,
         _ => return Err("unknown surface kind".into()),
     })
 }
@@ -32,11 +34,12 @@ impl Body {
         out += &format!("surfs {}\n", self.surfs.len());
         for s in &self.surfs {
             out += &format!(
-                "{} {} {:?} {:?}\n",
+                "{} {} {:?} {:?} {:?}\n",
                 s.kind as u8,
                 frame_text(&s.f),
                 s.r,
-                s.s
+                s.s,
+                s.t
             );
         }
         out += &format!("curves {}\n", self.curves.len());
@@ -66,6 +69,14 @@ impl Body {
                     c.w[3],
                     c.w[4]
                 );
+            }
+            // The leads of the surfaces a curve is made from come last:
+            // files written before there were any stop short of them.
+            if matches!(c.kind, CurveKind::Trace | CurveKind::Meet) {
+                out += &format!(" {:?}", c.other.t);
+            }
+            if c.kind == CurveKind::Meet {
+                out += &format!(" {:?}", c.base.t);
             }
             out.push('\n');
         }
@@ -126,7 +137,7 @@ impl Body {
         let mut body = Body::new();
         for _ in 0..count(next()?, "surfs")? {
             let v = floats(next()?)?;
-            if v.len() != 15 {
+            if v.len() != 15 && v.len() != 16 {
                 return Err("malformed surface".into());
             }
             body.surfs.push(Surface {
@@ -134,42 +145,47 @@ impl Body {
                 f: frame(&v[1..13]),
                 r: v[13],
                 s: v[14],
+                t: v.get(15).copied().unwrap_or(0.0),
             });
         }
         for _ in 0..count(next()?, "curves")? {
             let v = floats(next()?)?;
-            if ![15, 32, 52].contains(&v.len()) {
+            if ![15, 32, 33, 52, 54].contains(&v.len()) {
                 return Err("malformed curve".into());
             }
             let mut curve = match v[0] as u8 {
                 0 => Curve::line(V3::ZERO, V3::X),
                 1 => Curve::circle(V3::ZERO, V3::Z, V3::X, 1.0),
                 2 => Curve::ellipse(V3::ZERO, V3::Z, V3::X, 1.0, 1.0),
-                3 if v.len() == 32 => {
+                3 if v.len() == 32 || v.len() == 33 => {
                     let other = Surface {
                         kind: surf_kind(v[15])?,
                         f: frame(&v[16..28]),
                         r: v[28],
                         s: v[29],
+                        t: v.get(32).copied().unwrap_or(0.0),
                     };
                     Curve::trace(&other, &other, 1.0, [v[30], v[31]])
                 }
-                4 if v.len() == 52 => {
+                4 if v.len() == 52 || v.len() == 54 => {
                     let other = Surface {
                         kind: surf_kind(v[15])?,
                         f: frame(&v[16..28]),
                         r: v[28],
                         s: v[29],
+                        t: v.get(52).copied().unwrap_or(0.0),
                     };
                     let base = Surface {
                         kind: surf_kind(v[32])?,
                         f: frame(&v[33..45]),
                         r: v[45],
                         s: v[46],
+                        t: v.get(53).copied().unwrap_or(0.0),
                     };
                     let w = [v[47], v[48], v[49], v[50], v[51]];
                     Curve::meet(&base, &other, false, [v[30], v[31]], w)
                 }
+                5 => Curve::helix(V3::ZERO, V3::Z, V3::X, 1.0, 1.0),
                 _ => return Err("unknown curve kind".into()),
             };
             curve.f = frame(&v[1..13]);

@@ -393,3 +393,81 @@ fn rims_on_a_cone() {
     assert!(m.volume < whole - first && m.volume > whole - first - TAU * 10.0 * reach * reach);
     skin(&rounded);
 }
+
+/// Two rounded edges that meet at the inside corner of an L: each round
+/// runs on past the corner until it meets the other, and they join along
+/// a mitre. The same for chamfers.
+#[test]
+fn rounds_meet_at_an_inside_corner() {
+    use limo_cad_kernel::props::{mass, planar_props};
+    let outline = [
+        v3(0.0, 0.0, 0.0),
+        v3(30.0, 0.0, 0.0),
+        v3(30.0, 10.0, 0.0),
+        v3(10.0, 10.0, 0.0),
+        v3(10.0, 30.0, 0.0),
+        v3(0.0, 30.0, 0.0),
+    ];
+    let segs: Vec<Seg> = (0..6)
+        .map(|i| Seg::Line {
+            a: outline[i],
+            b: outline[(i + 1) % 6],
+        })
+        .collect();
+    let block = make::extrude(&Region { loops: vec![segs] }, V3::Z, 0.0, 8.0).unwrap();
+    // The top edges along the two inner walls.
+    let inner = edges_where(&block, |mid, _| {
+        (mid.z - 8.0).abs() < 1.0e-9
+            && ((mid - v3(20.0, 10.0, 8.0)).len() < 1.0e-9
+                || (mid - v3(10.0, 20.0, 8.0)).len() < 1.0e-9)
+    });
+    assert_eq!(inner.len(), 2);
+    let top_of = |body: &Body| {
+        (0..body.face_count() as u32)
+            .filter_map(|f| planar_props(body, f).map(|p| (f, p)))
+            .find(|(f, p)| {
+                body.f_normal(*f, p.centroid).dot(V3::Z) > 0.99 && (p.centroid.z - 8.0).abs() < 1e-9
+            })
+            .map(|(_, p)| p.area)
+            .unwrap()
+    };
+    let r = 2.0_f64;
+    let rounded = fillet(&block, &inner, r).unwrap();
+    rounded.check().unwrap();
+    // The top loses a strip along each edge and the square between them.
+    assert!((top_of(&rounded) - (500.0 - 2.0 * 20.0 * r - r * r)).abs() < 1.0e-9);
+    // What a round takes from a square corner, along both edges; and in
+    // the corner square, the shallower of the two rounds at every point.
+    let dip = |a: f64| r - (r * r - (r - a) * (r - a)).sqrt();
+    let n = 800;
+    let mut corner = 0.0;
+    for i in 0..n {
+        for j in 0..n {
+            let (a, b) = (
+                (i as f64 + 0.5) * r / n as f64,
+                (j as f64 + 0.5) * r / n as f64,
+            );
+            corner += dip(a).min(dip(b));
+        }
+    }
+    corner *= (r / n as f64).powi(2);
+    let taken = 40.0 * r * r * (1.0 - 0.25 * std::f64::consts::PI) + corner;
+    assert!(
+        (mass(&block).volume - mass(&rounded).volume - taken).abs() < 1.0e-4,
+        "took {} for {taken}",
+        mass(&block).volume - mass(&rounded).volume
+    );
+    assert_eq!(count(&rounded, SurfKind::Cylinder), 2);
+    assert_eq!(count(&rounded, SurfKind::Plane), 8);
+
+    // Chamfers: two flats that meet along a diagonal.
+    let d = 1.5;
+    let broken = chamfer(&block, &inner, d, None).unwrap();
+    broken.check().unwrap();
+    assert!((top_of(&broken) - (500.0 - 2.0 * 20.0 * d - d * d)).abs() < 1.0e-9);
+    // Each chamfer takes a triangular prism; in the corner square what is
+    // under both is a pyramid lying on its side.
+    let taken = 40.0 * 0.5 * d * d + d * d * d / 3.0;
+    assert!((mass(&block).volume - mass(&broken).volume - taken).abs() < 1.0e-9);
+    assert_eq!(count(&broken, SurfKind::Plane), 10);
+}

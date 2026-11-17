@@ -349,7 +349,9 @@ fn outlines<'b>(body: &'b Body, mesh: &EdgeMesh, view: &View, deflection: f64) -
         type Whole = (Box<dyn Fn(f64) -> V3>, f64, f64, bool, usize);
         let mut curves: Vec<Whole> = Vec::new();
         match s.kind {
-            SurfKind::Plane => {}
+            // A thread shows by its edges, the helices along crest and
+            // root; the outline of its flanks is not drawn.
+            SurfKind::Plane | SurfKind::Helicoid | SurfKind::Coil => {}
             SurfKind::Cylinder => {
                 if across.len() > 1.0e-9 {
                     let side = z.cross(across).unit();

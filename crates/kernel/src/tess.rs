@@ -635,6 +635,9 @@ fn u_step(trim: &FaceTrim, opts: &TessOptions, scale: f64) -> f64 {
         SurfKind::Torus if trim.turned => s.s,
         SurfKind::Torus => s.r + s.s,
         SurfKind::Cone => trim.hi.y.abs().max(trim.lo.y.abs()) * s.s.tan(),
+        // As far from the axis as the face goes.
+        SurfKind::Helicoid => trim.hi.y.abs().max(trim.lo.y.abs()) * s.s.abs().tan(),
+        SurfKind::Coil => s.r + s.s.abs(),
         _ => s.r,
     }
     .max(1.0e-9)
@@ -655,6 +658,7 @@ fn v_step(trim: &FaceTrim, opts: &TessOptions) -> f64 {
         SurfKind::Sphere => s.r,
         SurfKind::Torus if trim.turned => s.r + s.s,
         SurfKind::Torus => s.s,
+        SurfKind::Coil => s.s.abs(),
         _ => return f64::INFINITY,
     };
     let chord = if opts.linear >= tube {

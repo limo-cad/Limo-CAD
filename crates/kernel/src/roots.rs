@@ -331,6 +331,139 @@ fn in_span(candidates: &[(f64, bool)], t0: f64, t1: f64, periodic: bool) -> Vec<
     out
 }
 
+/// Where a curve passes through the turns of a helicoid.
+///
+/// The height of a point above the surface is zero on one turn and a whole
+/// lead on the next, so the signed distance jumps halfway between them and
+/// is no use for bracketing. The height itself, with the angle about the
+/// axis carried along the curve without a jump, is continuous: the curve
+/// crosses a turn wherever it passes a whole number of leads.
+fn helicoid_hits(c: &Curve, t0: f64, t1: f64, s: &Surface) -> Vec<Root> {
+    let (slope, falls) = (s.s.abs().tan(), s.s.signum());
+    let lead = TAU * s.t;
+    // Height above the first turn before the angle is taken off, the angle,
+    // and the distance from the axis.
+    let at = |t: f64| {
+        let l = s.f.local(c.point(t));
+        let rho = l.x.hypot(l.y);
+        (l.z - falls * rho / slope, l.y.atan2(l.x), rho)
+    };
+    let nearest = |a: f64| a - TAU * (a / TAU).round();
+    let start = match c.kind {
+        CurveKind::Line => 32,
+        _ => (((t1 - t0).abs() / TAU * 64.0).ceil() as usize).max(16),
+    };
+    let mut ts: Vec<f64> = (0..=start)
+        .map(|i| t0 + (t1 - t0) * i as f64 / start as f64)
+        .collect();
+    // Finer wherever the angle or the height moves far between samples.
+    for _ in 0..14 {
+        let found: Vec<(f64, f64, f64)> = ts.iter().map(|&t| at(t)).collect();
+        let mut finer = Vec::with_capacity(ts.len() * 2);
+        let mut split = false;
+        for i in 0..ts.len() {
+            finer.push(ts[i]);
+            if i + 1 == ts.len() {
+                break;
+            }
+            let turn = nearest(found[i + 1].1 - found[i].1);
+            let climb = found[i + 1].0 - found[i].0 - s.t * turn;
+            if (turn.abs() > 0.5 || climb.abs() > 0.25 * lead.abs()) && ts.len() < 200_000 {
+                finer.push(0.5 * (ts[i] + ts[i + 1]));
+                split = true;
+            }
+        }
+        ts = finer;
+        if !split {
+            break;
+        }
+    }
+    let found: Vec<(f64, f64, f64)> = ts.iter().map(|&t| at(t)).collect();
+    // The height with the angle carried on from sample to sample.
+    let mut angle = found[0].1;
+    let mut heights = Vec::with_capacity(ts.len());
+    let mut angles = Vec::with_capacity(ts.len());
+    for (i, sample) in found.iter().enumerate() {
+        if i > 0 {
+            angle += nearest(sample.1 - found[i - 1].1);
+        }
+        angles.push(angle);
+        heights.push(sample.0 - s.t * angle);
+    }
+    let mut roots = Vec::new();
+    for i in 0..ts.len() - 1 {
+        // On the axis the angle means nothing.
+        if found[i].2 < 1.0e-9 || found[i + 1].2 < 1.0e-9 {
+            continue;
+        }
+        let (ga, gb) = (heights[i], heights[i + 1]);
+        let (lo, hi) = (ga.min(gb), ga.max(gb));
+        // Every whole number of leads in between, whichever way the screw
+        // is handed.
+        let turn = lead.abs();
+        let mut k = (lo / turn).ceil();
+        while k * turn <= hi {
+            let level = k * turn;
+            k += 1.0;
+            // Each turn once: at its sample, or strictly inside the step.
+            if gb == level && i + 2 < ts.len() {
+                continue;
+            }
+            let height = |t: f64| {
+                let here = at(t);
+                here.0 - s.t * (angles[i] + nearest(here.1 - found[i].1)) - level
+            };
+            let (mut a, mut b) = (ts[i], ts[i + 1]);
+            let (mut fa, mut fb) = (ga - level, gb - level);
+            if fa == 0.0 {
+                roots.push(Root {
+                    t: a,
+                    tangent: false,
+                });
+                continue;
+            }
+            if fb == 0.0 {
+                roots.push(Root {
+                    t: b,
+                    tangent: false,
+                });
+                continue;
+            }
+            for _ in 0..100 {
+                if (b - a).abs() <= 1.0e-15 * (1.0 + a.abs().max(b.abs())) {
+                    break;
+                }
+                let mut m = (a * fb - b * fa) / (fb - fa);
+                if !m.is_finite() || (m - a) * (m - b) >= 0.0 {
+                    m = 0.5 * (a + b);
+                }
+                let fm = height(m);
+                if fm == 0.0 {
+                    a = m;
+                    b = m;
+                    break;
+                }
+                if (fm > 0.0) == (fa > 0.0) {
+                    // Halve the stale end so the bracket keeps closing.
+                    a = m;
+                    fa = fm;
+                    fb *= 0.5;
+                } else {
+                    b = m;
+                    fb = fm;
+                    fa *= 0.5;
+                }
+            }
+            roots.push(Root {
+                t: 0.5 * (a + b),
+                tangent: false,
+            });
+        }
+    }
+    roots.sort_by(|x, y| x.t.total_cmp(&y.t));
+    roots
+}
+
 /// Where the span `[t0, t1]` of `c` meets surface `s`.
 pub fn curve_surface(c: &Curve, t0: f64, t1: f64, s: &Surface) -> Hits {
     // Lying in the surface is the common degenerate case (shared faces).
@@ -407,6 +540,7 @@ pub fn curve_surface(c: &Curve, t0: f64, t1: f64, s: &Surface) -> Hits {
             Hits::Roots(in_span(&line_torus(c, s), t0, t1, false))
         }
         (CurveKind::Line, SurfKind::Cone) => Hits::Roots(in_span(&line_cone(c, s), t0, t1, false)),
+        (_, SurfKind::Helicoid) => Hits::Roots(helicoid_hits(c, t0, t1, s)),
         _ => {
             let samples = match c.kind {
                 CurveKind::Line => 24,
@@ -417,7 +551,8 @@ pub fn curve_surface(c: &Curve, t0: f64, t1: f64, s: &Surface) -> Hits {
             let feature = match s.kind {
                 SurfKind::Cylinder | SurfKind::Sphere => s.r,
                 SurfKind::Torus => s.s,
-                SurfKind::Plane | SurfKind::Cone => f64::INFINITY,
+                SurfKind::Coil => s.s.abs(),
+                SurfKind::Plane | SurfKind::Cone | SurfKind::Helicoid => f64::INFINITY,
             };
             let by_size = if feature.is_finite() && feature > TOL {
                 ((c.length(t0, t1) / (0.5 * feature)).ceil() as usize).min(4096)

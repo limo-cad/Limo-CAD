@@ -7,9 +7,12 @@ use common::*;
 use limo_cad_core::{BodyId, FeatureId};
 use limo_cad_kernel::{Body, Kernel, SurfKind};
 use limo_cad_solid::{
-    ExtrudeOperation, KernelCurveDto, KernelExtrudeJobDto, KernelJobDto, KernelLoftJobDto,
-    KernelProfileDto, KernelSceneDto, KernelShellJobDto, KernelSweepJobDto, LoftContinuity,
-    Point3Dto, RecomputePlanDto, SweepOrientation, SweepTransition,
+    ExtrudeOperation, HoleBottomStyle, HoleExtent, HoleStyle, HoleThreadDto, HoleThreadHand,
+    HoleThreadRepresentation, HoleThreadSeries, HoleThreadStandard, KernelCurveDto,
+    KernelExternalThreadJobDto, KernelExtrudeJobDto, KernelHoleJobDto, KernelJobDto,
+    KernelLoftJobDto, KernelProfileDto, KernelSceneDto, KernelShellJobDto, KernelSweepJobDto,
+    LoftContinuity, Point3Dto, RecomputePlanDto, RoundedThreadProfile, SweepOrientation,
+    SweepTransition,
 };
 use std::f64::consts::PI;
 
@@ -327,4 +330,137 @@ fn a_tray_hollowed_through_the_session() {
     names.sort_unstable();
     names.dedup();
     assert_eq!(names.len(), 11);
+}
+
+fn metric(nominal: f64, pitch: f64, class: &str, depth: Option<f64>) -> HoleThreadDto {
+    HoleThreadDto {
+        standard: HoleThreadStandard::IsoMetric,
+        series: HoleThreadSeries::MetricCoarse,
+        designation: format!("M{nominal} x {pitch} - {class}"),
+        class: class.to_string(),
+        nominal_diameter: nominal,
+        pitch,
+        threads_per_inch: None,
+        hand: HoleThreadHand::Right,
+        depth,
+        representation: HoleThreadRepresentation::Modeled,
+        tap_drill_designation: None,
+        rounded_profile: None,
+    }
+}
+
+/// The cylinder face of body 1 as the scene shows it, to thread.
+fn thread_on(kernel: &mut Kernel, radius: f64, thread: HoleThreadDto, flip: bool) -> KernelJobDto {
+    let scene = kernel.scene(Vec::new());
+    let face = scene.bodies[0]
+        .faces
+        .iter()
+        .find(|f| {
+            f.cylinder
+                .as_ref()
+                .is_some_and(|c| (c.radius - radius).abs() < 1.0e-9)
+        })
+        .expect("a cylinder to thread");
+    KernelJobDto::ExternalThread(KernelExternalThreadJobDto {
+        feature_id: FeatureId(2),
+        target_body_id: BodyId(1),
+        face_key: face.key.clone(),
+        cylinder: face.cylinder.unwrap(),
+        thread,
+        flip,
+    })
+}
+
+/// The one body a plan makes: a sound solid under a clean skin. (A face
+/// turned down by a tolerance class leaves a ring too thin for the area
+/// of its display triangles to say much.)
+fn threaded(jobs: Vec<KernelJobDto>) -> Body {
+    let mut kernel = Kernel::new();
+    let scene = run(&mut kernel, jobs);
+    assert!(scene.errors.is_empty(), "{:?}", scene.errors);
+    let body = kernel.body(1).unwrap().clone();
+    body.check().unwrap();
+    assert_mesh_is_a_clean_skin(&body);
+    body
+}
+
+#[test]
+fn threads_on_a_pin_and_in_a_plate() {
+    // M8 on a pin, part of the way from either end, then all of it.
+    for (depth, flip) in [(Some(5.0), false), (Some(10.0), true), (None, false)] {
+        let pin = extrude(circle(4.0, 0.0), 14.0, 0.0);
+        let mut kernel = Kernel::new();
+        assert!(run(&mut kernel, vec![pin.clone()]).errors.is_empty());
+        let thread = thread_on(&mut kernel, 4.0, metric(8.0, 1.25, "6g", depth), flip);
+        let body = threaded(vec![pin, thread]);
+        assert_eq!(count(&body, SurfKind::Helicoid), 2);
+        let plain = PI * 16.0 * 14.0;
+        let volume = limo_cad_kernel::props::volume(&body);
+        assert!(volume < plain && volume > 0.8 * plain, "{volume}");
+    }
+    // The wrong face for the thread, and a thread longer than its face.
+    let pin = extrude(circle(4.0, 0.0), 14.0, 0.0);
+    let mut kernel = Kernel::new();
+    run(&mut kernel, vec![pin.clone()]);
+    let thread = thread_on(&mut kernel, 4.0, metric(10.0, 1.5, "6g", None), false);
+    assert!(refusal(vec![pin.clone(), thread]).contains("major diameter"));
+    let thread = thread_on(&mut kernel, 4.0, metric(8.0, 1.25, "6g", Some(20.0)), false);
+    assert!(refusal(vec![pin, thread]).contains("exceeds"));
+
+    // M6 tapped through a plate, and to a depth in a blind hole.
+    for (extent, depth) in [
+        (HoleExtent::ThroughAll, None),
+        (HoleExtent::Distance { depth: 9.0 }, Some(6.0)),
+    ] {
+        let plate = extrude(rectangle(30.0, 20.0, 0.0), 12.0, 0.0);
+        let hole = KernelJobDto::Hole(KernelHoleJobDto {
+            feature_id: FeatureId(2),
+            target_body_id: BodyId(1),
+            center: at(3.0, -2.0, 12.0),
+            direction: at(0.0, 0.0, -1.0),
+            diameter: 5.0,
+            extent,
+            style: HoleStyle::Simple,
+            counterbore_diameter: 0.0,
+            counterbore_depth: 0.0,
+            countersink_diameter: 0.0,
+            countersink_angle_deg: 90.0,
+            bottom_style: HoleBottomStyle::Flat,
+            drill_point_angle_deg: 118.0,
+            thread: Some(metric(6.0, 1.0, "6H", depth)),
+        });
+        let body = threaded(vec![plate, hole]);
+        assert_eq!(count(&body, SurfKind::Helicoid), 2);
+    }
+}
+
+#[test]
+fn a_rounded_thread_through_the_session() {
+    let thread = HoleThreadDto {
+        standard: HoleThreadStandard::CustomTrapezoidal,
+        series: HoleThreadSeries::Rounded,
+        designation: "Tr24 x 4 rounded".to_string(),
+        class: "custom".to_string(),
+        nominal_diameter: 24.0,
+        pitch: 4.0,
+        threads_per_inch: None,
+        hand: HoleThreadHand::Left,
+        depth: None,
+        representation: HoleThreadRepresentation::Modeled,
+        tap_drill_designation: None,
+        rounded_profile: Some(RoundedThreadProfile {
+            radial_depth: 2.0,
+            corner_radius: 0.3,
+            radial_clearance: 0.15,
+            axial_clearance: 0.2,
+        }),
+    };
+    let rod = extrude(circle(12.0, 0.0), 30.0, 0.0);
+    let mut kernel = Kernel::new();
+    run(&mut kernel, vec![rod.clone()]);
+    let job = thread_on(&mut kernel, 12.0, thread, false);
+    let body = threaded(vec![rod, job]);
+    // Two flanks, and a round at each end of each.
+    assert_eq!(count(&body, SurfKind::Helicoid), 2);
+    assert_eq!(count(&body, SurfKind::Coil), 4);
 }

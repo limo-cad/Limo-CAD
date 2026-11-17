@@ -30,11 +30,15 @@ const FINEST: usize = 512;
 /// stay regular for longer.
 fn rank(kind: SurfKind) -> u8 {
     match kind {
-        SurfKind::Plane => 0,
-        SurfKind::Cylinder => 1,
-        SurfKind::Torus => 2,
-        SurfKind::Cone => 3,
-        SurfKind::Sphere => 4,
+        // A surface that winds along its axis has one sheet after another;
+        // only its own parameters tell them apart.
+        SurfKind::Helicoid => 0,
+        SurfKind::Coil => 1,
+        SurfKind::Plane => 2,
+        SurfKind::Cylinder => 3,
+        SurfKind::Torus => 4,
+        SurfKind::Cone => 5,
+        SurfKind::Sphere => 6,
     }
 }
 
@@ -44,6 +48,9 @@ fn bend(s: &Surface) -> f64 {
         SurfKind::Plane | SurfKind::Cone => f64::INFINITY,
         SurfKind::Cylinder | SurfKind::Sphere => s.r,
         SurfKind::Torus => s.s,
+        // Half the way from one turn to the next, square to the flank.
+        SurfKind::Helicoid => PI * s.t.abs() * s.s.abs().sin(),
+        SurfKind::Coil => s.s.abs(),
     }
 }
 
@@ -138,6 +145,35 @@ impl Grid<'_> {
             SurfKind::Torus => {
                 let (u, whole) = around();
                 (u, turn(0.0217), [whole, true], v2(base.r + base.s, base.s))
+            }
+            // The turns that pass through the heights of the region, out to
+            // as far from the axis as the region goes.
+            SurfKind::Helicoid => {
+                let (lo, hi) = range(|p| p.z);
+                let far = local.iter().map(|p| p.x.hypot(p.y)).fold(0.0, f64::max);
+                let slope = base.s.abs().tan();
+                let out = far / slope;
+                let rise = base.s.signum() * out;
+                let turns = [lo, hi, lo - rise, hi - rise].map(|z| z / base.t);
+                let first = turns.iter().copied().fold(f64::INFINITY, f64::min);
+                let last = turns.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+                (
+                    (first - PI, last + PI),
+                    (1.0e-6 * out.max(1.0e-6), out),
+                    [false, false],
+                    v2(far.hypot(base.t), slope.hypot(1.0)),
+                )
+            }
+            SurfKind::Coil => {
+                let (lo, hi) = range(|p| p.z);
+                let tube = base.s.abs();
+                let ends = [(lo - tube) / base.t, (hi + tube) / base.t];
+                (
+                    (ends[0].min(ends[1]) - PI, ends[0].max(ends[1]) + PI),
+                    (-PI + 1.0e-3, PI - 1.0e-3),
+                    [false, false],
+                    v2((base.r + tube).hypot(base.t), tube),
+                )
             }
         };
         // An open range is widened unevenly for the same reason.
@@ -276,12 +312,34 @@ impl Grid<'_> {
             self.value(i + 1, j + 1) > 0.0,
             self.value(i, j + 1) > 0.0,
         ];
-        let sides = [
+        let mut sides = [
             (above[0] != above[1], (i, j, false)),
             (above[1] != above[2], (i + 1, j, true)),
             (above[3] != above[2], (i, j + 1, false)),
             (above[0] != above[3], (i, j, true)),
         ];
+        // Between two turns of a helicoid its distance changes sign without
+        // passing through zero. A real crossing lies between two values no
+        // further apart than their nodes; that jump is half a turn wide.
+        if self.other.kind == SurfKind::Helicoid {
+            let ends = [(0, 1), (1, 2), (3, 2), (0, 3)];
+            let corner = [(i, j), (i + 1, j), (i + 1, j + 1), (i, j + 1)];
+            for (side, (a, b)) in sides.iter_mut().zip(ends) {
+                if !side.0 {
+                    continue;
+                }
+                let (ga, gb) = (
+                    self.value(corner[a].0, corner[a].1),
+                    self.value(corner[b].0, corner[b].1),
+                );
+                let reach = if side.1 .2 {
+                    self.step.y * self.scale.y
+                } else {
+                    self.step.x * self.scale.x
+                };
+                side.0 = ga.abs() + gb.abs() <= 2.0 * reach;
+            }
+        }
         let cut: Vec<u64> = sides
             .iter()
             .filter(|(crossed, _)| *crossed)
@@ -614,5 +672,7 @@ fn name(kind: SurfKind) -> &'static str {
         SurfKind::Cone => "cone",
         SurfKind::Sphere => "sphere",
         SurfKind::Torus => "torus",
+        SurfKind::Helicoid => "helicoid",
+        SurfKind::Coil => "coil",
     }
 }

@@ -36,6 +36,7 @@ pub mod simplify;
 pub mod ssi;
 pub mod step;
 pub mod tess;
+pub mod thread;
 pub mod topo;
 pub mod trim;
 

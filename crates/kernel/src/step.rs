@@ -80,8 +80,13 @@ impl Out {
         self.add(format!("AXIS2_PLACEMENT_3D('',#{o},#{z},#{x})"))
     }
 
-    fn surface(&mut self, s: &Surface, heights: (f64, f64)) -> usize {
+    fn surface(&mut self, body: &Body, f: u32) -> usize {
+        let s = body.f_surface(f);
         match s.kind {
+            SurfKind::Helicoid | SurfKind::Coil => {
+                let (lo, hi) = spread(body, f);
+                self.patch(s, lo, hi)
+            }
             SurfKind::Plane => {
                 let at = self.placement(s.f.o, s.f.z, s.f.x);
                 self.add(format!("PLANE('',#{at})"))
@@ -95,7 +100,7 @@ impl Out {
                 // and has it widen along the axis from there. Place it in
                 // the middle of the face, on the side of the tip the face
                 // is on.
-                let (lo, hi) = heights;
+                let (lo, hi) = heights(body, f);
                 let mid = if lo.is_finite() && hi.is_finite() && (lo + hi).abs() > 1.0e-9 {
                     0.5 * (lo + hi)
                 } else {
@@ -144,6 +149,69 @@ impl Out {
         }
     }
 
+    /// A screw surface over the stretch of its parameters a face uses, as
+    /// a bicubic spline surface through points, slopes and twists of the
+    /// exact one. STEP has no name for a surface that turns and climbs at
+    /// once, and no rational spline is one; sixty-four spans to the turn
+    /// keep this within a few millionths of a millimetre.
+    fn patch(&mut self, s: &Surface, lo: V2, hi: V2) -> usize {
+        let fine = PI / 32.0;
+        let nu = (((hi.x - lo.x) / fine).ceil() as usize).max(1);
+        let nv = if s.kind == SurfKind::Helicoid {
+            // Straight that way: one span is exact.
+            1
+        } else {
+            (((hi.y - lo.y) / fine).ceil() as usize).max(1)
+        };
+        let (hu, hv) = ((hi.x - lo.x) / nu as f64, (hi.y - lo.y) / nv as f64);
+        // Which of the points before, at and after a node there are.
+        let around = |i: usize, n: usize| {
+            let mut steps = Vec::with_capacity(2);
+            if i > 0 {
+                steps.push(-1.0);
+            }
+            if i == 0 || i == n {
+                steps.push(0.0);
+            }
+            if i < n {
+                steps.push(1.0);
+            }
+            steps
+        };
+        let mut rows: Vec<String> = Vec::new();
+        for i in 0..=nu {
+            let u = lo.x + hu * i as f64;
+            for a in around(i, nu) {
+                let mut row: Vec<String> = Vec::new();
+                for j in 0..=nv {
+                    let v = lo.y + hv * j as f64;
+                    let p = s.point(u, v);
+                    let across = s.du(u, v) * (hu / 3.0);
+                    let along = s.dv(u, v) * (hv / 3.0);
+                    let e = 1.0e-5;
+                    let twist = (s.du(u, v + e) - s.du(u, v - e)) * (hu * hv / (18.0 * e));
+                    for b in around(j, nv) {
+                        let at = self.point(p + across * a + along * b + twist * (a * b));
+                        row.push(format!("#{at}"));
+                    }
+                }
+                rows.push(format!("({})", row.join(",")));
+            }
+        }
+        let knots = |n: usize| {
+            let mut multiplicities = vec!["4".to_string()];
+            multiplicities.extend(std::iter::repeat_n("2".to_string(), n - 1));
+            multiplicities.push("4".to_string());
+            let values: Vec<String> = (0..=n).map(|i| real(i as f64)).collect();
+            (multiplicities.join(","), values.join(","))
+        };
+        let ((mu, ku), (mv, kv)) = (knots(nu), knots(nv));
+        self.add(format!(
+            "B_SPLINE_SURFACE_WITH_KNOTS('',3,3,({}),.UNSPECIFIED.,.F.,.F.,.F.,({mu}),({mv}),({ku}),({kv}),.UNSPECIFIED.)",
+            rows.join(",")
+        ))
+    }
+
     /// A cubic spline through points and tangents of the curve, with as
     /// many spans as it takes to stay on it.
     fn spline(&mut self, c: &Curve, t0: f64, t1: f64) -> usize {
@@ -162,7 +230,7 @@ impl Out {
                     middle.dist(c.point(0.5 * (a + b)))
                 })
                 .fold(0.0, f64::max);
-            if worst <= CLOSE || spans >= 1024 {
+            if worst <= CLOSE || spans >= 65_536 {
                 break;
             }
             spans *= 2;
@@ -199,6 +267,32 @@ impl Out {
             knots.join(",")
         ))
     }
+}
+
+/// The stretch of its surface's parameters that a face takes up.
+fn spread(body: &Body, f: u32) -> (V2, V2) {
+    let s = body.f_surface(f);
+    let (mut lo, mut hi) = (
+        v2(f64::INFINITY, f64::INFINITY),
+        v2(f64::NEG_INFINITY, f64::NEG_INFINITY),
+    );
+    for h in body.face_hes(f) {
+        let e = h >> 1;
+        let c = body.e_curve_ref(e);
+        let [t0, t1] = body.e_t[e as usize];
+        let steps = c.segments(t0, t1, 0.05, 32.0).max(4);
+        for k in 0..=steps {
+            let q = s.uv(c.point(t0 + (t1 - t0) * k as f64 / steps as f64));
+            lo = v2(lo.x.min(q.x), lo.y.min(q.y));
+            hi = v2(hi.x.max(q.x), hi.y.max(q.y));
+        }
+    }
+    // A little beyond the face, so that its edges lie inside the patch.
+    let grow = v2(
+        1.0e-3 * (hi.x - lo.x).max(1.0),
+        1.0e-3 * (hi.y - lo.y).max(1.0e-3),
+    );
+    (lo - grow, hi + grow)
 }
 
 /// The lowest and highest a face reaches along the axis of its surface.
@@ -280,7 +374,7 @@ pub fn write(parts: &[(String, &Body)], description: &str) -> String {
         for (group, &inside_out) in groups.iter().zip(&hollow) {
             let mut faces = Vec::with_capacity(group.len());
             for &f in group {
-                let surface = out.surface(body.f_surface(f), heights(body, f));
+                let surface = out.surface(body, f);
                 let mut bounds: Vec<usize> = Vec::new();
                 for l in body.face_loops(f) {
                     let uses: Vec<String> = body
@@ -781,12 +875,14 @@ impl Model {
                 f,
                 r: 0.0,
                 s: 0.0,
+                t: 0.0,
             },
             "CYLINDRICAL_SURFACE" => Surface {
                 kind: SurfKind::Cylinder,
                 f,
                 r: self.radius(args.get(2))?,
                 s: 0.0,
+                t: 0.0,
             },
             "CONICAL_SURFACE" => {
                 let radius = self.radius(args.get(2))?;
@@ -805,6 +901,7 @@ impl Model {
                     },
                     r: 0.0,
                     s: half,
+                    t: 0.0,
                 }
             }
             "SPHERICAL_SURFACE" => Surface {
@@ -812,12 +909,14 @@ impl Model {
                 f,
                 r: self.radius(args.get(2))?,
                 s: 0.0,
+                t: 0.0,
             },
             _ => Surface {
                 kind: SurfKind::Torus,
                 f,
                 r: self.radius(args.get(2))?,
                 s: self.radius(args.get(3))?,
+                t: 0.0,
             },
         })
     }

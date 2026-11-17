@@ -9,7 +9,7 @@
 
 use std::collections::HashMap;
 
-use crate::boolean::{boolean, Op};
+use crate::boolean::{boolean, point_in_solid, Op, Side};
 use crate::geom::{Curve, CurveKind, SurfKind, Surface};
 use crate::make::{self, PSeg, Region, Seg};
 use crate::math::*;
@@ -136,8 +136,33 @@ fn apply(
         tool
     };
     let mut tools: Vec<Tool> = Vec::with_capacity(picked.len());
+    let side = Side::new(body);
     for &e in &picked {
-        tools.push(named(edge_tool(body, e, shape)?, tag(e)));
+        let (span, ends) = carried(body, &side, e, shape, &picked);
+        let mut tool = edge_tool_over(body, e, shape, span)?;
+        // Carried into a leaning or a round face, the tool is cut off by
+        // it. If that cannot be done the blend stops square at the end of
+        // the edge, as it would without.
+        let mut cut_off = Some(tool.body.clone());
+        for end in &ends {
+            cut_off = cut_off.and_then(|piece| {
+                boolean(
+                    &piece,
+                    &end.solid,
+                    if end.keep_inside {
+                        Op::Intersect
+                    } else {
+                        Op::Cut
+                    },
+                )
+                .ok()
+            });
+        }
+        match cut_off {
+            Some(piece) => tool.body = piece,
+            None => tool = edge_tool_over(body, e, shape, body.e_t[e as usize])?,
+        }
+        tools.push(named(tool, tag(e)));
     }
     if let Shape::Round(radius) = shape {
         for (tool, around) in corner_tools(body, &picked, radius) {
@@ -146,6 +171,11 @@ fn apply(
             tags.sort_unstable();
             tools.push(named(tool, mix(mix(tags[0], tags[1]), tags[2])));
         }
+    }
+    for (tool, around) in inside_corner_tools(body, &picked, shape) {
+        let mut tags = around.map(tag);
+        tags.sort_unstable();
+        tools.push(named(tool, mix(tags[0], tags[1])));
     }
     let mut result = body.clone();
     for tool in &tools {
@@ -263,13 +293,124 @@ fn section(shape: Shape, u1: V2, u2: V2) -> Result<Section, String> {
     }
 }
 
-fn edge_tool(body: &Body, e: u32, shape: Shape) -> Result<Tool, String> {
+/// What a tool carried past the end of its edge is cut off with: a solid,
+/// and whether the tool keeps what is inside it.
+struct End {
+    solid: Body,
+    keep_inside: bool,
+}
+
+/// The surface of the one face other than the edge's own two that meets
+/// the edge at vertex `v`.
+fn end_surface(body: &Body, e: u32, v: u32) -> Option<Surface> {
+    let own = [body.h_face(2 * e), body.h_face(2 * e + 1)];
+    let mut found: Option<Surface> = None;
+    for h in 0..2 * body.edge_count() as u32 {
+        if body.h_origin(h) != v || own.contains(&body.h_face(h)) {
+            continue;
+        }
+        let s = *body.f_surface(body.h_face(h));
+        match found {
+            None => found = Some(s),
+            Some(known) if known.same(&s).is_some() => {}
+            Some(_) => return None,
+        }
+    }
+    found
+}
+
+/// The stretch of its line that the tool for a straight edge covers, and
+/// what the tool is cut off with at its ends.
+///
+/// A blend ends where its edge does, on the face that ends the edge. That
+/// face need not be square to the edge: it can lean, or be round, like
+/// the shaft a shoulder runs up against. The tool is then carried on past
+/// the end and cut off by that face's own surface, on the side the edge
+/// is on. Where the solid simply stops past the end, the tool is carried
+/// on into the open, where it takes nothing.
+fn carried(body: &Body, side: &Side, e: u32, shape: Shape, picked: &[u32]) -> ([f64; 2], Vec<End>) {
+    let [t0, t1] = body.e_t[e as usize];
+    let c = body.e_curve_ref(e);
+    // Only a blend that takes material away: one that fills an inside
+    // edge would stick out past its end.
+    if c.kind != CurveKind::Line || convexity(body, e) != Some(true) {
+        return ([t0, t1], Vec::new());
+    }
+    let more = match shape {
+        Shape::Round(r) => 1.5 * r,
+        Shape::Bevel(d, _) => 2.0 * d,
+    };
+    let middle = c.point(0.5 * (t0 + t1));
+    let reach = body.bbox().diagonal() + 4.0 * more + 1.0;
+    let mut span = [t0, t1];
+    let mut ends = Vec::new();
+    for (k, (t, away)) in [(t0, -1.0), (t1, 1.0)].into_iter().enumerate() {
+        // Where another blended edge takes over, the two meet as they are.
+        let v = body.e_v[e as usize][k];
+        if picked
+            .iter()
+            .any(|&other| other != e && body.e_v[other as usize].contains(&v))
+        {
+            continue;
+        }
+        if point_in_solid(side, c.point(t + away * 1.0e-3)) == Some(false) {
+            span[k] = t + away * more;
+            continue;
+        }
+        let Some(s) = end_surface(body, e, body.e_v[e as usize][k]) else {
+            continue;
+        };
+        let outside = s.sdist(middle) > 0.0;
+        let solid = match s.kind {
+            // A face square to the edge ends the tool where the edge ends.
+            SurfKind::Plane if s.f.z.cross(c.f.x).len() > 1.0e-9 => {
+                let towards = if outside { s.f.z } else { -s.f.z };
+                let f = Frame::from_z(s.f.o, towards);
+                let corner = |x: f64, y: f64| s.f.o + f.x * (x * reach) + f.y * (y * reach);
+                let p = [
+                    corner(-1.0, -1.0),
+                    corner(1.0, -1.0),
+                    corner(1.0, 1.0),
+                    corner(-1.0, 1.0),
+                ];
+                let segs = (0..4)
+                    .map(|i| Seg::Line {
+                        a: p[i],
+                        b: p[(i + 1) % 4],
+                    })
+                    .collect();
+                make::extrude(&Region { loops: vec![segs] }, towards, 0.0, reach)
+                    .ok()
+                    .map(|solid| End {
+                        solid,
+                        keep_inside: true,
+                    })
+            }
+            SurfKind::Cylinder => make::cylinder(s.f.o - s.f.z * reach, s.f.z, s.r, 2.0 * reach)
+                .ok()
+                .map(|solid| End {
+                    solid,
+                    keep_inside: !outside,
+                }),
+            _ => None,
+        };
+        if let Some(end) = solid {
+            span[k] = t + away * more;
+            ends.push(end);
+        }
+    }
+    (span, ends)
+}
+
+/// The tool for edge `e` over a stretch of its curve other than the
+/// edge's own: the same section, carried on past an end.
+fn edge_tool_over(body: &Body, e: u32, shape: Shape, span: [f64; 2]) -> Result<Tool, String> {
     let convex = convexity(body, e)
         .ok_or_else(|| "the edge is smooth; there is nothing to refine".to_string())?;
     let (f1, f2) = (body.h_face(2 * e), body.h_face(2 * e + 1));
     let (s1, s2) = (body.f_surface(f1), body.f_surface(f2));
     let c = *body.e_curve_ref(e);
-    let [t0, t1] = body.e_t[e as usize];
+    let [t0, t1] = span;
     let tool = match (c.kind, s1.kind, s2.kind) {
         (CurveKind::Line, SurfKind::Plane, SurfKind::Plane) => {
             let d = c.f.x;
@@ -620,6 +761,92 @@ fn unsupported_edge() -> String {
     "this kind of edge cannot be refined by the Limo kernel yet (supported: straight edges \
      between flat faces and circular edges between a flat face and a cylinder)"
         .into()
+}
+
+/// Where two blended edges of one flat face meet at a corner that turns
+/// inwards (the inside corner of an L, seen from above), each blend has to
+/// run on past the corner until it meets the other. Each edge's own tool
+/// stops at the corner; what is missing is the part both tools would take
+/// if they ran on: the piece of the corner that lies in both.
+fn inside_corner_tools(body: &Body, edges: &[u32], shape: Shape) -> Vec<(Tool, [u32; 2])> {
+    // How far a blend can reach across the face it shares with the other.
+    let reach = match shape {
+        Shape::Round(r) => 2.0 * r,
+        Shape::Bevel(d, _) => 4.0 * d,
+    };
+    let straight = |e: u32| {
+        body.e_curve_ref(e).kind == CurveKind::Line
+            && body.f_surface(body.h_face(2 * e)).is_plane()
+            && body.f_surface(body.h_face(2 * e + 1)).is_plane()
+            && convexity(body, e) == Some(true)
+    };
+    let mut at: HashMap<u32, Vec<u32>> = HashMap::new();
+    for &e in edges {
+        if straight(e) {
+            let [v0, v1] = body.e_v[e as usize];
+            if v0 != v1 {
+                at.entry(v0).or_default().push(e);
+                at.entry(v1).or_default().push(e);
+            }
+        }
+    }
+    let mut corners: Vec<(u32, Vec<u32>)> =
+        at.into_iter().filter(|(_, met)| met.len() == 2).collect();
+    corners.sort_by_key(|(v, _)| *v);
+    let mut tools = Vec::new();
+    for (v, met) in corners {
+        let (e1, e2) = (met[0], met[1]);
+        // The face both edges bound, and the way its boundary runs
+        // through the corner: in along one edge, out along the other.
+        let faces = |e: u32| [body.h_face(2 * e), body.h_face(2 * e + 1)];
+        let Some(shared) = faces(e1).into_iter().find(|f| faces(e2).contains(f)) else {
+            continue;
+        };
+        let on = |e: u32| {
+            if body.h_face(2 * e) == shared {
+                2 * e
+            } else {
+                2 * e + 1
+            }
+        };
+        let (h1, h2) = (on(e1), on(e2));
+        let (arriving, leaving) = if body.h_dest(h1) == v && body.h_origin(h2) == v {
+            (h1, h2)
+        } else if body.h_dest(h2) == v && body.h_origin(h1) == v {
+            (h2, h1)
+        } else {
+            continue;
+        };
+        let normal = body.f_normal(shared, body.verts[v as usize]);
+        // Walking with the face on the left, a turn to the right is a
+        // corner that turns inwards.
+        if body.h_dir(arriving).cross(body.h_dir(leaving)).dot(normal) > -1.0e-9 {
+            continue;
+        }
+        // Each tool carried on past the corner.
+        let past = |e: u32| -> Option<Tool> {
+            let [t0, t1] = body.e_t[e as usize];
+            let span = if body.e_v[e as usize][1] == v {
+                [t1, t1 + reach]
+            } else {
+                [t0 - reach, t0]
+            };
+            edge_tool_over(body, e, shape, span).ok()
+        };
+        let (Some(a), Some(b)) = (past(e1), past(e2)) else {
+            continue;
+        };
+        if let Ok(piece) = boolean(&a.body, &b.body, Op::Intersect) {
+            tools.push((
+                Tool {
+                    body: piece,
+                    add: false,
+                },
+                [e1, e2],
+            ));
+        }
+    }
+    tools
 }
 
 /// Corner pieces: where three rounded edges meet at a square outside corner,

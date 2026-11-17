@@ -14,6 +14,11 @@ pub enum SurfKind {
     Cone,
     Sphere,
     Torus,
+    /// A straight line through the axis, turned about it and carried
+    /// along it at once: the flank of a screw thread.
+    Helicoid,
+    /// A circle carried the same way: the rounded root or crest of one.
+    Coil,
 }
 
 /// Analytic surface.
@@ -25,6 +30,16 @@ pub enum SurfKind {
 /// | Cone     | `o` apex, `z` into the nappe  | –            | half-angle   |
 /// | Sphere   | `o` centre, `z` pole axis     | radius       | –            |
 /// | Torus    | `o` centre, `z` axis          | major radius | minor radius |
+/// | Helicoid | `o` on axis, `z` axis         | –            | flank angle  |
+/// | Coil     | `o` on axis, `z` axis         | major radius | minor radius |
+///
+/// The two helical kinds also have a lead `t`, the climb along the axis
+/// per radian of `u`, which for them is not an angle that comes round
+/// again but a count of turns. On a helicoid `v` is the height the line
+/// has gained on its way out from the axis and `s` its angle to the axis,
+/// negative when the line falls instead. On a coil `v` is the tube angle;
+/// a negative minor radius puts `v = 0` on the side of the tube nearest
+/// the axis, so that a face there need not straddle `±π`.
 ///
 /// Parametrisations (`u` is always the angle about `z` for curved kinds):
 /// plane `o + u·x + v·y`; cylinder `v` is height; cone `v` is axial height
@@ -37,6 +52,9 @@ pub struct Surface {
     pub f: Frame,
     pub r: f64,
     pub s: f64,
+    /// Lead of the helical kinds: how far along the axis one radian of
+    /// `u` carries a point. Zero for the others.
+    pub t: f64,
 }
 
 impl Surface {
@@ -46,6 +64,7 @@ impl Surface {
             f: Frame::from_z(o, normal),
             r: 0.0,
             s: 0.0,
+            t: 0.0,
         }
     }
     pub fn plane_frame(f: Frame) -> Surface {
@@ -54,6 +73,7 @@ impl Surface {
             f,
             r: 0.0,
             s: 0.0,
+            t: 0.0,
         }
     }
     pub fn cylinder(o: V3, axis: V3, radius: f64) -> Surface {
@@ -62,6 +82,7 @@ impl Surface {
             f: Frame::from_z(o, axis),
             r: radius,
             s: 0.0,
+            t: 0.0,
         }
     }
     /// Cone with its apex at `apex`, opening along `axis` with the given
@@ -72,6 +93,7 @@ impl Surface {
             f: Frame::from_z(apex, axis),
             r: 0.0,
             s: half_angle,
+            t: 0.0,
         }
     }
     pub fn sphere(centre: V3, radius: f64) -> Surface {
@@ -83,6 +105,7 @@ impl Surface {
             },
             r: radius,
             s: 0.0,
+            t: 0.0,
         }
     }
     pub fn sphere_axis(centre: V3, axis: V3, radius: f64) -> Surface {
@@ -91,6 +114,7 @@ impl Surface {
             f: Frame::from_z(centre, axis),
             r: radius,
             s: 0.0,
+            t: 0.0,
         }
     }
     pub fn torus(centre: V3, axis: V3, major: f64, minor: f64) -> Surface {
@@ -99,12 +123,44 @@ impl Surface {
             f: Frame::from_z(centre, axis),
             r: major,
             s: minor,
+            t: 0.0,
         }
     }
 
+    /// The surface a straight line through the axis sweeps when it turns
+    /// about the axis and climbs it by `lead` with every radian. `angle`
+    /// is the angle between the line and the axis; negative, the line
+    /// falls as it leaves the axis.
+    pub fn helicoid(o: V3, axis: V3, x_hint: V3, angle: f64, lead: f64) -> Surface {
+        Surface {
+            kind: SurfKind::Helicoid,
+            f: Frame::from_zx(o, axis, x_hint),
+            r: 0.0,
+            s: angle,
+            t: lead,
+        }
+    }
+    /// The tube a circle of radius `minor` sweeps when its centre, `major`
+    /// from the axis, turns about the axis and climbs it by `lead` with
+    /// every radian.
+    pub fn coil(o: V3, axis: V3, x_hint: V3, major: f64, minor: f64, lead: f64) -> Surface {
+        Surface {
+            kind: SurfKind::Coil,
+            f: Frame::from_zx(o, axis, x_hint),
+            r: major,
+            s: minor,
+            t: lead,
+        }
+    }
     #[inline]
     pub fn is_plane(&self) -> bool {
         self.kind == SurfKind::Plane
+    }
+    /// Whether the surface winds along its axis instead of closing on
+    /// itself.
+    #[inline]
+    pub fn is_helical(&self) -> bool {
+        matches!(self.kind, SurfKind::Helicoid | SurfKind::Coil)
     }
 
     /// Radial unit vector at angle `u` about the axis.
@@ -129,6 +185,8 @@ impl Surface {
             SurfKind::Cone => self.around(u) * (v * self.s.tan()),
             SurfKind::Sphere => self.around(u) * (self.r * v.cos()),
             SurfKind::Torus => self.around(u) * (self.r + self.s * v.cos()),
+            SurfKind::Helicoid => self.around(u) * (v * self.s.abs().tan()) + self.f.z * self.t,
+            SurfKind::Coil => self.around(u) * (self.r + self.s * v.cos()) + self.f.z * self.t,
         }
     }
 
@@ -143,10 +201,11 @@ impl Surface {
                 let (sv, cv) = v.sin_cos();
                 (f.z * cv - self.radial(u) * sv) * self.r
             }
-            SurfKind::Torus => {
+            SurfKind::Torus | SurfKind::Coil => {
                 let (sv, cv) = v.sin_cos();
                 (f.z * cv - self.radial(u) * sv) * self.s
             }
+            SurfKind::Helicoid => self.radial(u) * self.s.abs().tan() + f.z * self.s.signum(),
         }
     }
 
@@ -158,6 +217,11 @@ impl Surface {
             SurfKind::Cone => v2((v * self.s.tan()).abs(), 1.0 / self.s.cos()),
             SurfKind::Sphere => v2(self.r * v.cos().abs(), self.r),
             SurfKind::Torus => v2((self.r + self.s * v.cos()).abs(), self.s),
+            SurfKind::Helicoid => {
+                let slope = self.s.abs().tan();
+                v2((v * slope).hypot(self.t), slope.hypot(1.0))
+            }
+            SurfKind::Coil => v2((self.r + self.s * v.cos()).hypot(self.t), self.s.abs()),
         }
     }
 
@@ -174,6 +238,14 @@ impl Surface {
             SurfKind::Torus => {
                 let (sv, cv) = v.sin_cos();
                 f.o + self.radial(u) * (self.r + self.s * cv) + f.z * (self.s * sv)
+            }
+            SurfKind::Helicoid => {
+                f.o + self.radial(u) * (v * self.s.abs().tan())
+                    + f.z * (self.s.signum() * v + self.t * u)
+            }
+            SurfKind::Coil => {
+                let (sv, cv) = v.sin_cos();
+                f.o + self.radial(u) * (self.r + self.s * cv) + f.z * (self.s * sv + self.t * u)
             }
         }
     }
@@ -197,6 +269,22 @@ impl Surface {
                 let rho = l.x.hypot(l.y);
                 v2(l.y.atan2(l.x), l.z.atan2(rho - self.r))
             }
+            // A point is on the nearest turn: the one whose height at the
+            // point's angle is closest to the point's own.
+            SurfKind::Helicoid => {
+                let rho = l.x.hypot(l.y);
+                let v = rho / self.s.abs().tan();
+                let around = if rho > 0.0 { l.y.atan2(l.x) } else { 0.0 };
+                let turns = (((l.z - self.s.signum() * v) / self.t - around) / TAU).round();
+                v2(around + TAU * turns, v)
+            }
+            SurfKind::Coil => {
+                let rho = l.x.hypot(l.y);
+                let around = if rho > 0.0 { l.y.atan2(l.x) } else { 0.0 };
+                let u = around + TAU * ((l.z / self.t - around) / TAU).round();
+                let side = self.s.signum();
+                v2(u, ((l.z - self.t * u) * side).atan2((rho - self.r) * side))
+            }
         }
     }
 
@@ -214,6 +302,34 @@ impl Surface {
             }
             SurfKind::Sphere => l.len() - self.r,
             SurfKind::Torus => (l.x.hypot(l.y) - self.r).hypot(l.z) - self.s,
+            // How far the point is above its turn, turned from a height
+            // into a distance: exact on the surface and to first order
+            // beside it. Halfway between two turns it changes sign without
+            // passing through zero; see `roots::curve_surface`.
+            SurfKind::Helicoid => {
+                let q = self.uv(p);
+                let rho = l.x.hypot(l.y);
+                if rho < 1.0e-12 {
+                    return 0.0;
+                }
+                let above = l.z - self.s.signum() * q.y - self.t * q.x;
+                let slope = self.s.abs().tan();
+                -above / (1.0 + 1.0 / (slope * slope) + (self.t / rho).powi(2)).sqrt()
+            }
+            // In the half-plane through the axis and the point the tube
+            // is a circle about the nearest turn of its centre line.
+            SurfKind::Coil => {
+                let q = self.uv(p);
+                let rho = l.x.hypot(l.y);
+                let rise = l.z - self.t * q.x;
+                let from = (rho - self.r).hypot(rise);
+                let steep = if from > 1.0e-12 && rho > 1.0e-12 {
+                    (1.0 + (rise * self.t / (from * rho)).powi(2)).sqrt()
+                } else {
+                    1.0
+                };
+                (from - self.s.abs()) / steep
+            }
         }
     }
 
@@ -239,19 +355,38 @@ impl Surface {
                 let rad = (d - f.z * d.dot(f.z)).unit();
                 (p - (f.o + rad * self.r)).unit()
             }
+            SurfKind::Helicoid | SurfKind::Coil => {
+                let q = self.uv(p);
+                self.du(q.x, q.y).cross(self.dv(q.x, q.y)).unit()
+            }
         }
     }
 
     /// Closest point on the surface.
     #[inline]
     pub fn project(&self, p: V3) -> V3 {
-        p - self.normal(p) * self.sdist(p)
+        if !self.is_helical() {
+            return p - self.normal(p) * self.sdist(p);
+        }
+        // The distance is only to first order here: step until it is gone.
+        let mut q = p;
+        for _ in 0..8 {
+            let d = self.sdist(q);
+            q = q - self.normal(q) * d;
+            if d.abs() < 1.0e-13 {
+                break;
+            }
+        }
+        q
     }
 
     /// Period of the `u` parameter, if any.
     #[inline]
     pub fn u_periodic(&self) -> bool {
-        self.kind != SurfKind::Plane
+        !matches!(
+            self.kind,
+            SurfKind::Plane | SurfKind::Helicoid | SurfKind::Coil
+        )
     }
     #[inline]
     pub fn v_periodic(&self) -> bool {
@@ -290,14 +425,50 @@ impl Surface {
                 && (self.s - o.s).abs() < TOL
                 && parallel(self.f.z, o.f.z))
             .then_some(true),
+            // The same screw surface can be written from any point of its
+            // axis: what counts is that a few points of one lie on the
+            // other, facing the same way.
+            SurfKind::Helicoid | SurfKind::Coil => {
+                if (self.t - o.t).abs() > 1.0e-9
+                    || (self.r - o.r).abs() > TOL
+                    || !parallel(self.f.z, o.f.z)
+                    || !on_axis(o.f.o)
+                {
+                    return None;
+                }
+                let (near, far) = if self.kind == SurfKind::Helicoid {
+                    (1.0, 2.5)
+                } else {
+                    (0.3, -0.4)
+                };
+                let mut facing = 0.0;
+                for (u, v) in [(0.3, near), (1.7, far), (4.1, near), (-2.2, far)] {
+                    let p = self.point(u, v);
+                    if o.sdist(p).abs() > TOL {
+                        return None;
+                    }
+                    let dot = self.normal(p).dot(o.normal(p));
+                    if dot.abs() < 1.0 - 1.0e-6 || dot * facing < 0.0 {
+                        return None;
+                    }
+                    facing = dot;
+                }
+                Some(facing > 0.0)
+            }
         }
     }
 
     pub fn transformed(&self, x: &Xform) -> Surface {
-        Surface {
+        let mut out = Surface {
             f: x.frame(&self.f),
             ..*self
+        };
+        // A reflection runs the angle backwards, and a screw with it: a
+        // right-hand thread in the mirror is a left-hand one.
+        if x.mirror {
+            out.t = -self.t;
         }
+        out
     }
 
     /// The surface offset by `d` along its natural normal, when the result is
@@ -322,6 +493,7 @@ impl Surface {
                     return None;
                 }
             }
+            SurfKind::Helicoid | SurfKind::Coil => return None,
         }
         Some(out)
     }
@@ -337,6 +509,8 @@ pub enum CurveKind {
     Trace,
     /// Where any two surfaces meet: see [`Curve::meet`].
     Meet,
+    /// A point turning about an axis and climbing it at once.
+    Helix,
 }
 
 /// Curve as plain data.
@@ -344,6 +518,8 @@ pub enum CurveKind {
 /// * Line: `o + t·x` (`t` is arc length).
 /// * Circle: `o + r(cos t·x + sin t·y)`.
 /// * Ellipse: `o + r cos t·x + s sin t·y`.
+/// * Helix: `o + r(cos t·x + sin t·y) + s·t·z`, with `s` the climb per
+///   radian. It does not come round again: `t` counts turns.
 /// * Trace: the intersection of the cylinder (`f`, `r`) with the quadric
 ///   `other`, written in closed form over the cylinder's angle `θ`: the
 ///   height along the axis is a root of a quadratic, and `s = ±1` selects
@@ -382,6 +558,7 @@ const NO_SURFACE: Surface = Surface {
     f: Frame::WORLD,
     r: 0.0,
     s: 0.0,
+    t: 0.0,
 };
 
 impl Curve {
@@ -417,6 +594,20 @@ impl Curve {
             f: Frame::from_zx(centre, normal, major_dir),
             r: major,
             s: minor,
+            other: NO_SURFACE,
+            span: [0.0; 2],
+            base: NO_SURFACE,
+            w: [0.0; 5],
+        }
+    }
+    /// The helix of `radius` about `axis` through the point `radius` from
+    /// `o` along `x_hint`, climbing by `lead` with every radian.
+    pub fn helix(o: V3, axis: V3, x_hint: V3, radius: f64, lead: f64) -> Curve {
+        Curve {
+            kind: CurveKind::Helix,
+            f: Frame::from_zx(o, axis, x_hint),
+            r: radius,
+            s: lead,
             other: NO_SURFACE,
             span: [0.0; 2],
             base: NO_SURFACE,
@@ -521,6 +712,20 @@ impl Curve {
             let (mut a, mut b) = (lo, hi);
             let (mut ga, mut gb) = (value(a).0, value(b).0);
             w = start;
+            // The reach was measured at a few places along the piece and
+            // can fall short between them. Before giving up on a crossing,
+            // look a little further out each way.
+            let mut wider = reach;
+            for _ in 0..6 {
+                if (ga > 0.0) != (gb > 0.0) {
+                    break;
+                }
+                wider *= 2.0;
+                a = start - wider;
+                b = start + wider;
+                ga = value(a).0;
+                gb = value(b).0;
+            }
             if (ga > 0.0) != (gb > 0.0) {
                 let mut side = 0;
                 for _ in 0..80 {
@@ -637,6 +842,10 @@ impl Curve {
                 let q = self.meet_uv(t);
                 self.base.point(q.x, q.y)
             }
+            CurveKind::Helix => {
+                let (s, c) = t.sin_cos();
+                f.o + (f.x * c + f.y * s) * self.r + f.z * (self.s * t)
+            }
         }
     }
 
@@ -676,13 +885,17 @@ impl Curve {
                 };
                 (along + across * dw) * self.s
             }
+            CurveKind::Helix => {
+                let (s, c) = t.sin_cos();
+                (f.y * c - f.x * s) * self.r + f.z * self.s
+            }
         }
     }
 
     #[inline]
     pub fn periodic(&self) -> bool {
         match self.kind {
-            CurveKind::Line | CurveKind::Meet => false,
+            CurveKind::Line | CurveKind::Meet | CurveKind::Helix => false,
             CurveKind::Trace => self.trace_closed(),
             _ => true,
         }
@@ -696,6 +909,11 @@ impl Curve {
         let mut t = match self.kind {
             CurveKind::Line => return l.x,
             CurveKind::Circle => return l.y.atan2(l.x),
+            // The turn whose height at the point's angle is nearest.
+            CurveKind::Helix => {
+                let around = l.y.atan2(l.x);
+                around + TAU * ((l.z / self.s - around) / TAU).round()
+            }
             CurveKind::Ellipse => (l.y / self.s).atan2(l.x / self.r),
             CurveKind::Trace => {
                 let theta = l.y.atan2(l.x);
@@ -805,6 +1023,25 @@ impl Curve {
                     && (self.span[1] - o.span[1]).abs() < 1.0e-9)
                     .then_some((1.0, 0.0))
             }
+            CurveKind::Helix => {
+                // One helix written from two points of its axis.
+                if (self.r - o.r).abs() >= TOL
+                    || (self.s - o.s).abs() >= 1.0e-9
+                    || !parallel(self.f.z, o.f.z)
+                    || self.f.z.dot(o.f.z) < 0.0
+                {
+                    return None;
+                }
+                let d = o.f.o - self.f.o;
+                let up = d.dot(self.f.z);
+                if (d - self.f.z * up).len() >= TOL {
+                    return None;
+                }
+                let turned = o.f.x.dot(self.f.y).atan2(o.f.x.dot(self.f.x));
+                let whole = ((up - self.s * turned) / (TAU * self.s)).round();
+                ((up - self.s * turned - TAU * self.s * whole).abs() < TOL)
+                    .then_some((1.0, turned + TAU * whole))
+            }
             CurveKind::Meet => {
                 // Only the identical piece counts as the same curve.
                 let close = |a: &Surface, b: &Surface| {
@@ -839,6 +1076,11 @@ impl Curve {
                 out.s = -self.s;
             }
         }
+        // Keeping x and y under a reflection reverses the axis, and with it
+        // the way the helix climbs.
+        if self.kind == CurveKind::Helix && x.mirror {
+            out.s = -self.s;
+        }
         if self.kind == CurveKind::Meet {
             out.f = Frame::WORLD;
             out.base = self.base.transformed(x);
@@ -864,6 +1106,7 @@ impl Curve {
         match self.kind {
             CurveKind::Line => (t1 - t0).abs(),
             CurveKind::Circle => (t1 - t0).abs() * self.r,
+            CurveKind::Helix => (t1 - t0).abs() * self.r.hypot(self.s),
             CurveKind::Ellipse | CurveKind::Trace | CurveKind::Meet => {
                 let n = 24;
                 let mut len = 0.0;
@@ -898,6 +1141,7 @@ impl Curve {
                 }
             }
             CurveKind::Circle | CurveKind::Ellipse => (self.r.max(self.s), min_per_turn),
+            CurveKind::Helix => (self.r, min_per_turn),
             // The curve bends with the tighter of its two surfaces.
             CurveKind::Trace => (self.r.min(self.other.r), 2.0 * min_per_turn),
         };

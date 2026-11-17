@@ -192,3 +192,30 @@ fn sample_parts_survive_the_reference_kernel() {
         }
     }
 }
+
+/// A thread goes out as spline surfaces; the reference kernel reads it
+/// as the same solid.
+#[test]
+fn a_threaded_rod_reaches_the_reference_kernel() {
+    let pitch = 2.0;
+    let rod = make::cylinder(V3::ZERO, V3::Z, 5.0, 9.0).unwrap();
+    let points = [v2(4.0, -0.3), v2(5.2, -0.9), v2(5.2, 0.9), v2(4.0, 0.3)];
+    let tooth: Vec<PSeg> = (0..4)
+        .map(|i| PSeg::Line {
+            a: points[i],
+            b: points[(i + 1) % 4],
+        })
+        .collect();
+    let groove = make::screw(
+        &tooth,
+        V3::ZERO,
+        V3::Z,
+        V3::X,
+        pitch / std::f64::consts::TAU,
+        -std::f64::consts::TAU,
+        std::f64::consts::TAU * (9.0 / pitch + 1.0),
+    )
+    .unwrap();
+    let threaded = boolean(&rod, &groove, Op::Cut).unwrap();
+    let _ = through_the_reference("threaded rod", &threaded);
+}

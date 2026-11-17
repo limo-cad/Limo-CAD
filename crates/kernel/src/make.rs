@@ -347,6 +347,8 @@ pub fn extrude(region: &Region, normal: V3, start: f64, end: f64) -> Result<Body
             let e0 = body.add_edge(c0, 0.0, TAU, v0, v0);
             let e1 = body.add_edge(c1, 0.0, TAU, v1, v1);
             let surf = body.add_surf(Surface {
+                // Against the sweep, as the reference kernel has it: features
+                // that start from one end of the face start from the same one.
                 f: Frame::from_zx(c + base, -sweep_dir, p - c),
                 ..Surface::cylinder(c, n, r)
             });
@@ -1314,6 +1316,193 @@ pub fn revolve(
         let s = body.add_surf(cap(t1));
         body.add_tagged_face(s, true, &end_cap, Role::End.tag());
     }
+    body.check()?;
+    Ok(body)
+}
+
+/// The solid a profile sweeps when it turns about an axis and climbs it
+/// at once, from the angle `from` to the angle `to` (radians; the profile
+/// is given as it stands at angle zero). `lead` is the climb per radian:
+/// negative for a left-hand screw.
+///
+/// The profile is one loop in the half-plane `(ρ, h)`, clear of the axis,
+/// and no taller than one turn climbs, so that the turns do not run into
+/// each other. A side of it along the axis sweeps a cylinder, a slanted
+/// side a helicoid, an arc a coil; a side square to the axis is not
+/// supported. However many turns there are, each side is one face.
+pub fn screw(
+    profile: &[PSeg],
+    origin: V3,
+    axis: V3,
+    zero: V3,
+    lead: f64,
+    from: f64,
+    to: f64,
+) -> Result<Body, String> {
+    let a = axis.unit();
+    let x0 = zero - a * zero.dot(a);
+    if a.len2() < 0.5 || x0.len2() < 1.0e-18 {
+        return Err("the screw axis is degenerate".into());
+    }
+    if !(lead.is_finite() && lead.abs() > 1.0e-12 && to - from > 1.0e-9) {
+        return Err("a screw needs a lead and at least part of a turn".into());
+    }
+    let x0 = x0.unit();
+    let t0 = a.cross(x0);
+    let area = profile_area2(profile);
+    if profile.len() < 2 || area.abs() < 1.0e-18 {
+        return Err("the screw profile encloses no area".into());
+    }
+    // Material on the left.
+    let mut lp = profile.to_vec();
+    let mut given: Vec<u32> = (0..lp.len() as u32).collect();
+    if area < 0.0 {
+        lp.reverse();
+        given.reverse();
+        for seg in &mut lp {
+            *seg = seg.reversed();
+        }
+    }
+    let n = lp.len();
+    let pts: Vec<V2> = lp.iter().map(PSeg::start).collect();
+    let (mut low, mut high) = (f64::INFINITY, f64::NEG_INFINITY);
+    for (i, seg) in lp.iter().enumerate() {
+        if matches!(seg, PSeg::Circle { .. }) {
+            return Err("a screw profile is made of lines and arcs".into());
+        }
+        if (seg.end() - pts[(i + 1) % n]).len() > CHAIN_TOL {
+            return Err("the screw profile is not connected end to end".into());
+        }
+        if pts[i].x <= TOL {
+            return Err("the screw profile must stay clear of its axis".into());
+        }
+        low = low.min(pts[i].y);
+        high = high.max(pts[i].y);
+    }
+    if high - low >= TAU * lead.abs() - TOL {
+        return Err("the screw profile is taller than one turn climbs".into());
+    }
+    let out = |angle: f64| x0 * angle.cos() + t0 * angle.sin();
+    let place = |q: V2, angle: f64| origin + a * (q.y + lead * angle) + out(angle) * q.x;
+    let mut body = Body::new();
+    let vs: Vec<u32> = pts.iter().map(|q| body.add_vert(place(*q, from))).collect();
+    let ve: Vec<u32> = pts.iter().map(|q| body.add_vert(place(*q, to))).collect();
+    // The helix each corner of the profile runs along.
+    let rails: Vec<u32> = (0..n)
+        .map(|i| {
+            let curve = body.add_curve(Curve::helix(origin + a * pts[i].y, a, x0, pts[i].x, lead));
+            body.add_edge(curve, from, to, vs[i], ve[i])
+        })
+        .collect();
+    let mut starts: Vec<u32> = Vec::with_capacity(n);
+    let mut ends: Vec<u32> = Vec::with_capacity(n);
+    struct Swept {
+        surf: Surface,
+        sense: bool,
+        cycle: Vec<u32>,
+        tag: u64,
+    }
+    let mut swept: Vec<Swept> = Vec::with_capacity(n);
+    for (i, seg) in lp.iter().enumerate() {
+        let j = (i + 1) % n;
+        // The segment as it stands at either end of the sweep.
+        let copy = |body: &mut Body, angle: f64, v: &[u32]| -> u32 {
+            match *seg {
+                PSeg::Arc { c, ccw, .. } => {
+                    let centre = place(c, angle);
+                    let across = a.cross(out(angle));
+                    let normal = if ccw { -across } else { across };
+                    let reach = body.verts[v[i] as usize] - centre;
+                    let curve = body.add_curve(Curve::circle(centre, normal, reach, reach.len()));
+                    body.add_edge(curve, 0.0, seg.sweep(), v[i], v[j])
+                }
+                _ => body.add_line_edge(v[i], v[j]),
+            }
+        };
+        let s = copy(&mut body, from, &vs);
+        let e = copy(&mut body, to, &ve);
+        starts.push(2 * s);
+        ends.push(2 * e + 1);
+        let (pa, pb) = (pts[i], pts[j]);
+        let (dr, dh) = (pb.x - pa.x, pb.y - pa.y);
+        let (surf, sense) = match *seg {
+            PSeg::Arc { c, ccw, .. } => {
+                let radius = (pa - c).len();
+                // Which side of the tube the arc is on: the tube angle is
+                // counted from the far side or the near one, whichever
+                // keeps the arc away from where it starts over.
+                let middle = {
+                    let (u, w) = (pa - c, pb - c);
+                    let half = 0.5 * seg.sweep() * if ccw { 1.0 } else { -1.0 };
+                    let _ = w;
+                    u.y.atan2(u.x) + half
+                };
+                let minor = if middle.cos() < 0.0 { -radius } else { radius };
+                (
+                    Surface::coil(origin + a * c.y, a, x0, c.x, minor, lead),
+                    ccw,
+                )
+            }
+            _ => {
+                let len = dr.hypot(dh);
+                if len <= TOL {
+                    return Err("the screw profile contains a zero-length line".into());
+                }
+                if dh.abs() <= 1.0e-9 * len {
+                    return Err(
+                        "a side of a screw profile square to its axis is not supported".into(),
+                    );
+                }
+                if dr.abs() <= 1.0e-9 * len {
+                    (
+                        Surface {
+                            f: Frame::from_zx(origin + a * pa.y.min(pb.y), a, x0),
+                            ..Surface::cylinder(origin, a, pa.x)
+                        },
+                        dh > 0.0,
+                    )
+                } else {
+                    // The line runs on to the axis at one height; from
+                    // there it rises or falls on its way out.
+                    let apex = pa.y - pa.x * dh / dr;
+                    let rises = (dh / dr).signum();
+                    let slope = (dr / dh).abs();
+                    (
+                        Surface::helicoid(origin + a * apex, a, x0, rises * slope.atan(), lead),
+                        rises * dh + slope * dr > 0.0,
+                    )
+                }
+            }
+        };
+        swept.push(Swept {
+            surf,
+            sense,
+            cycle: vec![2 * rails[i], 2 * e, 2 * rails[j] + 1, 2 * s + 1],
+            tag: Role::Side {
+                lp: 0,
+                seg: given[i],
+            }
+            .tag(),
+        });
+    }
+    ends.reverse();
+    for face in &swept {
+        let s = body.add_surf(face.surf);
+        body.add_tagged_face(s, face.sense, std::slice::from_ref(&face.cycle), face.tag);
+    }
+    let cap = |normal: V3| {
+        let x = reference_x(normal);
+        Surface::plane_frame(Frame {
+            o: origin,
+            x,
+            y: normal.cross(x),
+            z: normal,
+        })
+    };
+    let s = body.add_surf(cap(-a.cross(out(from))));
+    body.add_tagged_face(s, true, &[starts], Role::Start.tag());
+    let s = body.add_surf(cap(a.cross(out(to))));
+    body.add_tagged_face(s, true, &[ends], Role::End.tag());
     body.check()?;
     Ok(body)
 }

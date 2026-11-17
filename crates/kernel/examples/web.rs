@@ -48,6 +48,8 @@ fn kind_index(kind: SurfKind) -> usize {
         SurfKind::Cone => 2,
         SurfKind::Sphere => 3,
         SurfKind::Torus => 4,
+        // The page counts five kinds; a thread's faces go with the tori.
+        SurfKind::Helicoid | SurfKind::Coil => 4,
     }
 }
 
@@ -191,6 +193,11 @@ pub extern "C" fn limo_face(f: u32) {
                     SurfKind::Torus => {
                         format!("Torus, radii {:.3} mm and {:.3} mm", surf.r, surf.s)
                     }
+                    SurfKind::Helicoid => format!(
+                        "Thread flank, pitch {:.3} mm",
+                        surf.t.abs() * std::f64::consts::TAU
+                    ),
+                    SurfKind::Coil => format!("Thread round, radius {:.3} mm", surf.s.abs()),
                 }
             }
             _ => String::new(),

@@ -229,7 +229,9 @@ fn span(a: f64, b: f64, piece: f64, mut f: impl FnMut(f64) -> Sums) -> Sums {
 /// it bends.
 fn stride(s: &Surface, along_v: bool) -> f64 {
     match (s.kind, along_v) {
-        (SurfKind::Plane, _) | (SurfKind::Cylinder | SurfKind::Cone, true) => f64::INFINITY,
+        (SurfKind::Plane, _) | (SurfKind::Cylinder | SurfKind::Cone | SurfKind::Helicoid, true) => {
+            f64::INFINITY
+        }
         _ => PI / 6.0,
     }
 }
@@ -402,22 +404,25 @@ fn face_sums(body: &Body, f: u32, origin: V3, size: f64) -> Option<Sums> {
             }
             let (_, su, sv) = at(&s, q.x, q.y);
             let mut out = [0.0; N];
+            // How fast each parameter runs along the edge. The two
+            // directions of a screw surface are not square to each other.
+            let (e, f, g) = (su.len2(), su.dot(sv), sv.len2());
+            let det = e * g - f * f;
+            if det < 1.0e-24 * (e + g).max(1.0e-300) {
+                return out;
+            }
+            let (du, dv) = (
+                (g * d.dot(su) - f * d.dot(sv)) / det,
+                (e * d.dot(sv) - f * d.dot(su)) / det,
+            );
             if across {
                 // ∮ Q dv, with Q the integral along u.
-                let rate = sv.len2();
-                if rate < 1.0e-24 {
-                    return out;
-                }
                 let inner = span(0.0, q.x, stride(&s, false), |u| density(&s, u, q.y, origin));
-                add(&mut out, &inner, d.dot(sv) / rate);
+                add(&mut out, &inner, dv);
             } else {
                 // ∮ P du, with P minus the integral along v.
-                let rate = su.len2();
-                if rate < 1.0e-24 {
-                    return out;
-                }
                 let inner = span(from, q.y, stride(&s, true), |v| density(&s, q.x, v, origin));
-                add(&mut out, &inner, -d.dot(su) / rate);
+                add(&mut out, &inner, -du);
             }
             out
         };
@@ -590,8 +595,13 @@ pub fn bounds(body: &Body) -> Aabb {
                 }
             }
             _ => {
-                // Walk it, then close in on each place it turns back.
-                let steps = 64;
+                // Walk it, then close in on each place it turns back. A
+                // helix turns back twice in every turn.
+                let steps = if c.kind == CurveKind::Helix {
+                    64 * ((t1 - t0) / TAU).ceil().max(1.0) as usize
+                } else {
+                    64
+                };
                 let at = |i: usize| t0 + (t1 - t0) * i as f64 / steps as f64;
                 for d in axes {
                     for sign in [1.0, -1.0] {

@@ -27,6 +27,13 @@ pub fn intersect(a: &Surface, b: &Surface) -> Ssi {
         return Ssi::Same(same);
     }
     use SurfKind::*;
+    if a.is_helical() || b.is_helical() {
+        return if a.is_helical() {
+            helical(a, b)
+        } else {
+            helical(b, a)
+        };
+    }
     match (a.kind, b.kind) {
         (Plane, Plane) => plane_plane(a, b),
         (Plane, _) => plane_other(a, b),
@@ -40,6 +47,68 @@ pub fn intersect(a: &Surface, b: &Surface) -> Ssi {
                 _ => Ssi::General,
             },
         },
+    }
+}
+
+/// A surface that winds along its axis against another. A cylinder about
+/// the same axis meets it in helices; everything else is traced.
+fn helical(h: &Surface, s: &Surface) -> Ssi {
+    let axis = h.f.z;
+    // A plane square to the axis cuts a coil where the tube passes its
+    // height: once round the tube, with the place along the coil written
+    // down for every tube angle. Traced, the same curve doubles back on
+    // itself where the tube dips under the plane and comes up again.
+    if h.kind == SurfKind::Coil && s.kind == SurfKind::Plane && s.f.z.cross(axis).len() < ANG_TOL {
+        let height = (s.f.o - h.f.o).dot(axis);
+        let along = |v: f64| (height - h.s * v.sin()) / h.t;
+        let slope = |v: f64| -h.s * v.cos() / h.t;
+        // One piece all the way round: the plane is flat along the coil,
+        // so the search for the place along it lands in one step from
+        // anywhere.
+        let (a, b) = (-PI, PI);
+        return Ssi::Curves(vec![Curve::meet(
+            h,
+            s,
+            true,
+            [a, b],
+            [along(a), along(b), slope(a), slope(b), 0.0],
+        )]);
+    }
+    let coaxial = s.kind == SurfKind::Cylinder && s.f.z.cross(axis).len() < ANG_TOL * 10.0 && {
+        let d = s.f.o - h.f.o;
+        (d - axis * d.dot(axis)).len() < TOL
+    };
+    if !coaxial {
+        return Ssi::General;
+    }
+    match h.kind {
+        SurfKind::Helicoid => {
+            // The flank reaches the radius of the cylinder at one height
+            // above the turn.
+            let rise = h.s.signum() * s.r / h.s.abs().tan();
+            Ssi::Curves(vec![Curve::helix(
+                h.f.o + axis * rise,
+                axis,
+                h.f.x,
+                s.r,
+                h.t,
+            )])
+        }
+        _ => {
+            // The tube is cut where its circle is as far out as the
+            // cylinder: twice, or not at all.
+            let c = (s.r - h.r) / h.s;
+            if c.abs() >= 1.0 - 1.0e-9 {
+                return Ssi::None;
+            }
+            let v = c.acos();
+            Ssi::Curves(
+                [v, -v]
+                    .into_iter()
+                    .map(|v| Curve::helix(h.f.o + axis * (h.s * v.sin()), axis, h.f.x, s.r, h.t))
+                    .collect(),
+            )
+        }
     }
 }
 
@@ -123,6 +192,7 @@ fn plane_other(p: &Surface, s: &Surface) -> Ssi {
             Ssi::General
         }
         SurfKind::Plane => unreachable!(),
+        SurfKind::Helicoid | SurfKind::Coil => Ssi::General,
     }
 }
 
@@ -340,7 +410,7 @@ fn profile(s: &Surface, origin: V3, axis: V3) -> Option<Profile> {
             h: height(s.f.o),
             r: s.s,
         }),
-        SurfKind::Plane => None,
+        SurfKind::Plane | SurfKind::Helicoid | SurfKind::Coil => None,
     }
 }
 
