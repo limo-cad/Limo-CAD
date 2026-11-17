@@ -354,6 +354,9 @@ impl DetachedMeasurementKernel {
         selections: &[crate::measurement::ResolvedMeasurementSelection],
     ) -> Result<crate::measurement::MeasurementReport, OcctError> {
         use crate::measurement::{MeasurementProperties, MeasurementReport};
+        if let Some(limo) = &self.0.limo {
+            return limo_measure(limo, selections);
+        }
         let selections = selections
             .iter()
             .map(|s| ffi::FfiMeasurementSelection {
@@ -1261,6 +1264,250 @@ impl OcctKernel {
 /// The line drawing of a view, made by the Limo kernel: edges and outlines
 /// sorted into what the eye sees and what is behind something, and the
 /// outlines of the material a cutting plane goes through.
+/// Read-only measurements of one or two selections of the Limo kernel's
+/// bodies: what each is, and how they stand to each other.
+fn limo_measure(
+    limo: &limo_cad_kernel::Kernel,
+    selections: &[crate::measurement::ResolvedMeasurementSelection],
+) -> Result<crate::measurement::MeasurementReport, OcctError> {
+    use crate::measurement::{MeasurementProperties, MeasurementReport};
+    use limo_cad_kernel::near::{gap, Part};
+    use limo_cad_kernel::{props, v3, Body, CurveKind, SurfKind, Xform, V3};
+    let fail = |message: &str| OcctError(message.to_string());
+    if selections.is_empty() || selections.len() > 2 {
+        return Err(fail("Measure requires one or two selections"));
+    }
+    /// What a selection points along, for angles: a straight edge, the
+    /// normal of a flat face, the axis of a whole circle or of an arc.
+    #[derive(Clone, Copy, PartialEq)]
+    enum Along {
+        Nothing,
+        Line,
+        Plane,
+        Circle,
+        Arc,
+    }
+    struct Seen {
+        body: Body,
+        kind: u8,
+        index: u32,
+        point: V3,
+        along: Along,
+        direction: V3,
+        centre: V3,
+        radius: f64,
+    }
+    let mut seen: Vec<Seen> = Vec::new();
+    let mut properties: Vec<MeasurementProperties> = Vec::new();
+    for selection in selections {
+        let source = limo
+            .body(selection.body_id.0)
+            .ok_or_else(|| fail("Measurement body is missing"))?;
+        let [x, y, z] = selection.translation;
+        let pose = Xform::rigid(v3(x, y, z), selection.rotation, V3::ZERO)
+            .ok_or_else(|| fail("Measurement rotation is degenerate"))?;
+        let body = source.transformed(&pose);
+        let count = match selection.kind {
+            0 => 1,
+            1 => body.face_count(),
+            2..=5 => body.edge_count(),
+            _ => return Err(fail("Unknown measurement selection")),
+        };
+        if selection.index as usize >= count {
+            return Err(fail("Measurement topology is missing"));
+        }
+        let index = selection.index;
+        let mut found = MeasurementProperties::default();
+        let mut this = Seen {
+            kind: selection.kind,
+            index,
+            point: V3::ZERO,
+            along: Along::Nothing,
+            direction: V3::Z,
+            centre: V3::ZERO,
+            radius: 0.0,
+            body,
+        };
+        let body = &this.body;
+        match selection.kind {
+            0 => {
+                let mass = props::mass(body);
+                found.area = Some(mass.area);
+                found.volume = Some(mass.volume.abs());
+                let bounds = props::bounds(body);
+                if !bounds.is_empty() {
+                    found.size = Some((bounds.hi - bounds.lo).arr());
+                }
+            }
+            1 => {
+                found.area = Some(
+                    props::face_area(body, index)
+                        .ok_or_else(|| fail("The area of this face could not be measured"))?,
+                );
+                found.loop_length = Some(body.face_hes(index).map(|h| body.e_length(h >> 1)).sum());
+                let surface = body.f_surface(index);
+                match surface.kind {
+                    SurfKind::Plane => {
+                        this.along = Along::Plane;
+                        this.direction = surface.f.z;
+                        // A disc: the outer loop is one whole circle.
+                        let rings: Vec<u32> = body
+                            .face_loops(index)
+                            .filter_map(|l| {
+                                let mut hes = body.loop_hes(l);
+                                let (first, more) = (hes.next()?, hes.next());
+                                let e = first >> 1;
+                                (more.is_none()
+                                    && body.e_closed(e)
+                                    && body.e_curve_ref(e).kind == CurveKind::Circle)
+                                    .then_some(e)
+                            })
+                            .collect();
+                        let outer = rings.iter().copied().max_by(|a, b| {
+                            body.e_curve_ref(*a).r.total_cmp(&body.e_curve_ref(*b).r)
+                        });
+                        if let Some(e) = outer {
+                            let circle = body.e_curve_ref(e);
+                            let within = body.face_hes(index).all(|h| {
+                                h >> 1 == e
+                                    || body.e_mid(h >> 1).dist(circle.f.o) <= circle.r + 1.0e-9
+                            });
+                            if within {
+                                found.center = Some(circle.f.o.arr());
+                                found.radius = Some(circle.r);
+                                this.centre = circle.f.o;
+                                this.radius = circle.r;
+                            }
+                        }
+                    }
+                    SurfKind::Cylinder => found.radius = Some(surface.r),
+                    _ => {}
+                }
+            }
+            2 => {
+                found.length = Some(body.e_length(index));
+                let curve = body.e_curve_ref(index);
+                match curve.kind {
+                    CurveKind::Line => {
+                        this.along = Along::Line;
+                        this.direction = curve.deriv(0.0).unit();
+                    }
+                    CurveKind::Circle => {
+                        found.radius = Some(curve.r);
+                        found.center = Some(curve.f.o.arr());
+                        this.centre = curve.f.o;
+                        this.radius = curve.r;
+                        this.along = if body.e_closed(index) {
+                            Along::Circle
+                        } else {
+                            Along::Arc
+                        };
+                        this.direction = curve.f.z;
+                    }
+                    _ => {}
+                }
+            }
+            _ => {
+                let curve = body.e_curve_ref(index);
+                let [t0, t1] = body.e_t[index as usize];
+                this.point = match selection.kind {
+                    3 => curve.point(t0),
+                    4 => curve.point(t1),
+                    _ => {
+                        if curve.kind != CurveKind::Circle {
+                            return Err(fail(
+                                "Select an analytic circular edge to measure its center",
+                            ));
+                        }
+                        curve.f.o
+                    }
+                };
+                found.position = Some(this.point.arr());
+            }
+        }
+        properties.push(found);
+        seen.push(this);
+    }
+    let mut report = MeasurementReport {
+        selections: properties,
+        ..MeasurementReport::default()
+    };
+    if let [a, b] = seen.as_slice() {
+        fn part(seen: &Seen) -> Part<'_> {
+            match seen.kind {
+                0 => Part::body(&seen.body),
+                1 => Part::face(&seen.body, seen.index),
+                2 => Part::edge(&seen.body, seen.index),
+                _ => Part::point(&seen.body, seen.point),
+            }
+        }
+        let (pa, pb) = (part(a), part(b));
+        let mut found = gap(&pa, &pb)
+            .ok_or_else(|| fail("There is nothing to measure between these selections"))?;
+        // Something wholly inside a solid is no distance from it.
+        if found.distance > 1.0e-9 {
+            if pa.holds(found.b) {
+                found = limo_cad_kernel::near::Gap {
+                    distance: 0.0,
+                    a: found.b,
+                    b: found.b,
+                };
+            } else if pb.holds(found.a) {
+                found = limo_cad_kernel::near::Gap {
+                    distance: 0.0,
+                    a: found.a,
+                    b: found.a,
+                };
+            }
+        }
+        report.distance = Some(if found.distance <= 1.0e-9 {
+            0.0
+        } else {
+            found.distance
+        });
+        report.closest_points = Some([found.a.arr(), found.b.arr()]);
+        let dot = a.direction.dot(b.direction).abs().clamp(0.0, 1.0);
+        let straight = |along: Along| matches!(along, Along::Line | Along::Plane);
+        if straight(a.along) && straight(b.along) {
+            // Two lines or two planes by the angle between them, a line and
+            // a plane by the angle the line rises from the plane.
+            let angle = if a.along == b.along {
+                dot.acos()
+            } else {
+                dot.asin()
+            };
+            report.angle_degrees = Some(angle.to_degrees());
+        }
+        let round = |along: Along| matches!(along, Along::Circle | Along::Arc);
+        if round(a.along) && round(b.along) {
+            let delta = b.centre - a.centre;
+            report.center_distance = Some(delta.len());
+            report.center_points = Some([a.centre.arr(), b.centre.arr()]);
+            if a.along == Along::Circle && b.along == Along::Circle && dot > 1.0 - 1.0e-10 {
+                // Two whole circles about parallel axes: across both, on
+                // the far sides.
+                let height = delta.dot(a.direction);
+                let radial = (delta.len2() - height * height).max(0.0).sqrt();
+                report.maximum_distance = Some((radial + a.radius + b.radius).hypot(height));
+                let mut across = delta - a.direction * height;
+                if across.len() < 1.0e-12 {
+                    across = a.direction.cross(if a.direction.x.abs() < 0.9 {
+                        V3::X
+                    } else {
+                        V3::Y
+                    });
+                }
+                let across = across.unit();
+                report.maximum_points = Some([
+                    (a.centre - across * a.radius).arr(),
+                    (b.centre + across * b.radius).arr(),
+                ]);
+            }
+        }
+    }
+    Ok(report)
+}
+
 /// Clearance and shared volume of two placed bodies of the Limo kernel.
 fn limo_exact_interference(
     limo: &limo_cad_kernel::Kernel,
@@ -1435,8 +1682,13 @@ fn limo_section_geometry(
     } else {
         SectionOutcome::NoIntersection
     };
-    let section = result
-        .outlines
+    // A plane that only touches shows where it touches.
+    let lines = if outcome == SectionOutcome::MaterialSection {
+        &result.outlines
+    } else {
+        &result.contact
+    };
+    let section = lines
         .iter()
         .map(|line| DrawingPolylineDto {
             points: line.iter().map(|p| [p.dot(right), p.dot(up)]).collect(),

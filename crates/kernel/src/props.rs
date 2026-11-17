@@ -542,3 +542,107 @@ fn anchor(body: &Body) -> (V3, f64) {
     }
     (origin, size)
 }
+
+/// The box a body just fits in. Edges reach furthest where they turn back
+/// along an axis, and a ball or a ring where its face faces along one;
+/// both are found exactly, so a rod of radius 5 is 10 across, not the
+/// width of its facets.
+pub fn bounds(body: &Body) -> Aabb {
+    use crate::boolean::Side;
+    use crate::trim::{classify, PtClass};
+    let mut b = Aabb::EMPTY;
+    for &p in &body.verts {
+        b.add(p);
+    }
+    let axes = [V3::X, V3::Y, V3::Z];
+    for e in 0..body.edge_count() as u32 {
+        let c = body.e_curve_ref(e);
+        let [t0, t1] = body.e_t[e as usize];
+        match c.kind {
+            CurveKind::Line => {}
+            CurveKind::Circle | CurveKind::Ellipse => {
+                // Along `d` the point is furthest where the tangent is
+                // square to it.
+                let (major, minor) = if c.kind == CurveKind::Circle {
+                    (c.r, c.r)
+                } else {
+                    (c.r, c.s)
+                };
+                for d in axes {
+                    let turn = (minor * c.f.y.dot(d)).atan2(major * c.f.x.dot(d));
+                    for t in [turn, turn + PI] {
+                        let t = wrap_from(t, t0);
+                        if t <= t1 {
+                            b.add(c.point(t));
+                        }
+                    }
+                }
+            }
+            _ => {
+                // Walk it, then close in on each place it turns back.
+                let steps = 64;
+                let at = |i: usize| t0 + (t1 - t0) * i as f64 / steps as f64;
+                for d in axes {
+                    for sign in [1.0, -1.0] {
+                        let height = |t: f64| sign * c.point(t).dot(d);
+                        let values: Vec<f64> = (0..=steps).map(|i| height(at(i))).collect();
+                        for i in 1..steps {
+                            if values[i] < values[i - 1] || values[i] < values[i + 1] {
+                                continue;
+                            }
+                            let (mut lo, mut hi) = (at(i - 1), at(i + 1));
+                            for _ in 0..60 {
+                                let (x1, x2) = (lo + (hi - lo) / 3.0, hi - (hi - lo) / 3.0);
+                                if height(x1) < height(x2) {
+                                    lo = x1;
+                                } else {
+                                    hi = x2;
+                                }
+                            }
+                            b.add(c.point(0.5 * (lo + hi)));
+                        }
+                    }
+                }
+            }
+        }
+    }
+    // Faces that face along an axis somewhere away from their edges.
+    let round = (0..body.face_count() as u32)
+        .any(|f| matches!(body.f_surface(f).kind, SurfKind::Sphere | SurfKind::Torus));
+    if !round {
+        return b;
+    }
+    let side = Side::new(body);
+    for f in 0..body.face_count() as u32 {
+        let s = body.f_surface(f);
+        let mut tops: Vec<V3> = Vec::new();
+        for d in axes {
+            for d in [d, -d] {
+                match s.kind {
+                    SurfKind::Sphere => tops.push(s.f.o + d * s.r),
+                    SurfKind::Torus => {
+                        let up = d.dot(s.f.z);
+                        let flat = d - s.f.z * up;
+                        let m = flat.len();
+                        if m > 1.0e-9 {
+                            tops.push(s.f.o + flat * (s.r / m) + d * s.s);
+                        } else {
+                            // Along the axis: the whole of a circle.
+                            for i in 0..16 {
+                                let u = TAU * i as f64 / 16.0;
+                                tops.push(s.point(u, 0.5 * PI * up.signum()));
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+        for p in tops {
+            if classify(body, side.trim(f), f, p) != PtClass::Out {
+                b.add(p);
+            }
+        }
+    }
+    b
+}

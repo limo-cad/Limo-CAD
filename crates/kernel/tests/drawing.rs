@@ -171,3 +171,27 @@ fn a_plane_cuts_a_drilled_plate() {
     let before = cut(&plate, v3(-5.0, 0.0, 0.0), V3::X, None, 0.01).unwrap();
     assert!(before.kept.is_none() && before.outlines.is_empty());
 }
+
+/// A plane laid on a face of the body cuts nothing, and says where it
+/// touches: the outline of that face, holes and all.
+#[test]
+fn a_plane_on_a_face_reports_the_face() {
+    use limo_cad_kernel::project::cut;
+    let plate = make::block(V3::ZERO, v3(18.0, 12.0, 4.0)).unwrap();
+    let bore = make::cylinder(v3(9.0, 6.0, -1.0), V3::Z, 2.0, 6.0).unwrap();
+    let plate = boolean(&plate, &bore, Op::Cut).unwrap();
+    for (height, facing) in [(4.0, V3::Z), (4.0, -V3::Z), (0.0, V3::Z), (0.0, -V3::Z)] {
+        let found = cut(&plate, v3(0.0, 0.0, height), facing, None, 0.01).unwrap();
+        assert!(found.outlines.is_empty() && found.touches);
+        assert_eq!(found.contact.len(), 2, "the face and its hole");
+        let length = |line: &Vec<V3>| line.windows(2).map(|w| w[0].dist(w[1])).sum::<f64>();
+        let mut lengths: Vec<f64> = found.contact.iter().map(length).collect();
+        lengths.sort_by(f64::total_cmp);
+        assert!((lengths[1] - 60.0).abs() < 1.0e-9);
+        // The hole is drawn in chords, a little shorter than the circle.
+        assert!((lengths[0] - 4.0 * std::f64::consts::PI).abs() < 0.05);
+    }
+    // Clear of the body there is nothing to report.
+    let found = cut(&plate, v3(0.0, 0.0, 9.0), V3::Z, None, 0.01).unwrap();
+    assert!(found.outlines.is_empty() && !found.touches && found.contact.is_empty());
+}

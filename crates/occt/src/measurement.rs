@@ -115,6 +115,16 @@ pub fn resolve(
                 .map(|key| {
                     key.strip_prefix(if kind == 1 { "face:" } else { "edge:" })
                         .and_then(|s| s.parse::<u32>().ok())
+                        // A kernel that names topology by what made it lists
+                        // its faces and edges in its own order.
+                        .or_else(|| {
+                            let place = if kind == 1 {
+                                body.faces.iter().position(|f| f.key == key)
+                            } else {
+                                body.edges.iter().position(|e| e.key == key)
+                            };
+                            place.and_then(|i| u32::try_from(i).ok())
+                        })
                         .ok_or("Unsupported measurement topology")
                 })
                 .transpose()?

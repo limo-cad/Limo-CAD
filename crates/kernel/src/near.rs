@@ -76,6 +76,13 @@ impl<'a> Part<'a> {
         self.side.body
     }
 
+    /// Whether `p` is inside the solid, when the part is a whole body.
+    pub fn holds(&self, p: V3) -> bool {
+        self.faces.len() == self.body_ref().face_count()
+            && !self.faces.is_empty()
+            && point_in_solid(&self.side, p) == Some(true)
+    }
+
     /// Bounds of everything in the part.
     fn bounds(&self) -> Aabb {
         let mut b = Aabb::EMPTY;

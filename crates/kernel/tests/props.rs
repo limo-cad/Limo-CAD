@@ -222,3 +222,35 @@ fn booleans_keep_the_books() {
     }
     assert!(checked > 60, "only {checked} pairs could be compared");
 }
+
+/// The box a body fits in comes from where its edges and faces turn back,
+/// not from the corners of its facets.
+#[test]
+fn round_solids_are_as_wide_as_they_are() {
+    use limo_cad_kernel::props::bounds;
+    let size = |body: &Body| {
+        let b = bounds(body);
+        b.hi - b.lo
+    };
+    let near = |found: V3, wanted: V3| (found - wanted).len() < 1.0e-9;
+    let rod = make::cylinder(v3(5.0, -3.0, 2.0), V3::Z, 5.0, 20.0).unwrap();
+    assert!(near(size(&rod), v3(10.0, 10.0, 20.0)));
+    assert!(near(size(&ball(7.5)), v3(15.0, 15.0, 15.0)));
+    assert!(near(size(&ring(20.0, 6.0)), v3(52.0, 52.0, 12.0)));
+    // Turned an eighth of a turn about its axis a rod is no wider; laid
+    // over at 45 degrees it is as long as it is wide.
+    let turned = rod.transformed(&Xform::rotation(v3(5.0, -3.0, 2.0), V3::Z, 0.25 * PI));
+    assert!(near(size(&turned), v3(10.0, 10.0, 20.0)));
+    let laid = make::cylinder(V3::ZERO, V3::Z, 5.0, 20.0)
+        .unwrap()
+        .transformed(&Xform::rotation(V3::ZERO, V3::X, 0.25 * PI));
+    let across = (20.0 + 10.0) / 2.0_f64.sqrt();
+    assert!(near(size(&laid), v3(10.0, across, across)));
+    // A ring on its side.
+    let upright = ring(20.0, 6.0).transformed(&Xform::rotation(V3::ZERO, V3::X, 0.5 * PI));
+    assert!(near(size(&upright), v3(52.0, 12.0, 52.0)));
+    // Half a ball: flat on one side.
+    let slab = make::block(v3(-20.0, -20.0, 0.0), v3(20.0, 20.0, 20.0)).unwrap();
+    let dome = boolean(&ball(7.5), &slab, Op::Intersect).unwrap();
+    assert!(near(size(&dome), v3(15.0, 15.0, 7.5)));
+}

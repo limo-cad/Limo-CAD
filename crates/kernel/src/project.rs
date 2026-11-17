@@ -516,6 +516,9 @@ pub struct Cut {
     pub outlines: Vec<Vec<V3>>,
     /// The plane touches the body without cutting into it.
     pub touches: bool,
+    /// Where it touches: the outlines of the body's own faces that lie in
+    /// the plane.
+    pub contact: Vec<Vec<V3>>,
 }
 
 /// Faces a cutting plane leaves are tagged with this.
@@ -600,39 +603,53 @@ pub fn cut(
             };
         }
     }
+    // The loops of a face, as closed lines of points.
+    let rims = |of: &Body, f: u32, into: &mut Vec<Vec<V3>>| {
+        for l in of.face_loops(f) {
+            let mut line: Vec<V3> = Vec::new();
+            for h in of.loop_hes(l) {
+                let mut points = crate::tess::edge_polyline(of, h >> 1, deflection);
+                if h & 1 == 1 {
+                    points.reverse();
+                }
+                points.pop();
+                line.extend(points);
+            }
+            if let Some(first) = line.first().copied() {
+                line.push(first);
+                into.push(line);
+            }
+        }
+    };
+    let in_plane = |of: &Body, f: u32| {
+        let s = of.f_surface(f);
+        s.is_plane() && s.f.z.cross(n).len() < 1.0e-9 && (s.f.o - point).dot(n).abs() < 1.0e-6
+    };
     let mut outlines = Vec::new();
     if let Some(kept) = &kept {
         for f in 0..kept.face_count() as u32 {
-            let s = kept.f_surface(f);
             // The face the first plane left: on it, looking forwards.
-            let on_plane = kept.f_tag[f as usize] == CUT
-                && s.is_plane()
-                && (s.f.o - point).dot(n).abs() < 1.0e-6
-                && kept.f_normal(f, s.f.o).dot(n) > 0.5;
-            if !on_plane {
-                continue;
-            }
-            for l in kept.face_loops(f) {
-                let mut line: Vec<V3> = Vec::new();
-                for h in kept.loop_hes(l) {
-                    let mut points = crate::tess::edge_polyline(kept, h >> 1, deflection);
-                    if h & 1 == 1 {
-                        points.reverse();
-                    }
-                    points.pop();
-                    line.extend(points);
-                }
-                if let Some(first) = line.first().copied() {
-                    line.push(first);
-                    outlines.push(line);
-                }
+            if kept.f_tag[f as usize] == CUT
+                && in_plane(kept, f)
+                && kept.f_normal(f, kept.f_surface(f).f.o).dot(n) > 0.5
+            {
+                rims(kept, f, &mut outlines);
             }
         }
     }
     let touches = outlines.is_empty() && front >= -TOL && back <= TOL;
+    let mut contact = Vec::new();
+    if touches {
+        for f in 0..body.face_count() as u32 {
+            if in_plane(body, f) {
+                rims(body, f, &mut contact);
+            }
+        }
+    }
     Ok(Cut {
         kept,
         outlines,
         touches,
+        contact,
     })
 }

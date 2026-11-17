@@ -602,16 +602,13 @@ impl Kernel {
             ExtrudeOperation::Intersect => (Op::Intersect, "Intersect"),
             ExtrudeOperation::NewBody => unreachable!(),
         };
-        let mut done = Vec::with_capacity(targets.len());
+        // One target after another, as the reference kernel does: a target
+        // that fails leaves the ones before it changed, and the host tells
+        // from that that the geometry is no longer what it published.
         for id in targets {
             let target = self.get(*id, "boolean target")?;
-            done.push((
-                id.0,
-                boolean(&target, &tool, op).map_err(|e| format!("{name}: {e}"))?,
-            ));
-        }
-        for (id, body) in done {
-            self.put(id, body);
+            let body = boolean(&target, &tool, op).map_err(|e| format!("{name}: {e}"))?;
+            self.put(id.0, body);
         }
         Ok(())
     }
