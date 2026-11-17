@@ -1219,6 +1219,59 @@ fn sdk_cache_keys_keep_all_abi_inputs_and_arm_runner_is_default_branch_only() {
 }
 
 #[test]
+fn windows_arm_sdk_and_consumers_share_the_pinned_compiler() {
+    let config: serde_json::Value =
+        serde_json::from_str(&read("vcpkg-configuration.json")).unwrap();
+    assert_eq!(
+        config["overlay-triplets"],
+        serde_json::json!(["native/occt-overlay/triplets"])
+    );
+    let pin = "native/occt-overlay/triplets/msvc-arm64-version.txt";
+    assert!(Regex::new(r"^\d+\.\d+\.\d+\s*$")
+        .unwrap()
+        .is_match(&read(pin)));
+    let triplet = read("native/occt-overlay/triplets/arm64-windows.cmake");
+    for setting in [
+        "set(VCPKG_TARGET_ARCHITECTURE arm64)",
+        "set(VCPKG_CRT_LINKAGE dynamic)",
+        "set(VCPKG_LIBRARY_LINKAGE dynamic)",
+        "set(VCPKG_PLATFORM_TOOLSET v143)",
+        "file(STRINGS \"${CMAKE_CURRENT_LIST_DIR}/msvc-arm64-version.txt\"\n    VCPKG_PLATFORM_TOOLSET_VERSION LIMIT_COUNT 1)",
+        "set(VCPKG_HASH_ADDITIONAL_FILES \"${CMAKE_CURRENT_LIST_DIR}/msvc-arm64-version.txt\")",
+    ] {
+        assert!(triplet.contains(setting), "missing ARM64 ABI setting: {setting}");
+    }
+    let action = workflow(".github/actions/setup-windows-occt/action.yml");
+    let (_, step) = named_step(&action["runs"], "Detect MSVC toolset").unwrap();
+    let detect = step["run"].as_str().unwrap();
+    assert!(detect.contains(pin));
+    assert!(detect.contains("$env:VCPKG_TRIPLET -eq 'arm64-windows'"));
+    assert!(detect.contains("-vcvars_ver=$toolset"));
+    assert!(detect.contains("Required MSVC compiler is missing"));
+    assert!(detect.contains("(Get-Command cl.exe -ErrorAction Stop).Source -ine $compiler"));
+    for name in [
+        "PATH",
+        "INCLUDE",
+        "LIB",
+        "VCToolsVersion",
+        "VCINSTALLDIR",
+        "VSCMD_ARG_TGT_ARCH",
+    ] {
+        assert!(
+            detect.contains(&format!("'{name}'")),
+            "missing consumer environment: {name}"
+        );
+    }
+    assert!(detect.contains("$env:GITHUB_ENV"));
+    assert!(detect.contains("VCPKG_VISUAL_STUDIO_PATH=$installationRoot"));
+    let (_, qualify) =
+        named_step(&action["runs"], "Qualify checked header and actual runtime").unwrap();
+    let qualify = qualify["run"].as_str().unwrap();
+    assert!(qualify.contains("cargo xtask verify-occt-storage"));
+    assert!(!qualify.contains("Launch-VsDevShell"));
+}
+
+#[test]
 fn native_shards_keep_geometry_workshop_and_exact_same_run_artifact_provenance() {
     let caller = workflow(".github/workflows/mcp-server.yml");
     let shared = workflow(".github/workflows/mcp-acceptance.yml");
