@@ -31,8 +31,10 @@ example. It then removes only the repair and requires AddressSanitizer to detect
 the invalid write in each mode. Use `--archive PATH` for an already downloaded
 archive; checksum validation still applies. Repository CI runs the same check.
 
-This is source regression evidence, not Windows package qualification or
-release approval. Windows x64/ARM64 package builds must still pass, including
-the existing DLL consumer guard. The native SBOM still identifies this library
-as 1.3.2; the expired rc-only advisory exceptions are unchanged. See the
+This is source regression evidence. The 2026-11-17 package review also verified
+the Windows x64/ARM64 archives, their checksum-bound zlib 1.3.2#3 metadata and
+all shipped DLL consumers. The native scanner still identifies this library as
+1.3.2. The reviewed exception covers only final 0.3.0 Windows package paths;
+every new build must pass the source regression, DLL consumer guard, inventory
+verification and advisory scan. See the
 [dependency review record](../../../docs/security/dependencies.md).

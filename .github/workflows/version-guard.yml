@@ -36,5 +36,8 @@ jobs:
       - name: Check every version carrier
         run: cargo xtask version --check
 
+      - name: Check reviewed advisory exceptions
+        run: cargo xtask advisory-exceptions
+
       - name: Unit-test the version carriers
         run: cargo test --locked -p xtask 'release_tooling::'

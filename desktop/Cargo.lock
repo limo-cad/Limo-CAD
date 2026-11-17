@@ -407,7 +407,7 @@ dependencies = [
  "futures-lite",
  "parking",
  "polling",
- "rustix 1.1.5",
+ "rustix 1.1.6",
  "slab",
  "windows-sys 0.61.2",
 ]
@@ -438,7 +438,7 @@ dependencies = [
  "cfg-if",
  "event-listener",
  "futures-lite",
- "rustix 1.1.5",
+ "rustix 1.1.6",
 ]
 
 [[package]]
@@ -464,7 +464,7 @@ dependencies = [
  "cfg-if",
  "futures-core",
  "futures-io",
- "rustix 1.1.5",
+ "rustix 1.1.6",
  "signal-hook-registry",
  "slab",
  "windows-sys 0.61.2",
@@ -2876,7 +2876,7 @@ version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1bd49230192a3797a9a4d6abe9b3eed6f7fa4c8a8a4947977c6f80025f92cbd8"
 dependencies = [
- "rustix 1.1.5",
+ "rustix 1.1.6",
  "windows-link 0.2.1",
 ]
 
@@ -3501,7 +3501,7 @@ dependencies = [
 
 [[package]]
 name = "limo-cad"
-version = "0.3.0-rc.3"
+version = "0.3.0"
 dependencies = [
  "accesskit",
  "ashpd",
@@ -3551,7 +3551,7 @@ dependencies = [
 
 [[package]]
 name = "limo-cad-assembly"
-version = "0.3.0-rc.3"
+version = "0.3.0"
 dependencies = [
  "limo-cad-core",
  "limo-cad-solid",
@@ -3560,14 +3560,14 @@ dependencies = [
 
 [[package]]
 name = "limo-cad-build-info"
-version = "0.3.0-rc.3"
+version = "0.3.0"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "limo-cad-cam"
-version = "0.3.0-rc.3"
+version = "0.3.0"
 dependencies = [
  "limo-cad-core",
  "serde",
@@ -3576,7 +3576,7 @@ dependencies = [
 
 [[package]]
 name = "limo-cad-core"
-version = "0.3.0-rc.3"
+version = "0.3.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -3584,7 +3584,7 @@ dependencies = [
 
 [[package]]
 name = "limo-cad-export"
-version = "0.3.0-rc.3"
+version = "0.3.0"
 dependencies = [
  "limo-cad-assembly",
  "limo-cad-core",
@@ -3598,7 +3598,7 @@ dependencies = [
 
 [[package]]
 name = "limo-cad-fem"
-version = "0.3.0-rc.3"
+version = "0.3.0"
 dependencies = [
  "ciborium",
  "limo-cad-core",
@@ -3608,7 +3608,7 @@ dependencies = [
 
 [[package]]
 name = "limo-cad-help"
-version = "0.3.0-rc.3"
+version = "0.3.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -3616,7 +3616,7 @@ dependencies = [
 
 [[package]]
 name = "limo-cad-interface"
-version = "0.3.0-rc.3"
+version = "0.3.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -3624,7 +3624,7 @@ dependencies = [
 
 [[package]]
 name = "limo-cad-mcp"
-version = "0.3.0-rc.3"
+version = "0.3.0"
 dependencies = [
  "base64 0.23.1",
  "enigo",
@@ -3653,7 +3653,7 @@ dependencies = [
 
 [[package]]
 name = "limo-cad-mcp-mutate"
-version = "0.3.0-rc.3"
+version = "0.3.0"
 dependencies = [
  "limo-cad-export",
  "serde_json",
@@ -3661,7 +3661,7 @@ dependencies = [
 
 [[package]]
 name = "limo-cad-native-engine"
-version = "0.3.0-rc.3"
+version = "0.3.0"
 dependencies = [
  "base64 0.23.1",
  "limo-cad-cam",
@@ -3677,7 +3677,7 @@ dependencies = [
 
 [[package]]
 name = "limo-cad-occt"
-version = "0.3.0-rc.3"
+version = "0.3.0"
 dependencies = [
  "cxx",
  "cxx-build",
@@ -3695,7 +3695,7 @@ dependencies = [
 
 [[package]]
 name = "limo-cad-print"
-version = "0.3.0-rc.3"
+version = "0.3.0"
 dependencies = [
  "png",
  "serde_json",
@@ -3703,7 +3703,7 @@ dependencies = [
 
 [[package]]
 name = "limo-cad-project-file"
-version = "0.3.0-rc.3"
+version = "0.3.0"
 dependencies = [
  "base64 0.23.1",
  "ciborium",
@@ -3715,7 +3715,7 @@ dependencies = [
 
 [[package]]
 name = "limo-cad-recipes"
-version = "0.3.0-rc.3"
+version = "0.3.0"
 dependencies = [
  "limo-cad-script",
  "serde_json",
@@ -3723,14 +3723,14 @@ dependencies = [
 
 [[package]]
 name = "limo-cad-script"
-version = "0.3.0-rc.3"
+version = "0.3.0"
 dependencies = [
  "serde_json",
 ]
 
 [[package]]
 name = "limo-cad-session-publication"
-version = "0.3.0-rc.3"
+version = "0.3.0"
 dependencies = [
  "ciborium",
  "limo-cad-project-file",
@@ -3740,14 +3740,14 @@ dependencies = [
 
 [[package]]
 name = "limo-cad-session-storage"
-version = "0.3.0-rc.3"
+version = "0.3.0"
 dependencies = [
  "libc",
 ]
 
 [[package]]
 name = "limo-cad-sketch"
-version = "0.3.0-rc.3"
+version = "0.3.0"
 dependencies = [
  "limo-cad-assembly",
  "limo-cad-cam",
@@ -3762,7 +3762,7 @@ dependencies = [
 
 [[package]]
 name = "limo-cad-solid"
-version = "0.3.0-rc.3"
+version = "0.3.0"
 dependencies = [
  "limo-cad-core",
  "serde",
@@ -4739,7 +4739,7 @@ dependencies = [
  "concurrent-queue",
  "hermit-abi",
  "pin-project-lite",
- "rustix 1.1.5",
+ "rustix 1.1.6",
  "windows-sys 0.61.2",
 ]
 
@@ -5126,15 +5126,15 @@ dependencies = [
 
 [[package]]
 name = "rustix"
-version = "1.1.5"
+version = "1.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "891efababe418670775f199f0d233d84843c227a0949a883ce15b37c78d6629d"
+checksum = "e5e76742e5294153d4dde1207dbec5bdd81eef6fabdc0d2118babadabfd858aa"
 dependencies = [
  "bitflags 2.13.2",
  "errno",
  "libc",
  "linux-raw-sys 0.12.1",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -5587,7 +5587,7 @@ dependencies = [
  "fastrand",
  "getrandom 0.4.3",
  "once_cell",
- "rustix 1.1.5",
+ "rustix 1.1.6",
  "windows-sys 0.61.2",
 ]
 
@@ -6185,7 +6185,7 @@ checksum = "38a91b4eaddff87b1cd1074985e3713da4af2c49742d1b356b2c01670a67a078"
 dependencies = [
  "cc",
  "downcast-rs 1.2.1",
- "rustix 1.1.5",
+ "rustix 1.1.6",
  "scoped-tls",
  "smallvec",
  "wayland-sys",
@@ -6198,7 +6198,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3c36a0f861ad76d0901f2800b46321410d9f73f2ea88aac0650d86c32688073"
 dependencies = [
  "bitflags 2.13.2",
- "rustix 1.1.5",
+ "rustix 1.1.6",
  "wayland-backend",
  "wayland-scanner",
 ]
@@ -6220,7 +6220,7 @@ version = "0.31.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4a52d18780be9b1314328a3de5f930b73d2200112e3849ca6cb11822793fb34d"
 dependencies = [
- "rustix 1.1.5",
+ "rustix 1.1.6",
  "wayland-client",
  "xcursor",
 ]
@@ -6967,7 +6967,7 @@ dependencies = [
  "libc",
  "log",
  "os_pipe",
- "rustix 1.1.5",
+ "rustix 1.1.6",
  "thiserror 2.0.21",
  "tree_magic_mini",
  "wayland-backend",
@@ -7004,7 +7004,7 @@ dependencies = [
  "libc",
  "libloading",
  "once_cell",
- "rustix 1.1.5",
+ "rustix 1.1.6",
  "x11rb-protocol",
 ]
 
@@ -7118,7 +7118,7 @@ dependencies = [
  "hex",
  "libc",
  "ordered-stream",
- "rustix 1.1.5",
+ "rustix 1.1.6",
  "serde",
  "serde_repr",
  "tracing",
@@ -7144,7 +7144,7 @@ dependencies = [
  "hex",
  "libc",
  "ordered-stream",
- "rustix 1.1.5",
+ "rustix 1.1.6",
  "serde",
  "serde_repr",
  "socket2",

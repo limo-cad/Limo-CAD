@@ -399,8 +399,8 @@ pub(crate) fn verify_directory(directory: &Path) -> Result<()> {
 }
 
 /// Packaged images allowed to import zlib. The CVE-2026-85091 exception in
-/// .github/grype/exceptions.yaml rests on these using only inflate/deflate:
-/// the vulnerable gz_vacate() is reached only through gzprintf()/gzvprintf().
+/// .github/grype/exceptions.yaml records the 1.3.2#3 backport. Retain this
+/// additional restriction to consumers outside the affected gzip-write APIs.
 /// A new consumer, a gz* import, a runtime lookup of either name or a second
 /// static zlib copy fails the package until the review record is updated.
 const ZLIB: &str = "z.dll";
