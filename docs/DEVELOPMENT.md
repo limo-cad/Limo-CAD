@@ -368,6 +368,24 @@ cargo xtask smoke-wasm
 
 This checks engine bindings, not a completed Bevy browser application.
 
+## The Limo kernel (experimental)
+
+`crates/kernel` is Limo CAD's own exact B-rep kernel in plain Rust. It is
+opt-in: set `LIMO_CAD_KERNEL=limo` before starting the desktop or the MCP
+server and every recompute runs on it instead of OCCT. Features it does not
+cover fail with a message that says so; OCCT-backed services (sections,
+drawings, STEP export, interference) are unavailable in that mode.
+
+```sh
+cargo test -p limo-cad-kernel
+cargo xtask kernel-demo
+```
+
+The second command builds a self-contained browser page that models the
+kernel's sample parts live. [The kernel's README](../crates/kernel/README.md)
+covers its design, what it models, the differential lab against OCCT and the
+diagnostic switches.
+
 ## Where the code lives
 
 Repository maintenance runs through the same Cargo entry point on Windows,
@@ -391,7 +409,8 @@ The demo task reads `GITHUB_SHA` and `VERSION` for its provenance receipt.
 
 - Rust crates own project data, sketches, feature history, references, drawings,
   assemblies, kinematics and recompute planning.
-- Native OCCT supplies exact geometry through a narrow C++ bridge.
+- Native OCCT supplies exact geometry through a narrow C++ bridge. The Limo
+  kernel in `crates/kernel` is an opt-in alternative behind the same adapter.
 - Bevy owns the native interface and viewport; Winit supplies window integration.
 - The MCP server and Rust script interpreter drive the shared product interface.
 - The browser replacement shares the Bevy UI and uses a native Rust/OCCT service;

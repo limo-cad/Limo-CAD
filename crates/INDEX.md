@@ -6,6 +6,7 @@ Host-neutral Rust CAD crates (shared by UI / WASM / MCP where applicable).
 |-------|------|
 | [`build-info/`](build-info/) | Compiled desktop/MCP identity; kept outside the geometry engine dependency graph |
 | [`cam/`](cam/) | Host-neutral 3-axis CAM intent, validation, motion planning, volumetric stock simulation, and posts |
+| [`kernel/`](kernel/) | Limo CAD's own analytic B-rep kernel in pure Rust: Booleans, revolve, holes, fillets and chamfers on planes, cylinders, cones, spheres and tori. Opt-in with `LIMO_CAD_KERNEL=limo`; also builds for the browser |
 | [`interface/`](interface/) | Shared product catalog and rendered-control ownership, inspection, input and focus semantics |
 | [`print/`](print/) | Reading scanned 2D prints for agents: plate outline calibration, millimetre crops with a grid and hole overlay, ring scores at model holes, hole-symbol detection with coverage matching |
 | [`project-file/`](project-file/) | Project container compatibility, bounded reads, and atomic saves shared by native hosts |
