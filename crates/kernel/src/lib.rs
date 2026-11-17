@@ -17,11 +17,13 @@
 
 pub mod blend;
 pub mod boolean;
+pub mod delaunay;
 pub mod demo;
 pub mod geom;
 pub mod io;
 pub mod make;
 pub mod math;
+pub mod meet;
 pub mod props;
 pub mod roots;
 #[cfg(feature = "dto")]

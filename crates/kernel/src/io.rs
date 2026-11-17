@@ -42,7 +42,7 @@ impl Body {
         out += &format!("curves {}\n", self.curves.len());
         for c in &self.curves {
             out += &format!("{} {} {:?} {:?}", c.kind as u8, frame_text(&c.f), c.r, c.s);
-            if c.kind == CurveKind::Trace {
+            if matches!(c.kind, CurveKind::Trace | CurveKind::Meet) {
                 out += &format!(
                     " {} {} {:?} {:?} {:?} {:?}",
                     c.other.kind as u8,
@@ -51,6 +51,20 @@ impl Body {
                     c.other.s,
                     c.span[0],
                     c.span[1]
+                );
+            }
+            if c.kind == CurveKind::Meet {
+                out += &format!(
+                    " {} {} {:?} {:?} {:?} {:?} {:?} {:?} {:?}",
+                    c.base.kind as u8,
+                    frame_text(&c.base.f),
+                    c.base.r,
+                    c.base.s,
+                    c.w[0],
+                    c.w[1],
+                    c.w[2],
+                    c.w[3],
+                    c.w[4]
                 );
             }
             out.push('\n');
@@ -123,7 +137,7 @@ impl Body {
         }
         for _ in 0..count(next()?, "curves")? {
             let v = floats(next()?)?;
-            if v.len() != 15 && v.len() != 32 {
+            if ![15, 32, 52].contains(&v.len()) {
                 return Err("malformed curve".into());
             }
             let mut curve = match v[0] as u8 {
@@ -138,6 +152,22 @@ impl Body {
                         s: v[29],
                     };
                     Curve::trace(&other, &other, 1.0, [v[30], v[31]])
+                }
+                4 if v.len() == 52 => {
+                    let other = Surface {
+                        kind: surf_kind(v[15])?,
+                        f: frame(&v[16..28]),
+                        r: v[28],
+                        s: v[29],
+                    };
+                    let base = Surface {
+                        kind: surf_kind(v[32])?,
+                        f: frame(&v[33..45]),
+                        r: v[45],
+                        s: v[46],
+                    };
+                    let w = [v[47], v[48], v[49], v[50], v[51]];
+                    Curve::meet(&base, &other, false, [v[30], v[31]], w)
                 }
                 _ => return Err("unknown curve kind".into()),
             };

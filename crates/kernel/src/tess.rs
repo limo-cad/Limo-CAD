@@ -7,12 +7,11 @@
 //! the chord and angle limits. Normals are analytic, so shading is smooth
 //! regardless of the triangle layout.
 
-use std::collections::{HashMap, HashSet};
-
+use crate::delaunay::Net;
 use crate::geom::SurfKind;
 use crate::math::*;
 use crate::topo::Body;
-use crate::trim::{EdgeMesh, FaceTrim, TrimLoop};
+use crate::trim::{loop_points, EdgeMesh, FaceTrim, TrimLoop};
 
 #[derive(Clone, Copy, Debug)]
 pub struct TessOptions {
@@ -62,6 +61,78 @@ impl Mesh {
         six / 6.0
     }
 
+    /// Whether this mesh of `body`, made with `opts`, is a clean skin on
+    /// it: every triangle within reach of its surface and facing outwards,
+    /// and every triangle side shared with exactly one neighbour running
+    /// the other way.
+    pub fn check(&self, body: &Body, opts: &TessOptions) -> Result<(), String> {
+        let key = |p: V3| {
+            (
+                (p.x * 1.0e6).round() as i64,
+                (p.y * 1.0e6).round() as i64,
+                (p.z * 1.0e6).round() as i64,
+            )
+        };
+        let mut ids: crate::fast::Map<(i64, i64, i64), u32> = Default::default();
+        let mut sides: crate::fast::Map<(u32, u32), i32> = Default::default();
+        for (f, &[first, count]) in self.faces.iter().enumerate() {
+            let surface = body.f_surface(f as u32);
+            for t in self.indices[first as usize..(first + count) as usize]
+                .as_chunks::<3>()
+                .0
+            {
+                let p = t.map(|i| self.positions[i as usize]);
+                // Inside the triangle and along its sides. A diagonal of
+                // two steps at the tolerance is twice as far off as either.
+                let probes = [
+                    (p[0] + p[1] + p[2]) / 3.0,
+                    (p[0] + p[1]) * 0.5,
+                    (p[1] + p[2]) * 0.5,
+                    (p[2] + p[0]) * 0.5,
+                ];
+                for q in probes {
+                    let off = surface.sdist(q).abs();
+                    if off > 2.5 * opts.linear {
+                        return Err(format!(
+                            "face {f} ({:?}) has a triangle {off:.3} off its surface at {q:?}",
+                            surface.kind
+                        ));
+                    }
+                }
+                let n = t
+                    .iter()
+                    .fold(V3::ZERO, |sum, &i| sum + self.normals[i as usize]);
+                let twice = (p[1] - p[0]).cross(p[2] - p[0]);
+                let longest = (0..3)
+                    .map(|k| (p[(k + 1) % 3] - p[k]).len2())
+                    .fold(0.0, f64::max);
+                // A sliver thinner than the chord tolerance has no direction
+                // to speak of: the surface's own bend decides how it tilts.
+                let thin = twice.len() < 1.0e-3 * longest
+                    || twice.len() / longest.sqrt() < 0.5 * opts.linear;
+                let facing = twice.unit().dot(n.unit());
+                if facing <= 0.0 && !thin {
+                    return Err(format!(
+                        "face {f} ({:?}) has a triangle turned {facing:.3} against its surface at {:?}",
+                        surface.kind, p[0]
+                    ));
+                }
+                let v = p.map(|q| {
+                    let next = ids.len() as u32;
+                    *ids.entry(key(q)).or_insert(next)
+                });
+                for k in 0..3 {
+                    let (a, b) = (v[k], v[(k + 1) % 3]);
+                    *sides.entry((a.min(b), a.max(b))).or_insert(0) += if a < b { 1 } else { -1 };
+                }
+            }
+        }
+        match sides.values().filter(|&&n| n != 0).count() {
+            0 => Ok(()),
+            open => Err(format!("the mesh has {open} unmatched triangle sides")),
+        }
+    }
+
     pub fn area(&self) -> f64 {
         let mut twice = 0.0;
         for t in self.indices.as_chunks::<3>().0 {
@@ -77,15 +148,73 @@ impl Mesh {
 }
 
 pub fn tessellate(body: &Body, opts: &TessOptions) -> Mesh {
-    let edges = EdgeMesh::build(body, opts.linear, TAU / opts.angular);
+    let edges = EdgeMesh::build_for_faces(body, opts.linear, TAU / opts.angular);
     let mut mesh = Mesh::default();
     for f in 0..body.face_count() as u32 {
-        let trim = FaceTrim::build(body, &edges, f, opts.linear);
+        let trim = face_trim(body, &edges, f, opts.linear);
         let first = mesh.indices.len() as u32;
         tess_face(&trim, opts, &mut mesh);
         mesh.faces.push([first, mesh.indices.len() as u32 - first]);
     }
     mesh
+}
+
+/// Face `f` in the parameters it is meshed in.
+///
+/// A sphere has no axis of its own, and its two poles are where meshing is
+/// hardest: every angle meets there. So each face of a sphere gets the axis
+/// that keeps both poles as far from its boundary as can be, off the face
+/// altogether where that is possible.
+fn face_trim(body: &Body, edges: &EdgeMesh, f: u32, sag: f64) -> FaceTrim {
+    let s = body.f_surface(f);
+    let loops: Vec<Vec<V3>> = body
+        .face_loops(f)
+        .map(|l| loop_points(edges, body.loop_hes(l)))
+        .collect();
+    if s.kind != SurfKind::Sphere || loops.is_empty() {
+        return FaceTrim::from_points(*s, !body.f_sense[f as usize], loops, sag);
+    }
+    // Directions of the boundary from the centre, thinned to a few dozen.
+    let total: usize = loops.iter().map(Vec::len).sum();
+    let every = total.div_ceil(48).max(1);
+    let rim: Vec<V3> = loops
+        .iter()
+        .flatten()
+        .step_by(every)
+        .map(|p| (*p - s.f.o).unit())
+        .collect();
+    let middle = rim.iter().fold(V3::ZERO, |sum, d| sum + *d);
+    let mut axes = vec![s.f.z, s.f.x, s.f.y];
+    if middle.len() > 1.0e-6 {
+        // Through the middle of the boundary, and two ways across it.
+        let m = middle.unit();
+        let side = m.any_perp();
+        axes.extend([m, side, m.cross(side)]);
+    }
+    for (a, b) in [(1.0, 1.0), (1.0, -1.0), (-1.0, 1.0), (-1.0, -1.0)] {
+        axes.push((s.f.x * a + s.f.y * b + s.f.z).unit());
+    }
+    // How far the boundary keeps from both poles of an axis: nothing when
+    // it passes through one, one when it stays on the equator.
+    let room = |z: V3| {
+        rim.iter()
+            .map(|d| 1.0 - d.dot(z).abs())
+            .fold(f64::INFINITY, f64::min)
+    };
+    let mut best = (room(axes[0]), axes[0]);
+    for &z in &axes[1..] {
+        let r = room(z);
+        // The surface's own axis stays unless another is clearly better.
+        if r > best.0 + 0.05 {
+            best = (r, z);
+        }
+    }
+    let turned = if best.1 == s.f.z {
+        *s
+    } else {
+        crate::geom::Surface::sphere_axis(s.f.o, best.1, s.r)
+    };
+    FaceTrim::from_points(turned, !body.f_sense[f as usize], loops, sag)
 }
 
 /// Polyline of edge `e` for display: two points for a line, otherwise within
@@ -164,7 +293,6 @@ fn tess_face(trim: &FaceTrim, opts: &TessOptions, mesh: &mut Mesh) {
     };
     // Face-local vertices: every loop point except the closing duplicate.
     let mut corners: Vec<Vec<Corner>> = Vec::with_capacity(trim.loops.len());
-    let mut boundary: HashSet<(u32, u32)> = HashSet::new();
     for lp in &trim.loops {
         let n = lp.uv.len() - 1;
         let mut cs = Vec::with_capacity(n);
@@ -172,16 +300,11 @@ fn tess_face(trim: &FaceTrim, opts: &TessOptions, mesh: &mut Mesh) {
             let src = fv.push(lp.p3[i], singular_normal(trim, lp.uv[i]));
             cs.push(Corner { uv: lp.uv[i], src });
         }
-        for i in 0..n {
-            let (a, b) = (cs[i].src, cs[(i + 1) % n].src);
-            boundary.insert((a.min(b), a.max(b)));
-        }
         corners.push(cs);
     }
 
     let mut tris: Vec<[Corner; 3]> = Vec::new();
     let kind = trim.surf.kind;
-    let mut curved = kind != SurfKind::Plane;
 
     let winding: Vec<usize> = (0..trim.loops.len())
         .filter(|&i| trim.loops[i].winds())
@@ -194,6 +317,7 @@ fn tess_face(trim: &FaceTrim, opts: &TessOptions, mesh: &mut Mesh) {
         && trim.loops.len() == 1
         && trim.loops[0].winds_u()
         && trim.loops[0].shift.x < 0.0
+        && steady(&corners[0], false)
     {
         // Cone tip: a fan from the apex, one apex vertex per ruling so each
         // carries that ruling's normal.
@@ -221,48 +345,61 @@ fn tess_face(trim: &FaceTrim, opts: &TessOptions, mesh: &mut Mesh) {
                 },
             ]);
         }
-        curved = false;
     } else if let Some((bottom, top)) =
         strip_chains(trim, &corners, &winding, &plain, &mut fv, opts)
     {
         // The face lies between two chains that are monotone in `u`.
         strip(&mut fv, trim, &bottom, &top, opts, &mut tris);
-        curved = false;
     } else {
-        // Model length per unit of each parameter; crossing the curvature of
-        // a ruled surface costs far more than running along its rulings.
-        let metric = match kind {
-            SurfKind::Plane => v2(1.0, 1.0),
-            SurfKind::Cylinder | SurfKind::Cone => {
-                let m = trim.metric((trim.lo + trim.hi) * 0.5);
-                v2(m.x.max(1.0e-9), 1.0e-3 * m.x.max(1.0e-9))
+        let polys = assemble(trim, &corners, &winding, &plain, &mut fv, opts, &mut tris);
+        if crate::diag::trace() {
+            eprintln!(
+                "tess: {kind:?} face, {} winding and {} plain loops, {} polygons",
+                winding.len(),
+                plain.len(),
+                polys.len()
+            );
+        }
+        for poly in polys {
+            if kind == SurfKind::Plane {
+                earclip(poly.outer, poly.holes, v2(1.0, 1.0), &mut tris);
+            } else {
+                fill(trim, opts, &mut fv, poly, &mut tris);
             }
-            _ => trim.metric((trim.lo + trim.hi) * 0.5),
-        };
-        for poly in assemble(trim, &corners, &winding, &plain, &mut fv, opts) {
-            earclip(poly.outer, poly.holes, metric, &mut tris);
         }
     }
 
-    if curved {
-        refine(&mut tris, &mut fv, trim, opts, &boundary);
-    }
-
     let base = mesh.positions.len() as u32;
-    mesh.positions.extend_from_slice(&fv.p);
-    mesh.normals.extend_from_slice(&fv.n);
     for t in &tris {
         let (a, b, c) = (
             fv.p[t[0].src as usize],
             fv.p[t[1].src as usize],
             fv.p[t[2].src as usize],
         );
-        if (b - a).cross(c - a).len2() <= 1.0e-24 {
+        // A triangle with two corners in one place is nothing: a pole or a
+        // tip seen from two angles. One whose corners merely lie in a line
+        // stays, flat as it is, because its neighbours meet along its
+        // sides and would not meet each other without it.
+        let gone = |p: V3, q: V3| (p - q).len2() <= 1.0e-24;
+        if gone(a, b) || gone(b, c) || gone(c, a) {
             continue;
         }
-        mesh.indices
-            .extend([base + t[0].src, base + t[1].src, base + t[2].src]);
+        let mut ids = [t[0].src, t[1].src, t[2].src];
+        if kind == SurfKind::Cone {
+            // A triangle at the apex looks along its own ruling: the apex
+            // gets the normal half-way between the other two corners.
+            for k in 0..3 {
+                let (near, far) = (t[(k + 1) % 3], t[(k + 2) % 3]);
+                if t[k].uv.y == 0.0 && near.uv.y != 0.0 && far.uv.y != 0.0 {
+                    let u = 0.5 * (near.uv.x + far.uv.x);
+                    ids[k] = fv.push(fv.p[t[k].src as usize], singular_normal(trim, v2(u, 0.0)));
+                }
+            }
+        }
+        mesh.indices.extend(ids.map(|i| base + i));
     }
+    mesh.positions.extend_from_slice(&fv.p);
+    mesh.normals.extend_from_slice(&fv.n);
 }
 
 /// Bottom and top boundary chains of a curved face, both ordered by
@@ -292,6 +429,8 @@ fn strip_chains(
             })
             .collect()
     };
+    // How far a chain may stray from one height on a doubly curved surface.
+    let tilt = 2.0 * v_step(trim, opts);
     match (winding.len(), plain.len()) {
         (2, 0) => {
             let (mut lower, mut upper) = band_order(trim, winding);
@@ -310,6 +449,17 @@ fn strip_chains(
             if trim.loops[lower].shift.x < 0.0 {
                 std::mem::swap(&mut lower, &mut upper);
             }
+            // Rows run between chains that keep going the same way round;
+            // one that doubles back anywhere is for the general mesher.
+            let steadily = |i: usize| steady(&corners[i], trim.loops[i].shift.x > 0.0);
+            if !steadily(lower) || !steadily(upper) {
+                return None;
+            }
+            // Where the surface bends both ways the rows must also run
+            // level, or the triangles between them lean too far to trust.
+            if !level(&corners[lower], tilt) || !level(&corners[upper], tilt) {
+                return None;
+            }
             let uc: Vec<Corner> = corners[upper]
                 .iter()
                 .map(|c| fv.shifted(*c, v2(0.0, lift)))
@@ -323,10 +473,19 @@ fn strip_chains(
             ))
         }
         (1, 0) if kind == SurfKind::Sphere => {
-            // A cap: one loop around a pole.
+            // A cap: one loop around a pole. Rows follow its rim, which is
+            // only sensible while the rim keeps roughly to one latitude.
             let i = winding[0];
             let lp = &trim.loops[i];
             let cs = &corners[i];
+            let (low, high) = cs
+                .iter()
+                .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), c| {
+                    (lo.min(c.uv.y), hi.max(c.uv.y))
+                });
+            if high - low > 2.0 * v_step(trim, opts) || !steady(cs, lp.shift.x > 0.0) {
+                return None;
+            }
             let mut chain: Vec<Corner> = cs.clone();
             chain.push(fv.shifted(cs[0], lp.shift));
             if lp.shift.x > 0.0 {
@@ -338,7 +497,74 @@ fn strip_chains(
                 Some((bottom, chain))
             }
         }
-        (0, 1) => monotone_chains(&corners[plain[0]]),
+        // One loop around the face (not a hole in the whole surface). Rows
+        // need something to end on: a side of constant `u` or a real corner.
+        // Around the smooth end of an oval they would all crowd into one
+        // point, so that goes to the general mesher instead.
+        (0, 1) if trim.loops[plain[0]].area > 0.0 => {
+            let (bottom, top) = monotone_chains(&corners[plain[0]])?;
+            let ended = |b: [Corner; 2], t: [Corner; 2]| {
+                let m = trim.metric(b[0].uv);
+                let dir = |c: [Corner; 2]| {
+                    let d = c[1].uv - c[0].uv;
+                    v2(d.x * m.x, d.y * m.y)
+                };
+                let (db, dt) = (dir(b), dir(t));
+                let upright = |d: V2| d.x.abs() <= 1.0e-9 * (1.0 + d.y.abs());
+                upright(db) || upright(dt) || db.dot(dt) > -0.5 * db.len() * dt.len()
+            };
+            let (nb, nt) = (bottom.len(), top.len());
+            if nb < 2 || nt < 2 {
+                return None;
+            }
+            // Even a real corner is no good if a chain climbs away from it
+            // so steeply that several of its vertices share the first
+            // column: they would all be joined to the one row vertex there.
+            let crowded = |chain: &[Corner], from_start: bool| {
+                let tip = if from_start {
+                    chain[0]
+                } else {
+                    chain[chain.len() - 1]
+                };
+                let upright = chain
+                    .windows(2)
+                    .take_while(|w| (w[0].uv.x - w[1].uv.x).abs() <= 1.0e-9)
+                    .count();
+                let upright_end = chain
+                    .windows(2)
+                    .rev()
+                    .take_while(|w| (w[0].uv.x - w[1].uv.x).abs() <= 1.0e-9)
+                    .count();
+                if (from_start && upright > 0) || (!from_start && upright_end > 0) {
+                    return false;
+                }
+                chain
+                    .iter()
+                    .filter(|c| {
+                        let d = (c.uv.x - tip.uv.x).abs();
+                        d > 1.0e-9 && d < 0.9 * step
+                    })
+                    .count()
+                    > 2
+            };
+            // Rows also need a side to start from: an outline with none is
+            // an oval or a lens, however pointed its ends look.
+            let sided = |c: [Corner; 2]| (c[0].uv.x - c[1].uv.x).abs() <= 1.0e-9;
+            let has_side = sided([bottom[0], bottom[1]])
+                || sided([top[0], top[1]])
+                || sided([bottom[nb - 1], bottom[nb - 2]])
+                || sided([top[nt - 1], top[nt - 2]]);
+            (has_side
+                && level(&bottom, tilt)
+                && level(&top, tilt)
+                && ended([bottom[0], bottom[1]], [top[0], top[1]])
+                && ended([bottom[nb - 1], bottom[nb - 2]], [top[nt - 1], top[nt - 2]])
+                && !crowded(&bottom, true)
+                && !crowded(&top, true)
+                && !crowded(&bottom, false)
+                && !crowded(&top, false))
+            .then_some((bottom, top))
+        }
         (0, 0) if kind == SurfKind::Sphere => {
             let bottom = pole_row(fv, -PI, -0.5 * PI);
             let top = pole_row(fv, -PI, 0.5 * PI);
@@ -364,11 +590,48 @@ fn strip_chains(
     }
 }
 
+/// Whether a chain keeps to one height, give or take `tilt`. Stretches of
+/// constant `u` are the sides of a patch and do not count.
+fn level(chain: &[Corner], tilt: f64) -> bool {
+    if !tilt.is_finite() {
+        return true;
+    }
+    let (mut low, mut high) = (f64::INFINITY, f64::NEG_INFINITY);
+    for w in chain.windows(2) {
+        if (w[0].uv.x - w[1].uv.x).abs() > 1.0e-9 {
+            low = low.min(w[0].uv.y).min(w[1].uv.y);
+            high = high.max(w[0].uv.y).max(w[1].uv.y);
+        }
+    }
+    high - low <= tilt
+}
+
+/// Whether a loop's corners keep travelling the same way in `u`, upwards
+/// or downwards, all the way round.
+fn steady(cs: &[Corner], upwards: bool) -> bool {
+    let n = cs.len();
+    (0..n).all(|i| {
+        let step = cs[(i + 1) % n].uv.x - cs[i].uv.x;
+        // The step that closes the loop jumps back by a whole turn.
+        let step = if step.abs() > PI {
+            step - TAU * step.signum()
+        } else {
+            step
+        };
+        if upwards {
+            step >= -1.0e-12
+        } else {
+            step <= 1.0e-12
+        }
+    })
+}
+
 /// Largest parameter step in `u` (scaled by `scale`) that keeps a chord
 /// within tolerance.
 fn u_step(trim: &FaceTrim, opts: &TessOptions, scale: f64) -> f64 {
     let s = &trim.surf;
     let radius = match s.kind {
+        SurfKind::Torus if trim.turned => s.s,
         SurfKind::Torus => s.r + s.s,
         SurfKind::Cone => trim.hi.y.abs().max(trim.lo.y.abs()) * s.s.tan(),
         _ => s.r,
@@ -379,6 +642,24 @@ fn u_step(trim: &FaceTrim, opts: &TessOptions, scale: f64) -> f64 {
         PI
     } else {
         2.0 * (1.0 - opts.linear / radius).acos()
+    };
+    chord.min(opts.angular).max(1.0e-3)
+}
+
+/// Largest parameter step in `v` that keeps a chord within tolerance, on a
+/// surface that bends that way too.
+fn v_step(trim: &FaceTrim, opts: &TessOptions) -> f64 {
+    let s = &trim.surf;
+    let tube = match s.kind {
+        SurfKind::Sphere => s.r,
+        SurfKind::Torus if trim.turned => s.r + s.s,
+        SurfKind::Torus => s.s,
+        _ => return f64::INFINITY,
+    };
+    let chord = if opts.linear >= tube {
+        PI
+    } else {
+        2.0 * (1.0 - opts.linear / tube).acos()
     };
     chord.min(opts.angular).max(1.0e-3)
 }
@@ -412,12 +693,7 @@ fn strip(
     opts: &TessOptions,
     tris: &mut Vec<[Corner; 3]>,
 ) {
-    let s = &trim.surf;
-    let tube = match s.kind {
-        SurfKind::Sphere => s.r,
-        SurfKind::Torus => s.s,
-        _ => f64::INFINITY,
-    };
+    let tube = v_step(trim, opts);
     // Chains of one loop meet at both ends (the very same vertex, not a
     // period image of it); a band closes on itself instead.
     let mut joined =
@@ -459,12 +735,7 @@ fn strip(
     let columns = (((ub - ua) / u_step(trim, opts, 1.0)).ceil() as usize).max(1);
     let mut layers = 1;
     if tube.is_finite() {
-        let chord = if opts.linear >= tube {
-            PI
-        } else {
-            2.0 * (1.0 - opts.linear / tube).acos()
-        };
-        let step = chord.min(opts.angular).max(1.0e-3);
+        let step = v_step(trim, opts);
         let mut gap: f64 = 0.0;
         for i in 0..=columns {
             let u = ua + (ub - ua) * i as f64 / columns as f64;
@@ -694,6 +965,7 @@ fn assemble(
     plain: &[usize],
     fv: &mut FaceVerts,
     opts: &TessOptions,
+    tris: &mut Vec<[Corner; 3]>,
 ) -> Vec<Poly> {
     let kind = trim.surf.kind;
     let mut polys: Vec<Poly> = Vec::new();
@@ -748,25 +1020,15 @@ fn assemble(
         let up = trim.loops[i].shift.x > 0.0;
         if up && k + 1 < wound.len() && trim.loops[wound[k + 1]].shift.x < 0.0 {
             let j = wound[k + 1];
-            let (mut lc, uc) = (raised(fv, i, lift[k]), raised(fv, j, lift[k + 1]));
-            // Cut the band open where no hole is in the way.
-            if let Some(clear) = clear_angle(&holes) {
-                let start = (0..lc.len())
-                    .min_by(|&a, &b| {
-                        let da = (wrap_near(lc[a].uv.x, clear) - clear).abs();
-                        let db = (wrap_near(lc[b].uv.x, clear) - clear).abs();
-                        da.total_cmp(&db)
-                    })
-                    .unwrap();
-                let mut turned: Vec<Corner> = lc[start..].to_vec();
-                for c in &lc[..start] {
-                    turned.push(fv.shifted(*c, trim.loops[i].shift));
-                }
-                lc = turned;
-            }
-            let (bottom, top) = band_chains(fv, &trim.loops[i], &lc, &trim.loops[j], &uc);
-            let mut outer = bottom;
-            outer.extend(top.into_iter().rev());
+            let (lc, uc) = (raised(fv, i, lift[k]), raised(fv, j, lift[k + 1]));
+            let outer = band(
+                trim,
+                opts,
+                fv,
+                (&lc, trim.loops[i].shift),
+                (&uc, trim.loops[j].shift),
+                &holes,
+            );
             polys.push(Poly {
                 outer,
                 holes: Vec::new(),
@@ -784,22 +1046,55 @@ fn assemble(
         if let Some(v_end) = limit {
             let lp = &trim.loops[i];
             let cs = &corners[i];
-            let mut outer: Vec<Corner> = cs.clone();
-            outer.push(fv.shifted(cs[0], lp.shift));
+            // The tip is one point with every angle, which no polygon in the
+            // parameter plane can express. So stop short of it: a ring of
+            // vertices between the tip and the nearest boundary stands in
+            // for it, and a fan joins the ring to the tip. Up a cone the fan
+            // runs along straight rulings and may be as long as it likes;
+            // on a sphere it is one chord long at most.
+            let nearest = corners
+                .iter()
+                .flatten()
+                .map(|c| (c.uv.y - v_end).abs())
+                .fold(f64::INFINITY, f64::min);
+            let reach = (0.5 * nearest).min(v_step(trim, opts));
+            let v_ring = v_end + reach * (cs[0].uv.y - v_end).signum();
+            let steps = ((lp.shift.x.abs() / u_step(trim, opts, 1.0)).ceil() as usize).max(8);
+            // The ring goes around the other way from the loop.
+            let u_at = |k: usize| cs[0].uv.x + lp.shift.x * (1.0 - k as f64 / steps as f64);
+            let ring: Vec<Corner> = (0..steps)
+                .map(|k| {
+                    let q = v2(u_at(k), v_ring);
+                    Corner {
+                        uv: q,
+                        src: fv.push(trim.point(q), trim.normal(q)),
+                    }
+                })
+                .collect();
             let tip = trim.point(v2(cs[0].uv.x, v_end));
-            let far = fv.push(
-                tip,
-                singular_normal(trim, v2(cs[0].uv.x + lp.shift.x, v_end)),
-            );
-            let near = fv.push(tip, singular_normal(trim, v2(cs[0].uv.x, v_end)));
-            outer.push(Corner {
-                uv: v2(cs[0].uv.x + lp.shift.x, v_end),
-                src: far,
-            });
-            outer.push(Corner {
-                uv: v2(cs[0].uv.x, v_end),
-                src: near,
-            });
+            for k in 0..steps {
+                let q = v2(0.5 * (u_at(k) + u_at(k + 1)), v_end);
+                let apex = Corner {
+                    uv: q,
+                    src: fv.push(tip, singular_normal(trim, q)),
+                };
+                let next = if k + 1 < steps {
+                    ring[k + 1]
+                } else {
+                    // One turn on, the ring is back at its first vertex.
+                    Corner {
+                        uv: v2(u_at(steps), v_ring),
+                        src: fv.alias(ring[0].src),
+                    }
+                };
+                tris.push([ring[k], apex, next]);
+            }
+            let back = v2(-lp.shift.x, -lp.shift.y);
+            let outer = if up {
+                band(trim, opts, fv, (cs, lp.shift), (&ring, back), &holes)
+            } else {
+                band(trim, opts, fv, (&ring, back), (cs, lp.shift), &holes)
+            };
             polys.push(Poly {
                 outer,
                 holes: Vec::new(),
@@ -845,40 +1140,199 @@ fn assemble(
     polys
 }
 
-/// An angle `u` in the widest gap between the holes, if there are any.
-fn clear_angle(holes: &[Vec<Corner>]) -> Option<f64> {
-    let mut spans: Vec<(f64, f64)> = holes
+/// Corners along the straight cut from `a` to `b` in the parameter plane,
+/// close enough together to follow the surface. The ends are not included.
+fn cut_points(
+    trim: &FaceTrim,
+    opts: &TessOptions,
+    fv: &mut FaceVerts,
+    a: V2,
+    b: V2,
+) -> Vec<Corner> {
+    let du = (b.x - a.x) / u_step(trim, opts, 1.0);
+    let dv = (b.y - a.y) / v_step(trim, opts);
+    let pieces = (du.hypot(dv).ceil() as usize).clamp(1, 4096);
+    (1..pieces)
+        .map(|i| {
+            let q = a + (b - a) * (i as f64 / pieces as f64);
+            Corner {
+                uv: q,
+                src: fv.push(trim.point(q), trim.normal(q)),
+            }
+        })
+        .collect()
+}
+
+/// Parameter steps that count as one unit of length on a curved face: the
+/// longest chords the tolerance allows along `u` and `v`. Along the rulings
+/// of a cylinder or cone nothing bends, so there a unit is simply long; the
+/// flag says when that is so.
+fn units(trim: &FaceTrim, opts: &TessOptions) -> (V2, bool) {
+    /// Triangles along a ruling are at least this many times as long as
+    /// wide, and a face has about this many rows of them at most.
+    const SLENDER: f64 = 12.0;
+    const ROWS: f64 = 2.5;
+    let u = u_step(trim, opts, 1.0);
+    let across = v_step(trim, opts);
+    if across.is_finite() {
+        return (v2(u, across), false);
+    }
+    // The width of one step where the face is widest, in model units.
+    let far = if trim.hi.y.abs() > trim.lo.y.abs() {
+        trim.hi.y
+    } else {
+        trim.lo.y
+    };
+    let m = trim.metric(v2(0.5 * (trim.lo.x + trim.hi.x), far));
+    let slender = SLENDER * u * m.x / m.y.max(1.0e-12);
+    let v = slender.max((trim.hi.y - trim.lo.y) / ROWS).max(1.0e-9);
+    (v2(u, v), true)
+}
+
+/// Whether the segment from `p` to `q` meets the one from `r` to `s`
+/// anywhere but at an end they share.
+fn meets(p: V2, q: V2, r: V2, s: V2) -> bool {
+    let same = |a: V2, b: V2| (a - b).len() <= 1.0e-12 * (1.0 + a.len());
+    if same(p, r) || same(p, s) || same(q, r) || same(q, s) {
+        return false;
+    }
+    let slack = 1.0e-12 * (1.0 + p.len() + q.len() + r.len() + s.len());
+    let apart =
+        |a: f64, b: f64, c: f64, d: f64| a.max(b) < c.min(d) - slack || c.max(d) < a.min(b) - slack;
+    if apart(p.x, q.x, r.x, s.x) || apart(p.y, q.y, r.y, s.y) {
+        return false;
+    }
+    let size = (q - p).len() * (s - r).len();
+    let eps = 1.0e-12 * size;
+    let one_side = |a: f64, b: f64| (a > eps && b > eps) || (a < -eps && b < -eps);
+    !one_side((q - p).cross(r - p), (q - p).cross(s - p))
+        && !one_side((s - r).cross(p - r), (s - r).cross(q - r))
+}
+
+/// The outline of the band between two loops that go around the surface in
+/// opposite directions: `lower` up `u` with the face above it, `upper` back
+/// down `u` above that. Each comes with the step that closes it, a whole
+/// turn. The band is cut open along a straight line from a corner of one to
+/// a corner of the other, the shortest such line that crosses neither loop
+/// nor any of `holes`.
+fn band(
+    trim: &FaceTrim,
+    opts: &TessOptions,
+    fv: &mut FaceVerts,
+    lower: (&[Corner], V2),
+    upper: (&[Corner], V2),
+    holes: &[Vec<Corner>],
+) -> Vec<Corner> {
+    let (lower, turn) = lower;
+    let (upper, back) = upper;
+    let (n, m) = (lower.len(), upper.len());
+    let (unit, _) = units(trim, opts);
+    let apart = |a: V2, b: V2| ((a.x - b.x) / unit.x).hypot((a.y - b.y) / unit.y);
+    // Whole turns that bring `q` nearest to `p`.
+    let turns = |p: V2, q: V2| ((p - q).dot(turn) / turn.dot(turn)).round();
+
+    // Everything a cut must not cross.
+    let mut walls: Vec<[V2; 2]> = Vec::with_capacity(n + m);
+    for i in 0..n {
+        let next = if i + 1 < n {
+            lower[i + 1].uv
+        } else {
+            lower[0].uv + turn
+        };
+        walls.push([lower[i].uv, next]);
+    }
+    for j in 0..m {
+        let next = if j + 1 < m {
+            upper[j + 1].uv
+        } else {
+            upper[0].uv + back
+        };
+        walls.push([upper[j].uv, next]);
+    }
+    for hole in holes {
+        for k in 0..hole.len() {
+            walls.push([hole[k].uv, hole[(k + 1) % hole.len()].uv]);
+        }
+    }
+    // A torus repeats the other way as well, and a hole may be written
+    // one turn of the tube away from the band it lies in.
+    let tube: &[f64] = if trim.surf.kind == SurfKind::Torus {
+        &[-TAU, 0.0, TAU]
+    } else {
+        &[0.0]
+    };
+    let blocked = |p: V2, q: V2| {
+        walls.iter().any(|&[r, s]| {
+            (-2..=2).any(|k| {
+                tube.iter().any(|&lift| {
+                    let by = turn * k as f64 + v2(0.0, lift);
+                    meets(p, q, r + by, s + by)
+                })
+            })
+        })
+    };
+    // For every corner of the lower loop, the upper corner closest to it
+    // and the one most nearly straight above it; then the closest of those
+    // pairs that can see each other. Where the upper loop dips, the closest
+    // corner is the same for a long way round and something may stand in
+    // front of it; straight up is a different line from every corner.
+    let mut pairs: Vec<(f64, usize, usize)> = Vec::with_capacity(2 * n);
+    for (i, corner) in lower.iter().enumerate() {
+        let a = corner.uv;
+        let image = |j: usize| upper[j].uv + turn * turns(a, upper[j].uv);
+        let nearest = |measure: &dyn Fn(V2) -> f64| {
+            (0..m)
+                .min_by(|&x, &y| measure(image(x)).total_cmp(&measure(image(y))))
+                .unwrap()
+        };
+        let closest = nearest(&|b| apart(a, b));
+        let above = nearest(&|b| (b.x - a.x).abs());
+        pairs.push((apart(a, image(closest)), i, closest));
+        if above != closest {
+            pairs.push((apart(a, image(above)), i, above));
+        }
+    }
+    pairs.sort_by(|x, y| x.0.total_cmp(&y.0));
+    let (_, i0, j0) = pairs
         .iter()
-        .filter(|h| !h.is_empty())
-        .map(|h| {
-            let lo = h.iter().map(|c| c.uv.x).fold(f64::INFINITY, f64::min);
-            let hi = h.iter().map(|c| c.uv.x).fold(f64::NEG_INFINITY, f64::max);
-            let start = wrap_from(lo, 0.0);
-            (start, start + (hi - lo))
+        .copied()
+        .find(|&(_, i, j)| {
+            let (a, b) = (lower[i].uv, upper[j].uv);
+            !blocked(a, b + turn * turns(a, b))
+        })
+        .unwrap_or_else(|| {
+            if crate::diag::trace() {
+                eprintln!("tess: no clear cut across a band of {n} and {m} corners");
+            }
+            pairs[0]
+        });
+    let near_turns = turns(lower[i0].uv, upper[j0].uv);
+
+    // Along the lower loop for one turn, up the far bank of the cut, back
+    // along the upper loop, and down the near bank.
+    let mut outer: Vec<Corner> = Vec::with_capacity(n + m + 8);
+    for k in 0..=n {
+        let i = (i0 + k) % n;
+        let wraps = if i0 + k >= n { 1.0 } else { 0.0 };
+        outer.push(fv.shifted(lower[i], turn * wraps));
+    }
+    let top: Vec<Corner> = (0..=m)
+        .map(|k| {
+            let j = (j0 + k) % m;
+            // The upper loop unwinds what the lower one wound up.
+            let wraps = if j0 + k >= m { 1.0 } else { 0.0 };
+            fv.shifted(upper[j], turn * (near_turns + 1.0 - wraps))
         })
         .collect();
-    if spans.is_empty() {
-        return None;
-    }
-    spans.sort_by(|a, b| a.0.total_cmp(&b.0));
-    let mut best = (f64::NEG_INFINITY, 0.0);
-    let mut reach = spans[0].1;
-    for w in 1..=spans.len() {
-        // The gap after everything seen so far, up to the next hole (the
-        // first one again, a turn later, to close the circle).
-        let next = if w < spans.len() {
-            spans[w].0
-        } else {
-            spans[0].0 + TAU
-        };
-        if next - reach > best.0 {
-            best = (next - reach, 0.5 * (next + reach));
-        }
-        if w < spans.len() {
-            reach = reach.max(spans[w].1);
-        }
-    }
-    (best.0 > 0.0).then_some(best.1)
+    let far = cut_points(trim, opts, fv, outer[n].uv, top[0].uv);
+    let near: Vec<Corner> = far
+        .iter()
+        .map(|c| fv.shifted(*c, v2(-turn.x, -turn.y)))
+        .collect();
+    outer.extend(far);
+    outer.extend(top);
+    outer.extend(near.into_iter().rev());
+    outer
 }
 
 /// Boundary of the full parameter rectangle of a sphere or torus, with seam
@@ -915,26 +1369,280 @@ fn full_rectangle(
         let v0 = pick(1)?;
         (v0, v0 + TAU)
     };
-    let nu = ((TAU / opts.angular).ceil() as usize).max(8);
-    let nv = (((v1 - v0) / opts.angular).ceil() as usize).max(4);
-    let mut outer = Vec::new();
-    let mut add = |fv: &mut FaceVerts, q: V2| {
-        let src = fv.push(trim.point(q), trim.normal(q));
-        outer.push(Corner { uv: q, src });
+    let nu = ((TAU / u_step(trim, opts, 1.0)).ceil() as usize).max(8);
+    let nv = (((v1 - v0) / v_step(trim, opts)).ceil() as usize).max(4);
+    let u_at = |i: usize| u0 + TAU * i as f64 / nu as f64;
+    let v_at = |j: usize| v0 + (v1 - v0) * j as f64 / nv as f64;
+    let fresh = |fv: &mut FaceVerts, q: V2| Corner {
+        uv: q,
+        src: fv.push(trim.point(q), trim.normal(q)),
     };
-    for i in 0..nu {
-        add(fv, v2(u0 + TAU * i as f64 / nu as f64, v0));
-    }
-    for j in 0..nv {
-        add(fv, v2(u0 + TAU, v0 + (v1 - v0) * j as f64 / nv as f64));
-    }
-    for i in 0..nu {
-        add(fv, v2(u0 + TAU - TAU * i as f64 / nu as f64, v1));
-    }
-    for j in 0..nv {
-        add(fv, v2(u0, v1 - (v1 - v0) * j as f64 / nv as f64));
-    }
+    // The same point seen from the other side of a seam: one vertex, so the
+    // seam cannot open, and one name for the edge along it.
+    let image = |fv: &mut FaceVerts, c: Corner, q: V2| Corner {
+        uv: q,
+        src: fv.alias(c.src),
+    };
+    let bottom: Vec<Corner> = (0..nu).map(|i| fresh(fv, v2(u_at(i), v0))).collect();
+    let left: Vec<Corner> = (1..nv).map(|j| fresh(fv, v2(u0, v_at(j)))).collect();
+    let top: Vec<Corner> = if sphere {
+        (0..nu).map(|i| fresh(fv, v2(u_at(i), v1))).collect()
+    } else {
+        (0..nu)
+            .map(|i| image(fv, bottom[i], v2(u_at(i), v1)))
+            .collect()
+    };
+    let bottom_end = image(fv, bottom[0], v2(u0 + TAU, v0));
+    let right: Vec<Corner> = (1..nv)
+        .map(|j| image(fv, left[j - 1], v2(u0 + TAU, v_at(j))))
+        .collect();
+    let top_end = image(fv, top[0], v2(u0 + TAU, v1));
+    // Counter-clockwise: along the bottom, up the right, back along the
+    // top, down the left.
+    let mut outer: Vec<Corner> = bottom.clone();
+    outer.push(bottom_end);
+    outer.extend(right.iter().copied());
+    outer.push(top_end);
+    outer.extend(top[1..].iter().rev().copied());
+    outer.push(top[0]);
+    outer.extend(left.iter().rev().copied());
     Some(outer)
+}
+
+/// Triangulate a polygon on a curved surface.
+///
+/// Where the surface bends, the polygon needs vertices inside as well as on
+/// its outline. They come from a lattice of equilateral triangles and go one
+/// by one into a Delaunay triangulation of the outline. Lengths are counted
+/// in the longest chord the tolerance allows along each parameter: a
+/// triangle that is round in those units is equally accurate every way, and
+/// a lattice of side one is exactly fine enough.
+///
+/// Along the rulings of a cylinder or cone nothing bends. There a unit is
+/// simply long, so the triangles come out as slivers along the rulings with
+/// a few rows of lattice to hang on.
+fn fill(
+    trim: &FaceTrim,
+    opts: &TessOptions,
+    fv: &mut FaceVerts,
+    poly: Poly,
+    tris: &mut Vec<[Corner; 3]>,
+) {
+    /// Height of a row of the lattice.
+    const ROW: f64 = 0.866_025_403_784_438_6;
+    /// How far lattice points keep from the outline. Closer ones would make
+    /// needles against it, flat enough for the surface's bend to tip over.
+    const CLEAR: f64 = 0.35;
+    /// Where the lattice starts within its first cell: off the lines of
+    /// symmetry that outlines like to follow.
+    const START: V2 = v2(0.29, 0.37);
+    /// The longest side left alone, where the lattice stopped short of the
+    /// outline and a triangle has to span the gap.
+    const LONGEST: f64 = 1.4;
+
+    let (step, ruled) = units(trim, opts);
+    // How much of a side's length counts against the tolerance.
+    let bends = if ruled { v2(1.0, 0.0) } else { v2(1.0, 1.0) };
+    let scaled = |q: V2| v2(q.x / step.x, q.y / step.y);
+    let mut sides: Vec<[V2; 2]> = Vec::new();
+    for lp in std::iter::once(&poly.outer).chain(poly.holes.iter()) {
+        for k in 0..lp.len() {
+            sides.push([scaled(lp[k].uv), scaled(lp[(k + 1) % lp.len()].uv)]);
+        }
+    }
+
+    let mut start: Vec<[Corner; 3]> = Vec::new();
+    earclip(
+        poly.outer,
+        poly.holes,
+        v2(1.0 / step.x, 1.0 / step.y),
+        &mut start,
+    );
+    let mut corners: Vec<Corner> = Vec::new();
+    let mut local: crate::fast::Map<u32, u32> = Default::default();
+    let mut index = |c: Corner| {
+        *local.entry(c.src).or_insert_with(|| {
+            corners.push(c);
+            corners.len() as u32 - 1
+        })
+    };
+    let indexed: Vec<[u32; 3]> = start.iter().map(|t| t.map(&mut index)).collect();
+    let points: Vec<V2> = corners.iter().map(|c| scaled(c.uv)).collect();
+    let mut net = Net::new(points, indexed);
+
+    let (mut lo, mut hi) = (sides[0][0], sides[0][0]);
+    for side in &sides {
+        lo = v2(lo.x.min(side[0].x), lo.y.min(side[0].y));
+        hi = v2(hi.x.max(side[0].x), hi.y.max(side[0].y));
+    }
+    let rows = (((hi.y - lo.y) / ROW).ceil() as usize).min(8192);
+    let columns = ((hi.x - lo.x).ceil() as usize + 1).min(8192);
+    // The sides that pass near each row.
+    let row_at = |y: f64| (y - lo.y) / ROW - START.y;
+    let mut passing: Vec<Vec<u32>> = vec![Vec::new(); rows];
+    for (s, side) in sides.iter().enumerate() {
+        let (below, above) = (side[0].y.min(side[1].y), side[0].y.max(side[1].y));
+        let first = row_at(below - CLEAR).ceil().max(0.0) as usize;
+        let last = row_at(above + CLEAR).floor();
+        if last < 0.0 {
+            continue;
+        }
+        for row in passing.iter_mut().take(last as usize + 1).skip(first) {
+            row.push(s as u32);
+        }
+    }
+    let mut near = 0;
+    let mut cuts: Vec<f64> = Vec::new();
+    let mut taken = vec![false; columns];
+    for (j, passing) in passing.iter().enumerate() {
+        let y = lo.y + (j as f64 + START.y) * ROW;
+        let x0 = lo.x + START.x + if j % 2 == 1 { 0.5 } else { 0.0 };
+        // Lattice columns from `from` to `to`, as far as there are any.
+        let span = |from: f64, to: f64| {
+            let first = (from - x0).ceil().max(0.0) as usize;
+            let last = (to - x0).floor();
+            let end = if last < 0.0 {
+                0
+            } else {
+                (last as usize + 1).min(columns)
+            };
+            first..end
+        };
+        cuts.clear();
+        taken.iter_mut().for_each(|t| *t = false);
+        for &s in passing {
+            let [a, b] = sides[s as usize];
+            if (a.y > y) != (b.y > y) {
+                cuts.push(a.x + (y - a.y) / (b.y - a.y) * (b.x - a.x));
+            }
+            let d = b - a;
+            for i in span(a.x.min(b.x) - CLEAR, a.x.max(b.x) + CLEAR) {
+                let q = v2(x0 + i as f64, y);
+                let along = ((q - a).dot(d) / d.dot(d).max(1.0e-300)).clamp(0.0, 1.0);
+                if (q - (a + d * along)).len() < CLEAR {
+                    taken[i] = true;
+                }
+            }
+        }
+        cuts.sort_by(f64::total_cmp);
+        for inside in cuts.as_chunks::<2>().0 {
+            for i in span(inside[0], inside[1]) {
+                if taken[i] {
+                    continue;
+                }
+                let q = v2(x0 + i as f64, y);
+                if let Some(t) = net.insert(q, near) {
+                    near = t;
+                    let uv = v2(q.x * step.x, q.y * step.y);
+                    corners.push(Corner {
+                        uv,
+                        src: fv.push(trim.point(uv), trim.normal(uv)),
+                    });
+                }
+            }
+        }
+    }
+    // Halve what is still too long, unless that would crowd the outline.
+    for _ in 0..8 {
+        let mut long: Vec<V2> = Vec::new();
+        for (t, tri) in net.tris.iter().enumerate() {
+            for k in 0..3 {
+                let (a, b) = (tri[k], tri[(k + 1) % 3]);
+                if a < b && !net.on_outline(t, k) {
+                    let (pa, pb) = (net.points[a as usize], net.points[b as usize]);
+                    let d = pb - pa;
+                    if d.x * d.x * bends.x + d.y * d.y * bends.y > LONGEST * LONGEST {
+                        long.push((pa + pb) * 0.5);
+                    }
+                }
+            }
+        }
+        let mut added = false;
+        for q in long {
+            // On a ruled face a side that long cuts a corner off the
+            // surface wherever it lies; a needle against the outline is
+            // the lesser evil there, and nothing can tip it over.
+            let crowded = !ruled
+                && sides.iter().any(|&[a, b]| {
+                    let d = b - a;
+                    let along = ((q - a).dot(d) / d.dot(d).max(1.0e-300)).clamp(0.0, 1.0);
+                    (q - (a + d * along)).len() < CLEAR
+                });
+            if crowded {
+                continue;
+            }
+            if let Some(t) = net.insert(q, near) {
+                near = t;
+                added = true;
+                let uv = v2(q.x * step.x, q.y * step.y);
+                corners.push(Corner {
+                    uv,
+                    src: fv.push(trim.point(uv), trim.normal(uv)),
+                });
+            }
+        }
+        if !added {
+            break;
+        }
+    }
+    if crate::diag::trace() {
+        eprintln!(
+            "  fill: unit {step:?}, {} outline sides, {} corners, {} triangles",
+            sides.len(),
+            corners.len(),
+            net.tris.len()
+        );
+    }
+    if let Some(dir) = std::env::var_os("LIMO_CAD_KERNEL_PICTURES") {
+        picture(std::path::Path::new(&dir), trim.surf.kind, &net, &sides);
+    }
+    tris.extend(net.tris.iter().map(|t| t.map(|i| corners[i as usize])));
+}
+
+/// `LIMO_CAD_KERNEL_PICTURES`: draw a triangulation and its outline as they
+/// lie in the parameter plane, one numbered SVG file per face.
+fn picture(dir: &std::path::Path, kind: SurfKind, net: &Net, sides: &[[V2; 2]]) {
+    use std::fmt::Write as _;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    static NEXT: AtomicUsize = AtomicUsize::new(0);
+    let (mut lo, mut hi) = (net.points[0], net.points[0]);
+    for q in &net.points {
+        lo = v2(lo.x.min(q.x), lo.y.min(q.y));
+        hi = v2(hi.x.max(q.x), hi.y.max(q.y));
+    }
+    // Stretched to a square: the shapes matter here, not the proportions.
+    let size = 1500.0;
+    let scale = v2(
+        size / (hi.x - lo.x).max(1.0e-9),
+        size / (hi.y - lo.y).max(1.0e-9),
+    );
+    let at = |q: V2| ((q.x - lo.x) * scale.x, size - (q.y - lo.y) * scale.y);
+    let mut svg = format!(
+        "<svg xmlns='http://www.w3.org/2000/svg' viewBox='-10 -10 {0} {0}'>\
+         <rect x='-10' y='-10' width='{0}' height='{0}' fill='white'/>",
+        size + 20.0
+    );
+    for tri in &net.tris {
+        let p = tri.map(|i| at(net.points[i as usize]));
+        let _ = write!(
+            svg,
+            "<polygon points='{:.1},{:.1} {:.1},{:.1} {:.1},{:.1}' \
+             fill='#cde' stroke='#369' stroke-width='0.6'/>",
+            p[0].0, p[0].1, p[1].0, p[1].1, p[2].0, p[2].1
+        );
+    }
+    for side in sides {
+        let (a, b) = (at(side[0]), at(side[1]));
+        let _ = write!(
+            svg,
+            "<line x1='{:.1}' y1='{:.1}' x2='{:.1}' y2='{:.1}' stroke='red' stroke-width='1.5'/>\
+             <circle cx='{:.1}' cy='{:.1}' r='2.2' fill='red'/>",
+            a.0, a.1, b.0, b.1, a.0, a.1
+        );
+    }
+    svg.push_str("</svg>");
+    let name = format!("face-{}-{kind:?}.svg", NEXT.fetch_add(1, Ordering::Relaxed));
+    let _ = std::fs::write(dir.join(name), svg);
 }
 
 fn in_triangle(q: V2, a: V2, b: V2, c: V2, eps: f64) -> bool {
@@ -1029,9 +1737,12 @@ fn earclip(
         let (ta, tb, tc) = (m, v2(m.x, best_y), poly[p].uv);
         let mut best_tan = f64::INFINITY;
         let mut best_d = f64::INFINITY;
+        // A ray that lands on the corner itself sees it directly; the
+        // triangle would be a sliver that everything on the ray falls into.
+        let direct = (tb - tc).len() < 1.0e-9 * scale;
         for (i, corner) in poly.iter().enumerate().take(n) {
             let q = corner.uv;
-            if q.y < m.y || (q - tc).len() < 1.0e-14 * scale {
+            if direct || q.y < m.y || (q - tc).len() < 1.0e-14 * scale {
                 continue;
             }
             if in_triangle(q, ta, tb, tc, eps) {
@@ -1197,108 +1908,5 @@ fn earclip(
         if area2(a, b, c).abs() > eps {
             out.push([poly[a], poly[b], poly[c]]);
         }
-    }
-}
-
-/// Split interior edges until each meets the chord and angle limits.
-///
-/// Each triangle nominates only its worst edge, so a long sliver is bisected
-/// across its length instead of being quartered; an edge nominated by either
-/// neighbour is split in both, which keeps the mesh conforming.
-fn refine(
-    tris: &mut Vec<[Corner; 3]>,
-    fv: &mut FaceVerts,
-    trim: &FaceTrim,
-    opts: &TessOptions,
-    boundary: &HashSet<(u32, u32)>,
-) {
-    let cos_limit = opts.angular.cos();
-    let key = |a: Corner, b: Corner| (a.src.min(b.src), a.src.max(b.src));
-    // How badly an edge misses the limits; anything above 1 must be split.
-    let excess = |fv: &FaceVerts, a: Corner, b: Corner| -> f64 {
-        let (oa, ob) = (fv.origin[a.src as usize], fv.origin[b.src as usize]);
-        if oa == ob || boundary.contains(&(oa.min(ob), oa.max(ob))) {
-            return 0.0;
-        }
-        let (pa, pb) = (fv.p[a.src as usize], fv.p[b.src as usize]);
-        if pa.dist(pb) <= 1.0e-6 {
-            return 0.0;
-        }
-        let pm = trim.point((a.uv + b.uv) * 0.5);
-        let chord = pm.dist((pa + pb) * 0.5) / opts.linear;
-        let cos = fv.n[a.src as usize].dot(fv.n[b.src as usize]);
-        let bend = if cos < cos_limit {
-            cos.clamp(-1.0, 1.0).acos() / opts.angular
-        } else {
-            0.0
-        };
-        chord.max(bend)
-    };
-    for _ in 0..40 {
-        let mut split: HashMap<(u32, u32), u32> = HashMap::new();
-        for t in tris.iter() {
-            let mut worst = (1.0, 3);
-            for k in 0..3 {
-                let e = excess(fv, t[k], t[(k + 1) % 3]);
-                if e > worst.0 {
-                    worst = (e, k);
-                }
-            }
-            if worst.1 < 3 {
-                let (a, b) = (t[worst.1], t[(worst.1 + 1) % 3]);
-                split.entry(key(a, b)).or_insert_with(|| {
-                    let mid = (a.uv + b.uv) * 0.5;
-                    fv.push(trim.point(mid), trim.normal(mid))
-                });
-            }
-        }
-        if split.is_empty() {
-            break;
-        }
-        if crate::diag::trace() {
-            let mut worst = (0.0, [v2(0.0, 0.0); 2], 0.0);
-            for t in tris.iter() {
-                for k in 0..3 {
-                    let (a, b) = (t[k], t[(k + 1) % 3]);
-                    let e = excess(fv, a, b);
-                    if e > worst.0 {
-                        worst = (
-                            e,
-                            [a.uv, b.uv],
-                            fv.p[a.src as usize].dist(fv.p[b.src as usize]),
-                        );
-                    }
-                }
-            }
-            eprintln!(
-                "refine: {} tris, {} splits, worst {:?}",
-                tris.len(),
-                split.len(),
-                worst
-            );
-        }
-        let mut next: Vec<[Corner; 3]> = Vec::with_capacity(tris.len() + 2 * split.len());
-        for t in tris.iter() {
-            let mid = |a: Corner, b: Corner| -> Option<Corner> {
-                split.get(&key(a, b)).map(|&src| Corner {
-                    uv: (a.uv + b.uv) * 0.5,
-                    src,
-                })
-            };
-            let (a, b, c) = (t[0], t[1], t[2]);
-            match (mid(a, b), mid(b, c), mid(c, a)) {
-                (None, None, None) => next.push(*t),
-                (Some(ab), Some(bc), Some(ca)) => {
-                    next.extend([[a, ab, ca], [ab, b, bc], [ca, bc, c], [ab, bc, ca]]);
-                }
-                (Some(ab), None, None) => next.extend([[a, ab, c], [ab, b, c]]),
-                (None, Some(bc), None) => next.extend([[b, bc, a], [bc, c, a]]),
-                (None, None, Some(ca)) => next.extend([[c, ca, b], [ca, a, b]]),
-                (Some(ab), Some(bc), None) => next.extend([[ab, b, bc], [a, ab, bc], [a, bc, c]]),
-                (None, Some(bc), Some(ca)) => next.extend([[bc, c, ca], [b, bc, ca], [b, ca, a]]),
-                (Some(ab), None, Some(ca)) => next.extend([[ca, a, ab], [c, ca, ab], [c, ab, b]]),
-            }
-        }
-        *tris = next;
     }
 }

@@ -8,7 +8,7 @@
 //! answer far-field questions; anything close to the boundary is decided with
 //! the exact edge curves.
 
-use crate::geom::{Curve, SurfKind, Surface};
+use crate::geom::{Curve, CurveKind, SurfKind, Surface};
 use crate::math::*;
 use crate::topo::Body;
 
@@ -20,20 +20,62 @@ pub struct EdgeMesh {
 }
 
 impl EdgeMesh {
+    /// Every edge within `sag` of its curve.
     pub fn build(body: &Body, sag: f64, min_per_turn: f64) -> EdgeMesh {
+        EdgeMesh::sample(body, sag, min_per_turn, false)
+    }
+
+    /// As [`EdgeMesh::build`], and fine enough for the faces as well: no
+    /// piece of an edge turns the normal of either face beside it by more
+    /// than a piece of a full circle would.
+    pub fn build_for_faces(body: &Body, sag: f64, min_per_turn: f64) -> EdgeMesh {
+        EdgeMesh::sample(body, sag, min_per_turn, true)
+    }
+
+    fn sample(body: &Body, sag: f64, min_per_turn: f64, for_faces: bool) -> EdgeMesh {
         let mut offs = Vec::with_capacity(body.edge_count() + 1);
         let mut pts = Vec::new();
         offs.push(0);
+        let pins = if for_faces {
+            pins(body, sag)
+        } else {
+            Vec::new()
+        };
         for e in 0..body.edge_count() as u32 {
             let c = body.e_curve_ref(e);
             let [t0, t1] = body.e_t[e as usize];
             let [v0, v1] = body.e_v[e as usize];
-            let n = c.segments(t0, t1, sag, min_per_turn);
+            let mut n = c.segments(t0, t1, sag, min_per_turn);
+            // A face that bends along the edge needs it as fine as its own
+            // triangles will be: a curve can run nearly straight across a
+            // surface that turns quickly under it.
+            if for_faces && c.kind != CurveKind::Line {
+                let faces = [2 * e, 2 * e + 1].map(|h| body.f_surface(body.h_face(h)));
+                let allowed = TAU / min_per_turn;
+                let mut before = f64::INFINITY;
+                for _ in 0..6 {
+                    let turn = widest_turn(c, t0, t1, n, &faces);
+                    // More pieces that turn no less have found a kink, and
+                    // no number of them will smooth that out.
+                    if turn <= 1.05 * allowed || n >= 4096 || turn > 0.75 * before {
+                        break;
+                    }
+                    before = turn;
+                    n = ((n as f64 * turn / allowed).ceil() as usize).clamp(n + 1, 4096);
+                }
+            }
             // End points are the vertices themselves so loops close exactly.
             pts.push(body.verts[v0 as usize]);
-            for i in 1..n {
-                pts.push(c.point(t0 + (t1 - t0) * i as f64 / n as f64));
+            let step = (t1 - t0) / n as f64;
+            let mut inner: Vec<f64> = (1..n).map(|i| t0 + step * i as f64).collect();
+            if let Some(pinned) = pins.get(e as usize).filter(|p| !p.is_empty()) {
+                // A pinned place takes over from the regular one next to it.
+                inner.retain(|t| pinned.iter().all(|p| (t - p).abs() > 0.3 * step.abs()));
+                inner.extend(pinned.iter().copied());
+                inner.sort_by(f64::total_cmp);
+                inner.dedup_by(|a, b| (*a - *b).abs() <= 1.0e-9 * (t1 - t0).abs());
             }
+            pts.extend(inner.into_iter().map(|t| c.point(t)));
             pts.push(body.verts[v1 as usize]);
             offs.push(pts.len() as u32);
         }
@@ -44,6 +86,67 @@ impl EdgeMesh {
     pub fn edge(&self, e: u32) -> &[V3] {
         &self.pts[self.offs[e as usize] as usize..self.offs[e as usize + 1] as usize]
     }
+}
+
+/// Per edge, the places where it must have a sample point: where a corner
+/// of one of its faces comes closer to it than a chord may stray from it.
+/// A chord across such a place could cut the corner off, and the face's
+/// outline would cross itself there.
+fn pins(body: &Body, sag: f64) -> Vec<Vec<f64>> {
+    let mut pins: Vec<Vec<f64>> = vec![Vec::new(); body.edge_count()];
+    let mut corners: Vec<u32> = Vec::new();
+    for f in 0..body.face_count() as u32 {
+        corners.clear();
+        corners.extend(body.face_hes(f).map(|h| body.h_origin(h)));
+        corners.sort_unstable();
+        corners.dedup();
+        for h in body.face_hes(f) {
+            let e = h >> 1;
+            let c = body.e_curve_ref(e);
+            if c.kind == CurveKind::Line || corners.len() < 3 {
+                continue;
+            }
+            let [t0, t1] = body.e_t[e as usize];
+            let ends = body.e_v[e as usize];
+            for &v in &corners {
+                if ends.contains(&v) {
+                    continue;
+                }
+                let p = body.verts[v as usize];
+                let mut t = c.param(p);
+                if c.periodic() {
+                    t = wrap_from(t, t0);
+                }
+                let margin = 1.0e-6 * (t1 - t0);
+                if t > t0 + margin && t < t1 - margin && c.point(t).dist(p) < 2.0 * sag {
+                    pins[e as usize].push(t);
+                }
+            }
+        }
+    }
+    pins
+}
+
+/// The most that the normal of any of `faces` turns across one of `n` equal
+/// pieces of the curve from `t0` to `t1`.
+fn widest_turn(c: &Curve, t0: f64, t1: f64, n: usize, faces: &[&Surface]) -> f64 {
+    let mut widest: f64 = 0.0;
+    for s in faces {
+        if s.kind == SurfKind::Plane {
+            continue;
+        }
+        let mut last = s.normal(c.point(t0));
+        for i in 1..=n {
+            let next = s.normal(c.point(t0 + (t1 - t0) * i as f64 / n as f64));
+            let turn = last.cross(next).len().atan2(last.dot(next));
+            // At the tip of a cone the normal is anybody's guess.
+            if turn.is_finite() {
+                widest = widest.max(turn);
+            }
+            last = next;
+        }
+    }
+    widest
 }
 
 /// Sample points of a loop given by its half-edges, without the closing
@@ -78,6 +181,14 @@ pub struct TrimLoop {
 
 impl TrimLoop {
     #[inline]
+    /// Largest `u` of the polyline.
+    pub fn hi_u(&self) -> f64 {
+        self.uv
+            .iter()
+            .map(|q| q.x)
+            .fold(f64::NEG_INFINITY, f64::max)
+    }
+
     pub fn winds_u(&self) -> bool {
         self.shift.x.abs() > 1.0
     }
@@ -103,6 +214,11 @@ pub struct FaceTrim {
     pub surf: Surface,
     /// `u` is mirrored because the face is reversed on its surface.
     pub flip: bool,
+    /// The two parameters are turned a quarter (first `v`, then `-u`), for a
+    /// torus face whose boundary goes around the tube instead of the axis.
+    /// Everything that works on bands around the first parameter then
+    /// applies to it unchanged.
+    pub turned: bool,
     pub loops: Vec<TrimLoop>,
     pub lo: V2,
     pub hi: V2,
@@ -122,6 +238,11 @@ pub fn image(x: f64, base: f64) -> f64 {
     } else {
         w
     }
+}
+
+/// Loops that go around the tube of a torus and none around its axis.
+pub fn tube_wise(loops: &[TrimLoop]) -> bool {
+    loops.iter().any(|l| l.winds_v()) && !loops.iter().any(|l| l.winds_u())
 }
 
 /// Parameter-space point is at a pole or apex, where `u` is undefined.
@@ -151,9 +272,26 @@ impl FaceTrim {
     /// Build from loops given as model-space sample points (no closing
     /// duplicate). `flip` is true for a face reversed on its surface.
     pub fn from_points(surf: Surface, flip: bool, loop_pts: Vec<Vec<V3>>, sag: f64) -> FaceTrim {
+        let trim = FaceTrim::from_points_as(surf, flip, false, &loop_pts, sag);
+        if tube_wise(&trim.loops) {
+            return FaceTrim::from_points_as(surf, flip, true, &loop_pts, sag);
+        }
+        trim
+    }
+
+    /// As [`FaceTrim::from_points`], with the parameter turn chosen by the
+    /// caller (one choice has to hold for every loop of a face).
+    pub fn from_points_as(
+        surf: Surface,
+        flip: bool,
+        turned: bool,
+        loop_pts: &[Vec<V3>],
+        sag: f64,
+    ) -> FaceTrim {
         let mut trim = FaceTrim {
             surf,
             flip,
+            turned,
             loops: Vec::new(),
             lo: v2(f64::INFINITY, f64::INFINITY),
             hi: v2(f64::NEG_INFINITY, f64::NEG_INFINITY),
@@ -162,7 +300,7 @@ impl FaceTrim {
             sag,
         };
         let (pu, pv) = (surf.u_periodic(), surf.v_periodic());
-        for pts in &loop_pts {
+        for pts in loop_pts {
             let mut uv: Vec<V2> = Vec::new();
             let mut p3: Vec<V3> = Vec::new();
             // Leading singular points wait for the first well-defined `u`.
@@ -283,8 +421,9 @@ impl FaceTrim {
     #[inline]
     pub fn uv(&self, p: V3) -> V2 {
         let q = self.surf.uv(p);
-        if self.flip {
-            v2(-q.x, q.y)
+        let q = if self.flip { v2(-q.x, q.y) } else { q };
+        if self.turned {
+            v2(q.y, -q.x)
         } else {
             q
         }
@@ -293,6 +432,7 @@ impl FaceTrim {
     /// Model-space point at face-oriented parameters.
     #[inline]
     pub fn point(&self, q: V2) -> V3 {
+        let q = if self.turned { v2(-q.y, q.x) } else { q };
         self.surf.point(if self.flip { -q.x } else { q.x }, q.y)
     }
 
@@ -312,18 +452,24 @@ impl FaceTrim {
     pub fn cross_vertical(&self, x: f64, mut visit: impl FnMut(f64, f64)) {
         let periodic = self.surf.u_periodic();
         for lp in &self.loops {
-            // One period image per loop, chosen once: deciding it per segment
-            // would let rounding count the seam twice.
-            let xs = if periodic { image(x, lp.lo.x) } else { x };
-            for w in lp.uv.windows(2) {
-                let (a, b) = (w[0], w[1]);
-                let (lo, hi) = if a.x < b.x { (a.x, b.x) } else { (b.x, a.x) };
-                // Half-open so a vertex on the line is counted exactly once.
-                if lo == hi || xs < lo || xs >= hi {
-                    continue;
+            // The period image is chosen once per loop: deciding it per
+            // segment would let rounding count the seam twice. A loop that
+            // doubles back past its own end is written over more than one
+            // turn, and the line then meets it a turn further on as well.
+            let mut xs = if periodic { image(x, lp.lo.x) } else { x };
+            let last = if periodic { lp.hi_u() } else { xs };
+            while xs <= last {
+                for w in lp.uv.windows(2) {
+                    let (a, b) = (w[0], w[1]);
+                    let (lo, hi) = if a.x < b.x { (a.x, b.x) } else { (b.x, a.x) };
+                    // Half-open so a vertex on the line is counted once.
+                    if lo == hi || xs < lo || xs >= hi {
+                        continue;
+                    }
+                    let t = (xs - a.x) / (b.x - a.x);
+                    visit(a.y + t * (b.y - a.y), (b.x - a.x).signum());
                 }
-                let t = (xs - a.x) / (b.x - a.x);
-                visit(a.y + t * (b.y - a.y), (b.x - a.x).signum());
+                xs += TAU;
             }
         }
     }
@@ -333,15 +479,23 @@ impl FaceTrim {
     pub fn cross_horizontal(&self, y: f64, mut visit: impl FnMut(f64, f64)) {
         let periodic = self.surf.v_periodic();
         for lp in &self.loops {
-            let ys = if periodic { image(y, lp.lo.y) } else { y };
-            for w in lp.uv.windows(2) {
-                let (a, b) = (w[0], w[1]);
-                let (lo, hi) = if a.y < b.y { (a.y, b.y) } else { (b.y, a.y) };
-                if lo == hi || ys < lo || ys >= hi {
-                    continue;
+            let mut ys = if periodic { image(y, lp.lo.y) } else { y };
+            let last = if periodic {
+                lp.uv.iter().map(|q| q.y).fold(f64::NEG_INFINITY, f64::max)
+            } else {
+                ys
+            };
+            while ys <= last {
+                for w in lp.uv.windows(2) {
+                    let (a, b) = (w[0], w[1]);
+                    let (lo, hi) = if a.y < b.y { (a.y, b.y) } else { (b.y, a.y) };
+                    if lo == hi || ys < lo || ys >= hi {
+                        continue;
+                    }
+                    let t = (ys - a.y) / (b.y - a.y);
+                    visit(a.x + t * (b.x - a.x), (b.y - a.y).signum());
                 }
-                let t = (ys - a.y) / (b.y - a.y);
-                visit(a.x + t * (b.x - a.x), (b.y - a.y).signum());
+                ys += TAU;
             }
         }
     }
@@ -349,6 +503,12 @@ impl FaceTrim {
     /// Far-field membership of face-oriented parameters `q`.
     pub fn contains_uv(&self, q: V2) -> bool {
         match self.surf.kind {
+            SurfKind::Cone if (q.y > 0.0) != (self.hi.y > 0.0) => {
+                // A cone is two cones tip to tip, and a face lies on one of
+                // them. Below a rim with the tip inside it, counting
+                // crossings alone would go on through the tip for ever.
+                false
+            }
             SurfKind::Plane | SurfKind::Cylinder | SurfKind::Cone => {
                 let mut odd = false;
                 self.cross_vertical(q.x, |v, _| {
@@ -412,13 +572,11 @@ impl FaceTrim {
 
     /// Model-space length of a parameter step at `q`.
     pub fn metric(&self, q: V2) -> V2 {
-        let s = &self.surf;
-        match s.kind {
-            SurfKind::Plane => v2(1.0, 1.0),
-            SurfKind::Cylinder => v2(s.r, 1.0),
-            SurfKind::Cone => v2((q.y * s.s.tan()).abs(), 1.0 / s.s.cos()),
-            SurfKind::Sphere => v2(s.r * q.y.cos().abs(), s.r),
-            SurfKind::Torus => v2((s.r + s.s * q.y.cos()).abs(), s.s),
+        let m = self.surf.scale(0.0, if self.turned { q.x } else { q.y });
+        if self.turned {
+            v2(m.y, m.x)
+        } else {
+            m
         }
     }
 

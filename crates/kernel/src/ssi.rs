@@ -1,8 +1,11 @@
-//! Surface–surface intersection in closed form.
+//! Surface–surface intersection.
 //!
-//! Every supported pair yields lines, circles or ellipses. Tangential
-//! contact is deliberately not reported: it never separates inside from
-//! outside, and shared edges are found through coincident faces instead.
+//! Most pairs of a mechanical part meet in lines, circles, ellipses or the
+//! closed-form curve of two cylinders; those are written down directly. The
+//! rest are traced numerically inside the region that matters (see
+//! [`crate::meet`]). Tangential contact is deliberately not reported: it
+//! never separates inside from outside, and shared edges are found through
+//! coincident faces instead.
 
 use crate::geom::{Curve, SurfKind, Surface};
 use crate::math::*;
@@ -15,8 +18,8 @@ pub enum Ssi {
     Same(bool),
     /// Transversal intersection curves (unbounded lines, full conics).
     Curves(Vec<Curve>),
-    /// A general intersection this kernel does not represent yet.
-    Unsupported(&'static str),
+    /// No closed form: trace the curves where the two faces can meet.
+    General,
 }
 
 pub fn intersect(a: &Surface, b: &Surface) -> Ssi {
@@ -31,14 +34,11 @@ pub fn intersect(a: &Surface, b: &Surface) -> Ssi {
         (Cylinder, Cylinder) => cylinder_cylinder(a, b),
         _ => match coaxial(a, b) {
             Some(result) => result,
-            None => Ssi::Unsupported(match (a.kind, b.kind) {
-                (Cylinder, Sphere) => return trace(a, b),
-                (Sphere, Cylinder) => return trace(b, a),
-                (Cylinder, Cone) | (Cone, Cylinder) => "a cylinder and a cone on different axes",
-                (Cone, Cone) => "two cones on different axes",
-                (Torus, _) | (_, Torus) => "a torus and a surface on a different axis",
-                _ => "two curved surfaces on different axes",
-            }),
+            None => match (a.kind, b.kind) {
+                (Cylinder, Sphere) => trace(a, b),
+                (Sphere, Cylinder) => trace(b, a),
+                _ => Ssi::General,
+            },
         },
     }
 }
@@ -120,7 +120,7 @@ fn plane_other(p: &Surface, s: &Surface) -> Ssi {
                     Curve::circle(s.f.o - w * s.r, n, -w, s.s),
                 ]);
             }
-            Ssi::Unsupported("a plane cutting a torus obliquely")
+            Ssi::General
         }
         SurfKind::Plane => unreachable!(),
     }
@@ -160,7 +160,7 @@ fn plane_cone(p: &Surface, s: &Surface, perpendicular: bool) -> Ssi {
         ]);
     }
     if na.abs() <= alpha.sin() + 1.0e-12 {
-        return Ssi::Unsupported("a plane cutting a cone in a parabola or hyperbola");
+        return Ssi::General;
     }
     // Ellipse: work in the plane spanned by the axis and the plane normal.
     let tq = (p.f.o - apex).dot(n) / na;
@@ -174,7 +174,7 @@ fn plane_cone(p: &Surface, s: &Surface, perpendicular: bool) -> Ssi {
     let s1 = tq / (ew * cot - ea);
     let s2 = tq / (-ew * cot - ea);
     if !s1.is_finite() || !s2.is_finite() {
-        return Ssi::Unsupported("a plane cutting a cone in a parabola or hyperbola");
+        return Ssi::General;
     }
     let q = apex + axis * tq;
     let (p1, p2) = (q + e * s1, q + e * s2);

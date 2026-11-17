@@ -662,7 +662,7 @@ fn face_region(body: &Body, f: u32) -> Result<Region, String> {
                     m: c.point(0.5 * (t0 + t1)),
                     b,
                 }),
-                CurveKind::Ellipse | CurveKind::Trace => {
+                CurveKind::Ellipse | CurveKind::Trace | CurveKind::Meet => {
                     return Err(unsupported("Extruding a face with an elliptical edge"))
                 }
             }

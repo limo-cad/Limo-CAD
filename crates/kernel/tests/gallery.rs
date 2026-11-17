@@ -1,104 +1,10 @@
 //! The demonstration parts, built with the kernel's own API.
+mod common;
+
+use common::*;
 use limo_cad_kernel::math::*;
 use limo_cad_kernel::tess::{tessellate, TessOptions};
-use limo_cad_kernel::{demo, make, Body, SurfKind};
-
-/// Every flat face must be covered exactly once by its triangles: their area
-/// has to equal the exact area from the boundary integrals.
-fn assert_flat_faces_are_covered(body: &Body) {
-    let mesh = tessellate(body, &TessOptions::default());
-    for f in 0..body.face_count() as u32 {
-        let Some(props) = limo_cad_kernel::props::planar_props(body, f) else {
-            continue;
-        };
-        let [first, count] = mesh.faces[f as usize];
-        let mut area = 0.0;
-        for t in mesh.indices[first as usize..(first + count) as usize]
-            .as_chunks::<3>()
-            .0
-        {
-            let (a, b, c) = (
-                mesh.positions[t[0] as usize],
-                mesh.positions[t[1] as usize],
-                mesh.positions[t[2] as usize],
-            );
-            area += 0.5 * (b - a).cross(c - a).len();
-        }
-        assert!(
-            (area - props.area).abs() <= 0.02 * props.area + 1e-9,
-            "face {f} with {} loops: meshed {area}, exact {}",
-            props.loops,
-            props.area
-        );
-    }
-}
-
-/// The display mesh must be a closed skin that lies flat on the solid: every
-/// triangle faces the way its surface does, and every triangle side is
-/// shared with exactly one neighbour running the other way.
-fn assert_mesh_is_a_clean_skin(body: &Body) {
-    use std::collections::HashMap;
-    let mesh = tessellate(body, &TessOptions::default());
-    let key = |p: V3| {
-        (
-            (p.x * 1.0e6).round() as i64,
-            (p.y * 1.0e6).round() as i64,
-            (p.z * 1.0e6).round() as i64,
-        )
-    };
-    let mut ids: HashMap<(i64, i64, i64), u32> = HashMap::new();
-    let mut sides: HashMap<(u32, u32), i32> = HashMap::new();
-    for (f, &[first, count]) in mesh.faces.iter().enumerate() {
-        for t in mesh.indices[first as usize..(first + count) as usize]
-            .as_chunks::<3>()
-            .0
-        {
-            let p: Vec<V3> = t.iter().map(|&i| mesh.positions[i as usize]).collect();
-            let n: V3 = t
-                .iter()
-                .fold(V3::ZERO, |sum, &i| sum + mesh.normals[i as usize]);
-            let twice = (p[1] - p[0]).cross(p[2] - p[0]);
-            let longest = (0..3)
-                .map(|k| (p[(k + 1) % 3] - p[k]).len2())
-                .fold(0.0, f64::max);
-            // A needle has no direction to speak of.
-            let facing = twice.unit().dot(n.unit());
-            assert!(
-                facing > 0.7 || twice.len() < 1.0e-3 * longest,
-                "face {f} ({:?}) has a triangle turned {facing:.3} against its surface at {:?}",
-                body.f_surface(f as u32).kind,
-                p[0]
-            );
-            let v: Vec<u32> = p
-                .iter()
-                .map(|q| {
-                    let next = ids.len() as u32;
-                    *ids.entry(key(*q)).or_insert(next)
-                })
-                .collect();
-            for k in 0..3 {
-                let (a, b) = (v[k], v[(k + 1) % 3]);
-                *sides.entry((a.min(b), a.max(b))).or_insert(0) += if a < b { 1 } else { -1 };
-            }
-        }
-    }
-    let open = sides.values().filter(|&&n| n != 0).count();
-    assert_eq!(open, 0, "the mesh has {open} unmatched triangle sides");
-}
-
-fn count(body: &Body, kind: SurfKind) -> usize {
-    (0..body.face_count() as u32)
-        .filter(|&f| body.f_surface(f).kind == kind)
-        .count()
-}
-
-/// Volume to compare with closed forms. The chord error of a mesh falls with
-/// the square of its step, so two meshes extrapolate it away.
-fn volume(body: &Body) -> f64 {
-    let at =
-        |linear: f64, angular: f64| tessellate(body, &TessOptions { linear, angular }).volume();
-    (4.0 * at(0.0005, 0.02) - at(0.002, 0.04)) / 3.0
-}
+use limo_cad_kernel::{demo, make, SurfKind};
 
 #[test]
 fn mounting_block() {

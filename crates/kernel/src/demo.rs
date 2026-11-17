@@ -3,9 +3,13 @@
 //! They are the kernel's showcase and its broadest tests: the test suite
 //! checks them against closed-form volumes, the viewport proof draws them
 //! and the browser demo remodels them on every slider move.
+//!
+//! [`random_pair`] is the opposite of a showcase: two plain solids thrown
+//! together at any angle, to see that Booleans hold up when nothing lines
+//! up.
 
 use crate::geom::CurveKind;
-use crate::make::{self, Region, Seg};
+use crate::make::{self, PSeg, Region, Seg};
 use crate::math::*;
 use crate::topo::Body;
 use crate::{blend, boolean, Op};
@@ -498,4 +502,88 @@ pub fn showcase() -> Result<Vec<(&'static str, Body)>, String> {
         .iter()
         .map(|part| Ok((part.name, part.default_body()?)))
         .collect()
+}
+
+/// Two solids in a pose taken from `seed`: a ring, cone, ball, rod or block
+/// against another, turned any way and moved so that the two usually run
+/// into each other. Each comes with the name of its kind.
+pub fn random_pair(seed: u64) -> [(&'static str, Body); 2] {
+    // Any seed, zero included, starts a different sequence.
+    let mut state = seed.wrapping_mul(0x9e37_79b9_7f4a_7c15) ^ 0x2545_f491_4f6c_dd1d;
+    let mut unit = move || {
+        state ^= state << 13;
+        state ^= state >> 7;
+        state ^= state << 17;
+        (state >> 11) as f64 / (1u64 << 53) as f64
+    };
+    for _ in 0..8 {
+        unit();
+    }
+    let mut between = |lo: f64, hi: f64| lo + (hi - lo) * unit();
+    // A solid about the origin, with a radius it fits in.
+    let solid = |between: &mut dyn FnMut(f64, f64) -> f64| -> (&'static str, Body, f64) {
+        let built = match between(0.0, 5.0) as u32 {
+            0 => {
+                let (major, minor) = (between(12.0, 24.0), between(3.0, 7.0));
+                let tube = PSeg::Circle {
+                    c: v2(major, 0.0),
+                    r: minor,
+                };
+                let ring = make::revolve(&[vec![tube]], V3::ZERO, V3::Z, V3::X, TAU);
+                ("ring", ring, major + minor)
+            }
+            1 => {
+                let (radius, height) = (between(8.0, 20.0), between(15.0, 35.0));
+                let cone = make::lathe(
+                    v3(0.0, 0.0, -0.5 * height),
+                    V3::Z,
+                    &[(0.0, 0.0), (radius, height), (0.0, height)],
+                );
+                ("cone", cone, radius.max(0.5 * height))
+            }
+            2 => {
+                let r = between(6.0, 14.0);
+                let half = [
+                    PSeg::Arc {
+                        a: v2(0.0, -r),
+                        b: v2(0.0, r),
+                        c: v2(0.0, 0.0),
+                        ccw: true,
+                    },
+                    PSeg::Line {
+                        a: v2(0.0, r),
+                        b: v2(0.0, -r),
+                    },
+                ];
+                let ball = make::revolve(&[half.to_vec()], V3::ZERO, V3::Z, V3::X, TAU);
+                ("ball", ball, r)
+            }
+            3 => {
+                let (radius, height) = (between(2.0, 9.0), between(20.0, 60.0));
+                let rod = make::cylinder(v3(0.0, 0.0, -0.5 * height), V3::Z, radius, height);
+                ("rod", rod, radius.max(0.5 * height))
+            }
+            _ => {
+                let half = v3(between(5.0, 20.0), between(5.0, 20.0), between(5.0, 20.0));
+                ("block", make::block(-half, half), half.len())
+            }
+        };
+        (built.0, built.1.expect("a plain solid"), built.2)
+    };
+    let (name_a, a, reach_a) = solid(&mut between);
+    let (name_b, b, reach_b) = solid(&mut between);
+    let mut direction = || loop {
+        let d = v3(between(-1.0, 1.0), between(-1.0, 1.0), between(-1.0, 1.0));
+        if d.len() > 0.2 && d.len() < 1.0 {
+            return d.unit();
+        }
+    };
+    let axis = direction();
+    let away = direction();
+    let angle = between(0.0, PI);
+    let distance = between(0.1, 0.9) * (reach_a + reach_b);
+    let b = b
+        .transformed(&Xform::rotation(V3::ZERO, axis, angle))
+        .transformed(&Xform::translation(away * distance));
+    [(name_a, a), (name_b, b)]
 }

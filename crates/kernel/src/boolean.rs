@@ -17,7 +17,7 @@
 use std::cell::OnceCell;
 
 use crate::fast::{Map as HashMap, Set as HashSet};
-use crate::geom::{Curve, SurfKind, Surface};
+use crate::geom::{Curve, CurveKind, SurfKind, Surface};
 use crate::math::*;
 use crate::roots::{curve_curve, curve_surface, Hits};
 use crate::simplify::unify;
@@ -343,19 +343,43 @@ fn evaluate(a: &Body, b: &Body, op: Op) -> Result<Body, String> {
                 .clone();
             match rel {
                 Ssi::None => {}
-                Ssi::Unsupported(what) => {
-                    // Either face's edges may go through the other; a closed
-                    // crossing inside both shows best on the smaller face.
-                    let a_smaller =
-                        sa.boxes[fa as usize].diagonal() <= sb.boxes[fb as usize].diagonal();
-                    if !pierces(&sa, fa, &sb, fb, a_smaller)
-                        && !pierces(&sb, fb, &sa, fa, !a_smaller)
-                    {
+                Ssi::General => {
+                    // Trace the curves of the two surfaces where the faces
+                    // can meet; clipping keeps what lies in both. The quick
+                    // bounds take in the whole turn of a curved face, and
+                    // its surface often does cross the other one somewhere
+                    // on that turn. Tracing is the dear part, so it gets
+                    // the bounds of the patches themselves.
+                    let (ba, bb) = (sa.trim(fa).bbox(), sb.trim(fb).bbox());
+                    let shared = Aabb {
+                        lo: v3(
+                            ba.lo.x.max(bb.lo.x),
+                            ba.lo.y.max(bb.lo.y),
+                            ba.lo.z.max(bb.lo.z),
+                        ),
+                        hi: v3(
+                            ba.hi.x.min(bb.hi.x),
+                            ba.hi.y.min(bb.hi.y),
+                            ba.hi.z.min(bb.hi.z),
+                        ),
+                    };
+                    let apart = shared.lo.x > shared.hi.x
+                        || shared.lo.y > shared.hi.y
+                        || shared.lo.z > shared.hi.z;
+                    if apart {
                         continue;
                     }
-                    return Err(format!(
-                        "this needs the intersection of {what}, which the Limo kernel does not support yet"
-                    ));
+                    let shared = shared.grown(0.02 * shared.diagonal() + 1.0e-3);
+                    let (surf_a, surf_b) = (a.f_surface(fa), b.f_surface(fb));
+                    for c in crate::meet::trace(surf_a, surf_b, &shared) {
+                        let before = segs.len();
+                        section(&mut sa, fa, &mut sb, fb, &c, &[], &mut segs);
+                        // A piece that could not be followed may pass by,
+                        // but nothing may be built on it.
+                        if crate::meet::doubtful(&c) && segs.len() > before {
+                            return Err(crate::meet::too_close(surf_a, surf_b));
+                        }
+                    }
                 }
                 Ssi::Same(same) => {
                     let agree = same == (a.f_sense[fa as usize] == b.f_sense[fb as usize]);
@@ -554,159 +578,14 @@ fn disjoint(a: &Body, b: &Body, op: Op) -> Result<Body, String> {
     }
 }
 
-/// Does face `f` pass through face `g` of the other body? Used only for
-/// surface pairs whose intersection curve the kernel cannot write down: when
-/// neither face passes through the other, that curve is not needed. Faces
-/// that merely touch do not count.
-///
-/// The surface of `g` splits space in two. Wherever `f` changes sides — along
-/// its boundary or across its interior — the crossing point either lies in
-/// `g`, and the faces intersect, or misses it.
-fn pierces(side: &Side, f: u32, other: &Side, g: u32, interior: bool) -> bool {
-    let s = other.body.f_surface(g);
-    let touch = 100.0 * TOL;
-    // A signed distance changes no faster than the point moves: a face whose
-    // bounds stay within reach of their centre cannot get to the surface.
-    let bounds = &side.boxes[f as usize];
-    let centre = (bounds.lo + bounds.hi) * 0.5;
-    if s.sdist(centre).abs() > 0.5 * bounds.diagonal() + touch {
-        return false;
-    }
-    let trim = side.trim(f);
-    // Where a path crosses the surface, if its ends (at distances `dp` and
-    // `dq`) are clearly on opposite sides.
-    let crossing = |dp: f64, dq: f64, at: &dyn Fn(f64) -> V3| -> Option<V3> {
-        if !((dp < -touch && dq > touch) || (dp > touch && dq < -touch)) {
-            return None;
-        }
-        let (mut lo, mut hi) = (0.0, 1.0);
-        for _ in 0..40 {
-            let mid = 0.5 * (lo + hi);
-            if (s.sdist(at(mid)) > 0.0) == (dp > 0.0) {
-                lo = mid;
-            } else {
-                hi = mid;
-            }
-        }
-        Some(at(0.5 * (lo + hi)))
-    };
-    let lands = |p: V3| classify(other.body, other.trim(g), g, p) == PtClass::In;
-    // A crossing that sits exactly on the rim of `g` decides nothing by
-    // itself: the faces may only meet there. They intersect if, a little
-    // way into `f`, the surface of `g` is still crossed inside `g`.
-    let enters = |z: V3| -> bool {
-        let reach = 0.02;
-        let q0 = trim.uv(z);
-        let m = trim.metric(q0);
-        if m.x <= 1.0e-12 || m.y <= 1.0e-12 {
-            return false;
-        }
-        let steps = 24;
-        let ring: Vec<(V2, f64)> = (0..steps)
-            .map(|k| {
-                let a = TAU * k as f64 / steps as f64;
-                let q = q0 + v2(reach * a.cos() / m.x, reach * a.sin() / m.y);
-                (q, s.sdist(trim.point(q)))
-            })
-            .collect();
-        for k in 0..steps {
-            let ((qa, da), (qb, db)) = (ring[k], ring[(k + 1) % steps]);
-            if (da > 0.0) == (db > 0.0) {
-                continue;
-            }
-            let (mut lo, mut hi) = (0.0, 1.0);
-            for _ in 0..40 {
-                let mid = 0.5 * (lo + hi);
-                if (s.sdist(trim.point(qa + (qb - qa) * mid)) > 0.0) == (da > 0.0) {
-                    lo = mid;
-                } else {
-                    hi = mid;
-                }
-            }
-            let w = qa + (qb - qa) * (0.5 * (lo + hi));
-            if trim.contains_uv(w) && lands(trim.point(w)) {
-                return true;
-            }
-        }
-        false
-    };
-    let through = |z: V3| match classify(other.body, other.trim(g), g, z) {
-        PtClass::In => true,
-        PtClass::On => enters(z),
-        PtClass::Out => false,
-    };
-    // Along the boundary: an edge of `f` that goes through `g`, between two
-    // of its points or right at one.
-    for lp in &trim.loops {
-        let n = lp.p3.len();
-        let d: Vec<f64> = lp.p3.iter().map(|p| s.sdist(*p)).collect();
-        for i in 0..n {
-            let j = (i + 1) % n;
-            let (p, q) = (lp.p3[i], lp.p3[j]);
-            if crossing(d[i], d[j], &|t| p + (q - p) * t).is_some_and(through) {
-                return true;
-            }
-            let k = (j + 1) % n;
-            let opposed = (d[i] < -touch && d[k] > touch) || (d[i] > touch && d[k] < -touch);
-            if d[j].abs() <= touch && opposed && through(q) {
-                return true;
-            }
-        }
-    }
-    if !interior {
-        return false;
-    }
-    // Across the interior: `g` pokes through `f` without reaching its edges.
-    let n = 16;
-    let node = |i: usize, j: usize| {
-        v2(
-            trim.lo.x + (trim.hi.x - trim.lo.x) * i as f64 / n as f64,
-            trim.lo.y + (trim.hi.y - trim.lo.y) * j as f64 / n as f64,
-        )
-    };
-    let at = |i: usize, j: usize| i * (n + 1) + j;
-    let mut grid: Vec<f64> = Vec::with_capacity((n + 1) * (n + 1));
-    for i in 0..=n {
-        for j in 0..=n {
-            grid.push(s.sdist(trim.point(node(i, j))));
-        }
-    }
-    // Whether a node belongs to the face is only worth finding out next to
-    // a change of sides.
-    let mut inside: Vec<Option<bool>> = vec![None; grid.len()];
-    let mut member =
-        |i: usize, j: usize| *inside[at(i, j)].get_or_insert_with(|| trim.contains_uv(node(i, j)));
-    for i in 0..=n {
-        for j in 0..=n {
-            let dp = grid[at(i, j)];
-            for (k, l) in [(i + 1, j), (i, j + 1)] {
-                if k > n || l > n {
-                    continue;
-                }
-                let dq = grid[at(k, l)];
-                if !((dp < -touch && dq > touch) || (dp > touch && dq < -touch)) {
-                    continue;
-                }
-                if !member(i, j) || !member(k, l) {
-                    continue;
-                }
-                let (a, b) = (node(i, j), node(k, l));
-                if crossing(dp, dq, &|t| trim.point(a + (b - a) * t)).is_some_and(lands) {
-                    return true;
-                }
-            }
-        }
-    }
-    false
-}
-
 fn dedup_params(c: &Curve, params: &mut Vec<f64>) {
     params.sort_by(f64::total_cmp);
     let mut kept: Vec<f64> = Vec::with_capacity(params.len());
     for &s in params.iter() {
+        // Closer than this the two points would be one vertex anyway.
         let near = kept
             .last()
-            .is_some_and(|&l| (s - l) * c.deriv(s).len() <= 2.0 * TOL);
+            .is_some_and(|&l| (s - l) * c.deriv(s).len() <= 1.5 * VTOL);
         if !near {
             kept.push(s);
         }
@@ -773,7 +652,7 @@ fn crossings(curves: &[Curve], on: &Surface) -> Vec<Vec<f64>> {
     // The branches of a traced curve only meet where they end.
     if curves
         .iter()
-        .any(|c| c.kind == crate::geom::CurveKind::Trace)
+        .any(|c| matches!(c.kind, CurveKind::Trace | CurveKind::Meet))
     {
         return cuts;
     }
@@ -965,7 +844,7 @@ fn split(arr: &mut Arr, c: &Curve, t0: f64, t1: f64, cands: &[(u32, V3)]) -> Vec
     let mut stops: Vec<(f64, u32)> = vec![(t0, arr.vert(c.point(t0))), (t1, arr.vert(c.point(t1)))];
     if !cands.is_empty() {
         let mut bounds = Aabb::EMPTY;
-        let curved = c.kind != crate::geom::CurveKind::Line;
+        let curved = c.kind != CurveKind::Line;
         let n = if curved { 16 } else { 1 };
         for i in 0..=n {
             bounds.add(c.point(t0 + (t1 - t0) * i as f64 / n as f64));
@@ -1144,20 +1023,25 @@ fn inside_polygon(uv: &[V2], q: V2) -> bool {
     inside
 }
 
-/// Height of a u-winding loop at parameter `u`.
-fn v_at(lp: &TrimLoop, u: f64) -> Option<f64> {
-    let x = image(u, lp.lo.x);
-    for w in lp.uv.windows(2) {
-        let (a, b) = (w[0], w[1]);
-        let (lo, hi) = if a.x < b.x { (a.x, b.x) } else { (b.x, a.x) };
-        if lo == hi {
-            continue;
+/// Whether `q` lies below a loop that goes once around the surface. The
+/// loop may double back on the way, so that a line of constant `u` meets
+/// it several times: what counts is whether it does so an odd number of
+/// times above `q`.
+fn below(lp: &TrimLoop, q: V2) -> bool {
+    let mut above = 0;
+    // The loop is written unrolled, from its lowest `u` on; where it
+    // doubles back past its own end, a turn further on is the same place.
+    let mut x = image(q.x, lp.lo.x);
+    while x <= lp.hi_u() {
+        for w in lp.uv.windows(2) {
+            let (a, b) = (w[0], w[1]);
+            if (a.x > x) != (b.x > x) && a.y + (x - a.x) / (b.x - a.x) * (b.y - a.y) > q.y {
+                above += 1;
+            }
         }
-        if x >= lo && x < hi {
-            return Some(a.y + (x - a.x) / (b.x - a.x) * (b.y - a.y));
-        }
+        x += TAU;
     }
-    None
+    above % 2 == 1
 }
 
 #[derive(Clone, Copy)]
@@ -1181,26 +1065,36 @@ fn group(
     sense: bool,
     loops: &[Vec<u32>],
 ) -> Result<Vec<Vec<usize>>, String> {
-    let polys: Vec<TrimLoop> = loops
+    let points: Vec<Vec<V3>> = loops
         .iter()
-        .map(|hes| {
-            FaceTrim::from_points(
-                *surf,
-                !sense,
-                vec![loop_points(gmesh, hes.iter().copied())],
-                SAG,
-            )
-            .loops
-            .pop()
-            .ok_or_else(|| "empty loop".to_string())
-        })
-        .collect::<Result<_, _>>()?;
+        .map(|hes| loop_points(gmesh, hes.iter().copied()))
+        .collect();
+    // One loop at a time, so each keeps its place in the list; the turn of
+    // the parameters has to be the same for all of them.
+    let build = |turned: bool| -> Result<Vec<TrimLoop>, String> {
+        points
+            .iter()
+            .map(|pts| {
+                FaceTrim::from_points_as(*surf, !sense, turned, std::slice::from_ref(pts), SAG)
+                    .loops
+                    .pop()
+                    .ok_or_else(|| "empty loop".to_string())
+            })
+            .collect()
+    };
+    let mut polys = build(false)?;
+    if crate::trim::tube_wise(&polys) {
+        polys = build(true)?;
+    }
     let mut regions: Vec<(Kind, Vec<usize>)> = Vec::new();
     let mut holes: Vec<usize> = Vec::new();
     let mut winding: Vec<usize> = Vec::new();
     for (i, p) in polys.iter().enumerate() {
         if p.winds_v() {
-            return Err("splitting a torus face across its tube is not supported yet".into());
+            return Err(
+                "a curve that winds around both the axis and the tube of a torus cannot split its face yet"
+                    .into(),
+            );
         }
         if p.winds_u() {
             winding.push(i);
@@ -1211,31 +1105,37 @@ fn group(
         }
     }
     let mean_v = |i: usize| polys[i].uv.iter().map(|q| q.y).sum::<f64>() / polys[i].uv.len() as f64;
-    // Order the loops around the surface by height. Each is read at the same
-    // few angles, so the two directions of one section curve come out equal
-    // whatever its shape: of those, the one travelling in -u closes the band
-    // below and must come first.
+    // Order the loops around the surface by height: the lowest point of
+    // each. The two directions of one section curve have the very same
+    // points, however the curve doubles back, so they come out equal; of
+    // those, the one travelling in -u closes the band below and goes first.
+    // Around a torus tube a loop may be written a whole turn away from its
+    // other direction, which its mean height puts right.
+    let tube = if surf.kind == SurfKind::Torus {
+        TAU
+    } else {
+        0.0
+    };
     let heights: Vec<f64> = (0..polys.len())
         .map(|i| {
-            let lp = &polys[i];
-            let (mut sum, mut n) = (0.0, 0);
-            for k in 0..8 {
-                let angle = TAU * (k as f64 + 0.5) / 8.0;
-                if let Some(v) = v_at(lp, wrap_from(angle, lp.lo.x)) {
-                    sum += v;
-                    n += 1;
-                }
-            }
-            if n == 8 {
-                sum / 8.0
+            let low = polys[i]
+                .uv
+                .iter()
+                .map(|q| q.y)
+                .fold(f64::INFINITY, f64::min);
+            if tube > 0.0 {
+                low - tube * (mean_v(i) / tube).round()
             } else {
-                mean_v(i)
+                low
             }
         })
         .collect();
+    let twins = |x: usize, y: usize| {
+        loops[x].len() == loops[y].len() && loops[y].contains(&(loops[x][0] ^ 1))
+    };
     winding.sort_by(|&x, &y| {
         let (vx, vy) = (heights[x], heights[y]);
-        if (vx - vy).abs() <= 1.0e-7 * (1.0 + vx.abs()) {
+        if twins(x, y) || (vx - vy).abs() <= 1.0e-7 * (1.0 + vx.abs()) {
             polys[x].shift.x.total_cmp(&polys[y].shift.x)
         } else {
             vx.total_cmp(&vy)
@@ -1304,19 +1204,19 @@ fn group(
             Kind::Disk(i) => shifts
                 .iter()
                 .any(|s| inside_polygon(&polys[i].uv, v2(q.x + s, q.y))),
-            Kind::Band(lo, hi, rise) => match (v_at(&polys[lo], q.x), v_at(&polys[hi], q.x)) {
-                (Some(a), Some(b)) => {
-                    let turns: &[f64] = if surf.v_periodic() {
-                        &[0.0, TAU, -TAU]
-                    } else {
-                        &[0.0]
-                    };
-                    turns.iter().any(|t| q.y + t > a && q.y + t < b + rise)
-                }
-                _ => false,
-            },
-            Kind::Above(i) => v_at(&polys[i], q.x).is_some_and(|a| q.y > a),
-            Kind::Below(i) => v_at(&polys[i], q.x).is_some_and(|a| q.y < a),
+            Kind::Band(lo, hi, rise) => {
+                let turns: &[f64] = if surf.v_periodic() {
+                    &[0.0, TAU, -TAU]
+                } else {
+                    &[0.0]
+                };
+                turns.iter().any(|t| {
+                    !below(&polys[lo], v2(q.x, q.y + t))
+                        && below(&polys[hi], v2(q.x, q.y + t - rise))
+                })
+            }
+            Kind::Above(i) => !below(&polys[i], q),
+            Kind::Below(i) => below(&polys[i], q),
             Kind::Whole => true,
         }
     };

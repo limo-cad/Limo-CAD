@@ -434,6 +434,17 @@ impl Aabb {
             && p.z >= self.lo.z
             && p.z <= self.hi.z
     }
+    /// Distance from `p` to the box; zero inside.
+    pub fn distance(&self, p: V3) -> f64 {
+        let gap = |lo: f64, hi: f64, x: f64| (lo - x).max(x - hi).max(0.0);
+        v3(
+            gap(self.lo.x, self.hi.x, p.x),
+            gap(self.lo.y, self.hi.y, p.y),
+            gap(self.lo.z, self.hi.z, p.z),
+        )
+        .len()
+    }
+
     pub fn is_empty(&self) -> bool {
         self.lo.x > self.hi.x
     }

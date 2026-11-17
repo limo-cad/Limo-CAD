@@ -114,6 +114,53 @@ impl Surface {
         self.f.x * c + self.f.y * s
     }
 
+    /// Unit vector along the circle of angle `u` about the axis.
+    #[inline]
+    fn around(&self, u: f64) -> V3 {
+        let (s, c) = u.sin_cos();
+        self.f.y * c - self.f.x * s
+    }
+
+    /// Derivative of [`Surface::point`] with respect to `u`.
+    pub fn du(&self, u: f64, v: f64) -> V3 {
+        match self.kind {
+            SurfKind::Plane => self.f.x,
+            SurfKind::Cylinder => self.around(u) * self.r,
+            SurfKind::Cone => self.around(u) * (v * self.s.tan()),
+            SurfKind::Sphere => self.around(u) * (self.r * v.cos()),
+            SurfKind::Torus => self.around(u) * (self.r + self.s * v.cos()),
+        }
+    }
+
+    /// Derivative of [`Surface::point`] with respect to `v`.
+    pub fn dv(&self, u: f64, v: f64) -> V3 {
+        let f = &self.f;
+        match self.kind {
+            SurfKind::Plane => f.y,
+            SurfKind::Cylinder => f.z,
+            SurfKind::Cone => f.z + self.radial(u) * self.s.tan(),
+            SurfKind::Sphere => {
+                let (sv, cv) = v.sin_cos();
+                (f.z * cv - self.radial(u) * sv) * self.r
+            }
+            SurfKind::Torus => {
+                let (sv, cv) = v.sin_cos();
+                (f.z * cv - self.radial(u) * sv) * self.s
+            }
+        }
+    }
+
+    /// Model length of a unit step in each parameter at `(u, v)`.
+    pub fn scale(&self, _u: f64, v: f64) -> V2 {
+        match self.kind {
+            SurfKind::Plane => v2(1.0, 1.0),
+            SurfKind::Cylinder => v2(self.r, 1.0),
+            SurfKind::Cone => v2((v * self.s.tan()).abs(), 1.0 / self.s.cos()),
+            SurfKind::Sphere => v2(self.r * v.cos().abs(), self.r),
+            SurfKind::Torus => v2((self.r + self.s * v.cos()).abs(), self.s),
+        }
+    }
+
     pub fn point(&self, u: f64, v: f64) -> V3 {
         let f = &self.f;
         match self.kind {
@@ -288,6 +335,8 @@ pub enum CurveKind {
     Ellipse,
     /// Where a cylinder meets another quadric: see [`Curve::trace`].
     Trace,
+    /// Where any two surfaces meet: see [`Curve::meet`].
+    Meet,
 }
 
 /// Curve as plain data.
@@ -302,15 +351,30 @@ pub enum CurveKind {
 ///   Otherwise the curve is the piece between two turning points
 ///   `span = [θa, θb]`, parametrised over `t ∈ [0, π]` so that it stays
 ///   smooth where the two roots merge.
+/// * Meet: a piece of the intersection of the surfaces `base` and `other`,
+///   written on `base`. One parameter of `base` drives (`r` is `0` for `u`,
+///   `1` for `v`) and equals `s·t` with `s = ±1`; the other is the nearby
+///   root of `other`'s signed distance. `w` holds that parameter and its
+///   slope at both ends of `span`: the cubic through them is where the root
+///   search starts. It also holds how far from that cubic the curve can be,
+///   which is as far as the search may go, so it cannot wander off to
+///   another branch of the intersection. A point costs a few Newton steps
+///   and is exact.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Curve {
     pub kind: CurveKind,
     pub f: Frame,
     pub r: f64,
     pub s: f64,
-    /// Trace only.
+    /// Trace and Meet: the surface that cuts.
     pub other: Surface,
     pub span: [f64; 2],
+    /// Meet only: the surface the curve is written on.
+    pub base: Surface,
+    /// Meet only: the dependent parameter at `span[0]` and `span[1]`, its
+    /// derivative with respect to `t` at both, and the furthest the curve
+    /// strays from the cubic those four define (zero: not known).
+    pub w: [f64; 5],
 }
 
 const NO_SURFACE: Surface = Surface {
@@ -329,6 +393,8 @@ impl Curve {
             s: 0.0,
             other: NO_SURFACE,
             span: [0.0; 2],
+            base: NO_SURFACE,
+            w: [0.0; 5],
         }
     }
     /// Circle whose parameter runs counter-clockwise about `normal`, with
@@ -341,6 +407,8 @@ impl Curve {
             s: radius,
             other: NO_SURFACE,
             span: [0.0; 2],
+            base: NO_SURFACE,
+            w: [0.0; 5],
         }
     }
     pub fn ellipse(centre: V3, normal: V3, major_dir: V3, major: f64, minor: f64) -> Curve {
@@ -351,6 +419,8 @@ impl Curve {
             s: minor,
             other: NO_SURFACE,
             span: [0.0; 2],
+            base: NO_SURFACE,
+            w: [0.0; 5],
         }
     }
     /// Intersection of `cylinder` with `other` (a cylinder or sphere) on the
@@ -364,6 +434,143 @@ impl Curve {
             s: sign,
             other: *other,
             span,
+            base: NO_SURFACE,
+            w: [0.0; 5],
+        }
+    }
+
+    /// A piece of the intersection of `base` and `other` over `span` of the
+    /// driving parameter of `base` (`v` when `along_v`), with the dependent
+    /// parameter's end values and slopes in `w`.
+    pub fn meet(
+        base: &Surface,
+        other: &Surface,
+        along_v: bool,
+        span: [f64; 2],
+        w: [f64; 5],
+    ) -> Curve {
+        Curve {
+            kind: CurveKind::Meet,
+            f: Frame::WORLD,
+            r: if along_v { 1.0 } else { 0.0 },
+            s: 1.0,
+            other: *other,
+            span,
+            base: *base,
+            w,
+        }
+    }
+
+    /// Where the cubic through the ends of a meet puts the dependent
+    /// parameter at `t`.
+    pub fn meet_guess(&self, t: f64) -> f64 {
+        let [t0, t1] = self.span;
+        let h = t1 - t0;
+        let x = if h.abs() > 0.0 { (t - t0) / h } else { 0.0 };
+        let [w0, w1, m0, m1, _] = self.w;
+        let (x2, x3) = (x * x, x * x * x);
+        (2.0 * x3 - 3.0 * x2 + 1.0) * w0
+            + (x3 - 2.0 * x2 + x) * h * m0
+            + (3.0 * x2 - 2.0 * x3) * w1
+            + (x3 - x2) * h * m1
+    }
+
+    /// Parameters on `base` of the point of a meet at `t`.
+    pub fn meet_uv(&self, t: f64) -> V2 {
+        let start = self.meet_guess(t);
+        let drive = self.s * t;
+        let along_v = self.r != 0.0;
+        // Distance from the other surface at dependent parameter `w`, and
+        // how fast it changes with `w`.
+        let value = |w: f64| {
+            let (u, v) = if along_v { (w, drive) } else { (drive, w) };
+            let p = self.base.point(u, v);
+            let across = if along_v {
+                self.base.du(u, v)
+            } else {
+                self.base.dv(u, v)
+            };
+            (self.other.sdist(p), self.other.normal(p).dot(across))
+        };
+        let reach = if self.w[4] > 0.0 {
+            self.w[4]
+        } else {
+            f64::INFINITY
+        };
+        let (lo, hi) = (start - reach, start + reach);
+        let mut w = start;
+        let mut strayed = false;
+        for _ in 0..12 {
+            let (g, slope) = value(w);
+            if slope.abs() < 1.0e-14 {
+                break;
+            }
+            let step = g / slope;
+            if w - step < lo || w - step > hi {
+                strayed = true;
+                break;
+            }
+            w -= step;
+            if step.abs() <= 1.0e-14 * (1.0 + w.abs()) {
+                break;
+            }
+        }
+        if strayed {
+            // Newton was about to leave for another branch. The curve is
+            // within reach of the cubic: close in on it from both sides.
+            let (mut a, mut b) = (lo, hi);
+            let (mut ga, mut gb) = (value(a).0, value(b).0);
+            w = start;
+            if (ga > 0.0) != (gb > 0.0) {
+                let mut side = 0;
+                for _ in 0..80 {
+                    if b - a <= 1.0e-15 * (1.0 + a.abs() + b.abs()) {
+                        break;
+                    }
+                    let mut m = (a * gb - b * ga) / (gb - ga);
+                    if !m.is_finite() || m <= a || m >= b {
+                        m = 0.5 * (a + b);
+                    }
+                    let g = value(m).0;
+                    w = m;
+                    if g == 0.0 {
+                        break;
+                    }
+                    if (g > 0.0) == (gb > 0.0) {
+                        b = m;
+                        gb = g;
+                        if side == -1 {
+                            ga *= 0.5;
+                        }
+                        side = -1;
+                    } else {
+                        a = m;
+                        ga = g;
+                        if side == 1 {
+                            gb *= 0.5;
+                        }
+                        side = 1;
+                    }
+                }
+            } else {
+                // No crossing to close in on: take what short steps allow.
+                for _ in 0..12 {
+                    let (g, slope) = value(w);
+                    if slope.abs() < 1.0e-14 {
+                        break;
+                    }
+                    let next = (w - g / slope).clamp(lo, hi);
+                    if (next - w).abs() <= 1.0e-14 * (1.0 + w.abs()) {
+                        break;
+                    }
+                    w = next;
+                }
+            }
+        }
+        if along_v {
+            v2(w, drive)
+        } else {
+            v2(drive, w)
         }
     }
 
@@ -399,7 +606,11 @@ impl Curve {
     /// Parameter range of a bounded curve.
     #[inline]
     pub fn bounds(&self) -> Option<(f64, f64)> {
-        (self.kind == CurveKind::Trace && !self.trace_closed()).then_some((0.0, PI))
+        match self.kind {
+            CurveKind::Trace if !self.trace_closed() => Some((0.0, PI)),
+            CurveKind::Meet => Some((self.span[0], self.span[1])),
+            _ => None,
+        }
     }
 
     #[inline]
@@ -421,6 +632,10 @@ impl Curve {
                 let (qa, qb, qc) = Curve::trace_quadratic(&self.other, foot, f.z);
                 let disc = (qb * qb - 4.0 * qa * qc).max(0.0);
                 foot + f.z * ((-qb + self.s * disc.sqrt()) / (2.0 * qa))
+            }
+            CurveKind::Meet => {
+                let q = self.meet_uv(t);
+                self.base.point(q.x, q.y)
             }
         }
     }
@@ -447,13 +662,27 @@ impl Curve {
                 };
                 (self.point(hi) - self.point(lo)) / (hi - lo)
             }
+            CurveKind::Meet => {
+                // The dependent parameter follows from staying on `other`.
+                let q = self.meet_uv(t);
+                let n = self.other.normal(self.base.point(q.x, q.y));
+                let (du, dv) = (self.base.du(q.x, q.y), self.base.dv(q.x, q.y));
+                let (along, across) = if self.r != 0.0 { (dv, du) } else { (du, dv) };
+                let slope = n.dot(across);
+                let dw = if slope.abs() > 1.0e-300 {
+                    -n.dot(along) / slope
+                } else {
+                    0.0
+                };
+                (along + across * dw) * self.s
+            }
         }
     }
 
     #[inline]
     pub fn periodic(&self) -> bool {
         match self.kind {
-            CurveKind::Line => false,
+            CurveKind::Line | CurveKind::Meet => false,
             CurveKind::Trace => self.trace_closed(),
             _ => true,
         }
@@ -481,6 +710,20 @@ impl Curve {
                     }
                     (1.0 - 2.0 * (u - a) / (b - a)).clamp(-1.0, 1.0).acos()
                 }
+            }
+            CurveKind::Meet => {
+                // The driving parameter of the point's own place on `base`.
+                let q = self.base.uv(p);
+                let (drive, turns) = if self.r != 0.0 {
+                    (q.y, self.base.v_periodic())
+                } else {
+                    (q.x, self.base.u_periodic())
+                };
+                let mut t = self.s * drive;
+                if turns {
+                    t = wrap_near(t, 0.5 * (self.span[0] + self.span[1]));
+                }
+                return t.clamp(self.span[0], self.span[1]);
             }
         };
         for _ in 0..4 {
@@ -562,6 +805,24 @@ impl Curve {
                     && (self.span[1] - o.span[1]).abs() < 1.0e-9)
                     .then_some((1.0, 0.0))
             }
+            CurveKind::Meet => {
+                // Only the identical piece counts as the same curve.
+                let close = |a: &Surface, b: &Surface| {
+                    a.kind == b.kind
+                        && a.f.o.dist(b.f.o) < TOL
+                        && a.f.x.dist(b.f.x) < ANG_TOL * 10.0
+                        && a.f.z.dist(b.f.z) < ANG_TOL * 10.0
+                        && (a.r - b.r).abs() < TOL
+                        && (a.s - b.s).abs() < TOL
+                };
+                (close(&self.base, &o.base)
+                    && close(&self.other, &o.other)
+                    && self.r == o.r
+                    && self.s == o.s
+                    && (0..2).all(|i| (self.span[i] - o.span[i]).abs() < 1.0e-9)
+                    && (0..4).all(|i| (self.w[i] - o.w[i]).abs() < 1.0e-9))
+                .then_some((1.0, 0.0))
+            }
         }
     }
 
@@ -578,6 +839,23 @@ impl Curve {
                 out.s = -self.s;
             }
         }
+        if self.kind == CurveKind::Meet {
+            out.f = Frame::WORLD;
+            out.base = self.base.transformed(x);
+            out.other = self.other.transformed(x);
+            if x.mirror {
+                // A reflected surface runs one of its parameters backwards:
+                // `v` on a plane, the angle `u` on everything else.
+                let flips_v = self.base.kind == SurfKind::Plane;
+                if flips_v == (self.r != 0.0) {
+                    out.s = -self.s;
+                } else {
+                    for k in 0..4 {
+                        out.w[k] = -self.w[k];
+                    }
+                }
+            }
+        }
         out
     }
 
@@ -586,7 +864,7 @@ impl Curve {
         match self.kind {
             CurveKind::Line => (t1 - t0).abs(),
             CurveKind::Circle => (t1 - t0).abs() * self.r,
-            CurveKind::Ellipse | CurveKind::Trace => {
+            CurveKind::Ellipse | CurveKind::Trace | CurveKind::Meet => {
                 let n = 24;
                 let mut len = 0.0;
                 let mut prev = self.point(t0);
@@ -605,6 +883,20 @@ impl Curve {
     pub fn segments(&self, t0: f64, t1: f64, sag: f64, min_per_turn: f64) -> usize {
         let (r, per_turn) = match self.kind {
             CurveKind::Line => return 1,
+            CurveKind::Meet => {
+                // No radius to go by: double until every chord is close.
+                let mut n = 1;
+                loop {
+                    let at = |i: usize| self.point(t0 + (t1 - t0) * i as f64 / (2 * n) as f64);
+                    let worst = (0..n)
+                        .map(|i| at(2 * i + 1).dist((at(2 * i) + at(2 * i + 2)) * 0.5))
+                        .fold(0.0, f64::max);
+                    if worst <= sag || n >= 256 {
+                        return n;
+                    }
+                    n *= 2;
+                }
+            }
             CurveKind::Circle | CurveKind::Ellipse => (self.r.max(self.s), min_per_turn),
             // The curve bends with the tighter of its two surfaces.
             CurveKind::Trace => (self.r.min(self.other.r), 2.0 * min_per_turn),
