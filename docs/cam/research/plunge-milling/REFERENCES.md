@@ -1,9 +1,12 @@
 # Plunge-milling reading leads
 
-Checked for this draft on 2026-10-20. Titles are bibliographic identifiers;
+Initial checks: 2026-10-20; metadata/access refresh: 2026-11-17.
+Titles are bibliographic identifiers;
 linked publications remain with their respective authors and publishers.
-Years below are the Crossref publication-date field and may differ from an
-issue year. No full-text review is claimed for these entries.
+R1–R6 identities were checked through the linked Crossref API records on
+2026-11-17. Years below retain the earliest publication date and distinguish
+print/issue dates where they differ.
+No full-text review is claimed for these entries.
 
 ## English-language records
 
@@ -17,7 +20,7 @@ method details and reported gains are not assessed here.
 
 ### R2. Plunge milling with constant scallop height by adaptively modifying the step interval for pocket wall
 
-Nuodi Huang; Yongqiao Jin; Yaoan Lu; Xiaoyong Li; Shijing Wu. The International Journal of Advanced Manufacturing Technology. Crossref publication date: 2018.
+Nuodi Huang; Yongqiao Jin; Yaoan Lu; Xiaoyong Li; Shijing Wu. The International Journal of Advanced Manufacturing Technology. Crossref online date: 2018-10-31; print issue: 2019, 101(1–4), 203–208.
 
 [DOI record](https://doi.org/10.1007/s00170-018-2912-y) · [Crossref metadata](https://api.crossref.org/works/10.1007/s00170-018-2912-y).
 Evidence: title, authors, venue and DOI checked in the Crossref record;
@@ -33,7 +36,7 @@ method details and reported gains are not assessed here.
 
 ### R4. Dynamics and Stability of Plunge Milling Operations
 
-Jeong Hoon Ko; Yusuf Altintas. Journal of Manufacturing Science and Engineering. Crossref publication date: 2006.
+Jeong Hoon Ko; Yusuf Altintas. Journal of Manufacturing Science and Engineering. Crossref online date: 2006-07-03; print issue: 2007, 129(1), 32–40.
 
 [DOI record](https://doi.org/10.1115/1.2383070) · [Crossref metadata](https://api.crossref.org/works/10.1115/1.2383070).
 Evidence: title, authors, venue and DOI checked in the Crossref record;
@@ -51,9 +54,12 @@ method details and reported gains are not assessed here.
 
 Y. Altintas and J. H. Ko. CIRP Annals, 55(1), 361–364, 2006.
 [DOI](https://doi.org/10.1016/S0007-8506(07)60435-1) ·
-[publisher page](https://www.sciencedirect.com/science/article/pii/S0007850607604351).
-Evidence: publisher metadata and public abstract. The abstract discusses a
-frequency-domain stability model for plunge milling. This draft does not
+[publisher page](https://www.sciencedirect.com/science/article/pii/S0007850607604351) ?
+[Crossref metadata](https://api.crossref.org/works/10.1016/S0007-8506(07)60435-1).
+Evidence: Crossref identity checked 2026-11-17; publisher metadata and public
+abstract assessment inherited from 2026-10-20. Publisher access returned HTTP
+403 on 2026-11-17; the abstract was not freshly reassessed. The earlier
+assessment identifies a frequency-domain stability topic. This draft does not
 reproduce its derivation or assess experimental applicability to Limo CAD.
 
 ## 中文文献 / Chinese-language record
@@ -67,8 +73,12 @@ reproduce its derivation or assess experimental applicability to Limo CAD.
 期刊页面与先前引用中的年份/卷号存在差异，需在正式引用前复核。
 
 Evidence: journal metadata and public abstract. Retain this as a separate record
-from R3; the titles and author lists are different. Issue metadata needs further
-checking before a formal citation is finalized.
+from R3; the titles and author lists are different. On 2026-11-17 the journal page
+and its suggested citation both displayed
+2008, 30(6), 1692–1698 and publication date 2008-11-25. This observation does
+not resolve the year/volume inconsistency: confirm against the journal issue
+or an authoritative correction before finalizing the citation. The PDF link
+was not followed; no full text or reuse terms were assessed.
 
 ## Patent search leads — not clearance
 

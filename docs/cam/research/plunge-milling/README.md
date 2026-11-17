@@ -1,7 +1,7 @@
 # Plunge-milling research draft
 
-Status: research only, 2026-10-20. No CAM implementation, machine program or
-machining qualification is included. This note replaces the local working
+Status: research only; bibliography/access refresh 2026-11-17. Author-held Draft.
+No CAM implementation, machine program or machining qualification is included. This note replaces the local working
 reports as the material proposed for public review; those reports and their
 source downloads are not included.
 
@@ -49,8 +49,10 @@ patent analysis before an implementation is chosen.
 ## Reading map and evidence
 
 See [References](REFERENCES.md). R1–R5 were checked against Crossref metadata on
-2026-10-20. R6 and C1 have publicly accessible publisher abstracts. Metadata
-verification establishes a publication's identity, not correctness, permission
+2026-10-20 and rechecked on 2026-11-17; R6 metadata was also checked in Crossref
+then. R6 abstract evidence is inherited from 2026-10-20 (publisher access
+returned HTTP 403 on refresh); C1 public journal metadata/abstract was revisited.
+Metadata verification establishes a publication's identity, not correctness, permission
 to redistribute its contents, or validation of its algorithm.
 
 The earlier local notes included numerical performance claims, detailed
@@ -79,3 +81,41 @@ implementation against relevant claims, families, jurisdictions and current
 register records where needed. The candidate records in the bibliography are
 search leads only: this draft makes no finding of infringement, validity,
 expiration, abandonment or permission to practice. The search is not exhaustive.
+
+## Author decision brief — 2026-11-17
+
+This refresh preserves the research scope and selects no machining algorithm.
+The next author review can make three separate decisions:
+
+1. **Source access.** For each proposed method, record the reference ID, exact
+   edition/DOI, access route (publisher, institution, author-provided manuscript
+   or licensed repository), access date and applicable terms. R1–R6 currently
+   have metadata-level identity checks; no full-text method assessment is
+   established. R6's earlier abstract assessment does not establish current
+   access. C1's public abstract is accessible, but its year/volume remains
+   unresolved. A visible PDF link or Crossref text-mining license field alone
+   does not establish reuse or redistribution permission. Seek permitted access
+   before method study; retain links and original assessment notes here.
+2. **Method evidence.** After permitted reading, tie each claimed method
+   property to a source location and distinguish the authors' reported results
+   from an independently reproduced result. Record assumptions, required inputs,
+   failure cases and unavailable details. Apply the synthetic-pocket comparison
+   above only after this assessment. Record remaining stock and clearance as
+   well as travel; do not rank candidates from titles or abstract performance
+   figures.
+3. **Implementation-specific patent questions.** Before selecting a method,
+   give a qualified patent professional a concrete proposed implementation:
+   plunge-location construction, wall-spacing rule, axis/orientation strategy,
+   stock update, feed/stability model and linking/entry behavior. Ask which
+   claims could concern those steps, what claim limitations distinguish the
+   proposal, which related families and jurisdictions require investigation,
+   and which current official register records are needed. The bibliography's
+   13 leads are unassessed search inputs; no mapping of a lead to an algorithm,
+   complete search, current status or clearance is established.
+
+Author decisions still needed: choose the initial evaluation scope (the proposed
+2½-axis pocket set or a separately specified multi-axis study), assign lawful
+source-access followup, resolve C1's citation, and decide which fully described
+candidates warrant method and patent review. Preserve Draft until the author
+changes that instruction. No cutting trial, implementation or publication
+readiness follows from completing this bibliography.
