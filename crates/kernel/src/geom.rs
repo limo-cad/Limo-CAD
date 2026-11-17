@@ -226,10 +226,10 @@ impl Surface {
             SurfKind::Plane => (parallel(self.f.z, o.f.z)
                 && (o.f.o - self.f.o).dot(self.f.z).abs() < TOL)
                 .then(|| self.f.z.dot(o.f.z) > 0.0),
-            SurfKind::Cylinder => ((self.r - o.r).abs() < TOL
-                && parallel(self.f.z, o.f.z)
-                && on_axis(o.f.o))
-            .then_some(true),
+            SurfKind::Cylinder => {
+                ((self.r - o.r).abs() < TOL && parallel(self.f.z, o.f.z) && on_axis(o.f.o))
+                    .then_some(true)
+            }
             SurfKind::Cone => ((self.s - o.s).abs() < ANG_TOL * 10.0
                 && self.f.o.dist(o.f.o) < TOL
                 && parallel(self.f.z, o.f.z)
@@ -522,8 +522,7 @@ impl Curve {
                 }
                 let d = o.f.o - self.f.o;
                 let along = d.dot(self.f.x);
-                ((d - self.f.x * along).len() < TOL)
-                    .then(|| (self.f.x.dot(o.f.x).signum(), along))
+                ((d - self.f.x * along).len() < TOL).then(|| (self.f.x.dot(o.f.x).signum(), along))
             }
             CurveKind::Circle => {
                 if self.f.o.dist(o.f.o) >= TOL

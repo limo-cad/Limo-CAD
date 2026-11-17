@@ -190,7 +190,8 @@ impl Kernel {
             .flat_map(|(_, state)| state.values().map(|slot| slot.generation))
             .chain(live.iter().copied())
             .collect();
-        self.display.retain(|generation, _| retained.contains(generation));
+        self.display
+            .retain(|generation, _| retained.contains(generation));
         let mut bodies = Vec::with_capacity(self.state.len());
         for (id, slot) in &self.state {
             let options = self.options;
@@ -212,8 +213,16 @@ impl Kernel {
             tessellate(
                 body,
                 &TessOptions {
-                    linear: if linear > 0.0 { linear } else { defaults.linear },
-                    angular: if angular > 0.0 { angular } else { defaults.angular },
+                    linear: if linear > 0.0 {
+                        linear
+                    } else {
+                        defaults.linear
+                    },
+                    angular: if angular > 0.0 {
+                        angular
+                    } else {
+                        defaults.angular
+                    },
                 },
             )
         })
@@ -243,11 +252,19 @@ impl Kernel {
             KernelJobDto::Extrude(j) => {
                 let normal = p3(&j.normal);
                 let tools = match &j.source_face {
-                    Some(source) => vec![self.face_tool(source, normal, j.start_offset, j.end_offset, j.taper_angle_deg)?],
+                    Some(source) => vec![self.face_tool(
+                        source,
+                        normal,
+                        j.start_offset,
+                        j.end_offset,
+                        j.taper_angle_deg,
+                    )?],
                     None => j
                         .profiles
                         .iter()
-                        .map(|p| profile_tool(p, normal, j.start_offset, j.end_offset, j.taper_angle_deg))
+                        .map(|p| {
+                            profile_tool(p, normal, j.start_offset, j.end_offset, j.taper_angle_deg)
+                        })
                         .collect::<Result<Vec<_>, _>>()?,
                 };
                 self.profile_job(
@@ -265,12 +282,19 @@ impl Kernel {
                     .iter()
                     .map(|p| profile_tool(p, normal, j.start_offset, j.end_offset, 0.0))
                     .collect::<Result<Vec<_>, _>>()?;
-                self.profile_job(j.operation, false, tools, &j.target_body_ids, &j.result_body_ids)
+                self.profile_job(
+                    j.operation,
+                    false,
+                    tools,
+                    &j.target_body_ids,
+                    &j.result_body_ids,
+                )
             }
             KernelJobDto::Hole(j) => {
                 let target = self.get(j.target_body_id, "hole target")?;
                 let cutter = hole_cutter(j, &target)?;
-                let result = boolean(&target, &cutter, Op::Cut).map_err(|e| format!("Hole: {e}"))?;
+                let result =
+                    boolean(&target, &cutter, Op::Cut).map_err(|e| format!("Hole: {e}"))?;
                 self.put(j.target_body_id.0, result);
                 Ok(())
             }
@@ -305,7 +329,8 @@ impl Kernel {
                 };
                 for tool in &j.tool_body_ids {
                     let tool = self.get(*tool, "Combine tool")?;
-                    result = boolean(&result, &tool, op).map_err(|e| format!("Combine {name}: {e}"))?;
+                    result =
+                        boolean(&result, &tool, op).map_err(|e| format!("Combine {name}: {e}"))?;
                 }
                 self.put(j.target_body_id.0, result);
                 if !j.keep_tools {
@@ -359,7 +384,8 @@ impl Kernel {
             KernelJobDto::Fillet(j) => {
                 let target = self.get(j.target_body_id, "edge refinement target")?;
                 let edges = edge_indices(&j.edge_keys)?;
-                let result = blend::fillet(&target, &edges, j.radius).map_err(|e| format!("Fillet: {e}"))?;
+                let result =
+                    blend::fillet(&target, &edges, j.radius).map_err(|e| format!("Fillet: {e}"))?;
                 self.put(j.target_body_id.0, result);
                 Ok(())
             }
@@ -412,9 +438,11 @@ impl Kernel {
             }
             let merged = fuse(tools)?;
             if require_single_solid && lump_count(&merged) != 1 {
-                return Err("Merge profiles requires contacting regions that form one solid; \
+                return Err(
+                    "Merge profiles requires contacting regions that form one solid; \
                             separate regions and point-only contact cannot be merged"
-                    .into());
+                        .into(),
+                );
             }
             self.put(results[0].0, merged);
             return Ok(());
@@ -432,7 +460,10 @@ impl Kernel {
         let mut done = Vec::with_capacity(targets.len());
         for id in targets {
             let target = self.get(*id, "boolean target")?;
-            done.push((id.0, boolean(&target, &tool, op).map_err(|e| format!("{name}: {e}"))?));
+            done.push((
+                id.0,
+                boolean(&target, &tool, op).map_err(|e| format!("{name}: {e}"))?,
+            ));
         }
         for (id, body) in done {
             self.put(id, body);
@@ -475,9 +506,13 @@ impl Kernel {
         let face = match hinted {
             Some(f) => f,
             None => {
-                let found: Vec<u32> = (0..body.face_count() as u32).filter(|f| matches(*f)).collect();
+                let found: Vec<u32> = (0..body.face_count() as u32)
+                    .filter(|f| matches(*f))
+                    .collect();
                 if found.len() != 1 {
-                    return Err("the planar face used by this Extrude changed; reselect its source".into());
+                    return Err(
+                        "the planar face used by this Extrude changed; reselect its source".into(),
+                    );
                 }
                 found[0]
             }
@@ -661,7 +696,7 @@ fn half_space(origin: V3, normal: V3, reach: f64) -> Result<Body, String> {
 
 /// Cutter for a hole: one solid of revolution, built without Booleans.
 fn hole_cutter(j: &KernelHoleJobDto, target: &Body) -> Result<Body, String> {
-    if !(j.diameter > 0.0) {
+    if j.diameter.is_nan() || j.diameter <= 0.0 {
         return Err("hole parameters are malformed".into());
     }
     let direction = p3(&j.direction);
@@ -684,7 +719,7 @@ fn hole_cutter(j: &KernelHoleJobDto, target: &Body) -> Result<Body, String> {
     let overlap = 1.0e-4;
     let depth = match j.extent {
         HoleExtent::Distance { depth } => {
-            if !(depth > 0.0) {
+            if depth.is_nan() || depth <= 0.0 {
                 return Err("hole parameters are malformed".into());
             }
             depth
@@ -700,7 +735,8 @@ fn hole_cutter(j: &KernelHoleJobDto, target: &Body) -> Result<Body, String> {
         HoleStyle::Simple => profile.push((radius, -overlap)),
         HoleStyle::Counterbore => {
             let bore = 0.5 * j.counterbore_diameter;
-            if !(bore > radius) || !(j.counterbore_depth > 0.0) {
+            let deep = j.counterbore_depth;
+            if bore.is_nan() || bore <= radius || deep.is_nan() || deep <= 0.0 {
                 return Err("counterbore dimensions are invalid".into());
             }
             let bottom = if through {
@@ -717,7 +753,10 @@ fn hole_cutter(j: &KernelHoleJobDto, target: &Body) -> Result<Body, String> {
             if !sink.is_finite() || sink <= 0.0 {
                 return Err("countersink dimensions are invalid".into());
             }
-            profile.extend([(large + overlap * half_angle.tan(), -overlap), (radius, sink)]);
+            profile.extend([
+                (large + overlap * half_angle.tan(), -overlap),
+                (radius, sink),
+            ]);
         }
     }
     profile.push((radius, depth));
@@ -768,7 +807,10 @@ fn shell_volumes(body: &Body, mesh: &Mesh, groups: &[Vec<u32>]) -> Vec<f64> {
             let mut six = 0.0;
             for &f in faces {
                 let [first, count] = mesh.faces[f as usize];
-                for t in mesh.indices[first as usize..(first + count) as usize].chunks_exact(3) {
+                for t in mesh.indices[first as usize..(first + count) as usize]
+                    .as_chunks::<3>()
+                    .0
+                {
                     let (a, b, c) = (
                         mesh.positions[t[0] as usize],
                         mesh.positions[t[1] as usize],
@@ -928,10 +970,7 @@ pub fn body_dto(id: u64, body: &Body, options: &TessOptions) -> KernelBodyDto {
         let c = body.e_curve_ref(e);
         let points = edge_polyline(body, e, 0.01).into_iter().map(dto).collect();
         let [t0, t1] = body.e_t[e as usize];
-        // A real break between two faces: their normals differ along it.
-        let (f1, f2) = (body.h_face(2 * e), body.h_face(2 * e + 1));
-        let mid = body.e_mid(e);
-        let refinable = f1 != f2 && body.f_normal(f1, mid).cross(body.f_normal(f2, mid)).len() > 1.0e-6;
+        let refinable = body.e_sharp(e);
         edges.push(KernelEdgeDto {
             key: format!("edge:{e}"),
             points,

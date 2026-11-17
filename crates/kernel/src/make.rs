@@ -485,11 +485,22 @@ pub fn cylinder(base: V3, axis: V3, radius: f64, height: f64) -> Result<Body, St
 /// `x` is the distance from the axis, `y` the height along it.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum PSeg {
-    Line { a: V2, b: V2 },
+    Line {
+        a: V2,
+        b: V2,
+    },
     /// Circular arc from `a` to `b` about `c`.
-    Arc { a: V2, b: V2, c: V2, ccw: bool },
+    Arc {
+        a: V2,
+        b: V2,
+        c: V2,
+        ccw: bool,
+    },
     /// Full circle (a tube section).
-    Circle { c: V2, r: f64 },
+    Circle {
+        c: V2,
+        r: f64,
+    },
 }
 
 impl PSeg {
@@ -688,7 +699,8 @@ pub fn revolve(
         let rails: Vec<Option<u32>> = (0..n)
             .map(|i| {
                 (!on_axis[i]).then(|| {
-                    let curve = body.add_curve(Curve::circle(origin + a * pts[i].y, a, x0, pts[i].x));
+                    let curve =
+                        body.add_curve(Curve::circle(origin + a * pts[i].y, a, x0, pts[i].x));
                     body.add_edge(curve, 0.0, angle, vs[i], ve[i])
                 })
             })
@@ -840,12 +852,7 @@ pub fn revolve(
 
 /// Revolve a planar region given in model space. The profile plane must
 /// contain the axis.
-pub fn revolve_region(
-    region: &Region,
-    origin: V3,
-    axis: V3,
-    angle: f64,
-) -> Result<Body, String> {
+pub fn revolve_region(region: &Region, origin: V3, axis: V3, angle: f64) -> Result<Body, String> {
     let mut a = axis.unit();
     if a.len2() < 0.5 {
         return Err("revolve axis is degenerate".into());

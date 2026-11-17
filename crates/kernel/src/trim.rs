@@ -367,6 +367,22 @@ impl FaceTrim {
                 });
                 odd != self.north_in
             }
+            SurfKind::Torus if !self.loops.is_empty() && self.loops.iter().all(|l| !l.winds()) => {
+                // Loops that close without going around the torus bound a
+                // patch, or holes in the whole surface. Either way parity
+                // decides; the patch may sit a tube turn away from `q`.
+                let mut odd = [false; 3];
+                self.cross_vertical(q.x, |v, _| {
+                    for (k, turn) in [-TAU, 0.0, TAU].into_iter().enumerate() {
+                        if v > q.y + turn {
+                            odd[k] = !odd[k];
+                        }
+                    }
+                });
+                let enclosed = odd.iter().any(|&o| o);
+                let patch = self.loops.iter().map(|l| l.area).sum::<f64>() > 0.0;
+                enclosed == patch
+            }
             SurfKind::Torus => {
                 // No "outside" exists; read the orientation of the nearest
                 // boundary instead. The face lies to the left of travel.
@@ -512,7 +528,14 @@ impl FaceTrim {
             _ => {
                 // Curved faces bulge beyond their boundary: sample the
                 // parameter rectangle and pad for the chord error.
-                let (nu, nv) = (16, if self.surf.kind == SurfKind::Cylinder { 1 } else { 8 });
+                let (nu, nv) = (
+                    16,
+                    if self.surf.kind == SurfKind::Cylinder {
+                        1
+                    } else {
+                        8
+                    },
+                );
                 let (mut lo, mut hi) = (self.lo, self.hi);
                 // A face that is "everything except its holes" covers the
                 // whole closed surface.
@@ -521,8 +544,22 @@ impl FaceTrim {
                     && self.loops.iter().all(|l| !l.winds())
                     && self.loops.iter().map(|l| l.area).sum::<f64>() <= 0.0
                 {
-                    lo = v2(-PI, if self.surf.kind == SurfKind::Sphere { -0.5 * PI } else { -PI });
-                    hi = v2(PI, if self.surf.kind == SurfKind::Sphere { 0.5 * PI } else { PI });
+                    lo = v2(
+                        -PI,
+                        if self.surf.kind == SurfKind::Sphere {
+                            -0.5 * PI
+                        } else {
+                            -PI
+                        },
+                    );
+                    hi = v2(
+                        PI,
+                        if self.surf.kind == SurfKind::Sphere {
+                            0.5 * PI
+                        } else {
+                            PI
+                        },
+                    );
                 }
                 if self.surf.kind == SurfKind::Sphere {
                     if self.north_in {
@@ -554,8 +591,8 @@ impl FaceTrim {
                     }
                 }
                 let step = ((hi.x - lo.x) / nu as f64).min(PI);
-                let pad = radius.max(self.surf.r).max(self.surf.s.abs())
-                    * (1.0 - (0.5 * step).cos());
+                let pad =
+                    radius.max(self.surf.r).max(self.surf.s.abs()) * (1.0 - (0.5 * step).cos());
                 return b.grown(pad + 10.0 * TOL);
             }
         }
@@ -574,7 +611,11 @@ pub fn edge_closest(body: &Body, e: u32, p: V3) -> (f64, f64, bool) {
         if t > t1 {
             // Past the end: the nearer end point wins.
             let (d0, d1) = (c.point(t0).dist(p), c.point(t1).dist(p));
-            return if d0 < d1 { (t0, d0, false) } else { (t1, d1, false) };
+            return if d0 < d1 {
+                (t0, d0, false)
+            } else {
+                (t1, d1, false)
+            };
         }
     } else if t <= t0 {
         return (t0, c.point(t0).dist(p), false);

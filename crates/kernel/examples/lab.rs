@@ -138,7 +138,12 @@ fn summarise(scene: &Value) -> Vec<BodySummary> {
             .unwrap_or_default();
         let indices: Vec<usize> = body["mesh"]["indices"]
             .as_array()
-            .map(|a| a.iter().filter_map(Value::as_u64).map(|i| i as usize).collect())
+            .map(|a| {
+                a.iter()
+                    .filter_map(Value::as_u64)
+                    .map(|i| i as usize)
+                    .collect()
+            })
             .unwrap_or_default();
         let point = |i: usize| [positions[3 * i], positions[3 * i + 1], positions[3 * i + 2]];
         let mut summary = BodySummary {
@@ -148,16 +153,16 @@ fn summarise(scene: &Value) -> Vec<BodySummary> {
             triangles: indices.len() / 3,
             ..Default::default()
         };
-        for t in indices.chunks_exact(3) {
+        for t in indices.as_chunks::<3>().0 {
             let (a, b, c) = (point(t[0]), point(t[1]), point(t[2]));
             summary.volume += (a[0] * (b[1] * c[2] - b[2] * c[1])
                 + a[1] * (b[2] * c[0] - b[0] * c[2])
                 + a[2] * (b[0] * c[1] - b[1] * c[0]))
                 / 6.0;
             for p in [a, b, c] {
-                for k in 0..3 {
-                    summary.lo[k] = summary.lo[k].min(p[k]);
-                    summary.hi[k] = summary.hi[k].max(p[k]);
+                for (k, x) in p.into_iter().enumerate() {
+                    summary.lo[k] = summary.lo[k].min(x);
+                    summary.hi[k] = summary.hi[k].max(x);
                 }
             }
         }
@@ -207,7 +212,11 @@ fn run(server: &Path, kernel: &str, script: &Script, scratch: &Path) -> Run {
     let mut kernel_ns = 0;
     let mut recomputes = 0;
     for line in std::fs::read_to_string(&timing).unwrap_or_default().lines() {
-        if let Some(ns) = line.rsplit('\t').next().and_then(|v| v.parse::<u128>().ok()) {
+        if let Some(ns) = line
+            .rsplit('\t')
+            .next()
+            .and_then(|v| v.parse::<u128>().ok())
+        {
             kernel_ns += ns;
             recomputes += 1;
         }
@@ -353,7 +362,14 @@ fn main() {
                 "-",
                 "-",
                 "-",
-                reference.outcome.as_ref().err().unwrap().lines().next().unwrap_or("")
+                reference
+                    .outcome
+                    .as_ref()
+                    .err()
+                    .unwrap()
+                    .lines()
+                    .next()
+                    .unwrap_or("")
             );
             continue;
         };

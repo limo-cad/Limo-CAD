@@ -31,7 +31,13 @@ impl Body {
         let mut out = String::from("limo-body 1\n");
         out += &format!("surfs {}\n", self.surfs.len());
         for s in &self.surfs {
-            out += &format!("{} {} {:?} {:?}\n", s.kind as u8, frame_text(&s.f), s.r, s.s);
+            out += &format!(
+                "{} {} {:?} {:?}\n",
+                s.kind as u8,
+                frame_text(&s.f),
+                s.r,
+                s.s
+            );
         }
         out += &format!("curves {}\n", self.curves.len());
         for c in &self.curves {
@@ -78,7 +84,11 @@ impl Body {
 
     pub fn from_text(text: &str) -> Result<Body, String> {
         let mut lines = text.lines().filter(|l| !l.trim().is_empty());
-        let mut next = || lines.next().ok_or_else(|| "unexpected end of body".to_string());
+        let mut next = || {
+            lines
+                .next()
+                .ok_or_else(|| "unexpected end of body".to_string())
+        };
         if next()?.trim() != "limo-body 1" {
             return Err("not a limo-body file".into());
         }

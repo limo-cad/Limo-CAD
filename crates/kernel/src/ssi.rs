@@ -152,9 +152,8 @@ fn plane_cone(p: &Surface, s: &Surface, perpendicular: bool) -> Ssi {
         }
         let phase = ny.atan2(nx);
         let d = (rhs / amp).acos();
-        let ruling = |u: f64| {
-            axis * alpha.cos() + (s.f.x * u.cos() + s.f.y * u.sin()) * alpha.sin()
-        };
+        let ruling =
+            |u: f64| axis * alpha.cos() + (s.f.x * u.cos() + s.f.y * u.sin()) * alpha.sin();
         return Ssi::Curves(vec![
             Curve::line(apex, ruling(phase + d)),
             Curve::line(apex, ruling(phase - d)),
@@ -302,9 +301,18 @@ fn trace(base: &Surface, other: &Surface) -> Ssi {
 enum Profile {
     /// `ρ = k·(h − h0)`, valid where the result is positive; `k = ∞` is a
     /// cylinder stored as `Vertical`.
-    Slanted { h0: f64, k: f64 },
-    Vertical { rho: f64 },
-    Circle { rho: f64, h: f64, r: f64 },
+    Slanted {
+        h0: f64,
+        k: f64,
+    },
+    Vertical {
+        rho: f64,
+    },
+    Circle {
+        rho: f64,
+        h: f64,
+        r: f64,
+    },
 }
 
 fn profile(s: &Surface, origin: V3, axis: V3) -> Option<Profile> {
@@ -315,7 +323,9 @@ fn profile(s: &Surface, origin: V3, axis: V3) -> Option<Profile> {
     let parallel = s.f.z.cross(axis).len() < ANG_TOL * 10.0;
     let height = |p: V3| (p - origin).dot(axis);
     match s.kind {
-        SurfKind::Cylinder => (parallel && on_axis(s.f.o)).then_some(Profile::Vertical { rho: s.r }),
+        SurfKind::Cylinder => {
+            (parallel && on_axis(s.f.o)).then_some(Profile::Vertical { rho: s.r })
+        }
         SurfKind::Cone => (parallel && on_axis(s.f.o)).then(|| Profile::Slanted {
             h0: height(s.f.o),
             k: s.s.tan() * s.f.z.dot(axis).signum(),
@@ -351,19 +361,20 @@ fn coaxial(a: &Surface, b: &Surface) -> Option<Ssi> {
     };
     let (pa, pb) = (profile(a, origin, axis)?, profile(b, origin, axis)?);
     let mut points: Vec<(f64, f64)> = Vec::new();
-    let line_circle = |x0: f64, h0: f64, dx: f64, dh: f64, c: (f64, f64, f64), out: &mut Vec<(f64, f64)>| {
-        // Line (x0, h0) + t(dx, dh), unit direction, against a circle.
-        let (wx, wh) = (x0 - c.0, h0 - c.1);
-        let tm = -(wx * dx + wh * dh);
-        let closest = ((wx + dx * tm).powi(2) + (wh + dh * tm).powi(2)).sqrt();
-        if closest >= c.2 - TOL {
-            return;
-        }
-        let half = (c.2 * c.2 - closest * closest).sqrt();
-        for t in [tm - half, tm + half] {
-            out.push((x0 + dx * t, h0 + dh * t));
-        }
-    };
+    let line_circle =
+        |x0: f64, h0: f64, dx: f64, dh: f64, c: (f64, f64, f64), out: &mut Vec<(f64, f64)>| {
+            // Line (x0, h0) + t(dx, dh), unit direction, against a circle.
+            let (wx, wh) = (x0 - c.0, h0 - c.1);
+            let tm = -(wx * dx + wh * dh);
+            let closest = ((wx + dx * tm).powi(2) + (wh + dh * tm).powi(2)).sqrt();
+            if closest >= c.2 - TOL {
+                return;
+            }
+            let half = (c.2 * c.2 - closest * closest).sqrt();
+            for t in [tm - half, tm + half] {
+                out.push((x0 + dx * t, h0 + dh * t));
+            }
+        };
     use Profile::*;
     match (&pa, &pb) {
         (Vertical { .. }, Vertical { .. }) => {}
@@ -376,14 +387,27 @@ fn coaxial(a: &Surface, b: &Surface) -> Option<Ssi> {
                 points.push((k1 * (h - h1), h));
             }
         }
-        (Vertical { rho }, Circle { rho: cx, h, r }) | (Circle { rho: cx, h, r }, Vertical { rho }) => {
+        (Vertical { rho }, Circle { rho: cx, h, r })
+        | (Circle { rho: cx, h, r }, Vertical { rho }) => {
             line_circle(*rho, 0.0, 0.0, 1.0, (*cx, *h, *r), &mut points);
         }
-        (Slanted { h0, k }, Circle { rho: cx, h, r }) | (Circle { rho: cx, h, r }, Slanted { h0, k }) => {
+        (Slanted { h0, k }, Circle { rho: cx, h, r })
+        | (Circle { rho: cx, h, r }, Slanted { h0, k }) => {
             let norm = (1.0 + k * k).sqrt();
             line_circle(0.0, *h0, k / norm, 1.0 / norm, (*cx, *h, *r), &mut points);
         }
-        (Circle { rho: x1, h: h1, r: r1 }, Circle { rho: x2, h: h2, r: r2 }) => {
+        (
+            Circle {
+                rho: x1,
+                h: h1,
+                r: r1,
+            },
+            Circle {
+                rho: x2,
+                h: h2,
+                r: r2,
+            },
+        ) => {
             let (dx, dh) = (x2 - x1, h2 - h1);
             let d = dx.hypot(dh);
             if d > TOL && d < r1 + r2 - TOL && d > (r1 - r2).abs() + TOL {

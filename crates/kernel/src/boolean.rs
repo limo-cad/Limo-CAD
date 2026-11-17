@@ -14,8 +14,9 @@
 //! 5. **Select and sew.** The pieces the operation keeps become the result,
 //!    which is then simplified ([`crate::simplify`]).
 
-use std::collections::{HashMap, HashSet};
+use std::cell::OnceCell;
 
+use crate::fast::{Map as HashMap, Set as HashSet};
 use crate::geom::{Curve, SurfKind, Surface};
 use crate::math::*;
 use crate::roots::{curve_curve, curve_surface, Hits};
@@ -42,6 +43,10 @@ const CELL: f64 = 1.0e-4;
 /// A point this close to a curve lies on it.
 const ON_CURVE: f64 = 10.0 * TOL;
 
+/// How two surfaces meet, and where their intersection curves cross each
+/// other.
+type Relation = (Ssi, Vec<Vec<f64>>);
+
 /// Shared vertex and edge registry of one Boolean.
 struct Arr {
     /// Geometry only: curves, vertices and edges, no faces.
@@ -54,17 +59,26 @@ impl Arr {
     fn new() -> Arr {
         Arr {
             g: Body::new(),
-            cells: HashMap::new(),
-            by_verts: HashMap::new(),
+            cells: HashMap::default(),
+            by_verts: HashMap::default(),
         }
     }
 
     fn vert(&mut self, p: V3) -> u32 {
-        let cell = |v: f64| (v / CELL).floor() as i64;
-        let (cx, cy, cz) = (cell(p.x), cell(p.y), cell(p.z));
-        for dx in -1..=1 {
-            for dy in -1..=1 {
-                for dz in -1..=1 {
+        // A vertex within `VTOL` lies in this cell, or in a neighbour when
+        // `p` is that close to the shared wall; cells are much larger.
+        let span = |v: f64| {
+            let c = (v / CELL).floor();
+            let rest = v / CELL - c;
+            let reach = VTOL / CELL;
+            let lo = if rest < reach { -1 } else { 0 };
+            let hi = if rest > 1.0 - reach { 1 } else { 0 };
+            (c as i64, lo, hi)
+        };
+        let ((cx, x0, x1), (cy, y0, y1), (cz, z0, z1)) = (span(p.x), span(p.y), span(p.z));
+        for dx in x0..=x1 {
+            for dy in y0..=y1 {
+                for dz in z0..=z1 {
                     if let Some(list) = self.cells.get(&[cx + dx, cy + dy, cz + dz]) {
                         for &i in list {
                             if self.g.verts[i as usize].dist(p) < VTOL {
@@ -113,7 +127,11 @@ impl Arr {
 /// One operand with its trimming data.
 struct Side<'a> {
     body: &'a Body,
-    trims: Vec<FaceTrim>,
+    mesh: EdgeMesh,
+    /// Trimming data of a face, built the first time something asks for it:
+    /// most faces of a large body are never touched by a small tool.
+    trims: Vec<OnceCell<FaceTrim>>,
+    /// Bounds that contain each face.
     boxes: Vec<Aabb>,
     /// Bounds of every edge.
     eboxes: Vec<Aabb>,
@@ -132,14 +150,6 @@ struct Side<'a> {
 impl<'a> Side<'a> {
     fn new(body: &'a Body) -> Side<'a> {
         let mesh = EdgeMesh::build(body, SAG, PER_TURN);
-        let trims: Vec<FaceTrim> = (0..body.face_count() as u32)
-            .map(|f| FaceTrim::build(body, &mesh, f, SAG))
-            .collect();
-        let boxes: Vec<Aabb> = trims.iter().map(FaceTrim::bbox).collect();
-        let mut bbox = Aabb::EMPTY;
-        for b in &boxes {
-            bbox.union(b);
-        }
         let eboxes: Vec<Aabb> = (0..body.edge_count() as u32)
             .map(|e| {
                 let mut b = Aabb::EMPTY;
@@ -149,18 +159,94 @@ impl<'a> Side<'a> {
                 b.grown(SAG + 10.0 * TOL)
             })
             .collect();
+        let boxes: Vec<Aabb> = (0..body.face_count() as u32)
+            .map(|f| face_bounds(body, &eboxes, f))
+            .collect();
+        let mut bbox = Aabb::EMPTY;
+        for b in &boxes {
+            bbox.union(b);
+        }
         Side {
             body,
-            trims,
+            mesh,
+            trims: (0..body.face_count()).map(|_| OnceCell::new()).collect(),
             boxes,
             eboxes,
             bbox,
             partners: vec![Vec::new(); body.face_count()],
             sub: Vec::new(),
             interior: vec![Vec::new(); body.face_count()],
-            hits: HashMap::new(),
+            hits: HashMap::default(),
         }
     }
+}
+
+impl Side<'_> {
+    fn trim(&self, f: u32) -> &FaceTrim {
+        self.trims[f as usize].get_or_init(|| FaceTrim::build(self.body, &self.mesh, f, SAG))
+    }
+}
+
+/// Bounds that are sure to contain face `f`: its edges, and for a curved
+/// face the part of its surface that those edges can enclose.
+fn face_bounds(body: &Body, eboxes: &[Aabb], f: u32) -> Aabb {
+    let mut edges = Aabb::EMPTY;
+    for h in body.face_hes(f) {
+        edges.union(&eboxes[(h >> 1) as usize]);
+    }
+    let s = body.f_surface(f);
+    let z = s.f.z;
+    // Half extents of a disc of radius `r` across the axis, `t` thick.
+    let disc = |r: f64, t: f64| {
+        let across = |k: f64| r * (1.0 - k * k).max(0.0).sqrt() + t * k.abs();
+        v3(across(z.x), across(z.y), across(z.z))
+    };
+    // Heights along the axis that the edges reach.
+    let heights = || {
+        let (mut lo, mut hi) = (f64::INFINITY, f64::NEG_INFINITY);
+        for i in 0..8 {
+            let corner = v3(
+                if i & 1 == 0 { edges.lo.x } else { edges.hi.x },
+                if i & 2 == 0 { edges.lo.y } else { edges.hi.y },
+                if i & 4 == 0 { edges.lo.z } else { edges.hi.z },
+            );
+            let h = (corner - s.f.o).dot(z);
+            lo = lo.min(h);
+            hi = hi.max(h);
+        }
+        (lo, hi)
+    };
+    let around = |centres: [V3; 2], reach: V3| {
+        let mut b = Aabb::EMPTY;
+        for c in centres {
+            b.add(c - reach);
+            b.add(c + reach);
+        }
+        b
+    };
+    let mut bounds = match s.kind {
+        SurfKind::Plane => return edges,
+        SurfKind::Cylinder => {
+            let (lo, hi) = heights();
+            around([s.f.o + z * lo, s.f.o + z * hi], disc(s.r, 0.0))
+        }
+        SurfKind::Cone => {
+            let (mut lo, mut hi) = heights();
+            // A face with a single loop may run on to the apex.
+            if body.face_loops(f).len() == 1 {
+                lo = lo.min(0.0);
+                hi = hi.max(0.0);
+            }
+            let widest = lo.abs().max(hi.abs()) * s.s.tan();
+            around([s.f.o + z * lo, s.f.o + z * hi], disc(widest, 0.0))
+        }
+        SurfKind::Sphere => around([s.f.o, s.f.o], v3(s.r, s.r, s.r)),
+        SurfKind::Torus => around([s.f.o, s.f.o], disc(s.r + s.s, s.s)),
+    };
+    if !edges.is_empty() {
+        bounds.union(&edges);
+    }
+    bounds.grown(10.0 * TOL)
 }
 
 /// A piece of intersection curve lying in both bodies' boundaries.
@@ -216,12 +302,13 @@ fn evaluate(a: &Body, b: &Body, op: Op) -> Result<Body, String> {
             _ => Ok(a.clone()),
         };
     }
-    let timing = std::env::var_os("LIMO_CAD_KERNEL_PROFILE").is_some();
-    let mut clock = std::time::Instant::now();
+    // The clock is only started on request: reading the time is not
+    // available on every target the kernel builds for.
+    let mut clock = crate::diag::profile().then(std::time::Instant::now);
     let mut lap = |name: &str| {
-        if timing {
+        if let Some(clock) = clock.as_mut() {
             eprintln!("  {name}: {:?}", clock.elapsed());
-            clock = std::time::Instant::now();
+            *clock = std::time::Instant::now();
         }
     };
     let mut sa = Side::new(a);
@@ -233,7 +320,7 @@ fn evaluate(a: &Body, b: &Body, op: Op) -> Result<Body, String> {
 
     // 1. Intersection curves and coincident faces.
     let mut segs: Vec<Seg> = Vec::new();
-    let mut relation: HashMap<(u32, u32), Ssi> = HashMap::new();
+    let mut relation: HashMap<(u32, u32), Relation> = HashMap::default();
     for fa in 0..a.face_count() as u32 {
         if !sa.boxes[fa as usize].overlaps(&sb.bbox) {
             continue;
@@ -243,14 +330,27 @@ fn evaluate(a: &Body, b: &Body, op: Op) -> Result<Body, String> {
                 continue;
             }
             let key = (a.f_surf[fa as usize], b.f_surf[fb as usize]);
-            let rel = relation
+            let (rel, crossings) = relation
                 .entry(key)
-                .or_insert_with(|| intersect(a.f_surface(fa), b.f_surface(fb)))
+                .or_insert_with(|| {
+                    let rel = intersect(a.f_surface(fa), b.f_surface(fb));
+                    let crossings = match &rel {
+                        Ssi::Curves(curves) => crossings(curves, a.f_surface(fa)),
+                        _ => Vec::new(),
+                    };
+                    (rel, crossings)
+                })
                 .clone();
             match rel {
                 Ssi::None => {}
                 Ssi::Unsupported(what) => {
-                    if separated(&sa, fa, b.f_surface(fb)) || separated(&sb, fb, a.f_surface(fa)) {
+                    // Either face's edges may go through the other; a closed
+                    // crossing inside both shows best on the smaller face.
+                    let a_smaller =
+                        sa.boxes[fa as usize].diagonal() <= sb.boxes[fb as usize].diagonal();
+                    if !pierces(&sa, fa, &sb, fb, a_smaller)
+                        && !pierces(&sb, fb, &sa, fa, !a_smaller)
+                    {
                         continue;
                     }
                     return Err(format!(
@@ -265,8 +365,8 @@ fn evaluate(a: &Body, b: &Body, op: Op) -> Result<Body, String> {
                     imprint(&sa, fa, &sb, fb, true, &mut segs);
                 }
                 Ssi::Curves(curves) => {
-                    for c in &curves {
-                        section(&mut sa, fa, &mut sb, fb, c, &mut segs);
+                    for (c, cuts) in curves.iter().zip(&crossings) {
+                        section(&mut sa, fa, &mut sb, fb, c, cuts, &mut segs);
                     }
                 }
             }
@@ -350,7 +450,7 @@ fn evaluate(a: &Body, b: &Body, op: Op) -> Result<Body, String> {
         Op::Union => c == Cls::Out,
         Op::Cut | Op::Intersect => c == Cls::In,
     };
-    if std::env::var_os("LIMO_CAD_KERNEL_TRACE").is_some() {
+    if crate::diag::trace() {
         for (name, list, cls) in [("A", &pieces_a, &cls_a), ("B", &pieces_b, &cls_b)] {
             for (piece, c) in list.iter().zip(cls.iter()) {
                 eprintln!("{name} face {} -> {c:?}", piece.orig);
@@ -370,7 +470,11 @@ fn evaluate(a: &Body, b: &Body, op: Op) -> Result<Body, String> {
     let mut out = Body::new();
     let mut edge_map: Vec<u32> = vec![NONE; arr.g.edge_count()];
     let mut vert_map: Vec<u32> = vec![NONE; arr.g.verts.len()];
-    let mut add = |out: &mut Body, src: &Body, piece: &Piece, reversed: bool| -> Result<(), String> {
+    let mut add = |out: &mut Body,
+                   src: &Body,
+                   piece: &Piece,
+                   reversed: bool|
+     -> Result<(), String> {
         let (surf, same) = out.intern_surf(*src.f_surface(piece.orig));
         let sense = (src.f_sense[piece.orig as usize] == same) != reversed;
         let mut loops: Vec<Vec<u32>> = Vec::with_capacity(piece.loops.len());
@@ -450,28 +554,150 @@ fn disjoint(a: &Body, b: &Body, op: Op) -> Result<Body, String> {
     }
 }
 
-/// True when every sample of face `f` is clearly on one side of `s`.
-fn separated(side: &Side, f: u32, s: &Surface) -> bool {
-    let trim = &side.trims[f as usize];
-    let mut sign = 0.0;
-    let mut check = |p: V3| {
-        let d = s.sdist(p);
-        if d.abs() < 4.0 * trim.sag {
-            return false;
+/// Does face `f` pass through face `g` of the other body? Used only for
+/// surface pairs whose intersection curve the kernel cannot write down: when
+/// neither face passes through the other, that curve is not needed. Faces
+/// that merely touch do not count.
+///
+/// The surface of `g` splits space in two. Wherever `f` changes sides — along
+/// its boundary or across its interior — the crossing point either lies in
+/// `g`, and the faces intersect, or misses it.
+fn pierces(side: &Side, f: u32, other: &Side, g: u32, interior: bool) -> bool {
+    let s = other.body.f_surface(g);
+    let touch = 100.0 * TOL;
+    // A signed distance changes no faster than the point moves: a face whose
+    // bounds stay within reach of their centre cannot get to the surface.
+    let bounds = &side.boxes[f as usize];
+    let centre = (bounds.lo + bounds.hi) * 0.5;
+    if s.sdist(centre).abs() > 0.5 * bounds.diagonal() + touch {
+        return false;
+    }
+    let trim = side.trim(f);
+    // Where a path crosses the surface, if its ends (at distances `dp` and
+    // `dq`) are clearly on opposite sides.
+    let crossing = |dp: f64, dq: f64, at: &dyn Fn(f64) -> V3| -> Option<V3> {
+        if !((dp < -touch && dq > touch) || (dp > touch && dq < -touch)) {
+            return None;
         }
-        if sign == 0.0 {
-            sign = d.signum();
+        let (mut lo, mut hi) = (0.0, 1.0);
+        for _ in 0..40 {
+            let mid = 0.5 * (lo + hi);
+            if (s.sdist(at(mid)) > 0.0) == (dp > 0.0) {
+                lo = mid;
+            } else {
+                hi = mid;
+            }
         }
-        d.signum() == sign
+        Some(at(0.5 * (lo + hi)))
     };
-    for lp in &trim.loops {
-        if !lp.p3.iter().all(|p| check(*p)) {
+    let lands = |p: V3| classify(other.body, other.trim(g), g, p) == PtClass::In;
+    // A crossing that sits exactly on the rim of `g` decides nothing by
+    // itself: the faces may only meet there. They intersect if, a little
+    // way into `f`, the surface of `g` is still crossed inside `g`.
+    let enters = |z: V3| -> bool {
+        let reach = 0.02;
+        let q0 = trim.uv(z);
+        let m = trim.metric(q0);
+        if m.x <= 1.0e-12 || m.y <= 1.0e-12 {
             return false;
+        }
+        let steps = 24;
+        let ring: Vec<(V2, f64)> = (0..steps)
+            .map(|k| {
+                let a = TAU * k as f64 / steps as f64;
+                let q = q0 + v2(reach * a.cos() / m.x, reach * a.sin() / m.y);
+                (q, s.sdist(trim.point(q)))
+            })
+            .collect();
+        for k in 0..steps {
+            let ((qa, da), (qb, db)) = (ring[k], ring[(k + 1) % steps]);
+            if (da > 0.0) == (db > 0.0) {
+                continue;
+            }
+            let (mut lo, mut hi) = (0.0, 1.0);
+            for _ in 0..40 {
+                let mid = 0.5 * (lo + hi);
+                if (s.sdist(trim.point(qa + (qb - qa) * mid)) > 0.0) == (da > 0.0) {
+                    lo = mid;
+                } else {
+                    hi = mid;
+                }
+            }
+            let w = qa + (qb - qa) * (0.5 * (lo + hi));
+            if trim.contains_uv(w) && lands(trim.point(w)) {
+                return true;
+            }
+        }
+        false
+    };
+    let through = |z: V3| match classify(other.body, other.trim(g), g, z) {
+        PtClass::In => true,
+        PtClass::On => enters(z),
+        PtClass::Out => false,
+    };
+    // Along the boundary: an edge of `f` that goes through `g`, between two
+    // of its points or right at one.
+    for lp in &trim.loops {
+        let n = lp.p3.len();
+        let d: Vec<f64> = lp.p3.iter().map(|p| s.sdist(*p)).collect();
+        for i in 0..n {
+            let j = (i + 1) % n;
+            let (p, q) = (lp.p3[i], lp.p3[j]);
+            if crossing(d[i], d[j], &|t| p + (q - p) * t).is_some_and(through) {
+                return true;
+            }
+            let k = (j + 1) % n;
+            let opposed = (d[i] < -touch && d[k] > touch) || (d[i] > touch && d[k] < -touch);
+            if d[j].abs() <= touch && opposed && through(q) {
+                return true;
+            }
         }
     }
-    trim.interior_points()
-        .iter()
-        .all(|(q, _)| check(trim.point(*q)))
+    if !interior {
+        return false;
+    }
+    // Across the interior: `g` pokes through `f` without reaching its edges.
+    let n = 16;
+    let node = |i: usize, j: usize| {
+        v2(
+            trim.lo.x + (trim.hi.x - trim.lo.x) * i as f64 / n as f64,
+            trim.lo.y + (trim.hi.y - trim.lo.y) * j as f64 / n as f64,
+        )
+    };
+    let at = |i: usize, j: usize| i * (n + 1) + j;
+    let mut grid: Vec<f64> = Vec::with_capacity((n + 1) * (n + 1));
+    for i in 0..=n {
+        for j in 0..=n {
+            grid.push(s.sdist(trim.point(node(i, j))));
+        }
+    }
+    // Whether a node belongs to the face is only worth finding out next to
+    // a change of sides.
+    let mut inside: Vec<Option<bool>> = vec![None; grid.len()];
+    let mut member =
+        |i: usize, j: usize| *inside[at(i, j)].get_or_insert_with(|| trim.contains_uv(node(i, j)));
+    for i in 0..=n {
+        for j in 0..=n {
+            let dp = grid[at(i, j)];
+            for (k, l) in [(i + 1, j), (i, j + 1)] {
+                if k > n || l > n {
+                    continue;
+                }
+                let dq = grid[at(k, l)];
+                if !((dp < -touch && dq > touch) || (dp > touch && dq < -touch)) {
+                    continue;
+                }
+                if !member(i, j) || !member(k, l) {
+                    continue;
+                }
+                let (a, b) = (node(i, j), node(k, l));
+                if crossing(dp, dq, &|t| trim.point(a + (b - a) * t)).is_some_and(lands) {
+                    return true;
+                }
+            }
+        }
+    }
+    false
 }
 
 fn dedup_params(c: &Curve, params: &mut Vec<f64>) {
@@ -532,13 +758,72 @@ fn boundary_params(
     }
 }
 
-/// Clip intersection curve `c` of faces `fa` and `fb` to both faces.
-fn section(sa: &mut Side, fa: u32, sb: &mut Side, fb: u32, c: &Curve, segs: &mut Vec<Seg>) {
+/// Parameters at which the intersection curves of one pair of surfaces
+/// cross each other. Two equal cylinders, for instance, meet in two ellipses
+/// that share two points; the curves have to end there like at any vertex.
+fn crossings(curves: &[Curve], on: &Surface) -> Vec<Vec<f64>> {
+    let mut cuts: Vec<Vec<f64>> = vec![Vec::new(); curves.len()];
+    let span = |c: &Curve| {
+        c.bounds().unwrap_or(if c.periodic() {
+            (0.0, TAU)
+        } else {
+            (-1.0e6, 1.0e6)
+        })
+    };
+    // The branches of a traced curve only meet where they end.
+    if curves
+        .iter()
+        .any(|c| c.kind == crate::geom::CurveKind::Trace)
+    {
+        return cuts;
+    }
+    for i in 0..curves.len() {
+        for j in i + 1..curves.len() {
+            let (t0, t1) = span(&curves[i]);
+            if let Hits::Roots(roots) = curve_curve(&curves[i], t0, t1, &curves[j], on) {
+                for r in roots {
+                    cuts[i].push(r.t);
+                    cuts[j].push(curves[j].param(curves[i].point(r.t)));
+                }
+            }
+        }
+    }
+    cuts
+}
+
+/// Clip intersection curve `c` of faces `fa` and `fb` to both faces. `cuts`
+/// are further parameters at which the curve must end.
+fn section(
+    sa: &mut Side,
+    fa: u32,
+    sb: &mut Side,
+    fb: u32,
+    c: &Curve,
+    cuts: &[f64],
+    segs: &mut Vec<Seg>,
+) {
     let (surf_a, surf_b) = (*sa.body.f_surface(fa), *sb.body.f_surface(fb));
     let mut params: Vec<f64> = Vec::new();
     let (box_a, box_b) = (sa.boxes[fa as usize], sb.boxes[fb as usize]);
-    boundary_params(sa, fa, &surf_b, sb.body.f_surf[fb as usize], &box_b, c, &mut params);
-    boundary_params(sb, fb, &surf_a, sa.body.f_surf[fa as usize], &box_a, c, &mut params);
+    boundary_params(
+        sa,
+        fa,
+        &surf_b,
+        sb.body.f_surf[fb as usize],
+        &box_b,
+        c,
+        &mut params,
+    );
+    boundary_params(
+        sb,
+        fb,
+        &surf_a,
+        sa.body.f_surf[fa as usize],
+        &box_a,
+        c,
+        &mut params,
+    );
+    params.extend_from_slice(cuts);
     let periodic = c.periodic();
     if periodic {
         for p in &mut params {
@@ -574,7 +859,7 @@ fn section(sa: &mut Side, fa: u32, sb: &mut Side, fb: u32, c: &Curve, segs: &mut
             spans.push((w[0], w[1]));
         }
     }
-    let tracing = std::env::var_os("LIMO_CAD_KERNEL_TRACE").is_some();
+    let tracing = crate::diag::trace();
     if tracing {
         eprintln!(
             "section A{fa} x B{fb} {:?} at {:?}: params {params:?}",
@@ -587,15 +872,15 @@ fn section(sa: &mut Side, fa: u32, sb: &mut Side, fb: u32, c: &Curve, segs: &mut
         if tracing {
             eprintln!(
                 "   span {t0}..{t1} mid {mid:?}: A {:?} B {:?}",
-                classify(sa.body, &sa.trims[fa as usize], fa, mid),
-                classify(sb.body, &sb.trims[fb as usize], fb, mid)
+                classify(sa.body, sa.trim(fa), fa, mid),
+                classify(sb.body, sb.trim(fb), fb, mid)
             );
         }
-        let ca = classify(sa.body, &sa.trims[fa as usize], fa, mid);
+        let ca = classify(sa.body, sa.trim(fa), fa, mid);
         if ca == PtClass::Out {
             continue;
         }
-        let cb = classify(sb.body, &sb.trims[fb as usize], fb, mid);
+        let cb = classify(sb.body, sb.trim(fb), fb, mid);
         if cb == PtClass::Out {
             continue;
         }
@@ -660,7 +945,7 @@ fn imprint(src: &Side, fs: u32, dst: &Side, fd: u32, dst_is_b: bool, segs: &mut 
         dedup_params(&c, &mut params);
         for w in params.windows(2) {
             let mid = c.point(0.5 * (w[0] + w[1]));
-            if classify(dst.body, &dst.trims[fd as usize], fd, mid) != PtClass::In {
+            if classify(dst.body, dst.trim(fd), fd, mid) != PtClass::In {
                 continue;
             }
             segs.push(Seg {
@@ -677,10 +962,7 @@ fn imprint(src: &Side, fs: u32, dst: &Side, fd: u32, dst_is_b: bool, segs: &mut 
 /// Register the span `[t0, t1]` of `c`, split at every candidate vertex that
 /// lies on it. Returns registry half-edges in order from `t0` to `t1`.
 fn split(arr: &mut Arr, c: &Curve, t0: f64, t1: f64, cands: &[(u32, V3)]) -> Vec<u32> {
-    let mut stops: Vec<(f64, u32)> = vec![
-        (t0, arr.vert(c.point(t0))),
-        (t1, arr.vert(c.point(t1))),
-    ];
+    let mut stops: Vec<(f64, u32)> = vec![(t0, arr.vert(c.point(t0))), (t1, arr.vert(c.point(t1)))];
     if !cands.is_empty() {
         let mut bounds = Aabb::EMPTY;
         let curved = c.kind != crate::geom::CurveKind::Line;
@@ -779,8 +1061,8 @@ fn chord_dir(g: &Body, h: u32, delta: f64) -> V3 {
 /// continue with the first edge clockwise from the one just travelled.
 fn trace(arr: &Arr, surf: &Surface, sense: bool, hes: &[u32]) -> Result<Vec<Vec<u32>>, String> {
     let g = &arr.g;
-    let mut outgoing: HashMap<u32, Vec<u32>> = HashMap::new();
-    let mut shortest: HashMap<u32, f64> = HashMap::new();
+    let mut outgoing: HashMap<u32, Vec<u32>> = HashMap::default();
+    let mut shortest: HashMap<u32, f64> = HashMap::default();
     for &h in hes {
         outgoing.entry(g.h_origin(h)).or_default().push(h);
         let len = g.e_length(h >> 1);
@@ -799,7 +1081,8 @@ fn trace(arr: &Arr, surf: &Surface, sense: bool, hes: &[u32]) -> Result<Vec<Vec<
         let e2 = n.cross(e1);
         dir.dot(e2).atan2(dir.dot(e1))
     };
-    let mut angles: HashMap<u32, f64> = HashMap::with_capacity(hes.len());
+    let mut angles: HashMap<u32, f64> =
+        HashMap::with_capacity_and_hasher(hes.len(), Default::default());
     for &h in hes {
         angles.insert(h, angle(h, g.h_origin(h)));
     }
@@ -824,7 +1107,7 @@ fn trace(arr: &Arr, surf: &Surface, sense: bool, hes: &[u32]) -> Result<Vec<Vec<
         best.map(|(_, c)| c)
             .ok_or_else(|| "an intersection edge ends inside a face".to_string())
     };
-    let mut used: HashSet<u32> = HashSet::with_capacity(hes.len());
+    let mut used: HashSet<u32> = HashSet::with_capacity_and_hasher(hes.len(), Default::default());
     let mut loops = Vec::new();
     for &start in hes {
         if used.contains(&start) {
@@ -901,10 +1184,15 @@ fn group(
     let polys: Vec<TrimLoop> = loops
         .iter()
         .map(|hes| {
-            FaceTrim::from_points(*surf, !sense, vec![loop_points(gmesh, hes.iter().copied())], SAG)
-                .loops
-                .pop()
-                .ok_or_else(|| "empty loop".to_string())
+            FaceTrim::from_points(
+                *surf,
+                !sense,
+                vec![loop_points(gmesh, hes.iter().copied())],
+                SAG,
+            )
+            .loops
+            .pop()
+            .ok_or_else(|| "empty loop".to_string())
         })
         .collect::<Result<_, _>>()?;
     let mut regions: Vec<(Kind, Vec<usize>)> = Vec::new();
@@ -923,10 +1211,30 @@ fn group(
         }
     }
     let mean_v = |i: usize| polys[i].uv.iter().map(|q| q.y).sum::<f64>() / polys[i].uv.len() as f64;
-    // Both directions of one section circle sit at the same height: the one
-    // travelling in -u closes the band below and must come first.
+    // Order the loops around the surface by height. Each is read at the same
+    // few angles, so the two directions of one section curve come out equal
+    // whatever its shape: of those, the one travelling in -u closes the band
+    // below and must come first.
+    let heights: Vec<f64> = (0..polys.len())
+        .map(|i| {
+            let lp = &polys[i];
+            let (mut sum, mut n) = (0.0, 0);
+            for k in 0..8 {
+                let angle = TAU * (k as f64 + 0.5) / 8.0;
+                if let Some(v) = v_at(lp, wrap_from(angle, lp.lo.x)) {
+                    sum += v;
+                    n += 1;
+                }
+            }
+            if n == 8 {
+                sum / 8.0
+            } else {
+                mean_v(i)
+            }
+        })
+        .collect();
     winding.sort_by(|&x, &y| {
-        let (vx, vy) = (mean_v(x), mean_v(y));
+        let (vx, vy) = (heights[x], heights[y]);
         if (vx - vy).abs() <= 1.0e-7 * (1.0 + vx.abs()) {
             polys[x].shift.x.total_cmp(&polys[y].shift.x)
         } else {
@@ -945,6 +1253,23 @@ fn group(
             for slot in &mut lift[n - leading..] {
                 *slot = TAU;
             }
+        }
+    }
+    if crate::diag::trace() {
+        for &i in &winding {
+            let (lo, hi) = polys[i]
+                .uv
+                .iter()
+                .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), q| {
+                    (lo.min(q.y), hi.max(q.y))
+                });
+            eprintln!(
+                "  winding loop {i} of {:?}: travels {}u, height {lo:.6} to {hi:.6} (mean {:.6}), {} edges",
+                surf.kind,
+                if polys[i].shift.x > 0.0 { '+' } else { '-' },
+                mean_v(i),
+                loops[i].len()
+            );
         }
     }
     let mut k = 0;
@@ -1068,7 +1393,8 @@ fn split_face(
             .collect();
         let loops = trace(arr, surf, sense, &hes)?;
         let regions = group(gmesh, surf, sense, &loops)?;
-        let mut region_of: HashMap<u32, usize> = HashMap::with_capacity(hes.len());
+        let mut region_of: HashMap<u32, usize> =
+            HashMap::with_capacity_and_hasher(hes.len(), Default::default());
         for (r, members) in regions.iter().enumerate() {
             for &l in members {
                 for &h in &loops[l] {
@@ -1076,7 +1402,7 @@ fn split_face(
                 }
             }
         }
-        if std::env::var_os("LIMO_CAD_KERNEL_TRACE").is_some() {
+        if crate::diag::trace() {
             eprintln!("split {:?} sense {sense}: inner {inner:?}", surf.kind);
             for (i, lp) in loops.iter().enumerate() {
                 eprintln!("  loop {i}: {lp:?}");
@@ -1129,7 +1455,7 @@ fn point_in_solid(side: &Side, p: V3) -> Option<bool> {
             };
             for r in roots {
                 let q = ray.point(r.t);
-                match classify(body, &side.trims[f as usize], f, q) {
+                match classify(body, side.trim(f), f, q) {
                     PtClass::Out => {}
                     PtClass::On => continue 'dirs,
                     PtClass::In => {
@@ -1158,8 +1484,14 @@ fn classify_pieces(
     other: &Side,
 ) -> Result<Vec<Cls>, String> {
     let mut out = Vec::with_capacity(list.len());
+    let reach = other.bbox.grown(10.0 * VTOL);
     for piece in list {
         let f = piece.orig;
+        // Most faces are nowhere near the other body.
+        if !this.boxes[f as usize].overlaps(&reach) {
+            out.push(Cls::Out);
+            continue;
+        }
         let trim = FaceTrim::from_points(
             *this.body.f_surface(f),
             !this.body.f_sense[f as usize],
@@ -1175,7 +1507,7 @@ fn classify_pieces(
             let p = trim.point(q);
             let mut on: Option<Cls> = None;
             for &(partner, agree) in &this.partners[f as usize] {
-                if classify(other.body, &other.trims[partner as usize], partner, p) != PtClass::Out {
+                if classify(other.body, other.trim(partner), partner, p) != PtClass::Out {
                     on = Some(if agree { Cls::OnSame } else { Cls::OnOpp });
                     break;
                 }
@@ -1189,7 +1521,7 @@ fn classify_pieces(
                 break;
             }
         }
-        if decided.is_none() && std::env::var_os("LIMO_CAD_KERNEL_TRACE").is_some() {
+        if decided.is_none() && crate::diag::trace() {
             eprintln!(
                 "undecided piece of face {f} ({:?}), {} loops, candidates:",
                 this.body.f_surface(f).kind,
@@ -1197,7 +1529,10 @@ fn classify_pieces(
             );
             for (q, score) in trim.interior_points() {
                 let p = trim.point(q);
-                eprintln!("   {p:?} clearance {score:.4} -> {:?}", point_in_solid(other, p));
+                eprintln!(
+                    "   {p:?} clearance {score:.4} -> {:?}",
+                    point_in_solid(other, p)
+                );
             }
             for lp in &piece.loops {
                 let text: Vec<String> = lp

@@ -119,8 +119,16 @@ pub fn solve(g: &dyn Fn(f64) -> f64, a: f64, b: f64, samples: usize, tol: f64) -
     // change at sample resolution.
     for i in 0..=n {
         let here = gs[i].abs();
-        let left = if i > 0 { gs[i - 1].abs() } else { f64::INFINITY };
-        let right = if i < n { gs[i + 1].abs() } else { f64::INFINITY };
+        let left = if i > 0 {
+            gs[i - 1].abs()
+        } else {
+            f64::INFINITY
+        };
+        let right = if i < n {
+            gs[i + 1].abs()
+        } else {
+            f64::INFINITY
+        };
         if here > left || here > right || gs[i] == 0.0 {
             continue;
         }
@@ -147,6 +155,153 @@ pub fn solve(g: &dyn Fn(f64) -> f64, a: f64, b: f64, samples: usize, tol: f64) -
     }
     roots.sort_by(|x, y| x.t.total_cmp(&y.t));
     roots
+}
+
+/// Real roots of a polynomial inside `[lo, hi]` at which it changes sign, in
+/// increasing order. Coefficients run from the constant term up. Roots are
+/// isolated between the roots of the derivative, so none can be missed.
+fn poly_roots(c: &[f64], lo: f64, hi: f64) -> Vec<f64> {
+    let scale = c.iter().fold(0.0_f64, |m, k| m.max(k.abs()));
+    let mut n = c.len();
+    while n > 0 && c[n - 1].abs() <= 1.0e-14 * scale {
+        n -= 1;
+    }
+    let c = &c[..n];
+    if n < 2 || lo >= hi {
+        return Vec::new();
+    }
+    let eval = |t: f64| c.iter().rev().fold(0.0, |acc, &k| acc * t + k);
+    if n == 2 {
+        let t = -c[0] / c[1];
+        return if t >= lo && t <= hi {
+            vec![t]
+        } else {
+            Vec::new()
+        };
+    }
+    let slope: Vec<f64> = (1..n).map(|i| c[i] * i as f64).collect();
+    let mut knots = vec![lo];
+    knots.extend(poly_roots(&slope, lo, hi));
+    knots.push(hi);
+    let mut roots: Vec<f64> = Vec::new();
+    for w in knots.windows(2) {
+        let (mut a, mut b) = (w[0], w[1]);
+        let (mut fa, fb) = (eval(a), eval(b));
+        if fa == 0.0 {
+            if roots.last() != Some(&a) {
+                roots.push(a);
+            }
+            continue;
+        }
+        if fb == 0.0 || (fa > 0.0) == (fb > 0.0) {
+            continue;
+        }
+        // The polynomial is monotone here: plain bisection is exact enough
+        // and cannot fail.
+        for _ in 0..200 {
+            let m = 0.5 * (a + b);
+            if m <= a || m >= b {
+                break;
+            }
+            let fm = eval(m);
+            if fm == 0.0 {
+                a = m;
+                b = m;
+                break;
+            }
+            if (fm > 0.0) == (fa > 0.0) {
+                a = m;
+                fa = fm;
+            } else {
+                b = m;
+            }
+        }
+        roots.push(0.5 * (a + b));
+    }
+    if eval(hi) == 0.0 && roots.last() != Some(&hi) {
+        roots.push(hi);
+    }
+    roots
+}
+
+/// Where a line meets a torus: the roots of a quartic.
+fn line_torus(c: &Curve, s: &Surface) -> Vec<(f64, bool)> {
+    let (major, minor) = (s.r, s.s);
+    let reach = major + minor;
+    let d = v3(c.f.x.dot(s.f.x), c.f.x.dot(s.f.y), c.f.x.dot(s.f.z));
+    let o = s.f.local(c.f.o);
+    // Measure the line from its point nearest the centre, in units of the
+    // torus size: the quartic is then well scaled wherever the torus is.
+    let t_near = -o.dot(d);
+    let p = (o + d * t_near) * (1.0 / reach);
+    let free = 1.0 - p.len2();
+    if free < -1.0e-9 {
+        return Vec::new();
+    }
+    let (big, small) = (major / reach, minor / reach);
+    let b = p.len2() + big * big - small * small;
+    let k = 4.0 * big * big;
+    let quartic = [
+        b * b - k * (p.x * p.x + p.y * p.y),
+        -2.0 * k * (p.x * d.x + p.y * d.y),
+        2.0 * b - k * (d.x * d.x + d.y * d.y),
+        0.0,
+        1.0,
+    ];
+    let half = free.max(0.0).sqrt() + 1.0e-6;
+    let point = |tau: f64| c.point(t_near + tau * reach);
+    let slope: Vec<f64> = (1..5).map(|i| quartic[i] * i as f64).collect();
+    let mut knots = vec![-half];
+    knots.extend(poly_roots(&slope, -half, half));
+    knots.push(half);
+    let crossings = poly_roots(&quartic, -half, half);
+    // Where the line only grazes the tube, the crossings on either side of
+    // the closest approach merge into one touching point.
+    let mut out: Vec<(f64, bool)> = Vec::new();
+    let mut grazed: Vec<(f64, f64)> = Vec::new();
+    for i in 1..knots.len() - 1 {
+        if s.sdist(point(knots[i])).abs() < TOL {
+            grazed.push((knots[i - 1], knots[i + 1]));
+            out.push((t_near + knots[i] * reach, true));
+        }
+    }
+    for tau in crossings {
+        if grazed.iter().any(|&(a, b)| tau > a && tau < b) {
+            continue;
+        }
+        // A spindle torus has an inner sheet that is not part of the surface.
+        if s.sdist(point(tau)).abs() < 1.0e-6 * (1.0 + reach) {
+            out.push((t_near + tau * reach, false));
+        }
+    }
+    out
+}
+
+/// Where a line meets a cone: a quadratic on the double cone.
+fn line_cone(c: &Curve, s: &Surface) -> Vec<(f64, bool)> {
+    let d = v3(c.f.x.dot(s.f.x), c.f.x.dot(s.f.y), c.f.x.dot(s.f.z));
+    let o = s.f.local(c.f.o);
+    let k = s.s.tan().powi(2);
+    let qa = d.x * d.x + d.y * d.y - k * d.z * d.z;
+    let qb = 2.0 * (o.x * d.x + o.y * d.y - k * o.z * d.z);
+    let qc = o.x * o.x + o.y * o.y - k * o.z * o.z;
+    if qa.abs() < 1.0e-12 {
+        // Parallel to a ruling: one crossing at most.
+        if qb.abs() < 1.0e-12 {
+            return Vec::new();
+        }
+        return vec![(-qc / qb, false)];
+    }
+    let t_mid = -qb / (2.0 * qa);
+    if s.sdist(c.point(t_mid)).abs() < TOL {
+        return vec![(t_mid, true)];
+    }
+    let disc = qb * qb - 4.0 * qa * qc;
+    if disc <= 0.0 {
+        return Vec::new();
+    }
+    let half = disc.sqrt() / (2.0 * qa.abs());
+    vec![(t_mid - half, false), (t_mid + half, false)]
 }
 
 /// Keep roots of a periodic closed form that fall inside `[t0, t1]`.
@@ -248,16 +403,32 @@ pub fn curve_surface(c: &Curve, t0: f64, t1: f64, s: &Surface) -> Hits {
                 true,
             ))
         }
+        (CurveKind::Line, SurfKind::Torus) => {
+            Hits::Roots(in_span(&line_torus(c, s), t0, t1, false))
+        }
+        (CurveKind::Line, SurfKind::Cone) => Hits::Roots(in_span(&line_cone(c, s), t0, t1, false)),
         _ => {
             let samples = match c.kind {
                 CurveKind::Line => 24,
                 _ => (((t1 - t0) / TAU * 64.0).ceil() as usize).max(8),
             };
+            // Sample finely enough to notice the curve passing through the
+            // smallest feature of the surface.
+            let feature = match s.kind {
+                SurfKind::Cylinder | SurfKind::Sphere => s.r,
+                SurfKind::Torus => s.s,
+                SurfKind::Plane | SurfKind::Cone => f64::INFINITY,
+            };
+            let by_size = if feature.is_finite() && feature > TOL {
+                ((c.length(t0, t1) / (0.5 * feature)).ceil() as usize).min(4096)
+            } else {
+                0
+            };
             Hits::Roots(solve(
                 &|t| s.sdist(c.point(t)),
                 t0,
                 t1,
-                samples,
+                samples.max(by_size),
                 TOL,
             ))
         }
@@ -322,6 +493,60 @@ pub fn curve_curve(c: &Curve, t0: f64, t1: f64, other: &Curve, s: &Surface) -> H
         .all(|k| dist(t0 + (t1 - t0) * k) < TOL)
     {
         return Hits::Coincident;
+    }
+    if c.kind == CurveKind::Circle {
+        // A circle against a line or another circle in its own plane.
+        let z = c.f.z;
+        let w = other.f.o - c.f.o;
+        let flat = w.dot(z).abs() < TOL;
+        let mut meet: Option<Vec<(V3, bool)>> = None;
+        if other.kind == CurveKind::Line && flat && other.f.x.dot(z).abs() < ANG_TOL {
+            let d = other.f.x;
+            let s_mid = -w.dot(d);
+            let foot = w + d * s_mid;
+            let closest = foot.len();
+            meet = Some(if (closest - c.r).abs() < TOL {
+                vec![(c.f.o + foot, true)]
+            } else if closest > c.r {
+                Vec::new()
+            } else {
+                let half = (c.r * c.r - closest * closest).sqrt();
+                vec![
+                    (c.f.o + foot - d * half, false),
+                    (c.f.o + foot + d * half, false),
+                ]
+            });
+        } else if other.kind == CurveKind::Circle && flat && other.f.z.cross(z).len() < ANG_TOL {
+            let gap = w.len();
+            let (r1, r2) = (c.r, other.r);
+            meet = Some(
+                if gap > r1 + r2 + TOL || gap < (r1 - r2).abs() - TOL || gap < TOL {
+                    Vec::new()
+                } else {
+                    let e = w * (1.0 / gap);
+                    if (gap - (r1 + r2)).abs() < TOL || (gap - (r1 - r2)).abs() < TOL {
+                        vec![(c.f.o + e * r1, true)]
+                    } else if (gap - (r2 - r1)).abs() < TOL {
+                        vec![(c.f.o - e * r1, true)]
+                    } else {
+                        let along = (gap * gap + r1 * r1 - r2 * r2) / (2.0 * gap);
+                        let off = (r1 * r1 - along * along).max(0.0).sqrt();
+                        let side = z.cross(e);
+                        vec![
+                            (c.f.o + e * along - side * off, false),
+                            (c.f.o + e * along + side * off, false),
+                        ]
+                    }
+                },
+            );
+        }
+        if let Some(points) = meet {
+            let params: Vec<(f64, bool)> = points
+                .iter()
+                .map(|&(p, touch)| (c.param(p), touch))
+                .collect();
+            return Hits::Roots(in_span(&params, t0, t1, true));
+        }
     }
     let samples = match c.kind {
         CurveKind::Line => 24,

@@ -51,7 +51,7 @@ impl Mesh {
     /// Enclosed volume by the divergence theorem (exact for planar bodies).
     pub fn volume(&self) -> f64 {
         let mut six = 0.0;
-        for t in self.indices.chunks_exact(3) {
+        for t in self.indices.as_chunks::<3>().0 {
             let (a, b, c) = (
                 self.positions[t[0] as usize],
                 self.positions[t[1] as usize],
@@ -64,7 +64,7 @@ impl Mesh {
 
     pub fn area(&self) -> f64 {
         let mut twice = 0.0;
-        for t in self.indices.chunks_exact(3) {
+        for t in self.indices.as_chunks::<3>().0 {
             let (a, b, c) = (
                 self.positions[t[0] as usize],
                 self.positions[t[1] as usize],
@@ -83,8 +83,7 @@ pub fn tessellate(body: &Body, opts: &TessOptions) -> Mesh {
         let trim = FaceTrim::build(body, &edges, f, opts.linear);
         let first = mesh.indices.len() as u32;
         tess_face(&trim, opts, &mut mesh);
-        mesh.faces
-            .push([first, mesh.indices.len() as u32 - first]);
+        mesh.faces.push([first, mesh.indices.len() as u32 - first]);
     }
     mesh
 }
@@ -213,10 +212,19 @@ fn tess_face(trim: &FaceTrim, opts: &TessOptions, mesh: &mut Mesh) {
             } else {
                 b
             };
-            tris.push([a, b, Corner { uv: tip_uv, src: tip }]);
+            tris.push([
+                a,
+                b,
+                Corner {
+                    uv: tip_uv,
+                    src: tip,
+                },
+            ]);
         }
         curved = false;
-    } else if let Some((bottom, top)) = strip_chains(trim, &corners, &winding, &plain, &mut fv, opts) {
+    } else if let Some((bottom, top)) =
+        strip_chains(trim, &corners, &winding, &plain, &mut fv, opts)
+    {
         // The face lies between two chains that are monotone in `u`.
         strip(&mut fv, trim, &bottom, &top, opts, &mut tris);
         curved = false;
@@ -410,9 +418,43 @@ fn strip(
         SurfKind::Torus => s.s,
         _ => f64::INFINITY,
     };
+    // Chains of one loop meet at both ends (the very same vertex, not a
+    // period image of it); a band closes on itself instead.
+    let mut joined =
+        bottom[0].src == top[0].src && bottom[bottom.len() - 1].src == top[top.len() - 1].src;
+    // Where such a loop begins or ends with an edge of constant `u`, that
+    // edge is a side of the patch in its own right: rows end on it, spread
+    // over its vertices, instead of all meeting in one of them.
+    let upright = |w: &[Corner]| (w[0].uv.x - w[1].uv.x).abs() <= 1.0e-9;
+    let lead = |chain: &[Corner]| chain.windows(2).take_while(|w| upright(w)).count();
+    let trail = |chain: &[Corner]| chain.windows(2).rev().take_while(|w| upright(w)).count();
+    let (mut left, mut right): (Vec<Corner>, Vec<Corner>) = (Vec::new(), Vec::new());
+    let (mut lower, mut upper) = (bottom, top);
+    if joined {
+        let (pb, pt) = (lead(bottom), lead(top));
+        let (qb, qt) = (trail(bottom), trail(top));
+        if pb + qb < bottom.len() - 1 && pt + qt < top.len() - 1 {
+            // Both sides run upwards, from the lower chain to the upper one.
+            left = bottom[..=pb]
+                .iter()
+                .rev()
+                .chain(&top[1..=pt])
+                .copied()
+                .collect();
+            right = bottom[bottom.len() - 1 - qb..]
+                .iter()
+                .chain(top[top.len() - 1 - qt..top.len() - 1].iter().rev())
+                .copied()
+                .collect();
+            lower = &bottom[pb..bottom.len() - qb];
+            upper = &top[pt..top.len() - qt];
+        } else {
+            joined = false;
+        }
+    }
     let (ua, ub) = (
-        bottom[0].uv.x.min(top[0].uv.x),
-        bottom[bottom.len() - 1].uv.x.max(top[top.len() - 1].uv.x),
+        lower[0].uv.x.min(upper[0].uv.x),
+        lower[lower.len() - 1].uv.x.max(upper[upper.len() - 1].uv.x),
     );
     let columns = (((ub - ua) / u_step(trim, opts, 1.0)).ceil() as usize).max(1);
     let mut layers = 1;
@@ -426,50 +468,99 @@ fn strip(
         let mut gap: f64 = 0.0;
         for i in 0..=columns {
             let u = ua + (ub - ua) * i as f64 / columns as f64;
-            gap = gap.max((v_on(top, u) - v_on(bottom, u)).abs());
+            gap = gap.max((v_on(upper, u) - v_on(lower, u)).abs());
         }
         layers = ((gap / step).ceil() as usize).max(1);
     }
-    if layers == 1 {
+    if !joined && layers == 1 {
         zipper(bottom, top, tris);
         return;
     }
     let same = |fv: &FaceVerts, a: Corner, b: Corner| {
         fv.origin[a.src as usize] == fv.origin[b.src as usize]
     };
-    // Chains of one loop meet at both ends (the very same vertex, not a
-    // period image of it); a band closes on itself.
-    let pinned_start = bottom[0].src == top[0].src;
-    let pinned_end = bottom[bottom.len() - 1].src == top[top.len() - 1].src;
-    let closed = !pinned_start && same(fv, bottom[0], bottom[bottom.len() - 1]);
-    let mut prev: Vec<Corner> = bottom.to_vec();
-    for k in 1..layers {
-        let f = k as f64 / layers as f64;
-        let mut row: Vec<Corner> = Vec::with_capacity(columns + 1);
-        for i in 0..=columns {
-            if i == 0 && pinned_start {
-                row.push(bottom[0]);
-                continue;
+    let closed = !joined && same(fv, bottom[0], bottom[bottom.len() - 1]);
+    // Vertex of a side that row `k` ends on.
+    let pick = |side: &[Corner], k: usize| {
+        ((k * (side.len() - 1)) as f64 / layers as f64).round() as usize
+    };
+    let mut prev: Vec<Corner> = lower.to_vec();
+    let mut prev_ends = (0, 0);
+    for k in 1..=layers {
+        let ends = if joined {
+            (pick(&left, k), pick(&right, k))
+        } else {
+            (0, 0)
+        };
+        let row: Vec<Corner> = if k == layers {
+            upper.to_vec()
+        } else {
+            let f = k as f64 / layers as f64;
+            let mut row: Vec<Corner> = Vec::with_capacity(columns + 1);
+            for i in 0..=columns {
+                if joined && i == 0 {
+                    row.push(left[ends.0]);
+                    continue;
+                }
+                if joined && i == columns {
+                    row.push(right[ends.1]);
+                    continue;
+                }
+                if closed && i == columns {
+                    let first = row[0];
+                    row.push(fv.shifted(first, v2(ub - ua, 0.0)));
+                    continue;
+                }
+                let u = ua + (ub - ua) * i as f64 / columns as f64;
+                let (vb, vt) = (v_on(lower, u), v_on(upper, u));
+                let q = v2(u, vb + (vt - vb) * f);
+                let src = fv.push(trim.point(q), trim.normal(q));
+                row.push(Corner { uv: q, src });
             }
-            if i == columns && pinned_end {
-                row.push(bottom[bottom.len() - 1]);
-                continue;
-            }
-            if i == columns && closed {
-                let first = row[0];
-                row.push(fv.shifted(first, v2(ub - ua, 0.0)));
-                continue;
-            }
-            let u = ua + (ub - ua) * i as f64 / columns as f64;
-            let (vb, vt) = (v_on(bottom, u), v_on(top, u));
-            let q = v2(u, vb + (vt - vb) * f);
-            let src = fv.push(trim.point(q), trim.normal(q));
-            row.push(Corner { uv: q, src });
+            row
+        };
+        if joined {
+            stitch(
+                &prev,
+                &row,
+                &left[prev_ends.0..=ends.0],
+                &right[prev_ends.1..=ends.1],
+                tris,
+            );
+        } else {
+            zipper(&prev, &row, tris);
         }
-        zipper(&prev, &row, tris);
         prev = row;
+        prev_ends = ends;
     }
-    zipper(&prev, top, tris);
+}
+
+/// Triangulate between two rows that end on the sides of a patch. `left`
+/// and `right` are the stretches of those sides between the rows' end
+/// points, running from the lower row up to the upper one.
+fn stitch(
+    lower: &[Corner],
+    upper: &[Corner],
+    left: &[Corner],
+    right: &[Corner],
+    tris: &mut Vec<[Corner; 3]>,
+) {
+    let mut emit = |a: Corner, b: Corner, c: Corner| {
+        if a.src != b.src && b.src != c.src && a.src != c.src {
+            tris.push([a, b, c]);
+        }
+    };
+    // A side stretch is fanned from the nearest vertex off the side, so no
+    // triangle has all three corners on it.
+    let apex = lower[1];
+    for w in left.windows(2) {
+        emit(apex, w[1], w[0]);
+    }
+    let apex = upper[upper.len() - 2];
+    for w in right.windows(2) {
+        emit(apex, w[0], w[1]);
+    }
+    zipper(&lower[1..], &upper[..upper.len() - 1], tris);
 }
 
 /// Of two u-winding loops, the one that travels in +u has the face above it.
@@ -508,7 +599,11 @@ fn band_chains(
     let mut top = Vec::with_capacity(m + 1);
     for k in 0..=m {
         let i = (j + k) % m;
-        let wrapped = if j + k >= m { upper.shift } else { v2(0.0, 0.0) };
+        let wrapped = if j + k >= m {
+            upper.shift
+        } else {
+            v2(0.0, 0.0)
+        };
         top.push(fv.shifted(uc[i], wrapped + v2(delta, 0.0)));
     }
     top.reverse();
@@ -653,7 +748,22 @@ fn assemble(
         let up = trim.loops[i].shift.x > 0.0;
         if up && k + 1 < wound.len() && trim.loops[wound[k + 1]].shift.x < 0.0 {
             let j = wound[k + 1];
-            let (lc, uc) = (raised(fv, i, lift[k]), raised(fv, j, lift[k + 1]));
+            let (mut lc, uc) = (raised(fv, i, lift[k]), raised(fv, j, lift[k + 1]));
+            // Cut the band open where no hole is in the way.
+            if let Some(clear) = clear_angle(&holes) {
+                let start = (0..lc.len())
+                    .min_by(|&a, &b| {
+                        let da = (wrap_near(lc[a].uv.x, clear) - clear).abs();
+                        let db = (wrap_near(lc[b].uv.x, clear) - clear).abs();
+                        da.total_cmp(&db)
+                    })
+                    .unwrap();
+                let mut turned: Vec<Corner> = lc[start..].to_vec();
+                for c in &lc[..start] {
+                    turned.push(fv.shifted(*c, trim.loops[i].shift));
+                }
+                lc = turned;
+            }
             let (bottom, top) = band_chains(fv, &trim.loops[i], &lc, &trim.loops[j], &uc);
             let mut outer = bottom;
             outer.extend(top.into_iter().rev());
@@ -677,7 +787,10 @@ fn assemble(
             let mut outer: Vec<Corner> = cs.clone();
             outer.push(fv.shifted(cs[0], lp.shift));
             let tip = trim.point(v2(cs[0].uv.x, v_end));
-            let far = fv.push(tip, singular_normal(trim, v2(cs[0].uv.x + lp.shift.x, v_end)));
+            let far = fv.push(
+                tip,
+                singular_normal(trim, v2(cs[0].uv.x + lp.shift.x, v_end)),
+            );
             let near = fv.push(tip, singular_normal(trim, v2(cs[0].uv.x, v_end)));
             outer.push(Corner {
                 uv: v2(cs[0].uv.x + lp.shift.x, v_end),
@@ -730,6 +843,42 @@ fn assemble(
         let _ = placed;
     }
     polys
+}
+
+/// An angle `u` in the widest gap between the holes, if there are any.
+fn clear_angle(holes: &[Vec<Corner>]) -> Option<f64> {
+    let mut spans: Vec<(f64, f64)> = holes
+        .iter()
+        .filter(|h| !h.is_empty())
+        .map(|h| {
+            let lo = h.iter().map(|c| c.uv.x).fold(f64::INFINITY, f64::min);
+            let hi = h.iter().map(|c| c.uv.x).fold(f64::NEG_INFINITY, f64::max);
+            let start = wrap_from(lo, 0.0);
+            (start, start + (hi - lo))
+        })
+        .collect();
+    if spans.is_empty() {
+        return None;
+    }
+    spans.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let mut best = (f64::NEG_INFINITY, 0.0);
+    let mut reach = spans[0].1;
+    for w in 1..=spans.len() {
+        // The gap after everything seen so far, up to the next hole (the
+        // first one again, a turn later, to close the circle).
+        let next = if w < spans.len() {
+            spans[w].0
+        } else {
+            spans[0].0 + TAU
+        };
+        if next - reach > best.0 {
+            best = (next - reach, 0.5 * (next + reach));
+        }
+        if w < spans.len() {
+            reach = reach.max(spans[w].1);
+        }
+    }
+    (best.0 > 0.0).then_some(best.1)
 }
 
 /// Boundary of the full parameter rectangle of a sphere or torus, with seam
@@ -789,7 +938,11 @@ fn full_rectangle(
 }
 
 fn in_triangle(q: V2, a: V2, b: V2, c: V2, eps: f64) -> bool {
-    let (d0, d1, d2) = ((b - a).cross(q - a), (c - b).cross(q - b), (a - c).cross(q - c));
+    let (d0, d1, d2) = (
+        (b - a).cross(q - a),
+        (c - b).cross(q - b),
+        (a - c).cross(q - c),
+    );
     (d0 >= -eps && d1 >= -eps && d2 >= -eps) || (d0 <= eps && d1 <= eps && d2 <= eps)
 }
 
@@ -841,28 +994,80 @@ fn earclip(
             }
         }
         let Some(mut p) = cand else {
+            if crate::diag::trace() {
+                eprintln!(
+                    "earclip: no bridge for a hole of {} points at {m:?}",
+                    hole.len()
+                );
+            }
             continue;
         };
+        // Earlier bridges leave several corners at one point, each owning a
+        // different sector of the interior; the bridge must leave through
+        // the sector that faces the hole.
+        let faces_hole = |poly: &[Corner], i: usize| -> bool {
+            let n = poly.len();
+            let (a, v, b) = (poly[(i + n - 1) % n].uv, poly[i].uv, poly[(i + 1) % n].uv);
+            let left_of_in = (v - a).cross(m - v) >= 0.0;
+            let left_of_out = (b - v).cross(m - v) >= 0.0;
+            if (v - a).cross(b - v) > 0.0 {
+                left_of_in && left_of_out
+            } else {
+                left_of_in || left_of_out
+            }
+        };
+        if !faces_hole(&poly, p) {
+            let at = poly[p].uv;
+            if let Some(twin) =
+                (0..n).find(|&i| (poly[i].uv - at).len() < 1.0e-14 * scale && faces_hole(&poly, i))
+            {
+                p = twin;
+            }
+        }
         // A reflex vertex inside the candidate triangle would block the
         // bridge; the one closest in angle to the ray is visible instead.
         let (ta, tb, tc) = (m, v2(m.x, best_y), poly[p].uv);
         let mut best_tan = f64::INFINITY;
         let mut best_d = f64::INFINITY;
-        for i in 0..n {
-            let q = poly[i].uv;
+        for (i, corner) in poly.iter().enumerate().take(n) {
+            let q = corner.uv;
             if q.y < m.y || (q - tc).len() < 1.0e-14 * scale {
                 continue;
             }
             if in_triangle(q, ta, tb, tc, eps) {
                 let d = q - m;
                 let tan = d.x.abs() / d.y.max(1.0e-300);
-                if tan < best_tan - 1.0e-12 || ((tan - best_tan).abs() <= 1.0e-12 && d.len() < best_d)
+                if tan < best_tan - 1.0e-12
+                    || ((tan - best_tan).abs() <= 1.0e-12 && d.len() < best_d)
                 {
                     best_tan = tan;
                     best_d = d.len();
                     p = i;
                 }
             }
+        }
+        // Whatever vertex the bridge ends at, use the copy of it whose
+        // sector faces the hole.
+        if !faces_hole(&poly, p) {
+            let at = poly[p].uv;
+            if let Some(twin) =
+                (0..n).find(|&i| (poly[i].uv - at).len() < 1.0e-14 * scale && faces_hole(&poly, i))
+            {
+                p = twin;
+            }
+        }
+        if crate::diag::trace() {
+            let us: Vec<f64> = poly.iter().map(|c| c.uv.x).collect();
+            let (lo, hi) = (
+                us.iter().cloned().fold(f64::INFINITY, f64::min),
+                us.iter().cloned().fold(f64::NEG_INFINITY, f64::max),
+            );
+            eprintln!(
+                "earclip: bridge hole top {m:?} to {:?} (#{}), polygon u {lo:.3}..{hi:.3}, {} corners",
+                poly[p].uv,
+                poly[p].src,
+                poly.len()
+            );
         }
         let mut merged = Vec::with_capacity(poly.len() + hole.len() + 2);
         merged.extend_from_slice(&poly[..=p]);
@@ -879,7 +1084,8 @@ fn earclip(
     let mut prev: Vec<usize> = (0..n).map(|i| (i + n - 1) % n).collect();
     let mut next: Vec<usize> = (0..n).map(|i| (i + 1) % n).collect();
     let mut alive = vec![true; n];
-    let area2 = |a: usize, b: usize, c: usize| (poly[b].uv - poly[a].uv).cross(poly[c].uv - poly[a].uv);
+    let area2 =
+        |a: usize, b: usize, c: usize| (poly[b].uv - poly[a].uv).cross(poly[c].uv - poly[a].uv);
     let same = |a: V2, b: V2| (a - b).len() <= 1.0e-14 * scale;
     // Length of the diagonal an ear at `i` would add.
     let cost = |prev: &[usize], next: &[usize], i: usize| -> f64 {
@@ -906,18 +1112,44 @@ fn earclip(
                 // its flattest corner and carry on.
                 blocked.iter_mut().for_each(|x| *x = false);
             }
+            // Prefer a corner that covers nothing; failing that the cheapest
+            // convex one, never a reflex corner (its triangle lies outside).
             let mut worst = usize::MAX;
             let mut flattest = f64::INFINITY;
             for i in 0..n {
                 if alive[i] {
-                    let a = area2(prev[i], i, next[i]).abs();
-                    if a < flattest {
-                        flattest = a;
+                    let signed = area2(prev[i], i, next[i]);
+                    let rank = if signed.abs() <= eps {
+                        0.0
+                    } else if signed > 0.0 {
+                        1.0 + costs[i]
+                    } else {
+                        f64::MAX
+                    };
+                    if rank < flattest {
+                        flattest = rank;
                         worst = i;
                     }
                 }
             }
+            let flattest = area2(prev[worst], worst, next[worst]);
             let (a, c) = (prev[worst], next[worst]);
+            if crate::diag::trace() {
+                eprintln!(
+                    "earclip: stuck with {remaining} corners left, dropping one of area {}",
+                    area2(a, worst, c)
+                );
+                let mut i = worst;
+                let mut text = Vec::new();
+                for _ in 0..remaining.min(40) {
+                    text.push(format!(
+                        "({:.3},{:.3})#{}",
+                        poly[i].uv.x, poly[i].uv.y, poly[i].src
+                    ));
+                    i = next[i];
+                }
+                eprintln!("   ring: {}", text.join(" "));
+            }
             if flattest > eps {
                 out.push([poly[a], poly[worst], poly[c]]);
             }
@@ -1023,18 +1255,27 @@ fn refine(
         if split.is_empty() {
             break;
         }
-        if std::env::var_os("LIMO_CAD_KERNEL_TRACE").is_some() {
+        if crate::diag::trace() {
             let mut worst = (0.0, [v2(0.0, 0.0); 2], 0.0);
             for t in tris.iter() {
                 for k in 0..3 {
                     let (a, b) = (t[k], t[(k + 1) % 3]);
                     let e = excess(fv, a, b);
                     if e > worst.0 {
-                        worst = (e, [a.uv, b.uv], fv.p[a.src as usize].dist(fv.p[b.src as usize]));
+                        worst = (
+                            e,
+                            [a.uv, b.uv],
+                            fv.p[a.src as usize].dist(fv.p[b.src as usize]),
+                        );
                     }
                 }
             }
-            eprintln!("refine: {} tris, {} splits, worst {:?}", tris.len(), split.len(), worst);
+            eprintln!(
+                "refine: {} tris, {} splits, worst {:?}",
+                tris.len(),
+                split.len(),
+                worst
+            );
         }
         let mut next: Vec<[Corner; 3]> = Vec::with_capacity(tris.len() + 2 * split.len());
         for t in tris.iter() {

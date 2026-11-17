@@ -37,9 +37,7 @@ pub fn unify(body: &Body) -> Body {
     }
     let class: Vec<u32> = (0..nf as u32).map(|f| find(&mut parent, f)).collect();
     let mut dead: Vec<bool> = (0..ne as u32)
-        .map(|e| {
-            class[body.h_face(2 * e) as usize] == class[body.h_face(2 * e + 1) as usize]
-        })
+        .map(|e| class[body.h_face(2 * e) as usize] == class[body.h_face(2 * e + 1) as usize])
         .collect();
 
     // Successor of each surviving half-edge once the dead edges are gone.

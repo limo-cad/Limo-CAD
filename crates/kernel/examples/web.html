@@ -1,0 +1,537 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Limo kernel, live</title>
+<!--
+  Template of the kernel's browser demo. `cargo xtask kernel-demo` compiles
+  examples/web.rs to WebAssembly, compresses it and puts it where the
+  KERNEL placeholders are, giving one self-contained page.
+-->
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #eef0f3; --bg2: #dfe3e9; --panel: rgba(255, 255, 255, .86); --ink: #15181d; --muted: #5b6470;
+    --line: #cfd5dd; --accent: #c2410c; --good: #0f766e; --bad: #b91c1c; --track: #d5dae2;
+    --plane: #8a97a8; --cylinder: #3b82f6; --cone: #d97706; --sphere: #16a34a; --torus: #a855f7;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14161a; --bg2: #1d2026; --panel: rgba(27, 30, 36, .86); --ink: #eceef1; --muted: #98a1ad;
+      --line: #343944; --accent: #fb923c; --good: #2dd4bf; --bad: #f87171; --track: #3a404b;
+      --plane: #9aa7b8; --cylinder: #60a5fa; --cone: #fbbf24; --sphere: #4ade80; --torus: #c084fc;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg); color: var(--ink); overflow: hidden;
+    font: 14px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
+  canvas.dragging { cursor: grabbing; }
+  .panel {
+    position: fixed; top: 16px; left: 16px; bottom: 16px; width: 332px; display: flex; flex-direction: column;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); overflow: hidden;
+  }
+  .scroll { overflow-y: auto; padding: 16px 16px 8px; flex: 1; }
+  h1 { margin: 0; font-size: 17px; letter-spacing: -.01em; }
+  .lede { margin: 4px 0 14px; color: var(--muted); font-size: 12.5px; }
+  .tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 12px; }
+  .tabs button {
+    font: inherit; font-size: 12.5px; padding: 7px 8px; border-radius: 8px; border: 1px solid var(--line);
+    background: transparent; color: var(--ink); cursor: pointer; text-align: left;
+  }
+  .tabs button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  .about { color: var(--muted); font-size: 12.5px; margin: 0 0 12px; min-height: 4.3em; }
+  .dim { display: grid; grid-template-columns: 1fr auto; gap: 0 8px; align-items: baseline; margin-bottom: 7px; }
+  .dim label { font-size: 12.5px; }
+  .dim output { font-variant-numeric: tabular-nums; font-size: 12.5px; color: var(--muted); }
+  .dim input { grid-column: 1 / -1; width: 100%; margin: 2px 0 0; accent-color: var(--accent); }
+  .row { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0 4px; }
+  .row button, .row label {
+    font: inherit; font-size: 12.5px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line);
+    background: transparent; color: var(--ink); cursor: pointer; user-select: none;
+  }
+  .row label { display: inline-flex; align-items: center; gap: 6px; }
+  .row input { accent-color: var(--accent); margin: 0; }
+  .stats { border-top: 1px solid var(--line); padding: 12px 16px 14px; }
+  .times { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .times div span { display: block; }
+  .big { font-size: 24px; font-weight: 650; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+  .big small { font-size: 13px; font-weight: 500; color: var(--muted); margin-left: 3px; }
+  .cap { font-size: 11.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+  .counts { margin: 10px 0 0; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+  .kinds { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 6px 0 0; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+  .kinds i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 5px; }
+  .note { min-height: 1.5em; margin: 8px 0 0; font-size: 12.5px; color: var(--muted); }
+  .note.bad { color: var(--bad); }
+  .foot { margin: 8px 0 0; font-size: 11.5px; color: var(--muted); }
+  .hint { position: fixed; right: 16px; bottom: 14px; font-size: 12px; color: var(--muted); }
+  @media (max-width: 760px) {
+    /* A sheet under the model: the readings first, then the controls. */
+    .panel { top: auto; left: 8px; right: 8px; bottom: 8px; width: auto; max-height: 50vh; overflow-y: auto; }
+    .scroll { overflow: visible; flex: none; padding-top: 12px; }
+    .stats { order: -1; border-top: 0; border-bottom: 1px solid var(--line); padding-bottom: 10px; }
+    h1, .lede, .about, .foot, .hint { display: none; }
+    .note { min-height: 0; margin: 4px 0 0; }
+  }
+</style>
+</head>
+<body>
+<canvas id="view" aria-label="Solid model, drag to turn"></canvas>
+<section class="panel">
+  <div class="scroll">
+    <h1>Limo kernel, live</h1>
+    <p class="lede">An exact B-rep kernel running in this page. Every slider move models the part again from nothing: faces on planes, cylinders, cones, spheres and tori, joined by exact curves.</p>
+    <div class="tabs" id="tabs"></div>
+    <p class="about" id="about"></p>
+    <div id="dims"></div>
+    <div class="row">
+      <label><input type="checkbox" id="animate" checked> Animate</label>
+      <label><input type="checkbox" id="kinds"> Surface types</label>
+      <label><input type="checkbox" id="edges" checked> Edges</label>
+      <button id="shuffle" type="button">Shuffle</button>
+      <button id="reset" type="button">Reset</button>
+    </div>
+  </div>
+  <div class="stats">
+    <div class="times">
+      <div><span class="big" id="t-model">–<small>ms</small></span><span class="cap">exact model</span></div>
+      <div><span class="big" id="t-mesh">–<small>ms</small></span><span class="cap">display mesh</span></div>
+    </div>
+    <p class="counts" id="counts"></p>
+    <div class="kinds" id="kindlist"></div>
+    <p class="note" id="note"></p>
+    <p class="foot" id="foot"></p>
+  </div>
+</section>
+<div class="hint">Drag to turn · scroll to zoom · point at a face</div>
+<script>
+"use strict";
+const KERNEL = "__KERNEL_GZIP_BASE64__";
+const KERNEL_BYTES = Number("__KERNEL_BYTES__");
+const KINDS = ["plane", "cylinder", "cone", "sphere", "torus"];
+const PLURAL = ["planes", "cylinders", "cones", "spheres", "tori"];
+const $ = id => document.getElementById(id);
+const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+const rgb = hex => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255);
+
+// ---------------------------------------------------------------- kernel
+let wasm, kernel, catalogue = [];
+let part = 0, values = [], lastGood = null;
+
+async function loadKernel() {
+  const packed = Uint8Array.from(atob(KERNEL), c => c.charCodeAt(0));
+  const stream = new Blob([packed]).stream().pipeThrough(new DecompressionStream("gzip"));
+  wasm = await WebAssembly.compile(await new Response(stream).arrayBuffer());
+  await startKernel();
+}
+async function startKernel() {
+  kernel = (await WebAssembly.instantiate(wasm, {})).exports;
+}
+const bytes = (which, Type) => {
+  const n = kernel.limo_size(which);
+  return new Type(kernel.memory.buffer, kernel.limo_data(which), n);
+};
+const text = () => new TextDecoder().decode(bytes(6, Uint8Array));
+
+// ---------------------------------------------------------------- drawing
+const canvas = $("view");
+const gl = canvas.getContext("webgl2", { antialias: true, alpha: false });
+function program(vs, fs) {
+  const p = gl.createProgram();
+  for (const [type, src] of [[gl.VERTEX_SHADER, vs], [gl.FRAGMENT_SHADER, fs]]) {
+    const s = gl.createShader(type);
+    gl.shaderSource(s, "#version 300 es\nprecision highp float;\n" + src);
+    gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+    gl.attachShader(p, s);
+  }
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+  return p;
+}
+let solid, lines, meshVao, lineVao = [], buffers = {}, counts = { tris: 0, sharp: 0, smooth: 0 };
+function setupGl() {
+  solid = program(`
+    layout(location=0) in vec3 a_pos; layout(location=1) in vec3 a_nrm; layout(location=2) in vec2 a_tag;
+    uniform mat4 u_mvp; uniform mat3 u_turn;
+    out vec3 v_n; flat out vec2 v_tag;
+    void main() { v_n = u_turn * a_nrm; v_tag = a_tag; gl_Position = u_mvp * vec4(a_pos, 1.0); }`, `
+    in vec3 v_n; flat in vec2 v_tag;
+    uniform vec3 u_base; uniform vec3 u_pal[5]; uniform float u_kinds; uniform float u_hover;
+    out vec4 o;
+    void main() {
+      vec3 n = normalize(v_n);
+      vec3 base = mix(u_base, u_pal[int(v_tag.x + 0.5)], u_kinds);
+      vec3 key = normalize(vec3(-0.45, 0.60, 0.66));
+      float lit = 0.34 + 0.20 * (0.5 + 0.5 * n.y) + 0.50 * max(dot(n, key), 0.0)
+        + 0.14 * max(dot(n, normalize(vec3(0.7, -0.1, 0.5))), 0.0);
+      vec3 c = base * lit + vec3(0.22) * pow(max(dot(n, normalize(key + vec3(0.0, 0.0, 1.0))), 0.0), 60.0);
+      if (abs(v_tag.y - u_hover) < 0.5) c = mix(c, vec3(1.0, 0.60, 0.22), 0.38);
+      o = vec4(c, 1.0);
+    }`);
+  lines = program(`
+    layout(location=0) in vec3 a_pos; uniform mat4 u_mvp;
+    void main() { gl_Position = u_mvp * vec4(a_pos, 1.0); gl_Position.z -= 4e-4 * gl_Position.w; }`, `
+    uniform vec4 u_color; out vec4 o; void main() { o = u_color; }`);
+  meshVao = gl.createVertexArray();
+  gl.bindVertexArray(meshVao);
+  for (const [name, loc, size] of [["pos", 0, 3], ["nrm", 1, 3], ["tag", 2, 2]]) {
+    buffers[name] = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffers[name]);
+    gl.enableVertexAttribArray(loc);
+    gl.vertexAttribPointer(loc, size, gl.FLOAT, false, 0, 0);
+  }
+  buffers.idx = gl.createBuffer();
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, buffers.idx);
+  for (const name of ["sharp", "smooth"]) {
+    const vao = gl.createVertexArray();
+    gl.bindVertexArray(vao);
+    buffers[name] = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffers[name]);
+    gl.enableVertexAttribArray(0);
+    gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
+    lineVao.push(vao);
+  }
+  gl.bindVertexArray(null);
+  gl.enable(gl.DEPTH_TEST);
+  gl.enable(gl.CULL_FACE);
+}
+// Copies kept for picking the face under the pointer.
+let pick = { pos: new Float32Array(0), idx: new Uint32Array(0), tag: new Float32Array(0) };
+function upload() {
+  const put = (target, buffer, data) => { gl.bindBuffer(target, buffer); gl.bufferData(target, data, gl.DYNAMIC_DRAW); };
+  pick = { pos: bytes(0, Float32Array).slice(), idx: bytes(3, Uint32Array).slice(), tag: bytes(2, Float32Array).slice() };
+  put(gl.ARRAY_BUFFER, buffers.pos, pick.pos);
+  put(gl.ARRAY_BUFFER, buffers.nrm, bytes(1, Float32Array));
+  put(gl.ARRAY_BUFFER, buffers.tag, pick.tag);
+  gl.bindVertexArray(meshVao);
+  put(gl.ELEMENT_ARRAY_BUFFER, buffers.idx, pick.idx);
+  gl.bindVertexArray(null);
+  const sharp = bytes(4, Float32Array), smooth = bytes(5, Float32Array);
+  put(gl.ARRAY_BUFFER, buffers.sharp, sharp);
+  put(gl.ARRAY_BUFFER, buffers.smooth, smooth);
+  counts = { tris: pick.idx.length, sharp: sharp.length / 3, smooth: smooth.length / 3 };
+}
+
+// ---------------------------------------------------------------- camera
+const cam = { yaw: -0.9, pitch: 0.52, dist: 200, target: [0, 0, 0], fov: 26 * Math.PI / 180 };
+const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const unit = a => { const l = Math.hypot(...a); return [a[0] / l, a[1] / l, a[2] / l]; };
+function frame() {
+  const c = Math.cos(cam.pitch);
+  const eye = [cam.target[0] + cam.dist * c * Math.cos(cam.yaw), cam.target[1] + cam.dist * c * Math.sin(cam.yaw),
+    cam.target[2] + cam.dist * Math.sin(cam.pitch)];
+  const f = unit(sub(cam.target, eye)), r = unit(cross(f, [0, 0, 1])), u = cross(r, f);
+  return { eye, f, r, u };
+}
+function matrices() {
+  const { eye, f, r, u } = frame();
+  const aspect = canvas.width / canvas.height, t = 1 / Math.tan(cam.fov / 2);
+  const near = cam.dist / 40, far = cam.dist * 8;
+  // Column-major view and projection, multiplied by hand.
+  const view = [r[0], u[0], -f[0], 0, r[1], u[1], -f[1], 0, r[2], u[2], -f[2], 0, -dot(r, eye), -dot(u, eye), dot(f, eye), 1];
+  const proj = [t / aspect, 0, 0, 0, 0, t, 0, 0, 0, 0, (far + near) / (near - far), -1, 0, 0, 2 * far * near / (near - far), 0];
+  const mvp = new Float32Array(16);
+  for (let c = 0; c < 4; c++) for (let rw = 0; rw < 4; rw++) {
+    let s = 0;
+    for (let k = 0; k < 4; k++) s += proj[k * 4 + rw] * view[c * 4 + k];
+    mvp[c * 4 + rw] = s;
+  }
+  return { mvp, turn: new Float32Array([r[0], u[0], -f[0], r[1], u[1], -f[1], r[2], u[2], -f[2]]) };
+}
+function fit() {
+  const s = i => kernel.limo_stat(i);
+  const lo = [s(11), s(12), s(13)], hi = [s(14), s(15), s(16)];
+  cam.target = [0, 1, 2].map(i => (lo[i] + hi[i]) / 2);
+  const radius = Math.hypot(...sub(hi, lo)) / 2;
+  // The part gets the area the panel leaves free: beside it on a wide
+  // window, above it on a narrow one.
+  const narrow = innerWidth <= 760;
+  const wide = narrow ? 1 : 1 - 348 / innerWidth, tall = narrow ? 0.48 : 1;
+  const t = Math.tan(cam.fov / 2);
+  const half = Math.min(Math.atan(t * tall), Math.atan(t * wide * innerWidth / innerHeight));
+  cam.dist = radius / Math.sin(half) * 1.06;
+  cam.shift = narrow ? [0, 1 - tall] : [-(1 - wide), 0];
+}
+
+let hover = -1, dirty = true;
+function draw() {
+  dirty = false;
+  const dpr = Math.min(devicePixelRatio || 1, 2);
+  const w = Math.round(canvas.clientWidth * dpr), h = Math.round(canvas.clientHeight * dpr);
+  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+  gl.viewport(0, 0, w, h);
+  const bg = rgb(css("--bg"));
+  gl.clearColor(bg[0], bg[1], bg[2], 1);
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  if (!counts.tris) return;
+  const { mvp, turn } = matrices();
+  // Slide the picture sideways (or up) in clip space, away from the panel.
+  const shift = cam.shift || [0, 0];
+  for (let c = 0; c < 4; c++) { mvp[c * 4] -= shift[0] * mvp[c * 4 + 3]; mvp[c * 4 + 1] += shift[1] * mvp[c * 4 + 3]; }
+  gl.useProgram(solid);
+  gl.uniformMatrix4fv(gl.getUniformLocation(solid, "u_mvp"), false, mvp);
+  gl.uniformMatrix3fv(gl.getUniformLocation(solid, "u_turn"), false, turn);
+  const dark = matchMedia("(prefers-color-scheme: dark)").matches;
+  gl.uniform3fv(gl.getUniformLocation(solid, "u_base"), dark ? [0.70, 0.74, 0.80] : [0.80, 0.83, 0.87]);
+  gl.uniform3fv(gl.getUniformLocation(solid, "u_pal"), KINDS.flatMap(k => rgb(css("--" + k))));
+  gl.uniform1f(gl.getUniformLocation(solid, "u_kinds"), $("kinds").checked ? 0.85 : 0);
+  gl.uniform1f(gl.getUniformLocation(solid, "u_hover"), hover);
+  gl.enable(gl.POLYGON_OFFSET_FILL);
+  gl.polygonOffset(1, 1);
+  gl.bindVertexArray(meshVao);
+  gl.drawElements(gl.TRIANGLES, counts.tris, gl.UNSIGNED_INT, 0);
+  gl.disable(gl.POLYGON_OFFSET_FILL);
+  if ($("edges").checked) {
+    gl.useProgram(lines);
+    gl.uniformMatrix4fv(gl.getUniformLocation(lines, "u_mvp"), false, mvp);
+    const ink = dark ? [0.05, 0.06, 0.08] : [0.10, 0.12, 0.15];
+    gl.uniform4f(gl.getUniformLocation(lines, "u_color"), ink[0], ink[1], ink[2], 1);
+    gl.bindVertexArray(lineVao[0]);
+    gl.drawArrays(gl.LINES, 0, counts.sharp);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    gl.uniform4f(gl.getUniformLocation(lines, "u_color"), ink[0], ink[1], ink[2], 0.28);
+    gl.bindVertexArray(lineVao[1]);
+    gl.drawArrays(gl.LINES, 0, counts.smooth);
+    gl.disable(gl.BLEND);
+  }
+  gl.bindVertexArray(null);
+}
+
+// Face under the pointer: the nearest triangle along the ray through it.
+function faceAt(x, y) {
+  const { eye, f, r, u } = frame();
+  const shift = cam.shift || [0, 0];
+  const t = Math.tan(cam.fov / 2), aspect = canvas.clientWidth / canvas.clientHeight;
+  const nx = (2 * x / canvas.clientWidth - 1) + shift[0], ny = (1 - 2 * y / canvas.clientHeight) - shift[1];
+  const d = unit([0, 1, 2].map(i => f[i] + r[i] * nx * t * aspect + u[i] * ny * t));
+  const { pos, idx, tag } = pick;
+  let best = Infinity, face = -1;
+  for (let i = 0; i < idx.length; i += 3) {
+    const a = idx[i] * 3, b = idx[i + 1] * 3, c = idx[i + 2] * 3;
+    const e1 = [pos[b] - pos[a], pos[b + 1] - pos[a + 1], pos[b + 2] - pos[a + 2]];
+    const e2 = [pos[c] - pos[a], pos[c + 1] - pos[a + 1], pos[c + 2] - pos[a + 2]];
+    const p = cross(d, e2), det = dot(e1, p);
+    if (det < 1e-12) continue;
+    const s = [eye[0] - pos[a], eye[1] - pos[a + 1], eye[2] - pos[a + 2]];
+    const bu = dot(s, p) / det;
+    if (bu < 0 || bu > 1) continue;
+    const q = cross(s, e1), bv = dot(d, q) / det;
+    if (bv < 0 || bu + bv > 1) continue;
+    const dist = dot(e2, q) / det;
+    if (dist > 0 && dist < best) { best = dist; face = tag[idx[i] * 2 + 1]; }
+  }
+  return face;
+}
+
+// ---------------------------------------------------------------- modelling
+const ms = v => (v < 10 ? v.toFixed(2) : v.toFixed(1));
+// While the part is moving, show the mean of the last readings: one reading
+// of a page's coarse clock says little.
+let recent = [];
+function showTimes(model, mesh, single) {
+  if (single) {
+    recent.push([model, mesh]);
+    if (recent.length > 40) recent.shift();
+    model = recent.reduce((sum, r) => sum + r[0], 0) / recent.length;
+    mesh = recent.reduce((sum, r) => sum + r[1], 0) / recent.length;
+  }
+  $("t-model").firstChild.nodeValue = ms(model);
+  $("t-mesh").firstChild.nodeValue = ms(mesh);
+}
+function note(message, bad) {
+  $("note").textContent = message;
+  $("note").classList.toggle("bad", !!bad);
+}
+// Model the part with the current values. Returns the two timings.
+function model() {
+  new Float64Array(kernel.memory.buffer, kernel.limo_dims(), 16).set(values);
+  const t0 = performance.now();
+  const ok = kernel.limo_model(part);
+  const t1 = performance.now();
+  if (!ok) return { reason: text() };
+  kernel.limo_mesh(0.1, 0.16);
+  return { model: t1 - t0, mesh: performance.now() - t1 };
+}
+async function rebuild(refit) {
+  let result;
+  try {
+    result = model();
+  } catch (error) {
+    // A trap inside the kernel: start a fresh instance and say so.
+    await startKernel();
+    if (lastGood) { values = lastGood.slice(); model(); upload(); syncSliders(); }
+    note("The kernel stopped on those dimensions. That is a bug, not a limit: " + error.message, true);
+    dirty = true;
+    return;
+  }
+  if (result.reason) {
+    note("Not modelled: " + result.reason + ".", true);
+    return;
+  }
+  lastGood = values.slice();
+  upload();
+  if (refit) fit();
+  showTimes(result.model, result.mesh, true);
+  const s = i => kernel.limo_stat(i);
+  $("counts").textContent = `${s(0)} faces · ${s(1)} edges · ${s(2)} vertices · ${s(3).toLocaleString()} triangles · ${(s(4) / 1000).toFixed(2)} cm³`;
+  $("kindlist").innerHTML = KINDS.map((k, i) => s(6 + i) ? `<span><i style="background:var(--${k})"></i>${s(6 + i)} ${s(6 + i) === 1 ? k : PLURAL[i]}</span>` : "").join("");
+  if ($("note").classList.contains("bad")) note("");
+  dirty = true;
+  scheduleMeasure();
+}
+// Timers in a page are coarse. Once things are quiet, repeat the modelling
+// for a moment and show the average instead of one reading.
+let measureTimer = 0;
+function scheduleMeasure() {
+  clearTimeout(measureTimer);
+  if ($("animate").checked) return;
+  measureTimer = setTimeout(() => {
+    let runs = 0, model_ms = 0, mesh_ms = 0;
+    const start = performance.now();
+    while (performance.now() - start < 60) {
+      const r = model();
+      if (r.reason) return;
+      model_ms += r.model; mesh_ms += r.mesh; runs++;
+    }
+    showTimes(model_ms / runs, mesh_ms / runs);
+  }, 350);
+}
+
+// ---------------------------------------------------------------- controls
+function syncSliders() {
+  document.querySelectorAll(".dim").forEach((row, i) => {
+    row.querySelector("input").value = values[i];
+    row.querySelector("output").textContent = values[i].toFixed(1) + " mm";
+  });
+}
+function choose(index) {
+  part = index;
+  const spec = catalogue[part];
+  values = spec.dimensions.map(d => d.value);
+  phase = 0;
+  $("about").textContent = spec.about;
+  document.querySelectorAll("#tabs button").forEach((b, i) => b.setAttribute("aria-pressed", i === part));
+  $("dims").innerHTML = "";
+  spec.dimensions.forEach((d, i) => {
+    const row = document.createElement("div");
+    row.className = "dim";
+    row.innerHTML = `<label for="d${i}">${d.label}</label><output></output><input id="d${i}" type="range" min="${d.min}" max="${d.max}" step="0.1">`;
+    row.querySelector("input").addEventListener("input", event => {
+      $("animate").checked = false;
+      values[i] = Number(event.target.value);
+      syncSliders();
+      rebuild(false);
+    });
+    $("dims").append(row);
+  });
+  syncSliders();
+  hover = -1;
+  note("");
+  recent = [];
+  rebuild(true);
+}
+// Let every dimension drift through its range at its own pace.
+let phase = 0;
+function animate(dt) {
+  phase += dt;
+  const spec = catalogue[part];
+  values = spec.dimensions.map((d, i) => {
+    const swing = 0.5 - 0.5 * Math.cos(phase * (0.35 + 0.11 * i) + i * 1.7);
+    const start = (d.value - d.min) / (d.max - d.min);
+    // Begin at the part's own dimensions and ease into the full range.
+    const ease = Math.min(1, phase / 4);
+    const at = start + (swing - start) * ease;
+    return Math.round((d.min + (d.max - d.min) * at) * 10) / 10;
+  });
+  syncSliders();
+  rebuild(false);
+}
+function controls() {
+  catalogue.forEach((spec, i) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = spec.title;
+    b.addEventListener("click", () => choose(i));
+    $("tabs").append(b);
+  });
+  $("shuffle").addEventListener("click", () => {
+    $("animate").checked = false;
+    values = catalogue[part].dimensions.map(d => Math.round((d.min + (d.max - d.min) * Math.random()) * 10) / 10);
+    syncSliders();
+    rebuild(false);
+  });
+  $("reset").addEventListener("click", () => { $("animate").checked = false; choose(part); });
+  for (const id of ["kinds", "edges"]) $(id).addEventListener("change", () => { dirty = true; });
+  $("animate").addEventListener("change", () => scheduleMeasure());
+  let drag = null;
+  canvas.addEventListener("pointerdown", e => {
+    drag = { x: e.clientX, y: e.clientY };
+    canvas.setPointerCapture(e.pointerId);
+    canvas.classList.add("dragging");
+  });
+  canvas.addEventListener("pointermove", e => {
+    if (drag) {
+      cam.yaw -= (e.clientX - drag.x) * 0.008;
+      cam.pitch = Math.max(-1.45, Math.min(1.45, cam.pitch + (e.clientY - drag.y) * 0.008));
+      drag = { x: e.clientX, y: e.clientY };
+      dirty = true;
+      return;
+    }
+    const face = faceAt(e.clientX, e.clientY);
+    if (face !== hover) {
+      hover = face;
+      dirty = true;
+      if (!$("note").classList.contains("bad")) {
+        if (face >= 0) { kernel.limo_face(face); note(`Face ${face}: ${text()}`); } else note("");
+      }
+    }
+  });
+  const release = () => { drag = null; canvas.classList.remove("dragging"); };
+  canvas.addEventListener("pointerup", release);
+  canvas.addEventListener("pointercancel", release);
+  canvas.addEventListener("pointerleave", () => { if (hover !== -1) { hover = -1; dirty = true; } });
+  canvas.addEventListener("wheel", e => {
+    e.preventDefault();
+    cam.dist *= Math.exp(e.deltaY * 0.0012);
+    dirty = true;
+  }, { passive: false });
+  addEventListener("resize", () => { fit(); dirty = true; });
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { dirty = true; });
+}
+
+(async () => {
+  try {
+    if (!gl) throw new Error("this browser has no WebGL 2");
+    await loadKernel();
+    kernel.limo_catalogue();
+    catalogue = JSON.parse(text());
+    setupGl();
+    controls();
+    const kb = n => Math.round(n / 1024).toLocaleString();
+    $("foot").textContent = `This page is one file. The kernel is ${kb(KERNEL_BYTES)} KB of WebAssembly (${kb(KERNEL.length * 3 / 4)} KB compressed), compiled from Limo CAD's crates/kernel. Nothing else here computes geometry.`;
+    choose(0);
+    let before = performance.now();
+    const tick = now => {
+      const dt = Math.min(0.05, (now - before) / 1000);
+      before = now;
+      if ($("animate").checked) animate(dt);
+      if (dirty) draw();
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  } catch (error) {
+    note("Could not start: " + error.message, true);
+  }
+})();
+</script>
+</body>
+</html>

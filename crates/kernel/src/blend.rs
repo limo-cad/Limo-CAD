@@ -15,6 +15,9 @@ use crate::make::{self, PSeg, Region, Seg};
 use crate::math::*;
 use crate::topo::Body;
 
+/// Blends smaller than this are below what the Booleans resolve reliably.
+const SMALLEST: f64 = 0.01;
+
 #[derive(Clone, Copy, Debug)]
 enum Shape {
     Round(f64),
@@ -34,6 +37,9 @@ pub fn fillet(body: &Body, edges: &[u32], radius: f64) -> Result<Body, String> {
     if !(radius.is_finite() && radius > TOL) {
         return Err("fillet radius must be greater than zero".into());
     }
+    if radius < SMALLEST {
+        return Err(format!("fillet radius must be at least {SMALLEST} mm"));
+    }
     apply(body, edges, Shape::Round(radius))
 }
 
@@ -49,12 +55,19 @@ pub fn chamfer(
     if !(distance.is_finite() && distance > TOL) {
         return Err("chamfer distance must be greater than zero".into());
     }
+    if distance < SMALLEST {
+        return Err(format!("chamfer distance must be at least {SMALLEST} mm"));
+    }
     if let Some(angle) = angle_deg {
         if !(angle.is_finite() && angle > 0.0 && angle < 90.0) {
             return Err("Chamfer angle must be greater than 0 and less than 90 degrees".into());
         }
     }
-    apply(body, edges, Shape::Bevel(distance, angle_deg.map(f64::to_radians)))
+    apply(
+        body,
+        edges,
+        Shape::Bevel(distance, angle_deg.map(f64::to_radians)),
+    )
 }
 
 fn apply(body: &Body, edges: &[u32], shape: Shape) -> Result<Body, String> {
@@ -73,6 +86,7 @@ fn apply(body: &Body, edges: &[u32], shape: Shape) -> Result<Body, String> {
             picked.push(e);
         }
     }
+    chain(body, &mut picked);
     let mut tools: Vec<Tool> = Vec::with_capacity(picked.len());
     for &e in &picked {
         tools.push(edge_tool(body, e, shape)?);
@@ -88,6 +102,72 @@ fn apply(body: &Body, edges: &[u32], shape: Shape) -> Result<Body, String> {
     Ok(result)
 }
 
+/// Extend the picked edges along their tangent chains, the way a rolling
+/// ball keeps going: through a vertex where one more sharp edge continues the
+/// direction of travel and every other edge there is smooth, so the faces on
+/// either side run on without a crease.
+fn chain(body: &Body, picked: &mut Vec<u32>) {
+    let mut at: HashMap<u32, Vec<u32>> = HashMap::new();
+    for e in 0..body.edge_count() as u32 {
+        let [v0, v1] = body.e_v[e as usize];
+        at.entry(v0).or_default().push(e);
+        if v1 != v0 {
+            at.entry(v1).or_default().push(e);
+        }
+    }
+    let closed = |e: u32| body.e_v[e as usize][0] == body.e_v[e as usize][1];
+    // Unit direction in which an open edge leaves one of its vertices.
+    let leaving = |e: u32, v: u32| {
+        let [t0, t1] = body.e_t[e as usize];
+        let c = body.e_curve_ref(e);
+        if body.e_v[e as usize][0] == v {
+            c.deriv(t0).unit()
+        } else {
+            -c.deriv(t1).unit()
+        }
+    };
+    // Two edges continue each other when their directions agree to 0.01 rad.
+    let aligned = 0.99995;
+    let mut i = 0;
+    while i < picked.len() {
+        let e = picked[i];
+        i += 1;
+        if closed(e) {
+            continue;
+        }
+        let Some(convex) = convexity(body, e) else {
+            continue;
+        };
+        for v in body.e_v[e as usize] {
+            let onward = -leaving(e, v);
+            let mut next = None;
+            let mut creased = false;
+            for &x in &at[&v] {
+                if x == e {
+                    continue;
+                }
+                match convexity(body, x) {
+                    None => {}
+                    Some(turn)
+                        if next.is_none()
+                            && turn == convex
+                            && !closed(x)
+                            && leaving(x, v).dot(onward) > aligned =>
+                    {
+                        next = Some(x);
+                    }
+                    Some(_) => creased = true,
+                }
+            }
+            if let (Some(x), false) = (next, creased) {
+                if !picked.contains(&x) {
+                    picked.push(x);
+                }
+            }
+        }
+    }
+}
+
 /// Is the edge convex (an outside corner)? `None` when the faces are tangent.
 fn convexity(body: &Body, e: u32) -> Option<bool> {
     let (f1, f2) = (body.h_face(2 * e), body.h_face(2 * e + 1));
@@ -100,11 +180,15 @@ fn convexity(body: &Body, e: u32) -> Option<bool> {
     (turn.abs() > 1.0e-9).then_some(turn > 0.0)
 }
 
+/// How far a blend reaches along each face and, for a round, the centre and
+/// radius of its arc.
+type Section = (f64, f64, Option<(V2, f64)>);
+
 /// Cross-section of the blend in a plane across the edge: the corner `p`
 /// with unit directions `u1`, `u2` running along the two faces away from it.
 /// Returns the points where the blend leaves each face and, for a round, the
 /// middle of its arc.
-fn section(shape: Shape, u1: V2, u2: V2) -> Result<(f64, f64, Option<(V2, f64)>), String> {
+fn section(shape: Shape, u1: V2, u2: V2) -> Result<Section, String> {
     let phi = u1.dot(u2).clamp(-1.0, 1.0).acos();
     if phi < 1.0e-6 || phi > PI - 1.0e-6 {
         return Err("the edge is smooth; there is nothing to refine".into());
@@ -208,7 +292,9 @@ fn edge_tool(body: &Body, e: u32, shape: Shape) -> Result<Tool, String> {
             let corner = v2(c.r, 0.0);
             let (a1, a2) = (corner + u1 * reach_p, corner + u2 * reach_c);
             if a1.x <= TOL {
-                return Err("the blend is too large for this circular edge".into());
+                return Err(
+                    "the blend is larger than the radius of the circular edge it follows".into(),
+                );
             }
             let mut lp = vec![PSeg::Line { a: corner, b: a1 }];
             match arc {
@@ -227,7 +313,21 @@ fn edge_tool(body: &Body, e: u32, shape: Shape) -> Result<Tool, String> {
             lp.push(PSeg::Line { a: a2, b: corner });
             make::revolve(&[lp], c.f.o, axis, radial, t1 - t0)?
         }
-        _ => return Err(unsupported_edge()),
+        _ => {
+            if crate::diag::trace() {
+                eprintln!(
+                    "blend: no tool for a {:?} edge between {:?} (r {}) and {:?} (r {}), convex {convex}, from {:?} to {:?}",
+                    c.kind,
+                    s1.kind,
+                    s1.r,
+                    s2.kind,
+                    s2.r,
+                    c.point(t0),
+                    c.point(t1)
+                );
+            }
+            return Err(unsupported_edge());
+        }
     };
     Ok(Tool {
         body: tool,
@@ -349,12 +449,48 @@ fn corner_piece(v: V3, a: V3, b: V3, c: V3, r: f64) -> Result<Body, String> {
         let s = body.add_surf(surf);
         body.add_face(s, sense, &[hes]);
     };
-    face(&mut body, &[iv, ib, ibc, ic], Surface::plane(v, -a), true, -a);
-    face(&mut body, &[iv, ic, iac, ia], Surface::plane(v, -b), true, -b);
-    face(&mut body, &[iv, ia, iab, ib], Surface::plane(v, -c), true, -c);
-    face(&mut body, &[ia, iab, iac], Surface::plane(pts[1], a), true, a);
-    face(&mut body, &[ib, ibc, iab], Surface::plane(pts[2], b), true, b);
-    face(&mut body, &[ic, iac, ibc], Surface::plane(pts[3], c), true, c);
+    face(
+        &mut body,
+        &[iv, ib, ibc, ic],
+        Surface::plane(v, -a),
+        true,
+        -a,
+    );
+    face(
+        &mut body,
+        &[iv, ic, iac, ia],
+        Surface::plane(v, -b),
+        true,
+        -b,
+    );
+    face(
+        &mut body,
+        &[iv, ia, iab, ib],
+        Surface::plane(v, -c),
+        true,
+        -c,
+    );
+    face(
+        &mut body,
+        &[ia, iab, iac],
+        Surface::plane(pts[1], a),
+        true,
+        a,
+    );
+    face(
+        &mut body,
+        &[ib, ibc, iab],
+        Surface::plane(pts[2], b),
+        true,
+        b,
+    );
+    face(
+        &mut body,
+        &[ic, iac, ibc],
+        Surface::plane(pts[3], c),
+        true,
+        c,
+    );
     // The ball's surface, seen from outside the piece: its normal points at
     // the centre. Poles are kept away from the patch.
     let ball = Surface {

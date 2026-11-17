@@ -92,7 +92,11 @@ fn chamfers_equal_and_by_angle() {
     assert_eq!(r.face_count(), 7);
     close(volume(&r), 8000.0 - 0.5 * 4.0 * 40.0, 1e-12);
     let r = chamfer(&block, &edge, 2.0, Some(30.0)).unwrap();
-    close(volume(&r), 8000.0 - 0.5 * 2.0 * 2.0 * 30f64.to_radians().tan() * 40.0, 1e-12);
+    close(
+        volume(&r),
+        8000.0 - 0.5 * 2.0 * 2.0 * 30f64.to_radians().tan() * 40.0,
+        1e-12,
+    );
     // The whole top rim.
     let top = edges_where(&block, |m, d| m.z > 10.0 - 1e-9 && d.z.abs() < 1e-9);
     let r = chamfer(&block, &top, 1.0, None).unwrap();
@@ -104,7 +108,14 @@ fn chamfers_equal_and_by_angle() {
 fn inside_corner_is_filled() {
     // An L bracket: the inside corner runs along y.
     let p = |x: f64, z: f64| v3(x, 0.0, z);
-    let pts = [p(0.0, 0.0), p(30.0, 0.0), p(30.0, 5.0), p(5.0, 5.0), p(5.0, 25.0), p(0.0, 25.0)];
+    let pts = [
+        p(0.0, 0.0),
+        p(30.0, 0.0),
+        p(30.0, 5.0),
+        p(5.0, 5.0),
+        p(5.0, 25.0),
+        p(0.0, 25.0),
+    ];
     let region = Region {
         loops: vec![(0..6)
             .map(|i| Seg::Line {
@@ -142,7 +153,8 @@ fn rims_of_a_boss_and_a_hole() {
     let r = fillet(&body, &rim(&body, 22.0), 2.0).unwrap();
     assert_eq!(count(&r, SurfKind::Torus), 1);
     // Pappus: the ring is the spandrel revolved about the axis.
-    let ring = |square_centre: f64, disc_centre: f64| TAU * (4.0 * square_centre - PI * disc_centre);
+    let ring =
+        |square_centre: f64, disc_centre: f64| TAU * (4.0 * square_centre - PI * disc_centre);
     let offset = 8.0 / (3.0 * PI);
     close(volume(&r), base - ring(7.0, 6.0 + offset), 2e-4);
     // Foot of the boss: a concave rim is filled.
@@ -161,17 +173,36 @@ fn revolved_profiles() {
     // Washer: rectangle revolved a full turn.
     let rect = |r0: f64, r1: f64, h0: f64, h1: f64| {
         vec![
-            PSeg::Line { a: v2(r0, h0), b: v2(r1, h0) },
-            PSeg::Line { a: v2(r1, h0), b: v2(r1, h1) },
-            PSeg::Line { a: v2(r1, h1), b: v2(r0, h1) },
-            PSeg::Line { a: v2(r0, h1), b: v2(r0, h0) },
+            PSeg::Line {
+                a: v2(r0, h0),
+                b: v2(r1, h0),
+            },
+            PSeg::Line {
+                a: v2(r1, h0),
+                b: v2(r1, h1),
+            },
+            PSeg::Line {
+                a: v2(r1, h1),
+                b: v2(r0, h1),
+            },
+            PSeg::Line {
+                a: v2(r0, h1),
+                b: v2(r0, h0),
+            },
         ]
     };
     let washer = make::revolve(&[rect(4.0, 10.0, 0.0, 3.0)], V3::ZERO, V3::Z, V3::X, TAU).unwrap();
     assert_eq!((washer.face_count(), washer.edge_count()), (4, 4));
     close(volume(&washer), PI * (100.0 - 16.0) * 3.0, 2e-4);
     // A quarter turn adds two flat ends.
-    let quarter = make::revolve(&[rect(4.0, 10.0, 0.0, 3.0)], V3::ZERO, V3::Z, V3::X, 0.5 * PI).unwrap();
+    let quarter = make::revolve(
+        &[rect(4.0, 10.0, 0.0, 3.0)],
+        V3::ZERO,
+        V3::Z,
+        V3::X,
+        0.5 * PI,
+    )
+    .unwrap();
     assert_eq!(quarter.face_count(), 6);
     close(volume(&quarter), 0.25 * PI * (100.0 - 16.0) * 3.0, 2e-4);
     // Cone to a point.
@@ -181,8 +212,16 @@ fn revolved_profiles() {
     // Half disc revolved: a sphere with no edges at all.
     let ball = make::revolve(
         &[vec![
-            PSeg::Line { a: v2(0.0, 5.0), b: v2(0.0, -5.0) },
-            PSeg::Arc { a: v2(0.0, -5.0), b: v2(0.0, 5.0), c: v2(0.0, 0.0), ccw: true },
+            PSeg::Line {
+                a: v2(0.0, 5.0),
+                b: v2(0.0, -5.0),
+            },
+            PSeg::Arc {
+                a: v2(0.0, -5.0),
+                b: v2(0.0, 5.0),
+                c: v2(0.0, 0.0),
+                ccw: true,
+            },
         ]],
         V3::ZERO,
         V3::Z,
@@ -194,7 +233,10 @@ fn revolved_profiles() {
     close(volume(&ball), 4.0 / 3.0 * PI * 125.0, 5e-4);
     // Ring torus from a revolved circle.
     let torus = make::revolve(
-        &[vec![PSeg::Circle { c: v2(10.0, 0.0), r: 3.0 }]],
+        &[vec![PSeg::Circle {
+            c: v2(10.0, 0.0),
+            r: 3.0,
+        }]],
         V3::ZERO,
         V3::Z,
         V3::X,

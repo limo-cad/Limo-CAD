@@ -166,6 +166,13 @@ impl Body {
         let [a, b] = self.e_v[e as usize];
         a == b
     }
+    /// A real crease between two faces: their normals differ along the edge.
+    /// Tangent joins, such as the border of a fillet, are not sharp.
+    pub fn e_sharp(&self, e: u32) -> bool {
+        let (f1, f2) = (self.h_face(2 * e), self.h_face(2 * e + 1));
+        let mid = self.e_mid(e);
+        f1 != f2 && self.f_normal(f1, mid).cross(self.f_normal(f2, mid)).len() > 1.0e-6
+    }
     pub fn e_length(&self, e: u32) -> f64 {
         let [t0, t1] = self.e_t[e as usize];
         self.e_curve_ref(e).length(t0, t1)
