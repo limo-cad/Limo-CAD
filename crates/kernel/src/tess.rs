@@ -23,12 +23,13 @@ pub struct TessOptions {
 
 impl Default for TessOptions {
     fn default() -> Self {
-        // The viewport policy of the reference adapter (0.15 mm, 0.35 rad)
-        // yields 36 segments per full turn there; a segment here may turn
-        // the normal by half that angle to match.
+        // The viewport policy of the reference adapter (0.15 mm, 0.35 rad),
+        // a little finer round the turn: forty segments to a full circle
+        // keep the volume of a display mesh within half a percent of the
+        // solid's, which is what the host expects of it.
         TessOptions {
             linear: 0.15,
-            angular: 0.175,
+            angular: 0.16,
         }
     }
 }

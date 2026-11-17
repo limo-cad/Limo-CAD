@@ -1342,17 +1342,37 @@ impl SolidDocument {
     ) -> Result<RecomputePlanDto, SolidError> {
         self.ensure_idle()?;
         validate_positive(request.radius, "fillet radius")?;
-        if request.tangent_chain {
-            edge_keys_for(&self.scene, request.body_id, &request.edge_ids)?;
-            let body = self
-                .scene
-                .bodies
-                .iter()
-                .find(|b| b.id == request.body_id)
-                .ok_or(SolidError::MissingTarget(request.body_id))?;
-            request.edge_ids = crate::tangent_chain_edges(body, &request.edge_ids);
-        }
-        let edge_keys = edge_keys_for(&self.scene, request.body_id, &request.edge_ids)?;
+        // An edit that keeps its selection keeps the keys that selection
+        // already has. They name edges of the feature's own input body,
+        // which the scene no longer shows once the feature has taken them
+        // away; a kernel that names edges by what made them cannot find
+        // them there, and need not.
+        let kept = self
+            .fillets
+            .iter()
+            .find(|definition| definition.feature_id == feature_id)
+            .filter(|definition| {
+                definition.body_id == request.body_id
+                    && definition.edge_ids == request.edge_ids
+                    && edge_keys_for(&self.scene, request.body_id, &request.edge_ids).is_err()
+            })
+            .map(|definition| definition.edge_keys.clone());
+        let edge_keys = match kept {
+            Some(keys) => keys,
+            None => {
+                if request.tangent_chain {
+                    edge_keys_for(&self.scene, request.body_id, &request.edge_ids)?;
+                    let body = self
+                        .scene
+                        .bodies
+                        .iter()
+                        .find(|b| b.id == request.body_id)
+                        .ok_or(SolidError::MissingTarget(request.body_id))?;
+                    request.edge_ids = crate::tangent_chain_edges(body, &request.edge_ids);
+                }
+                edge_keys_for(&self.scene, request.body_id, &request.edge_ids)?
+            }
+        };
         let mut fillets = self.fillets.clone();
         let definition = fillets
             .iter_mut()
@@ -1440,17 +1460,37 @@ impl SolidDocument {
         self.ensure_idle()?;
         validate_positive(request.distance, "chamfer distance")?;
         validate_chamfer_angle(request.angle_deg)?;
-        if request.tangent_chain {
-            edge_keys_for(&self.scene, request.body_id, &request.edge_ids)?;
-            let body = self
-                .scene
-                .bodies
-                .iter()
-                .find(|b| b.id == request.body_id)
-                .ok_or(SolidError::MissingTarget(request.body_id))?;
-            request.edge_ids = crate::tangent_chain_edges(body, &request.edge_ids);
-        }
-        let edge_keys = edge_keys_for(&self.scene, request.body_id, &request.edge_ids)?;
+        // An edit that keeps its selection keeps the keys that selection
+        // already has. They name edges of the feature's own input body,
+        // which the scene no longer shows once the feature has taken them
+        // away; a kernel that names edges by what made them cannot find
+        // them there, and need not.
+        let kept = self
+            .chamfers
+            .iter()
+            .find(|definition| definition.feature_id == feature_id)
+            .filter(|definition| {
+                definition.body_id == request.body_id
+                    && definition.edge_ids == request.edge_ids
+                    && edge_keys_for(&self.scene, request.body_id, &request.edge_ids).is_err()
+            })
+            .map(|definition| definition.edge_keys.clone());
+        let edge_keys = match kept {
+            Some(keys) => keys,
+            None => {
+                if request.tangent_chain {
+                    edge_keys_for(&self.scene, request.body_id, &request.edge_ids)?;
+                    let body = self
+                        .scene
+                        .bodies
+                        .iter()
+                        .find(|b| b.id == request.body_id)
+                        .ok_or(SolidError::MissingTarget(request.body_id))?;
+                    request.edge_ids = crate::tangent_chain_edges(body, &request.edge_ids);
+                }
+                edge_keys_for(&self.scene, request.body_id, &request.edge_ids)?
+            }
+        };
         let mut chamfers = self.chamfers.clone();
         let definition = chamfers
             .iter_mut()
