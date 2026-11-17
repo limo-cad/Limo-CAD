@@ -273,7 +273,7 @@ fn a_bar_swept_along_a_line_and_a_bend() {
             end: at(30.0, 0.0, 45.0),
         },
     ];
-    let body = built(vec![sweep(rectangle(8.0, 6.0, 0.0), path)]);
+    let body = built(vec![sweep(rectangle(8.0, 6.0, 0.0), path.clone())]);
     let exact = 48.0 * (15.0 + 0.5 * PI * 30.0);
     assert!(
         (volume(&body) - exact).abs() < 1e-4 * exact,
@@ -296,6 +296,20 @@ fn a_bar_swept_along_a_line_and_a_bend() {
     ];
     let refused = refusal(vec![sweep(rectangle(8.0, 6.0, 0.0), corner)]);
     assert!(refused.contains("smoothly"), "{refused}");
+
+    // A profile kept facing one way is the same solid along a straight
+    // line. Round a bend it is another one, and that is said, not guessed.
+    let facing_one_way = |path: Vec<KernelCurveDto>| {
+        let mut job = sweep(rectangle(8.0, 6.0, 0.0), path);
+        if let KernelJobDto::Sweep(job) = &mut job {
+            job.orientation = SweepOrientation::Fixed;
+        }
+        job
+    };
+    let straight = built(vec![facing_one_way(vec![path[0].clone()])]);
+    assert!((volume(&straight) - 48.0 * 15.0).abs() < 1e-9);
+    let refused = refusal(vec![facing_one_way(path)]);
+    assert!(refused.contains("facing one way"), "{refused}");
 }
 
 #[test]

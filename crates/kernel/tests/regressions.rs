@@ -1,4 +1,7 @@
-//! Operations captured from real recipes that once failed.
+//! Operations captured from real recipes that once failed, and pairs of
+//! solids from the stress run that once came out wrong.
+use limo_cad_kernel::demo::random_pair;
+use limo_cad_kernel::props;
 use limo_cad_kernel::tess::{tessellate, TessOptions};
 use limo_cad_kernel::{boolean, Body, Op};
 
@@ -45,4 +48,64 @@ fn pin_hole_through_a_ring_off_its_axis() {
     let r = boolean(&ring, &pin, Op::Cut).unwrap();
     assert_eq!(r.face_count(), 14);
     assert!(volume(&r) < volume(&ring));
+}
+
+/// Pairs of `examples/pairs` that each went wrong for a reason of its own.
+///
+/// * 541: the corner of a block takes in the tip of a cone. The hyperbola
+///   on one of its faces turns back within a single cell of the tracer,
+///   which joined its two branches into one curve.
+/// * 562: a ball pokes through the edge of a block and leaves a sliver
+///   between an arc and its chord, thinner than the arc was sampled.
+/// * 574: a block cuts a ring into bands that are written a whole turn of
+///   the tube apart, and a hole was given to the wrong one.
+/// * 361, 367: what is left of a ring is all of it but one hole, and the
+///   seam it was cut open along brushed past that hole.
+/// * 496: the hole winds round the tube more than once, so no circle round
+///   the axis misses it.
+/// * 188, 3019: a needle up a cone next to its tip faced inwards, where
+///   the cone's own parameters are a skewed picture of it.
+/// * 1074: two holes in a ring, and the seam between them was looked for
+///   without minding that a hole reaches round the end of a turn.
+/// * 1548: the tip of a cone pokes into a ring and nothing else of it
+///   does. The curve round the tip is smaller than a cell of the tracer,
+///   and the two were called apart.
+/// * 2482: a rod leaves a cone a rim that rises steeply to just under its
+///   base, and zipping the two edges together turned a triangle over.
+#[test]
+fn pairs_that_once_went_wrong() {
+    for seed in [188, 361, 367, 496, 541, 562, 574, 1074, 1548, 2482, 3019] {
+        let [(_, a), (_, b)] = random_pair(seed);
+        let done = |op: Op| boolean(&a, &b, op).unwrap_or_else(|e| panic!("pair {seed}: {e}"));
+        let (rest, shared, joined) = (done(Op::Cut), done(Op::Intersect), done(Op::Union));
+        let fine = TessOptions {
+            linear: 0.004,
+            angular: 0.06,
+        };
+        for body in [&rest, &shared, &joined] {
+            body.check().unwrap();
+            for options in [TessOptions::default(), fine] {
+                if options.linear < 0.1 && seed != 188 {
+                    continue;
+                }
+                tessellate(body, &options)
+                    .check(body, &options)
+                    .unwrap_or_else(|flaw| panic!("pair {seed}: {flaw}"));
+            }
+        }
+        // What is cut away and what is kept make the whole; together the two
+        // weigh what they weigh apart, less what they share.
+        let (va, vb) = (props::volume(&a), props::volume(&b));
+        let (cut, common, union) = (
+            props::volume(&rest),
+            props::volume(&shared),
+            props::volume(&joined),
+        );
+        let scale = va.max(vb);
+        assert!((cut + common - va).abs() < 1.0e-8 * scale, "pair {seed}");
+        assert!(
+            (union + common - va - vb).abs() < 1.0e-8 * scale,
+            "pair {seed}"
+        );
+    }
 }

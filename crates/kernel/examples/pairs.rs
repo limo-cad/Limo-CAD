@@ -86,9 +86,11 @@ fn main() {
                 println!("{label}: WRONG, called apart but one reaches into the other");
                 continue;
             }
+            // Solids that miss each other are the common case and only
+            // counted; any other refusal is worth a line of its own.
             refused += 1;
             *reasons.entry(reason.clone()).or_insert(0) += 1;
-            if refused <= 12 {
+            if !reason.contains("do not overlap") {
                 println!("{label}: refused, {reason}");
             }
             continue;
@@ -131,9 +133,7 @@ fn main() {
             None => good += 1,
             Some(fault) => {
                 wrong += 1;
-                if wrong <= 12 {
-                    println!("{label}: WRONG, {fault}");
-                }
+                println!("{label}: WRONG, {fault}");
             }
         }
     }

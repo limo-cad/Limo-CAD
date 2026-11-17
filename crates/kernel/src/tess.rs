@@ -278,6 +278,20 @@ impl FaceVerts {
     }
 }
 
+/// Whether the triangle of three face-local vertices faces the way their
+/// normals do. A sliver thinner than the chord tolerance has no direction
+/// to speak of and passes either way.
+fn faces_out(fv: &FaceVerts, t: [u32; 3], opts: &TessOptions) -> bool {
+    let p = t.map(|i| fv.p[i as usize]);
+    let n = t.iter().fold(V3::ZERO, |sum, &i| sum + fv.n[i as usize]);
+    let twice = (p[1] - p[0]).cross(p[2] - p[0]);
+    let longest = (0..3)
+        .map(|k| (p[(k + 1) % 3] - p[k]).len2())
+        .fold(0.0, f64::max);
+    let thin = twice.len() < 1.0e-3 * longest || twice.len() / longest.sqrt() < 0.5 * opts.linear;
+    thin || twice.dot(n) > 0.0
+}
+
 fn singular_normal(trim: &FaceTrim, uv: V2) -> V3 {
     // At a cone apex the normal is that of the ruling through `u`.
     match trim.surf.kind {
@@ -346,11 +360,21 @@ fn tess_face(trim: &FaceTrim, opts: &TessOptions, mesh: &mut Mesh) {
                 },
             ]);
         }
-    } else if let Some((bottom, top)) =
-        strip_chains(trim, &corners, &winding, &plain, &mut fv, opts)
+    } else if let Some(made) = strip_chains(trim, &corners, &winding, &plain, &mut fv, opts)
+        .and_then(|(bottom, top)| {
+            // The face lies between two chains that are monotone in `u`.
+            // Zipping them together is quick, and right while each chain
+            // can see the other. Where one rises steeply to just under the
+            // other, a triangle comes out upside down; the face then goes
+            // the long way round like any other.
+            let mut made: Vec<[Corner; 3]> = Vec::new();
+            strip(&mut fv, trim, &bottom, &top, opts, &mut made);
+            made.iter()
+                .all(|t| faces_out(&fv, t.map(|c| c.src), opts))
+                .then_some(made)
+        })
     {
-        // The face lies between two chains that are monotone in `u`.
-        strip(&mut fv, trim, &bottom, &top, opts, &mut tris);
+        tris.extend(made);
     } else {
         let polys = assemble(trim, &corners, &winding, &plain, &mut fv, opts, &mut tris);
         if crate::diag::trace() {
@@ -1112,7 +1136,7 @@ fn assemble(
     // parameter rectangle, cut along seams that avoid the holes.
     let closed = matches!(kind, SurfKind::Sphere | SurfKind::Torus);
     if closed && polys.is_empty() && winding.is_empty() {
-        if let Some(outer) = full_rectangle(trim, &holes, fv, opts) {
+        if let Some(outer) = full_rectangle(trim, &holes, fv, opts, tris) {
             polys.push(Poly {
                 outer,
                 holes: Vec::new(),
@@ -1172,11 +1196,12 @@ fn cut_points(
 /// longest chords the tolerance allows along `u` and `v`. Along the rulings
 /// of a cylinder or cone nothing bends, so there a unit is simply long; the
 /// flag says when that is so.
+/// Triangles along a ruling are at least this many times as long as wide,
+/// and a face has about this many rows of them at most.
+const SLENDER: f64 = 12.0;
+const ROWS: f64 = 2.5;
+
 fn units(trim: &FaceTrim, opts: &TessOptions) -> (V2, bool) {
-    /// Triangles along a ruling are at least this many times as long as
-    /// wide, and a face has about this many rows of them at most.
-    const SLENDER: f64 = 12.0;
-    const ROWS: f64 = 2.5;
     let u = u_step(trim, opts, 1.0);
     let across = v_step(trim, opts);
     if across.is_finite() {
@@ -1220,6 +1245,9 @@ fn meets(p: V2, q: V2, r: V2, s: V2) -> bool {
 /// turn. The band is cut open along a straight line from a corner of one to
 /// a corner of the other, the shortest such line that crosses neither loop
 /// nor any of `holes`.
+///
+/// Round the tube of a torus it is the same picture a quarter turn on:
+/// `lower` then runs up `v` with the face to its left.
 fn band(
     trim: &FaceTrim,
     opts: &TessOptions,
@@ -1260,17 +1288,25 @@ fn band(
         }
     }
     // A torus repeats the other way as well, and a hole may be written
-    // one turn of the tube away from the band it lies in.
-    let tube: &[f64] = if trim.surf.kind == SurfKind::Torus {
-        &[-TAU, 0.0, TAU]
+    // one turn away from the band it lies in. The other way is round the
+    // tube for loops that go round the axis, and round the axis for a seam
+    // that goes round the tube.
+    let other = if turn.x != 0.0 {
+        v2(0.0, TAU)
+    } else {
+        v2(TAU, 0.0)
+    };
+    let lifts: &[f64] = if trim.surf.kind == SurfKind::Torus {
+        &[-1.0, 0.0, 1.0]
     } else {
         &[0.0]
     };
-    let blocked = |p: V2, q: V2| {
+    // `far` is how many turns away a wall may still get in the way.
+    let blocked = |p: V2, q: V2, far: i32| {
         walls.iter().any(|&[r, s]| {
-            (-2..=2).any(|k| {
-                tube.iter().any(|&lift| {
-                    let by = turn * k as f64 + v2(0.0, lift);
+            (-far..=far).any(|k| {
+                lifts.iter().any(|&lift| {
+                    let by = turn * k as f64 + other * lift;
                     meets(p, q, r + by, s + by)
                 })
             })
@@ -1291,27 +1327,47 @@ fn band(
                 .unwrap()
         };
         let closest = nearest(&|b| apart(a, b));
-        let above = nearest(&|b| (b.x - a.x).abs());
+        let above = nearest(&|b| (b - a).dot(turn).abs());
         pairs.push((apart(a, image(closest)), i, closest));
         if above != closest {
             pairs.push((apart(a, image(above)), i, above));
         }
     }
     pairs.sort_by(|x, y| x.0.total_cmp(&y.0));
-    let (_, i0, j0) = pairs
-        .iter()
-        .copied()
-        .find(|&(_, i, j)| {
-            let (a, b) = (lower[i].uv, upper[j].uv);
-            !blocked(a, b + turn * turns(a, b))
-        })
-        .unwrap_or_else(|| {
-            if crate::diag::trace() {
-                eprintln!("tess: no clear cut across a band of {n} and {m} corners");
+    let straight = pairs.iter().copied().find_map(|(_, i, j)| {
+        let (a, b) = (lower[i].uv, upper[j].uv);
+        (!blocked(a, b + turn * turns(a, b), 2)).then_some((i, j, 0.0))
+    });
+    // Holes can stand in the way of every line that goes more or less
+    // straight across: something that winds round the band like a screw
+    // thread leaves room only for a cut as slanted as itself, which comes
+    // out a turn or two further round than where it went in. So try every
+    // corner against every corner and its images, the shortest line first.
+    let slanted = || {
+        let (di, dj) = (n.div_ceil(64), m.div_ceil(64));
+        let mut all: Vec<(f64, usize, usize, f64)> = Vec::new();
+        for i in (0..n).step_by(di) {
+            let a = lower[i].uv;
+            for j in (0..m).step_by(dj) {
+                let b = upper[j].uv + turn * turns(a, upper[j].uv);
+                for extra in [-2.0, -1.0, 0.0, 1.0, 2.0] {
+                    all.push((apart(a, b + turn * extra), i, j, extra));
+                }
             }
-            pairs[0]
-        });
-    let near_turns = turns(lower[i0].uv, upper[j0].uv);
+        }
+        all.sort_by(|x, y| x.0.total_cmp(&y.0));
+        all.into_iter().find_map(|(_, i, j, extra)| {
+            let (a, b) = (lower[i].uv, upper[j].uv);
+            (!blocked(a, b + turn * (turns(a, b) + extra), 4)).then_some((i, j, extra))
+        })
+    };
+    let (i0, j0, extra) = straight.or_else(slanted).unwrap_or_else(|| {
+        if crate::diag::trace() {
+            eprintln!("tess: no clear cut across a band of {n} and {m} corners");
+        }
+        (pairs[0].1, pairs[0].2, 0.0)
+    });
+    let near_turns = turns(lower[i0].uv, upper[j0].uv) + extra;
 
     // Along the lower loop for one turn, up the far bank of the cut, back
     // along the upper loop, and down the near bank.
@@ -1340,48 +1396,123 @@ fn band(
     outer
 }
 
-/// Boundary of the full parameter rectangle of a sphere or torus, with seam
-/// points sampled so both copies of each seam match.
+/// The middle of the widest stretch of a whole turn that none of `spans`
+/// reaches into, if they leave one. A seam there keeps as far from the holes
+/// as a straight seam can: one that brushes past a hole leaves a strip
+/// thinner than the chords across it are deep, which no triangles fit.
+fn widest_gap(spans: &[(f64, f64)]) -> Option<f64> {
+    if spans.is_empty() {
+        return Some(-PI);
+    }
+    // Each span where it starts within the turn, and a turn before and
+    // after: one that starts late in the turn reaches round into its
+    // beginning, and the gap across the ends of the turn is one like the
+    // others. A gap that opens within the turn is then a real one.
+    let mut laid: Vec<(f64, f64)> = Vec::with_capacity(3 * spans.len());
+    for &(lo, hi) in spans {
+        if hi - lo >= TAU {
+            return None;
+        }
+        let start = wrap_from(lo, -PI);
+        for turn in [-TAU, 0.0, TAU] {
+            laid.push((start + turn, start + turn + (hi - lo)));
+        }
+    }
+    laid.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let mut best: Option<(f64, f64)> = None;
+    let mut reach = laid[0].1;
+    for &(start, end) in &laid[1..] {
+        let opens_here = (-PI..PI).contains(&reach);
+        if opens_here && start > reach && best.is_none_or(|(width, _)| start - reach > width) {
+            best = Some((start - reach, 0.5 * (start + reach)));
+        }
+        reach = reach.max(end);
+    }
+    best.filter(|&(width, _)| width > 1.0e-6)
+        .map(|(_, middle)| wrap_from(middle, -PI))
+}
+
+/// Outline of a whole sphere or torus, cut open so that it lies flat in the
+/// parameter plane.
+///
+/// Straight seams do where the holes leave room for them: a meridian of a
+/// sphere, a circle each way round a torus. The result is then the full
+/// parameter rectangle, with seam points sampled so both copies of each
+/// seam match. Holes can stand in the way of every straight seam one way
+/// round: a groove that spirals more than once about the tube, or holes
+/// staggered all the way round. The surface is then cut along a circle the
+/// other way, or around its poles, and across from one side of that cut to
+/// the other wherever a straight line gets through between the holes.
 fn full_rectangle(
     trim: &FaceTrim,
     holes: &[Vec<Corner>],
     fv: &mut FaceVerts,
     opts: &TessOptions,
+    tris: &mut Vec<[Corner; 3]>,
 ) -> Option<Vec<Corner>> {
     let sphere = trim.surf.kind == SurfKind::Sphere;
-    // Find seam positions that no hole straddles.
-    let clear = |seam: f64, axis: usize| {
-        holes.iter().all(|hole| {
-            let vals: Vec<f64> = hole
-                .iter()
-                .map(|c| if axis == 0 { c.uv.x } else { c.uv.y })
-                .collect();
-            let lo = vals.iter().cloned().fold(f64::INFINITY, f64::min);
-            let hi = vals.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
-            let start = wrap_from(lo, seam);
-            start > seam + 1.0e-9 && start + (hi - lo) < seam + TAU - 1.0e-9
-        })
-    };
-    let pick = |axis: usize| {
-        (0..32)
-            .map(|k| -PI + TAU * k as f64 / 32.0)
-            .find(|&s| clear(s, axis))
-    };
-    let u0 = pick(0)?;
-    let (v0, v1) = if sphere {
-        (-0.5 * PI, 0.5 * PI)
-    } else {
-        let v0 = pick(1)?;
-        (v0, v0 + TAU)
+    let spans = |axis: usize| -> Vec<(f64, f64)> {
+        holes
+            .iter()
+            .map(|hole| {
+                hole.iter()
+                    .map(|c| if axis == 0 { c.uv.x } else { c.uv.y })
+                    .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), x| {
+                        (lo.min(x), hi.max(x))
+                    })
+            })
+            .collect()
     };
     let nu = ((TAU / u_step(trim, opts, 1.0)).ceil() as usize).max(8);
-    let nv = (((v1 - v0) / v_step(trim, opts)).ceil() as usize).max(4);
-    let u_at = |i: usize| u0 + TAU * i as f64 / nu as f64;
-    let v_at = |j: usize| v0 + (v1 - v0) * j as f64 / nv as f64;
     let fresh = |fv: &mut FaceVerts, q: V2| Corner {
         uv: q,
         src: fv.push(trim.point(q), trim.normal(q)),
     };
+    let around = widest_gap(&spans(0));
+    let (u0, v0, v1) = if sphere {
+        let Some(u0) = around else {
+            return sphere_between_caps(trim, holes, fv, opts, tris, nu);
+        };
+        (u0, -0.5 * PI, 0.5 * PI)
+    } else {
+        match (around, widest_gap(&spans(1))) {
+            (Some(u0), Some(v0)) => (u0, v0, v0 + TAU),
+            (None, Some(v0)) => {
+                // Round the axis along `v0`, and across wherever it goes.
+                let lower: Vec<Corner> = (0..nu)
+                    .map(|i| fresh(fv, v2(-PI + TAU * i as f64 / nu as f64, v0)))
+                    .collect();
+                let upper: Vec<Corner> = lower
+                    .iter()
+                    .rev()
+                    .map(|c| fv.shifted(*c, v2(0.0, TAU)))
+                    .collect();
+                let (turn, back) = (v2(TAU, 0.0), v2(-TAU, 0.0));
+                return Some(band(trim, opts, fv, (&lower, turn), (&upper, back), holes));
+            }
+            (Some(u0), None) => {
+                // Round the tube along `u0`: the same a quarter turn on,
+                // the far copy of the seam going up and the near one down.
+                let nv = ((TAU / v_step(trim, opts)).ceil() as usize).max(8);
+                let near: Vec<Corner> = (0..nv)
+                    .map(|j| fresh(fv, v2(u0, -PI + TAU * j as f64 / nv as f64)))
+                    .collect();
+                let far: Vec<Corner> = near.iter().map(|c| fv.shifted(*c, v2(TAU, 0.0))).collect();
+                let down: Vec<Corner> = near.iter().rev().copied().collect();
+                let (turn, back) = (v2(0.0, TAU), v2(0.0, -TAU));
+                return Some(band(trim, opts, fv, (&far, turn), (&down, back), holes));
+            }
+            (None, None) => {
+                if crate::diag::trace() {
+                    eprintln!("tess: holes all the way round a torus both ways");
+                }
+                return None;
+            }
+        }
+    };
+    let nv = (((v1 - v0) / v_step(trim, opts)).ceil() as usize).max(4);
+    let u_at = |i: usize| u0 + TAU * i as f64 / nu as f64;
+    let v_at = |j: usize| v0 + (v1 - v0) * j as f64 / nv as f64;
     // The same point seen from the other side of a seam: one vertex, so the
     // seam cannot open, and one name for the edge along it.
     let image = |fv: &mut FaceVerts, c: Corner, q: V2| Corner {
@@ -1412,6 +1543,66 @@ fn full_rectangle(
     outer.push(top[0]);
     outer.extend(left.iter().rev().copied());
     Some(outer)
+}
+
+/// A whole sphere whose holes leave no meridian free: a ring of vertices
+/// round each pole with a fan up to it, and between the two rings a band,
+/// cut open wherever a straight line gets through.
+fn sphere_between_caps(
+    trim: &FaceTrim,
+    holes: &[Vec<Corner>],
+    fv: &mut FaceVerts,
+    opts: &TessOptions,
+    tris: &mut Vec<[Corner; 3]>,
+    steps: usize,
+) -> Option<Vec<Corner>> {
+    // Between each pole and whatever comes nearest to it.
+    let nearest = holes
+        .iter()
+        .flatten()
+        .map(|c| 0.5 * PI - c.uv.y.abs())
+        .fold(f64::INFINITY, f64::min);
+    let reach = (0.5 * nearest).min(v_step(trim, opts));
+    if reach.is_nan() || reach <= 1.0e-9 {
+        return None;
+    }
+    // `way` is +1 for the ring round the south pole, which runs up `u` with
+    // the face above it, and -1 for the one round the north pole.
+    let mut cap = |way: f64| -> Vec<Corner> {
+        let (v_end, v_ring) = (-0.5 * PI * way, (-0.5 * PI + reach) * way);
+        let u_at = |k: usize| way * (-PI + TAU * k as f64 / steps as f64);
+        let ring: Vec<Corner> = (0..steps)
+            .map(|k| {
+                let q = v2(u_at(k), v_ring);
+                Corner {
+                    uv: q,
+                    src: fv.push(trim.point(q), trim.normal(q)),
+                }
+            })
+            .collect();
+        let tip = trim.point(v2(0.0, v_end));
+        for k in 0..steps {
+            let q = v2(0.5 * (u_at(k) + u_at(k + 1)), v_end);
+            let apex = Corner {
+                uv: q,
+                src: fv.push(tip, singular_normal(trim, q)),
+            };
+            let next = if k + 1 < steps {
+                ring[k + 1]
+            } else {
+                // One turn on, the ring is back at its first vertex.
+                Corner {
+                    uv: v2(u_at(steps), v_ring),
+                    src: fv.alias(ring[0].src),
+                }
+            };
+            tris.push([ring[k], apex, next]);
+        }
+        ring
+    };
+    let (south, north) = (cap(1.0), cap(-1.0));
+    let (turn, back) = (v2(TAU, 0.0), v2(-TAU, 0.0));
+    Some(band(trim, opts, fv, (&south, turn), (&north, back), holes))
 }
 
 /// Triangulate a polygon on a curved surface.
@@ -1445,24 +1636,77 @@ fn fill(
     /// outline and a triangle has to span the gap.
     const LONGEST: f64 = 1.4;
 
-    let (step, ruled) = units(trim, opts);
+    let (mut step, ruled) = units(trim, opts);
     // How much of a side's length counts against the tolerance.
     let bends = if ruled { v2(1.0, 0.0) } else { v2(1.0, 1.0) };
-    let scaled = |q: V2| v2(q.x / step.x, q.y / step.y);
+    // A cone unrolls into a fan, on which its parameters are an angle and a
+    // distance from the tip. Lines that are straight in those are spirals
+    // on the fan, and the nearer the tip the less a triangle drawn in them
+    // looks like the one on the cone: a needle can come out facing the
+    // other way. The logarithm of the distance mends that. The fan is then
+    // the picture of a strip, magnified but nowhere skewed, and triangles
+    // keep their shape. Rows of needles are as many times longer than wide
+    // as elsewhere, and never so long that the magnification changes much
+    // from one end to the other.
+    let low = std::iter::once(&poly.outer)
+        .chain(poly.holes.iter())
+        .flatten()
+        .map(|c| c.uv.y)
+        .fold(f64::INFINITY, f64::min);
+    let rolled = trim.surf.kind == SurfKind::Cone && low > 0.0;
+    if rolled {
+        let far = trim.hi.y.abs().max(trim.lo.y.abs()).max(low);
+        let m = trim.metric(v2(0.5 * (trim.lo.x + trim.hi.x), far));
+        let slender = SLENDER * step.x * m.x / (m.y * far).max(1.0e-12);
+        step.y = slender.max((far / low).ln() / ROWS).clamp(1.0e-9, 1.0);
+    }
+    let flat = |q: V2| {
+        if rolled {
+            v2(q.x / step.x, q.y.ln() / step.y)
+        } else {
+            v2(q.x / step.x, q.y / step.y)
+        }
+    };
+    let lift = |q: V2| {
+        if rolled {
+            v2(q.x * step.x, (q.y * step.y).exp())
+        } else {
+            v2(q.x * step.x, q.y * step.y)
+        }
+    };
     let mut sides: Vec<[V2; 2]> = Vec::new();
     for lp in std::iter::once(&poly.outer).chain(poly.holes.iter()) {
         for k in 0..lp.len() {
-            sides.push([scaled(lp[k].uv), scaled(lp[(k + 1) % lp.len()].uv)]);
+            sides.push([flat(lp[k].uv), flat(lp[(k + 1) % lp.len()].uv)]);
         }
     }
 
     let mut start: Vec<[Corner; 3]> = Vec::new();
-    earclip(
-        poly.outer,
-        poly.holes,
-        v2(1.0 / step.x, 1.0 / step.y),
-        &mut start,
-    );
+    // Where each corner really is, for the ones that go in flattened.
+    let mut real: crate::fast::Map<u32, V2> = Default::default();
+    if rolled {
+        let mut flatten = |lp: Vec<Corner>| -> Vec<Corner> {
+            lp.into_iter()
+                .map(|c| {
+                    real.insert(c.src, c.uv);
+                    Corner {
+                        uv: flat(c.uv),
+                        src: c.src,
+                    }
+                })
+                .collect()
+        };
+        let outer = flatten(poly.outer);
+        let holes = poly.holes.into_iter().map(&mut flatten).collect();
+        earclip(outer, holes, v2(1.0, 1.0), &mut start);
+    } else {
+        earclip(
+            poly.outer,
+            poly.holes,
+            v2(1.0 / step.x, 1.0 / step.y),
+            &mut start,
+        );
+    }
     let mut corners: Vec<Corner> = Vec::new();
     let mut local: crate::fast::Map<u32, u32> = Default::default();
     let mut index = |c: Corner| {
@@ -1472,7 +1716,15 @@ fn fill(
         })
     };
     let indexed: Vec<[u32; 3]> = start.iter().map(|t| t.map(&mut index)).collect();
-    let points: Vec<V2> = corners.iter().map(|c| scaled(c.uv)).collect();
+    let points: Vec<V2> = if rolled {
+        let points = corners.iter().map(|c| c.uv).collect();
+        for c in &mut corners {
+            c.uv = real[&c.src];
+        }
+        points
+    } else {
+        corners.iter().map(|c| flat(c.uv)).collect()
+    };
     let mut net = Net::new(points, indexed);
 
     let (mut lo, mut hi) = (sides[0][0], sides[0][0]);
@@ -1538,7 +1790,7 @@ fn fill(
                 let q = v2(x0 + i as f64, y);
                 if let Some(t) = net.insert(q, near) {
                     near = t;
-                    let uv = v2(q.x * step.x, q.y * step.y);
+                    let uv = lift(q);
                     corners.push(Corner {
                         uv,
                         src: fv.push(trim.point(uv), trim.normal(uv)),
@@ -1579,7 +1831,7 @@ fn fill(
             if let Some(t) = net.insert(q, near) {
                 near = t;
                 added = true;
-                let uv = v2(q.x * step.x, q.y * step.y);
+                let uv = lift(q);
                 corners.push(Corner {
                     uv,
                     src: fv.push(trim.point(uv), trim.normal(uv)),
@@ -1590,6 +1842,12 @@ fn fill(
             break;
         }
     }
+    // Flat in the parameter plane every triangle faces the same way. On the
+    // surface a long thin one need not: up a cone the plane is skewed, more
+    // the nearer the tip, and a needle between the outline and something
+    // close to it can lie the other way round there. Its neighbour then
+    // overlaps it, and the other diagonal of the two puts both right.
+    net.mend(|t| faces_out(fv, t.map(|i| corners[i as usize].src), opts));
     if crate::diag::trace() {
         eprintln!(
             "  fill: unit {step:?}, {} outline sides, {} corners, {} triangles",

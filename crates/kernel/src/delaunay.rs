@@ -212,25 +212,53 @@ impl Net {
         }
     }
 
+    /// The two triangles on side `k` of triangle `t`: the neighbour, which
+    /// of its sides this is, and the four corners. The side runs from the
+    /// first to the second; the third is `t`'s own, the fourth the
+    /// neighbour's.
+    fn pair(&self, t: u32, k: usize) -> Option<(u32, usize, [u32; 4])> {
+        let n = self.across[t as usize][k];
+        if n == NOBODY {
+            return None;
+        }
+        let tri = self.tris[t as usize];
+        let (a, b, c) = (tri[k], tri[(k + 1) % 3], tri[(k + 2) % 3]);
+        let other = self.tris[n as usize];
+        let j = (0..3).find(|&j| other[j] == b && other[(j + 1) % 3] == a)?;
+        (self.across[n as usize][j] == t).then_some((n, j, [a, b, c, other[(j + 2) % 3]]))
+    }
+
+    /// Whether the other diagonal of those two triangles would leave both
+    /// with their sense.
+    fn can_swap(&self, [a, b, c, d]: [u32; 4]) -> bool {
+        let at = |i: u32| self.points[i as usize];
+        let (pa, pb, pc, pd) = (at(a), at(b), at(c), at(d));
+        let size = (pa - pd).len().max((pb - pd).len()).max((pc - pd).len());
+        let least = 1.0e-12 * size * size;
+        orient(pa, pd, pc) > least && orient(pd, pb, pc) > least
+    }
+
+    /// Swap side `k` of triangle `t`, found by [`Net::pair`], for the other
+    /// diagonal.
+    fn swap(&mut self, t: u32, k: usize, n: u32, j: usize, [a, b, c, d]: [u32; 4]) {
+        let (ti, ni) = (t as usize, n as usize);
+        let (t_bc, t_ca) = (self.across[ti][(k + 1) % 3], self.across[ti][(k + 2) % 3]);
+        let (n_ad, n_db) = (self.across[ni][(j + 1) % 3], self.across[ni][(j + 2) % 3]);
+        self.tris[ti] = [a, d, c];
+        self.across[ti] = [n_ad, n, t_ca];
+        self.tris[ni] = [d, b, c];
+        self.across[ni] = [n_db, t_bc, t];
+        self.relink(n_ad, n, t, d, a);
+        self.relink(t_bc, t, n, c, b);
+    }
+
     /// Swap side `k` of triangle `t` for the other diagonal if the corner
     /// opposite it in the neighbour lies inside this triangle's circle.
     fn flip(&mut self, t: u32, k: usize) {
-        let ti = t as usize;
-        let n = self.across[ti][k];
-        if n == NOBODY {
-            return;
-        }
-        let ni = n as usize;
-        let tri = self.tris[ti];
-        let (a, b, c) = (tri[k], tri[(k + 1) % 3], tri[(k + 2) % 3]);
-        let other = self.tris[ni];
-        let Some(j) = (0..3).find(|&j| other[j] == b && other[(j + 1) % 3] == a) else {
+        let Some((n, j, corners)) = self.pair(t, k) else {
             return;
         };
-        if self.across[ni][j] != t {
-            return;
-        }
-        let d = other[(j + 2) % 3];
+        let [a, b, c, d] = corners;
         let (pa, pb, pc, pd) = (
             self.points[a as usize],
             self.points[b as usize],
@@ -251,17 +279,43 @@ impl Net {
         if orient(pa, pd, pc) <= least || orient(pd, pb, pc) <= least {
             return;
         }
-        let (t_bc, t_ca) = (self.across[ti][(k + 1) % 3], self.across[ti][(k + 2) % 3]);
-        let (n_ad, n_db) = (self.across[ni][(j + 1) % 3], self.across[ni][(j + 2) % 3]);
-        self.tris[ti] = [a, d, c];
-        self.across[ti] = [n_ad, n, t_ca];
-        self.tris[ni] = [d, b, c];
-        self.across[ni] = [n_db, t_bc, t];
-        self.relink(n_ad, n, t, d, a);
-        self.relink(t_bc, t, n, c, b);
+        self.swap(t, k, n, j, corners);
         for s in 0..3 {
             self.stack.push((t, s));
             self.stack.push((n, s));
+        }
+    }
+
+    /// Swap sides to be rid of triangles that `sound` objects to, wherever
+    /// the other diagonal leaves two that it accepts.
+    ///
+    /// The plane this net lies in is only a picture of the surface being
+    /// meshed. Where the picture is skewed, a long thin triangle that faces
+    /// the right way here can face the other way there, and the caller
+    /// knows which. This is a last step: what it leaves need not be
+    /// Delaunay.
+    pub fn mend(&mut self, sound: impl Fn([u32; 3]) -> bool) {
+        for _ in 0..4 {
+            let mut mended = false;
+            for t in 0..self.tris.len() as u32 {
+                if sound(self.tris[t as usize]) {
+                    continue;
+                }
+                for k in 0..3 {
+                    let Some((n, j, corners)) = self.pair(t, k) else {
+                        continue;
+                    };
+                    let [a, b, c, d] = corners;
+                    if self.can_swap(corners) && sound([a, d, c]) && sound([d, b, c]) {
+                        self.swap(t, k, n, j, corners);
+                        mended = true;
+                        break;
+                    }
+                }
+            }
+            if !mended {
+                break;
+            }
         }
     }
 }

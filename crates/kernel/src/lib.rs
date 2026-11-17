@@ -3,15 +3,17 @@
 //! The kernel is data-oriented rather than object-oriented:
 //!
 //! * **Geometry is tagged plain data.** A surface or curve is a kind tag, a
-//!   frame and two scalars ([`geom`]). Evaluation is a `match`, not a virtual
-//!   call, and every surface has a closed-form signed distance.
+//!   frame and a few scalars ([`geom`]). Evaluation is a `match`, not a
+//!   virtual call, and every surface has a signed distance.
 //! * **Topology is flat arrays.** A [`topo::Body`] is a few `Vec`s indexed by
 //!   `u32` with implicit half-edge pairing. Cloning a body is a `memcpy`.
 //! * **Operations are functions from bodies to bodies.** Nothing is mutated
 //!   in place, so history replay can keep and reuse any intermediate result.
 //! * **Exact where it matters.** Faces lie on planes, cylinders, cones,
-//!   spheres and tori; edges are lines, circles and ellipses. Tessellation is
-//!   derived output, never modelling input.
+//!   spheres, tori and the two screw surfaces of a thread; edges are lines,
+//!   circles, ellipses, helices and the curves in which two surfaces meet,
+//!   solved to rounding at every point. Tessellation is derived output,
+//!   never modelling input.
 //!
 //! The crate has no native dependencies and builds for WebAssembly.
 

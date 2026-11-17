@@ -1095,9 +1095,10 @@ fn below(lp: &TrimLoop, q: V2) -> bool {
 enum Kind {
     /// Inside one counter-clockwise loop.
     Disk(usize),
-    /// Between two u-winding loops; the upper one may sit a period higher
-    /// when the band runs through the parameter seam of a torus tube.
-    Band(usize, usize, f64),
+    /// Between two u-winding loops, with how far each is written above
+    /// where it counts. Around a torus tube a loop may be written a whole
+    /// turn away from the band it bounds.
+    Band(usize, usize, f64, f64),
     /// From a u-winding loop to the pole or apex above / below it.
     Above(usize),
     Below(usize),
@@ -1163,6 +1164,17 @@ fn group(
     } else {
         0.0
     };
+    // Whole turns of the tube that a loop is written away from the turn
+    // the loops are ordered in.
+    let turns_up: Vec<f64> = (0..polys.len())
+        .map(|i| {
+            if tube > 0.0 {
+                tube * (mean_v(i) / tube).round()
+            } else {
+                0.0
+            }
+        })
+        .collect();
     let heights: Vec<f64> = (0..polys.len())
         .map(|i| {
             let low = polys[i]
@@ -1170,11 +1182,7 @@ fn group(
                 .iter()
                 .map(|q| q.y)
                 .fold(f64::INFINITY, f64::min);
-            if tube > 0.0 {
-                low - tube * (mean_v(i) / tube).round()
-            } else {
-                low
-            }
+            low - turns_up[i]
         })
         .collect();
     let twins = |x: usize, y: usize| {
@@ -1225,7 +1233,10 @@ fn group(
         if polys[i].shift.x > 0.0 {
             if k + 1 < winding.len() && polys[winding[k + 1]].shift.x < 0.0 {
                 let j = winding[k + 1];
-                regions.push((Kind::Band(i, j, lift[k + 1] - lift[k]), vec![i, j]));
+                regions.push((
+                    Kind::Band(i, j, turns_up[i] - lift[k], turns_up[j] - lift[k + 1]),
+                    vec![i, j],
+                ));
                 k += 2;
                 continue;
             }
@@ -1251,15 +1262,15 @@ fn group(
             Kind::Disk(i) => shifts
                 .iter()
                 .any(|s| inside_polygon(&polys[i].uv, v2(q.x + s, q.y))),
-            Kind::Band(lo, hi, rise) => {
+            Kind::Band(lo, hi, up_lo, up_hi) => {
                 let turns: &[f64] = if surf.v_periodic() {
-                    &[0.0, TAU, -TAU]
+                    &[0.0, TAU, -TAU, 2.0 * TAU, -2.0 * TAU]
                 } else {
                     &[0.0]
                 };
                 turns.iter().any(|t| {
-                    !below(&polys[lo], v2(q.x, q.y + t))
-                        && below(&polys[hi], v2(q.x, q.y + t - rise))
+                    !below(&polys[lo], v2(q.x, q.y + t + up_lo))
+                        && below(&polys[hi], v2(q.x, q.y + t + up_hi))
                 })
             }
             Kind::Above(i) => !below(&polys[i], q),

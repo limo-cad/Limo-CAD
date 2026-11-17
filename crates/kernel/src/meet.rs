@@ -7,7 +7,17 @@
 //! can one that far outside the region asked about. The window is halved on
 //! that test until what is left is a thin band of small cells.
 //! Each is crossed like a contour map, the crossings are joined into chains,
-//! and the chains are cut into pieces a [`Curve::meet`] can follow.
+//! and the chains are cut into pieces a [`Curve::meet`] can follow. A piece
+//! is a graph over one parameter, so a chain is cut wherever the curve turns
+//! back in the parameter it is followed along. It may do that between two
+//! crossings, inside one cell: the lean of the other surface's distance at
+//! the two of them shows it.
+//!
+//! A closed piece of the curve can be smaller than a cell and go round none
+//! of its corners, where one surface only just dips through the other. The
+//! corners then all lie on one side. Such cells are searched down the slope
+//! of the distance for a place on the other side, and the piece is drawn
+//! round it from there.
 //!
 //! Tangential contact changes no sign and is not reported, as for the
 //! closed-form pairs. Where the surfaces come close to touching, the curve
@@ -51,6 +61,19 @@ fn bend(s: &Surface) -> f64 {
         // Half the way from one turn to the next, square to the flank.
         SurfKind::Helicoid => PI * s.t.abs() * s.s.abs().sin(),
         SurfKind::Coil => s.s.abs(),
+    }
+}
+
+/// How sharply a surface bends at a point of it: one over the smallest
+/// radius it curves with there.
+fn curvature(s: &Surface, at: V3) -> f64 {
+    match s.kind {
+        // Round the axis, tighter towards the tip.
+        SurfKind::Cone => {
+            let local = s.f.local(at);
+            s.s.cos() / local.x.hypot(local.y).max(1.0e-9)
+        }
+        _ => 1.0 / bend(s),
     }
 }
 
@@ -216,6 +239,59 @@ impl Grid<'_> {
         self.other.sdist(self.base.point(q.x, q.y))
     }
 
+    /// How the other surface's distance changes along `u` and along `v`.
+    /// The curve runs square to this.
+    fn lean(&self, q: V2) -> V2 {
+        let n = self.other.normal(self.base.point(q.x, q.y));
+        v2(n.dot(self.base.du(q.x, q.y)), n.dot(self.base.dv(q.x, q.y)))
+    }
+
+    /// A point of the curve between two of its points that it passes
+    /// heading opposite ways, as on the two sides of a hairpin: where it
+    /// crosses the line midway between them. `None` unless it crosses that
+    /// line exactly once within reach.
+    fn between(&self, p: V2, q: V2) -> Option<V2> {
+        let mid = (p + q) * 0.5;
+        let m = self.base.scale(mid.x, mid.y);
+        // In model lengths, where a quarter turn is a quarter turn.
+        let chord = v2((q.x - p.x) * m.x, (q.y - p.y) * m.y);
+        let len = chord.len();
+        if len < 1.0e-6 || m.x <= 0.0 || m.y <= 0.0 {
+            return None;
+        }
+        let across = v2(-chord.y / (len * m.x), chord.x / (len * m.y));
+        let reach = len + (self.step.x * m.x).hypot(self.step.y * m.y);
+        let at = |w: f64| mid + across * w;
+        const STEPS: usize = 48;
+        let width = 2.0 * reach / STEPS as f64;
+        let mut found: Option<f64> = None;
+        let mut before = self.distance(at(-reach)) > 0.0;
+        for i in 1..=STEPS {
+            let w = -reach + width * i as f64;
+            let now = self.distance(at(w)) > 0.0;
+            if now != before {
+                if found.is_some() {
+                    return None;
+                }
+                found = Some(w);
+            }
+            before = now;
+        }
+        let (mut lo, mut hi) = (found? - width, found?);
+        let below = self.distance(at(lo)) > 0.0;
+        for _ in 0..60 {
+            let w = 0.5 * (lo + hi);
+            if (self.distance(at(w)) > 0.0) == below {
+                lo = w;
+            } else {
+                hi = w;
+            }
+        }
+        let found = at(0.5 * (lo + hi));
+        let apart = |a: V2, b: V2| ((b.x - a.x) * m.x).hypot((b.y - a.y) * m.y);
+        (apart(p, found) > 1.0e-6 && apart(found, q) > 1.0e-6).then_some(found)
+    }
+
     #[inline]
     fn node(&self, i: usize, j: usize) -> V2 {
         v2(
@@ -305,7 +381,8 @@ impl Grid<'_> {
     }
 
     /// The contour segments through one finest cell, as pairs of grid edges.
-    fn cell(&mut self, i: usize, j: usize, links: &mut Vec<(u64, u64)>) {
+    /// Returns whether there are any.
+    fn cell(&mut self, i: usize, j: usize, links: &mut Vec<(u64, u64)>) -> bool {
         let above = [
             self.value(i, j) > 0.0,
             self.value(i + 1, j) > 0.0,
@@ -360,10 +437,170 @@ impl Grid<'_> {
             }
             _ => {}
         }
+        !cut.is_empty()
     }
 
-    /// Contour segments of every cell the curve can be in.
-    fn scan(&mut self) -> Vec<(u64, u64)> {
+    /// A closed piece of the curve too small to cross a side of the grid:
+    /// it lies in the cell at `(i, j)` and goes round none of its corners.
+    /// The other surface dips through this one there and comes straight
+    /// back, as the tip of a cone does, or a ball that only just reaches.
+    ///
+    /// All four corners are on one side. The search goes down the slope of
+    /// the distance from the middle of the cell, and where it comes out on
+    /// the other side it feels its way round from there. `found` are the
+    /// pieces already drawn, by the cell next door perhaps.
+    fn island(
+        &mut self,
+        i: usize,
+        j: usize,
+        (here, middle): (V3, f64),
+        found: &[Vec<V2>],
+    ) -> Option<Vec<V2>> {
+        let (lo, hi) = (self.node(i, j), self.node(i + 1, j + 1));
+        let centre = (lo + hi) * 0.5;
+        let m = self.base.scale(centre.x, centre.y);
+        if m.x <= 0.0 || m.y <= 0.0 {
+            return None;
+        }
+        let (wide, tall) = (self.step.x * m.x, self.step.y * m.y);
+        let corners = [
+            self.value(i, j),
+            self.value(i + 1, j),
+            self.value(i + 1, j + 1),
+            self.value(i, j + 1),
+        ];
+        let outside = corners[0] > 0.0;
+        // No place in the cell is further than half its longer side from
+        // the nearest of these five, and the distance changes no faster
+        // than the place does. Where both surfaces bend gently it cannot
+        // even change that fast: a dip between the five is a shallow bowl,
+        // no deeper than the bend allows across it. That leaves only the
+        // cells that all but touch, and those next to something sharp.
+        let least = corners.iter().fold(middle.abs(), |l, g| l.min(g.abs()));
+        let bend = curvature(self.base, here) + curvature(self.other, here);
+        let span = 0.75 * wide.max(tall);
+        if (middle > 0.0) == outside && least > span.min(0.5 * bend * span * span) {
+            return None;
+        }
+        let slope_at = |grid: &Grid, q: V2| {
+            let lean = grid.lean(q);
+            v2(lean.x / m.x, lean.y / m.y)
+        };
+        let mut seed = centre;
+        if (middle > 0.0) == outside {
+            // A smooth dip has a level floor, which a steep slope across
+            // the cell rules out; the corners show the slope for nothing.
+            // The tip of a cone has no floor.
+            let across = v2(
+                (corners[1] + corners[2] - corners[0] - corners[3]) / (2.0 * wide),
+                (corners[3] + corners[2] - corners[0] - corners[1]) / (2.0 * tall),
+            );
+            if across.len() > 0.7 && bend * wide.max(tall) < 1.0 {
+                return None;
+            }
+            let (mut q, mut g) = (centre, middle);
+            let mut through = false;
+            for _ in 0..6 {
+                let slope = slope_at(self, q);
+                let steep = slope.len();
+                if steep < 1.0e-12 {
+                    break;
+                }
+                // As far as a straight slope would need, and a little over.
+                let reach = (1.25 * g.abs() / steep).min(0.5 * wide.max(tall));
+                let way = slope * (-g.signum() * reach / steep);
+                let next = v2(
+                    (q.x + way.x / m.x).clamp(lo.x, hi.x),
+                    (q.y + way.y / m.y).clamp(lo.y, hi.y),
+                );
+                let there = self.distance(next);
+                if (there > 0.0) != outside {
+                    seed = next;
+                    through = true;
+                    break;
+                }
+                if there.abs() >= g.abs() {
+                    break;
+                }
+                (q, g) = (next, there);
+            }
+            if !through {
+                return None;
+            }
+        }
+        let within = |ring: &[V2], q: V2| {
+            let mut inside = false;
+            for w in ring.windows(2) {
+                let (a, b) = (w[0], w[1]);
+                if (a.y > q.y) != (b.y > q.y) && q.x < a.x + (q.y - a.y) / (b.y - a.y) * (b.x - a.x)
+                {
+                    inside = !inside;
+                }
+            }
+            inside
+        };
+        if found.iter().any(|ring| within(ring, seed)) {
+            return None;
+        }
+        // Out from there every way, to where the distance changes side.
+        // A way that never does leads into something larger, which the
+        // grid sees for itself.
+        const WAYS: usize = 16;
+        const STEPS: usize = 16;
+        let far = 2.0 * (wide + tall);
+        let mut ring: Vec<V2> = Vec::with_capacity(WAYS + 1);
+        for k in 0..WAYS {
+            let turn = TAU * k as f64 / WAYS as f64;
+            let way = v2(turn.cos() / m.x, turn.sin() / m.y);
+            let at = |w: f64| seed + way * w;
+            let mut near = 0.0;
+            let mut beyond = (1..=STEPS)
+                .map(|s| far * s as f64 / STEPS as f64)
+                .find(|&w| {
+                    let out = (self.distance(at(w)) > 0.0) == outside;
+                    if !out {
+                        near = w;
+                    }
+                    out
+                })?;
+            for _ in 0..60 {
+                let w = 0.5 * (near + beyond);
+                if (self.distance(at(w)) > 0.0) == outside {
+                    beyond = w;
+                } else {
+                    near = w;
+                }
+            }
+            ring.push(at(0.5 * (near + beyond)));
+        }
+        ring.push(ring[0]);
+        // Round a corner of the grid it is no island: the cells there have
+        // it already.
+        let (mut low, mut high) = (ring[0], ring[0]);
+        for q in &ring {
+            low = v2(low.x.min(q.x), low.y.min(q.y));
+            high = v2(high.x.max(q.x), high.y.max(q.y));
+        }
+        let column = |x: f64| ((x - self.lo.x) / self.step.x).floor();
+        let row = |y: f64| ((y - self.lo.y) / self.step.y).floor();
+        for a in column(low.x) as i64..=column(high.x) as i64 + 1 {
+            for b in row(low.y) as i64..=row(high.y) as i64 + 1 {
+                let node = v2(
+                    self.lo.x + a as f64 * self.step.x,
+                    self.lo.y + b as f64 * self.step.y,
+                );
+                if within(&ring, node) {
+                    return None;
+                }
+            }
+        }
+        Some(ring)
+    }
+
+    /// Contour segments of every cell the curve can be in, and the closed
+    /// pieces of it that are too small for the grid to see.
+    fn scan(&mut self) -> (Vec<(u64, u64)>, Vec<Vec<V2>>) {
+        let mut islands: Vec<Vec<V2>> = Vec::new();
         let mut links = Vec::new();
         let mut pending = vec![[0, self.n[0], 0, self.n[1]]];
         while let Some([i0, i1, j0, j1]) = pending.pop() {
@@ -375,11 +612,16 @@ impl Grid<'_> {
             );
             let centre = self.base.point(middle.x, middle.y);
             let reach = 0.5 * (wide + tall);
-            if self.other.sdist(centre).abs() > reach || self.region.distance(centre) > reach {
+            let off = self.other.sdist(centre);
+            if off.abs() > reach || self.region.distance(centre) > reach {
                 continue;
             }
             if i1 - i0 == 1 && j1 - j0 == 1 {
-                self.cell(i0, j0, &mut links);
+                if !self.cell(i0, j0, &mut links) {
+                    if let Some(ring) = self.island(i0, j0, (centre, off), &islands) {
+                        islands.push(ring);
+                    }
+                }
             } else if j1 - j0 == 1 || (i1 - i0 > 1 && wide >= tall) {
                 let m = (i0 + i1) / 2;
                 pending.push([i0, m, j0, j1]);
@@ -390,7 +632,7 @@ impl Grid<'_> {
                 pending.push([i0, i1, m, j1]);
             }
         }
-        links
+        (links, islands)
     }
 }
 
@@ -472,7 +714,20 @@ fn fit(grid: &Grid, along_v: bool, run: &[V2], depth: u32, out: &mut Vec<Curve>)
     let slack = 0.5 * if along_v { grid.step.x } else { grid.step.y };
     // How far the curve gets from the cubic that the piece searches from.
     let mut stray: f64 = 0.0;
-    let mut follows = true;
+    // The piece is a graph over its driver. The curve is one only while the
+    // other surface's distance keeps rising, or keeps falling, across it in
+    // the held parameter; where that changes the curve has turned back, and
+    // points on either side of the turn are on different branches.
+    let lean = |q: V2| {
+        let n = other.normal(base.point(q.x, q.y));
+        n.dot(if along_v {
+            base.du(q.x, q.y)
+        } else {
+            base.dv(q.x, q.y)
+        })
+    };
+    let side = lean(a);
+    let mut follows = run.iter().all(|q| lean(*q) * side > 0.0);
     for q in &run[1..run.len() - 1] {
         let t = drive(*q);
         let got = piece.meet_uv(t);
@@ -480,7 +735,8 @@ fn fit(grid: &Grid, along_v: bool, run: &[V2], depth: u32, out: &mut Vec<Curve>)
         follows &= base.point(got.x, got.y).dist(base.point(q.x, q.y)) < 1.0e-7;
     }
     for w in run.windows(2) {
-        // Between two points: on the other surface, and between them.
+        // Between two points: on the other surface, between them, and on
+        // the same branch.
         let t = 0.5 * (drive(w[0]) + drive(w[1]));
         let got = piece.meet_uv(t);
         stray = stray.max((held(got) - piece.meet_guess(t)).abs());
@@ -488,7 +744,8 @@ fn fit(grid: &Grid, along_v: bool, run: &[V2], depth: u32, out: &mut Vec<Curve>)
         let room = 0.5 * (hi - lo) + slack;
         follows &= other.sdist(base.point(got.x, got.y)).abs() < 1.0e-9
             && held(got) > lo - room
-            && held(got) < hi + room;
+            && held(got) < hi + room
+            && lean(got) * side > 0.0;
     }
     // A search that starts further off than a cell can tell branches apart
     // is not to be trusted, wherever it ended up at the points tried.
@@ -566,19 +823,72 @@ fn pieces(grid: &Grid, points: &[V2], out: &mut Vec<Curve>) -> bool {
     if pts.len() == 1 && points.len() > 1 && far(pts[0], points[points.len() - 1]) {
         pts.push(points[points.len() - 1]);
     }
+    // A step can hide a turn of the curve: both of its points lie in one
+    // cell, and the curve goes round a bend between them. Along a parameter
+    // in which it turned back it is no graph, and a piece driven by that
+    // parameter would jump from one side of the bend to the other. The
+    // other surface's distance tells: across a graph it leans one way.
+    let mut leans: Vec<V2> = pts.iter().map(|q| grid.lean(*q)).collect();
+    // A bend that turns back both ways gets a point of its own in between.
+    let mut k = 0;
+    let mut added = 0;
+    while k + 1 < pts.len() {
+        let (a, b) = (leans[k], leans[k + 1]);
+        if a.x * b.x <= 0.0 && a.y * b.y <= 0.0 && added < 64 {
+            if let Some(m) = grid.between(pts[k], pts[k + 1]) {
+                pts.insert(k + 1, m);
+                leans.insert(k + 1, grid.lean(m));
+                added += 1;
+                continue;
+            }
+        }
+        k += 1;
+    }
+    // Whether the step from point `k` can be driven along `v`, or `u`.
+    let graph = |k: usize, along_v: bool| {
+        let (a, b) = (leans[k], leans[k + 1]);
+        if along_v {
+            a.x * b.x > 0.0
+        } else {
+            a.y * b.y > 0.0
+        }
+    };
     let mut sound = true;
     let mut start = 0;
     while start + 1 < pts.len() {
         let first = travel(pts[start], pts[start + 1]);
-        let along_v = first.y > first.x;
+        let mut along_v = first.y > first.x;
+        let lesser = if along_v { first.x } else { first.y };
+        if !graph(start, along_v) && graph(start, !along_v) && lesser > 1.0e-6 {
+            along_v = !along_v;
+        }
         let drive = |q: V2| if along_v { q.y } else { q.x };
         let rising = drive(pts[start + 1]) > drive(pts[start]);
         let mut end = start + 1;
+        if !graph(start, along_v) {
+            // Still turning back both ways: not to be followed on cells
+            // this size.
+            let mut run = vec![pts[start], pts[end]];
+            if !rising {
+                run.reverse();
+            }
+            let at = out.len();
+            fit(grid, along_v, &run, 16, out);
+            for piece in &mut out[at..] {
+                piece.w[4] = -1.0;
+            }
+            sound = false;
+            start = end;
+            continue;
+        }
         while end + 1 < pts.len() {
             let d = travel(pts[end], pts[end + 1]);
             let (with, across) = if along_v { (d.y, d.x) } else { (d.x, d.y) };
             // Keep the driver while the curve still mostly follows it.
-            if (drive(pts[end + 1]) > drive(pts[end])) != rising || across > 2.5 * with {
+            if (drive(pts[end + 1]) > drive(pts[end])) != rising
+                || across > 2.5 * with
+                || !graph(end, along_v)
+            {
                 break;
             }
             end += 1;
@@ -622,10 +932,10 @@ pub fn trace(a: &Surface, b: &Surface, region: &Aabb) -> Vec<Curve> {
         let Some(mut grid) = Grid::new(base, other, region, finer) else {
             return Vec::new();
         };
-        let links = grid.scan();
+        let (links, islands) = grid.scan();
         out.clear();
         let mut sound = true;
-        for chain in chains(&links) {
+        let drawn = chains(&links).into_iter().map(|chain| {
             let mut points: Vec<V2> = Vec::with_capacity(chain.len());
             for key in chain {
                 let mut q = grid.crossing(key);
@@ -640,6 +950,9 @@ pub fn trace(a: &Surface, b: &Surface, region: &Aabb) -> Vec<Curve> {
                 }
                 points.push(q);
             }
+            points
+        });
+        for points in drawn.collect::<Vec<_>>().into_iter().chain(islands) {
             // Where the surfaces only touch, their distance is zero to
             // rounding and changes sign at random. Those are not crossings:
             // the two normals are parallel at every one of them.

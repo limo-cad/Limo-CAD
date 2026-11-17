@@ -17,7 +17,7 @@ use limo_cad_solid::{
     HoleThreadHand, HoleThreadRepresentation, KernelBodyDto, KernelCurveDto, KernelEdgeDto,
     KernelFaceDto, KernelFeatureErrorDto, KernelHoleJobDto, KernelJobDto,
     KernelPlanarFaceSourceDto, KernelProfileDto, KernelSceneDto, KernelTransformDto,
-    PlanarFaceSignatureDto, Point3Dto, RecomputePlanDto,
+    PlanarFaceSignatureDto, Point3Dto, RecomputePlanDto, SweepOrientation,
 };
 
 use crate::blend;
@@ -672,6 +672,19 @@ impl Kernel {
             KernelJobDto::Sweep(j) => {
                 if !j.guide_rail.is_empty() {
                     return Err(unsupported("A sweep along a guide rail"));
+                }
+                // Along straight lines the profile faces one way whatever
+                // the setting; round a bend only a turning profile is built.
+                let bends = j.path.iter().any(|curve| {
+                    matches!(
+                        curve,
+                        KernelCurveDto::Arc { .. } | KernelCurveDto::Circle { .. }
+                    )
+                });
+                if bends && j.orientation == SweepOrientation::Fixed {
+                    return Err(unsupported(
+                        "A sweep round a bend with its profile kept facing one way",
+                    ));
                 }
                 let tool = sweep_tool(&j.profile, &j.path, feature)?;
                 self.profile_job(

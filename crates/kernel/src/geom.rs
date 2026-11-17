@@ -1123,12 +1123,17 @@ impl Curve {
 
     /// Number of straight segments that approximate `[t0, t1]` within the
     /// chord tolerance `sag`, with at least `min_per_turn` segments per turn.
+    ///
+    /// A curved edge gets two at least. Its middle point then stands off
+    /// its chord, so that a sliver between an arc and the line across it,
+    /// or between two arcs, keeps an outline with an inside however thin
+    /// it is.
     pub fn segments(&self, t0: f64, t1: f64, sag: f64, min_per_turn: f64) -> usize {
         let (r, per_turn) = match self.kind {
             CurveKind::Line => return 1,
             CurveKind::Meet => {
                 // No radius to go by: double until every chord is close.
-                let mut n = 1;
+                let mut n = 2;
                 loop {
                     let at = |i: usize| self.point(t0 + (t1 - t0) * i as f64 / (2 * n) as f64);
                     let worst = (0..n)
@@ -1151,6 +1156,6 @@ impl Curve {
             2.0 * (1.0 - sag / r).clamp(-1.0, 1.0).acos()
         };
         let step = step.min(TAU / per_turn).max(1.0e-3);
-        (((t1 - t0).abs() / step).ceil() as usize).max(1)
+        (((t1 - t0).abs() / step).ceil() as usize).max(2)
     }
 }
