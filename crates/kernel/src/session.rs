@@ -440,7 +440,24 @@ impl Kernel {
             }
             KernelJobDto::Sweep(_) => Err(unsupported("Sweep")),
             KernelJobDto::Loft(_) => Err(unsupported("Loft")),
-            KernelJobDto::Shell(_) => Err(unsupported("Shell")),
+            KernelJobDto::Shell(j) => {
+                let target = self.get(j.target_body_id, "Shell target")?;
+                let names = Names::of(&target);
+                let open = j
+                    .face_keys
+                    .iter()
+                    .map(|key| {
+                        names
+                            .face(key)
+                            .ok_or_else(|| "referenced Shell face no longer exists".to_string())
+                    })
+                    .collect::<Result<Vec<u32>, String>>()?;
+                let result =
+                    crate::offset::shell_as(&target, &open, j.thickness, j.inward, feature)
+                        .map_err(|e| format!("Shell: {e}"))?;
+                self.put(j.target_body_id.0, result);
+                Ok(())
+            }
             KernelJobDto::ImportStep(_) => Err(unsupported("STEP import")),
         }
     }

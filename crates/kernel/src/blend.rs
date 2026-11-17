@@ -222,7 +222,7 @@ fn chain(body: &Body, picked: &mut Vec<u32>) {
 }
 
 /// Is the edge convex (an outside corner)? `None` when the faces are tangent.
-fn convexity(body: &Body, e: u32) -> Option<bool> {
+pub(crate) fn convexity(body: &Body, e: u32) -> Option<bool> {
     let (f1, f2) = (body.h_face(2 * e), body.h_face(2 * e + 1));
     let [t0, t1] = body.e_t[e as usize];
     let c = body.e_curve_ref(e);
