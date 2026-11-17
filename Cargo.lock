@@ -818,6 +818,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "limo-cad-kernel"
+version = "0.3.0-rc.3"
+dependencies = [
+ "limo-cad-core",
+ "limo-cad-solid",
+ "serde_json",
+]
+
+[[package]]
 name = "limo-cad-mcp-mutate"
 version = "0.3.0-rc.3"
 dependencies = [
