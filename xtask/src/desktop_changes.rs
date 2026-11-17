@@ -34,6 +34,7 @@ impl Builds {
             "examples/scripts/",
             "xtask/",
             ".github/actions/",
+            ".github/grype/",
             ".cargo/",
         ]
         .iter()
@@ -407,6 +408,8 @@ mod tests {
             "assets/ribbon-icons/save.svg",
             ".cargo/config.toml",
             ".cargo/tools.toml",
+            ".github/grype/exceptions.yaml",
+            ".github/grype/reviews.yaml",
             ".gitattributes",
             "crates/occt/sdk.rs",
             "native/occt-overlay/opencascade/math_DoubleTab.hxx",

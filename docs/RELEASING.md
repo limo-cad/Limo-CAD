@@ -72,6 +72,12 @@ carriers disagree with `VERSION`.
    cargo metadata --offline --locked --format-version 1 > /dev/null
    ```
 
+   The Version guard also validates advisory review deadlines before packaging.
+   When a pull request builds all five packages, the package workflow verifies
+   their unsigned inventories and scans current advisories before review. Tag
+   builds additionally require signed release evidence; PR scans do not replace
+   those publication checks.
+
 2. **Merge** after review. `main` requires an approving review, and the author
    cannot approve their own PR.
 

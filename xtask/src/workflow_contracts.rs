@@ -440,6 +440,52 @@ fn check_package_gates(source: &Value) -> Result<()> {
 const GRYPE_EXCEPTIONS: &str = crate::release_tooling::advisory_exceptions::CONFIG;
 const RELEASE_GRYPE_SCAN: &str = "if grype \"sbom:$sbom\" --fail-on high --output json --config .github/grype/exceptions.yaml > \"$report\"; then";
 const RESCAN_GRYPE_SCAN: &str = "if ! grype \"sbom:$sbom\" --fail-on high --output json --config .github/grype/exceptions.yaml > \"$sbom.grype.json\"; then";
+const PACKAGE_SECURITY_EVENTS: &str = "github.event_name == 'pull_request' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))";
+
+#[test]
+fn version_guard_checks_review_deadlines_before_packaging() {
+    let source = workflow(".github/workflows/version-guard.yml");
+    let guard = executable_job(&source, "version_guard").unwrap();
+    let (check_index, check) = named_step(guard, "Check reviewed advisory exceptions").unwrap();
+    assert!(check["if"].is_null());
+    assert_eq!(
+        check["run"].as_str(),
+        Some("cargo xtask advisory-exceptions")
+    );
+    let (tests_index, _) = named_step(guard, "Unit-test the version carriers").unwrap();
+    assert!(check_index < tests_index);
+}
+
+#[cfg(unix)]
+#[test]
+fn package_security_verifies_pr_inventories_and_requires_tag_attestations() {
+    let source = workflow(".github/workflows/desktop-packages.yml");
+    let (_, verify) = named_step(
+        &source["jobs"]["release_security"],
+        "Verify complete SBOM coverage and archive identities",
+    )
+    .unwrap();
+    let run = verify["run"].as_str().unwrap();
+    let fake_cargo = r#"cargo() { printf '%s\n' "$*"; return "$FAKE_STATUS"; }"#;
+    for (event, expected) in [
+        ("pull_request", "xtask sbom verify --directory dist\n"),
+        (
+            "push",
+            "xtask sbom verify --directory dist --require-release-evidence\n",
+        ),
+    ] {
+        for status in [0, 17] {
+            let output = std::process::Command::new("bash")
+                .args(["-c", &format!("{fake_cargo}\n{run}")])
+                .env("GITHUB_EVENT_NAME", event)
+                .env("FAKE_STATUS", status.to_string())
+                .output()
+                .unwrap();
+            assert_eq!(output.status.code(), Some(status));
+            assert_eq!(String::from_utf8(output.stdout).unwrap(), expected);
+        }
+    }
+}
 
 // Every grype scan loads the reviewed exceptions, and only after the checker
 // has rejected expired, malformed, unmatched or broadened rules in that step.
@@ -620,6 +666,10 @@ fn check_release_sbom_gates(source: &Value) -> Result<()> {
     }
     let scanner = executable_job(source, "release_security")?;
     ensure!(
+        scanner["if"].as_str() == Some(PACKAGE_SECURITY_EVENTS),
+        "check package advisories on pull requests as well as release tags"
+    );
+    ensure!(
         needs(scanner)?
             == [
                 "build-windows-portable",
@@ -681,6 +731,11 @@ fn check_release_sbom_gates(source: &Value) -> Result<()> {
 fn release_sbom_gates_reject_omitted_inventories_bypassed_scans_and_unsigned_publication() {
     let source = workflow(".github/workflows/desktop-packages.yml");
     check_release_sbom_gates(&source).unwrap();
+    let mut tag_only = source.clone();
+    tag_only["jobs"]["release_security"]["if"] = Value::String(
+        "github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')".into(),
+    );
+    assert!(check_release_sbom_gates(&tag_only).is_err());
     let inventory_index = named_step(
         &source["jobs"]["build-linux-appimage"],
         "Generate release SBOMs and tag attestations",

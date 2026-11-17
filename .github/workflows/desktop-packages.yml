@@ -1010,7 +1010,7 @@ jobs:
 
   release_security:
     name: Verify release inventories and dependency advisories
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
     needs: [build-windows-portable, build-linux-ubuntu, build-linux-appimage, build-macos-apple-silicon]
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -1029,7 +1029,14 @@ jobs:
           path: dist
           merge-multiple: false
       - name: Verify complete SBOM coverage and archive identities
-        run: cargo xtask sbom verify --directory dist --require-release-evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_EVENT_NAME" == pull_request ]]; then
+            cargo xtask sbom verify --directory dist
+          else
+            cargo xtask sbom verify --directory dist --require-release-evidence
+          fi
       - name: Check native and compiled release advisories
         shell: bash
         run: |
