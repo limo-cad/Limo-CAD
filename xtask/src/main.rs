@@ -10,6 +10,7 @@ mod deploy_native;
 mod desktop_changes;
 mod icon_audit;
 mod install_mcp;
+mod kernel_demo;
 mod knowledge;
 mod linux_fixture;
 mod local_subject;
@@ -115,6 +116,7 @@ fn run() -> Result<()> {
         "verify-occt-storage" => occt_storage::run(args),
         "build-wasm" => wasm_build::run(args),
         "smoke-wasm" => wasm_build::smoke(args),
+        "kernel-demo" => kernel_demo::run(args),
         "knowledge" => knowledge::run(args),
         "retarget-repository" => repository::run(args),
         "switching-comparison" => switching_comparison::run(args),
@@ -169,6 +171,7 @@ Commands:
   switching-comparison  Plan (--plan) or orchestrate disposable hosted Bevy comparisons.
   build-wasm    Build the browser's Rust engine with wasm-pack (--dev or --release).
   smoke-wasm    Test the Rust engine facade in headless Chrome using wasm-bindgen-test.
+  kernel-demo   Build the Limo kernel's live browser demo as one HTML page (--out FILE).
   build-occt    Build pinned OCCT 8.0.1 with CMake/Ninja on the host:
                 --prefix PATH [--jobs N] [--cache-dir PATH] [--sccache] [--dry-run]
                 [--repair-runtime] (Windows: explicitly repair owned runtime closure).
