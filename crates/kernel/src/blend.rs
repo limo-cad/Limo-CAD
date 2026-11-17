@@ -86,7 +86,12 @@ fn apply(body: &Body, edges: &[u32], shape: Shape) -> Result<Body, String> {
             picked.push(e);
         }
     }
-    chain(body, &mut picked);
+    // An angled chamfer is measured from one face of each edge; which face
+    // that is further along a chain is not tracked yet, so it stays on the
+    // picked edges.
+    if !matches!(shape, Shape::Bevel(_, Some(_))) {
+        chain(body, &mut picked);
+    }
     let mut tools: Vec<Tool> = Vec::with_capacity(picked.len());
     for &e in &picked {
         tools.push(edge_tool(body, e, shape)?);
