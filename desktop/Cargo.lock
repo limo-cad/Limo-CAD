@@ -3519,6 +3519,7 @@ dependencies = [
  "limo-cad-core",
  "limo-cad-export",
  "limo-cad-interface",
+ "limo-cad-kernel",
  "limo-cad-mcp",
  "limo-cad-mcp-mutate",
  "limo-cad-native-engine",
@@ -3623,6 +3624,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "limo-cad-kernel"
+version = "0.3.0-rc.3"
+dependencies = [
+ "limo-cad-core",
+ "limo-cad-solid",
+]
+
+[[package]]
 name = "limo-cad-mcp"
 version = "0.3.0-rc.3"
 dependencies = [
@@ -3684,6 +3693,7 @@ dependencies = [
  "limo-cad-assembly",
  "limo-cad-core",
  "limo-cad-export",
+ "limo-cad-kernel",
  "limo-cad-sketch",
  "limo-cad-solid",
  "serde",

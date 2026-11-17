@@ -2469,4 +2469,117 @@ mod tests {
             );
         }
     }
+
+    /// Solids modelled by Limo CAD's own kernel, drawn by the real viewport
+    /// renderer. Set `LIMO_CAD_PREVIEW_PROOF_DIR` to keep the images.
+    #[test]
+    #[ignore = "requires a GPU; set LIMO_CAD_PREVIEW_PROOF_DIR to retain visual evidence"]
+    fn limo_kernel_solids_render_in_the_native_viewport() {
+        use limo_cad_kernel::Body;
+        use limo_cad_solid::{BodyDto, EdgeDto, FaceDto, MeshDto, SolidSceneDto};
+
+        let scene_of = |body: &Body| {
+            let id = limo_cad_core::BodyId(1);
+            let raw = limo_cad_kernel::session::body_dto(1, body, &Default::default());
+            SolidSceneDto {
+                bodies: vec![BodyDto {
+                    id,
+                    topology_signature: raw.topology_signature,
+                    display_warnings: Vec::new(),
+                    name: "Body1".into(),
+                    feature_id: limo_cad_core::FeatureId(1),
+                    mesh: MeshDto {
+                        positions: raw.positions,
+                        normals: raw.normals,
+                        indices: raw.indices,
+                    },
+                    faces: raw
+                        .faces
+                        .into_iter()
+                        .map(|face| FaceDto {
+                            id: limo_cad_solid::stable_face_id(id, &face.key),
+                            key: face.key,
+                            first_index: face.first_index,
+                            index_count: face.index_count,
+                            plane: face.plane,
+                            signature: face.signature,
+                            cylinder: face.cylinder,
+                            edge_keys: face.edge_keys,
+                            linear_seam_edge_keys: face.linear_seam_edge_keys,
+                            planar_inner_ring_edge_keys: face.planar_inner_ring_edge_keys,
+                            outer_shell: face.outer_shell,
+                            cone: face.cone,
+                        })
+                        .collect(),
+                    edges: raw
+                        .edges
+                        .into_iter()
+                        .map(|edge| EdgeDto {
+                            id: limo_cad_solid::stable_edge_id(id, &edge.key),
+                            key: edge.key,
+                            points: edge.points,
+                            circle: edge.circle,
+                            refinable: edge.refinable,
+                        })
+                        .collect(),
+                }],
+                errors: Vec::new(),
+            }
+        };
+        // The kernel's sample parts: a mounting block, a bracket whose edge
+        // break is one fillet over 22 edges, a box rounded all over and a
+        // cross-drilled shaft.
+        let parts = limo_cad_kernel::demo::showcase().unwrap();
+
+        let mut renderer = PreviewRenderer::new().unwrap();
+        let cancelled = AtomicBool::new(false);
+        let output = std::env::var_os("LIMO_CAD_PREVIEW_PROOF_DIR");
+        if let Some(path) = &output {
+            std::fs::create_dir_all(path).unwrap();
+        }
+        for (label, body) in &parts {
+            let label = *label;
+            body.check().unwrap();
+            let document = PreviewDocument::new(vec![Frame {
+                caption: label.into(),
+                scene: scene_of(body),
+                ..default()
+            }])
+            .unwrap();
+            let mut request = request(label.into(), String::new(), 1);
+            request.width = 1280;
+            request.height = 800;
+            request.yaw = std::f32::consts::FRAC_PI_4 * 0.8;
+            request.pitch = 0.6;
+            let png = renderer
+                .render(
+                    &document,
+                    &request,
+                    &cancelled,
+                    Instant::now() + Duration::from_secs(60),
+                )
+                .unwrap();
+            let (width, height, pixels) = decode_rgba(&png);
+            assert_eq!((width, height), (1280, 800));
+            // The solid must cover a visible part of the frame.
+            let background = [pixels[0], pixels[1], pixels[2]];
+            let drawn = pixels
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .filter(|p| (0..3).any(|k| p[k].abs_diff(background[k]) > 12))
+                .count();
+            assert!(
+                drawn > 20_000,
+                "{label}: only {drawn} pixels differ from the background"
+            );
+            if let Some(path) = &output {
+                std::fs::write(
+                    std::path::Path::new(path).join(format!("{label}.png")),
+                    &png,
+                )
+                .unwrap();
+            }
+        }
+    }
 }

@@ -69,6 +69,7 @@ earcutr = "=0.5.0"
 
 [dev-dependencies]
 ciborium = "=0.2.2"
+limo-cad-kernel = { path = "../crates/kernel" }
 
 [target.'cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))'.dependencies]
 bevy = { version = "=0.20.0", default-features = false, features = [
