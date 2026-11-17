@@ -372,9 +372,11 @@ This checks engine bindings, not a completed Bevy browser application.
 
 `crates/kernel` is Limo CAD's own exact B-rep kernel in plain Rust. It is
 opt-in: set `LIMO_CAD_KERNEL=limo` before starting the desktop or the MCP
-server and every recompute runs on it instead of OCCT. Features it does not
-cover fail with a message that says so; OCCT-backed services (sections,
-drawings, STEP export, interference) are unavailable in that mode.
+server and every recompute runs on it instead of OCCT, and so do the
+services around it: sections, drawings, measurement, mass properties,
+interference, STEP export and import, and deleting or editing a feature in
+the middle of the history. What it does not cover fails with a message that
+says so.
 
 ```sh
 cargo test -p limo-cad-kernel
@@ -382,9 +384,23 @@ cargo xtask kernel-demo
 ```
 
 The second command builds a self-contained browser page that models the
-kernel's sample parts live. [The kernel's README](../crates/kernel/README.md)
-covers its design, what it models, the differential lab against OCCT and the
-diagnostic switches.
+kernel's sample parts live.
+
+The host's own suites run on either kernel, so a change to the adapter or
+to history can be checked on both:
+
+```sh
+cargo test --release -p limo-cad-native-engine --features native-occt
+LIMO_CAD_KERNEL=limo cargo test --release -p limo-cad-native-engine --features native-occt
+```
+
+Where the two differ on purpose a test says so: OCCT will not delete a
+feature next to bodies that share geometry with it, and the Limo kernel,
+whose bodies share nothing, performs the delete.
+
+[The kernel's README](../crates/kernel/README.md) covers its design, how
+names survive edits, what it models, the differential lab against OCCT and
+the diagnostic switches.
 
 ## Where the code lives
 
