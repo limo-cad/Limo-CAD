@@ -54,7 +54,7 @@ method details and reported gains are not assessed here.
 
 Y. Altintas and J. H. Ko. CIRP Annals, 55(1), 361–364, 2006.
 [DOI](https://doi.org/10.1016/S0007-8506(07)60435-1) ·
-[publisher page](https://www.sciencedirect.com/science/article/pii/S0007850607604351) ?
+[publisher page](https://www.sciencedirect.com/science/article/pii/S0007850607604351) ·
 [Crossref metadata](https://api.crossref.org/works/10.1016/S0007-8506(07)60435-1).
 Evidence: Crossref identity checked 2026-11-17; publisher metadata and public
 abstract assessment inherited from 2026-10-20. Publisher access returned HTTP
