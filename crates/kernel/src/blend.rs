@@ -300,6 +300,88 @@ fn edge_tool(body: &Body, e: u32, shape: Shape) -> Result<Tool, String> {
             segs.push(Seg::Line { a: a2, b: p });
             make::extrude(&Region { loops: vec![segs] }, d, 0.0, t1 - t0)?
         }
+        (
+            CurveKind::Line,
+            SurfKind::Plane | SurfKind::Cylinder,
+            SurfKind::Plane | SurfKind::Cylinder,
+        ) => {
+            // A straight edge along a cylinder, against a plane or another
+            // cylinder: across the edge the faces are a circle and a line,
+            // or two circles.
+            let d = c.f.x;
+            let p = c.point(t0);
+            let u1 = body.f_normal(f1, p).cross(d).unit();
+            let u2 = d.cross(body.f_normal(f2, p)).unit();
+            let ex = u1;
+            let ey = d.cross(u1).unit();
+            let flat = |v: V3| v2(v.dot(ex), v.dot(ey));
+            let lift = |q: V2| p + ex * q.x + ey * q.y;
+            let across = |f: u32, into: V3| -> Across {
+                let s = body.f_surface(f);
+                let normal = flat(body.f_normal(f, p));
+                match s.kind {
+                    SurfKind::Plane => Across::Line {
+                        normal: normal.unit(),
+                        at: 0.0,
+                        into: flat(into),
+                    },
+                    _ => {
+                        let centre = flat(s.f.o - p);
+                        Across::Circle {
+                            centre,
+                            radius: s.r,
+                            // Whether the face looks away from the axis.
+                            outward: normal.dot(centre) < 0.0,
+                            into: flat(into),
+                        }
+                    }
+                }
+            };
+            let (a1, a2) = (across(f1, u1), across(f2, u2));
+            // Blends sit in the material of a convex edge, in the air of a
+            // concave one.
+            let side = if convex { -1.0 } else { 1.0 };
+            let (q1, q2, join) = match shape {
+                Shape::Round(r) => {
+                    let centre = a1
+                        .offset(side * r)
+                        .meet(&a2.offset(side * r))
+                        .into_iter()
+                        .filter(|o| a1.ahead(a1.foot(*o)) && a2.ahead(a2.foot(*o)))
+                        .min_by(|x, y| x.len().total_cmp(&y.len()))
+                        .ok_or("the blend is larger than the faces it joins")?;
+                    let (q1, q2) = (a1.foot(centre), a2.foot(centre));
+                    let mid = centre + ((q1 - centre) + (q2 - centre)).unit() * r;
+                    (
+                        q1,
+                        q2,
+                        Seg::Arc {
+                            a: lift(q1),
+                            m: lift(mid),
+                            b: lift(q2),
+                        },
+                    )
+                }
+                Shape::Bevel(distance, None) => {
+                    let (q1, q2) = (a1.along(distance), a2.along(distance));
+                    (
+                        q1,
+                        q2,
+                        Seg::Line {
+                            a: lift(q1),
+                            b: lift(q2),
+                        },
+                    )
+                }
+                Shape::Bevel(_, Some(_)) => return Err(unsupported_edge()),
+            };
+            let segs = vec![
+                a1.run(v2(0.0, 0.0), q1, &lift),
+                join,
+                a2.run(q2, v2(0.0, 0.0), &lift),
+            ];
+            make::extrude(&Region { loops: vec![segs] }, d, 0.0, t1 - t0)?
+        }
         (CurveKind::Circle, SurfKind::Plane, SurfKind::Cylinder)
         | (CurveKind::Circle, SurfKind::Cylinder, SurfKind::Plane) => {
             let (fp, fc) = if s1.kind == SurfKind::Plane {
@@ -386,6 +468,160 @@ fn edge_tool(body: &Body, e: u32, shape: Shape) -> Result<Tool, String> {
         body: tool,
         add: !convex,
     })
+}
+
+/// A face as it looks in the plane across a straight edge, with the edge
+/// at the origin: a line or a circle through it, or either of those moved
+/// off along its normal. `into` points along the face away from the edge.
+#[derive(Clone, Copy)]
+enum Across {
+    Line {
+        /// Unit normal, and how far along it the line lies.
+        normal: V2,
+        at: f64,
+        into: V2,
+    },
+    Circle {
+        centre: V2,
+        radius: f64,
+        outward: bool,
+        into: V2,
+    },
+}
+
+impl Across {
+    /// The same face moved by `by` along its normal.
+    fn offset(&self, by: f64) -> Across {
+        match *self {
+            Across::Line { normal, at, into } => Across::Line {
+                normal,
+                at: at + by,
+                into,
+            },
+            Across::Circle {
+                centre,
+                radius,
+                outward,
+                into,
+            } => Across::Circle {
+                centre,
+                radius: radius + if outward { by } else { -by },
+                outward,
+                into,
+            },
+        }
+    }
+
+    /// A point of the line and its direction; only for lines.
+    fn line(&self) -> (V2, V2) {
+        let Across::Line { normal, at, .. } = *self else {
+            unreachable!()
+        };
+        (normal * at, v2(-normal.y, normal.x))
+    }
+
+    /// Where two faces cross.
+    fn meet(&self, other: &Across) -> Vec<V2> {
+        match (*self, *other) {
+            (Across::Line { .. }, Across::Line { .. }) => {
+                let ((p, d), (q, e)) = (self.line(), other.line());
+                let det = d.cross(e);
+                if det.abs() < 1.0e-12 {
+                    return Vec::new();
+                }
+                vec![p + d * ((q - p).cross(e) / det)]
+            }
+            (Across::Line { .. }, Across::Circle { centre, radius, .. }) => {
+                let (p, d) = self.line();
+                // Foot of the centre on the line, and half the chord.
+                let along = (centre - p).dot(d);
+                let foot = p + d * along;
+                let half2 = radius * radius - (centre - foot).dot(centre - foot);
+                if radius <= 0.0 || half2 < 0.0 {
+                    return Vec::new();
+                }
+                let half = half2.sqrt();
+                vec![foot + d * half, foot - d * half]
+            }
+            (Across::Circle { .. }, Across::Line { .. }) => other.meet(self),
+            (
+                Across::Circle {
+                    centre: c1,
+                    radius: r1,
+                    ..
+                },
+                Across::Circle {
+                    centre: c2,
+                    radius: r2,
+                    ..
+                },
+            ) => {
+                let between = c2 - c1;
+                let apart = between.len();
+                if r1 <= 0.0 || r2 <= 0.0 || apart < 1.0e-12 {
+                    return Vec::new();
+                }
+                let along = (apart * apart + r1 * r1 - r2 * r2) / (2.0 * apart);
+                let half2 = r1 * r1 - along * along;
+                if half2 < 0.0 {
+                    return Vec::new();
+                }
+                let unit = between * (1.0 / apart);
+                let (foot, side) = (c1 + unit * along, v2(-unit.y, unit.x) * half2.sqrt());
+                vec![foot + side, foot - side]
+            }
+        }
+    }
+
+    /// The point of the face nearest `q`.
+    fn foot(&self, q: V2) -> V2 {
+        match *self {
+            Across::Line { normal, at, .. } => q - normal * (q.dot(normal) - at),
+            Across::Circle { centre, radius, .. } => {
+                centre + (q - centre) * (radius / (q - centre).len())
+            }
+        }
+    }
+
+    /// Whether a point of the face lies on the side the face runs to.
+    fn ahead(&self, q: V2) -> bool {
+        let (Across::Line { into, .. } | Across::Circle { into, .. }) = *self;
+        q.dot(into) > 1.0e-12
+    }
+
+    /// The point `distance` along the face from the edge.
+    fn along(&self, distance: f64) -> V2 {
+        match *self {
+            Across::Line { into, .. } => into * distance,
+            Across::Circle {
+                centre,
+                radius,
+                into,
+                ..
+            } => {
+                // Round the circle, the way `into` leaves the edge.
+                let from = v2(0.0, 0.0) - centre;
+                let turn = from.cross(into).signum() * distance / radius;
+                let (sin, cos) = turn.sin_cos();
+                centre + v2(from.x * cos - from.y * sin, from.x * sin + from.y * cos)
+            }
+        }
+    }
+
+    /// The stretch of the face from `a` to `b`, as a profile segment.
+    fn run(&self, a: V2, b: V2, lift: &dyn Fn(V2) -> V3) -> Seg {
+        match *self {
+            Across::Line { .. } => Seg::Line {
+                a: lift(a),
+                b: lift(b),
+            },
+            Across::Circle { centre, radius, .. } => Seg::Arc {
+                a: lift(a),
+                m: lift(centre + ((a - centre) + (b - centre)).unit() * radius),
+                b: lift(b),
+            },
+        }
+    }
 }
 
 fn unsupported_edge() -> String {

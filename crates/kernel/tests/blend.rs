@@ -246,3 +246,86 @@ fn revolved_profiles() {
     assert_eq!((torus.face_count(), torus.edge_count()), (1, 0));
     close(volume(&torus), 2.0 * PI * PI * 10.0 * 9.0, 5e-4);
 }
+
+fn assert_sound(body: &Body) {
+    body.check().unwrap();
+    let options = TessOptions::default();
+    tessellate(body, &options).check(body, &options).unwrap();
+}
+
+/// Straight edges where a flat face meets a cylinder that runs along them.
+fn seams(body: &Body) -> Vec<u32> {
+    (0..body.edge_count() as u32)
+        .filter(|&e| {
+            let kinds = [2 * e, 2 * e + 1].map(|h| body.f_surface(body.h_face(h)).kind);
+            body.e_curve_ref(e).kind == CurveKind::Line
+                && body.e_sharp(e)
+                && kinds.contains(&SurfKind::Plane)
+                && kinds.contains(&SurfKind::Cylinder)
+        })
+        .collect()
+}
+
+#[test]
+fn straight_edges_between_a_flat_and_a_cylinder() {
+    // Half a rod, split along its axis: the flat meets the round at two
+    // straight edges.
+    let rod = make::cylinder(V3::ZERO, V3::Z, 20.0, 30.0).unwrap();
+    let half = make::block(v3(-30.0, 0.0, -1.0), v3(30.0, 30.0, 31.0)).unwrap();
+    let half = boolean(&rod, &half, Op::Intersect).unwrap();
+    let edges = seams(&half);
+    assert_eq!(edges.len(), 2);
+    let before = 0.5 * PI * 400.0 * 30.0;
+
+    // Rounded: a circle of radius 2 that touches the flat and, from
+    // inside, the rod.
+    let rounded = fillet(&half, &edges, 2.0).unwrap();
+    assert_sound(&rounded);
+    let x0 = (400.0_f64 - 80.0).sqrt();
+    let turn = (2.0 / x0).atan();
+    let corner = 0.5 * 400.0 * turn - 0.5 * x0 * 2.0 - 0.5 * 4.0 * (0.5 * PI + turn);
+    // The rod's own chord error is in both volumes and drops out.
+    close(volume(&half) - volume(&rounded), 2.0 * corner * 30.0, 1e-2);
+    close(volume(&rounded), before - 2.0 * corner * 30.0, 1e-4);
+    assert_eq!(count(&rounded, SurfKind::Cylinder), 3);
+    // Nothing sharp is left along the rod.
+    assert!(seams(&rounded).is_empty());
+
+    // Bevelled 2 along each face: along the flat, and round the rod.
+    let bevelled = chamfer(&half, &edges, 2.0, None).unwrap();
+    assert_sound(&bevelled);
+    let corner = 0.5 * 400.0 * 0.1 - 0.5 * 18.0 * 20.0 * 0.1_f64.sin();
+    close(volume(&half) - volume(&bevelled), 2.0 * corner * 30.0, 1e-2);
+
+    // A round as wide as the rod does not fit.
+    assert!(fillet(&half, &edges, 12.0).is_err());
+}
+
+#[test]
+fn a_ridge_and_a_groove_along_a_plate() {
+    let plate = make::block(v3(-30.0, -20.0, -10.0), v3(30.0, 20.0, 0.0)).unwrap();
+    let bar = make::cylinder(v3(0.0, -20.0, 0.0), V3::Y, 10.0, 40.0).unwrap();
+
+    // A half-round ridge: where it rises from the plate the edges are
+    // hollow, and a round fills them.
+    let ridge = boolean(&plate, &bar, Op::Union).unwrap();
+    let edges = seams(&ridge);
+    assert_eq!(edges.len(), 2);
+    let filled = fillet(&ridge, &edges, 2.0).unwrap();
+    assert_sound(&filled);
+    let x0 = (144.0_f64 - 4.0).sqrt();
+    let turn = (2.0 / x0).atan();
+    let corner = 0.5 * x0 * 2.0 - 0.5 * 100.0 * turn - 0.5 * 4.0 * (0.5 * PI - turn);
+    close(volume(&filled) - volume(&ridge), 2.0 * corner * 40.0, 1e-2);
+    assert!(seams(&filled).is_empty());
+
+    // A half-round groove: its rims stand proud, and a round takes them
+    // off.
+    let groove = boolean(&plate, &bar, Op::Cut).unwrap();
+    let edges = seams(&groove);
+    assert_eq!(edges.len(), 2);
+    let eased = fillet(&groove, &edges, 2.0).unwrap();
+    assert_sound(&eased);
+    assert!(volume(&eased) < volume(&groove));
+    assert!(seams(&eased).is_empty());
+}

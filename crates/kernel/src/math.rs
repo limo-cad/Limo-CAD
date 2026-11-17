@@ -174,6 +174,11 @@ impl V2 {
     pub fn len(self) -> f64 {
         self.dot(self).sqrt()
     }
+    /// The same direction at length one.
+    #[inline]
+    pub fn unit(self) -> V2 {
+        self * (1.0 / self.len())
+    }
 }
 impl Add for V2 {
     type Output = V2;
