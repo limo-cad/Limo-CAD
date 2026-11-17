@@ -92,6 +92,22 @@ impl Kernel {
         self.display.clear();
     }
 
+    /// A kernel that holds the given bodies as they are now and nothing of
+    /// how they came about; all of them when no ids are given. For work
+    /// that only reads: drawings, sections, export.
+    pub fn snapshot(&self, ids: &[u64]) -> Kernel {
+        let mut copy = Kernel::new();
+        copy.options = self.options;
+        copy.clock = self.clock;
+        copy.state = self
+            .state
+            .iter()
+            .filter(|(id, _)| ids.is_empty() || ids.contains(id))
+            .map(|(id, slot)| (*id, slot.clone()))
+            .collect();
+        copy
+    }
+
     pub fn body_ids(&self) -> Vec<u64> {
         self.state.keys().copied().collect()
     }
@@ -199,6 +215,14 @@ impl Kernel {
         self.display
             .retain(|generation, _| retained.contains(generation));
         let mut bodies = Vec::with_capacity(self.state.len());
+        // `LIMO_CAD_KERNEL_BODIES`: leave every body of the scene in that
+        // folder as text, to be read back with `Body::from_text`.
+        if let Some(dir) = std::env::var_os("LIMO_CAD_KERNEL_BODIES") {
+            for (id, slot) in &self.state {
+                let path = std::path::Path::new(&dir).join(format!("{id}.body"));
+                let _ = std::fs::write(path, slot.body.to_text());
+            }
+        }
         for (id, slot) in &self.state {
             let options = self.options;
             let shared = self

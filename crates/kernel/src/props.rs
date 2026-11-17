@@ -20,22 +20,62 @@ const GAUSS_W: [f64; 5] = [
     0.236_926_885_056_189_08,
 ];
 
+/// Five-point Gauss–Legendre estimate of the integral of `f` over `[a, b]`.
+fn gauss(a: f64, b: f64, f: &mut impl FnMut(f64) -> f64) -> f64 {
+    let half = 0.5 * (b - a);
+    let mut sum = 0.0;
+    for k in 0..5 {
+        sum += GAUSS_W[k] * f(a + half * (1.0 + GAUSS_X[k]));
+    }
+    sum * half
+}
+
+/// The integral of `f` over `[a, b]`, halving the range until two halves
+/// say the same as the whole. `whole` is the estimate over the range, and
+/// `scale` the size of the answer the error is measured against.
+fn settle(
+    a: f64,
+    b: f64,
+    whole: f64,
+    scale: f64,
+    depth: u32,
+    f: &mut impl FnMut(f64) -> f64,
+) -> f64 {
+    let mid = 0.5 * (a + b);
+    let (left, right) = (gauss(a, mid, f), gauss(mid, b, f));
+    if depth == 0 || (left + right - whole).abs() <= 1.0e-13 * scale {
+        return left + right;
+    }
+    settle(a, mid, left, scale, depth - 1, f) + settle(mid, b, right, scale, depth - 1, f)
+}
+
 /// Integrate `f(t)` over the parameter range of edge `e`.
 fn integrate_edge(body: &Body, e: u32, mut f: impl FnMut(f64) -> f64) -> f64 {
     let [t0, t1] = body.e_t[e as usize];
-    let pieces = match body.e_curve_ref(e).kind {
+    let kind = body.e_curve_ref(e).kind;
+    let pieces = match kind {
         CurveKind::Line => 1,
         _ => (((t1 - t0) / (PI / 8.0)).ceil() as usize).max(1),
     };
     let step = (t1 - t0) / pieces as f64;
+    // Lines, circles and ellipses turn evenly with their parameter; any
+    // other curve is followed as closely as it takes.
+    let even = matches!(
+        kind,
+        CurveKind::Line | CurveKind::Circle | CurveKind::Ellipse
+    );
+    let size = if even { 0.0 } else { body.e_length(e).max(1.0) };
     let mut sum = 0.0;
     for i in 0..pieces {
-        let (a, half) = (t0 + step * i as f64, 0.5 * step);
-        for k in 0..5 {
-            sum += GAUSS_W[k] * f(a + half * (1.0 + GAUSS_X[k]));
-        }
+        let (a, b) = (t0 + step * i as f64, t0 + step * (i + 1) as f64);
+        let whole = gauss(a, b, &mut f);
+        sum += if even {
+            whole
+        } else {
+            settle(a, b, whole, whole.abs().max(size * size), 12, &mut f)
+        };
     }
-    sum * 0.5 * step
+    sum
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -108,4 +148,397 @@ pub fn planar_props(body: &Body, f: u32) -> Option<PlanarProps> {
         loops,
         edges: edges.len() as u32,
     })
+}
+
+// ---------------------------------------------------------------------
+// Volume, area and centre of mass.
+//
+// Everything a solid weighs in on is an integral over its faces, and an
+// integral over a face is one around its edges: with `P(u, v)` the
+// integral of the quantity along `v` from a fixed line, Green's theorem
+// turns the sum over the face into the line integral of `P du` along its
+// loops. The inner integral is over a polynomial or a trigonometric
+// polynomial and the outer one along an exact curve, so both converge to
+// rounding; no face is ever cut into triangles.
+// ---------------------------------------------------------------------
+
+use crate::geom::{SurfKind, Surface};
+
+/// Quantities carried through the integrals: the volume under the face,
+/// its area, and the three first moments of the volume.
+const N: usize = 5;
+type Sums = [f64; N];
+
+fn add(a: &mut Sums, b: &Sums, k: f64) {
+    for i in 0..N {
+        a[i] += k * b[i];
+    }
+}
+
+/// Point and both parameter derivatives. A cone is read the way
+/// [`Surface::uv`] writes it: `u` is the true angle on either side of the
+/// tip.
+fn at(s: &Surface, u: f64, v: f64) -> (V3, V3, V3) {
+    if s.kind != SurfKind::Cone {
+        return (s.point(u, v), s.du(u, v), s.dv(u, v));
+    }
+    let (sin, cos) = u.sin_cos();
+    let radial = s.f.x * cos + s.f.y * sin;
+    let around = s.f.y * cos - s.f.x * sin;
+    let slope = s.s.tan();
+    (
+        s.f.o + s.f.z * v + radial * (v.abs() * slope),
+        around * (v.abs() * slope),
+        s.f.z + radial * (slope * v.signum()),
+    )
+}
+
+/// What a unit of `(u, v)` at this spot adds to each sum, measured from
+/// `origin`.
+fn density(s: &Surface, u: f64, v: f64, origin: V3) -> Sums {
+    let (p, su, sv) = at(s, u, v);
+    let n = su.cross(sv);
+    let q = p - origin;
+    let half = 0.5 * q.len2();
+    [q.dot(n) / 3.0, n.len(), half * n.x, half * n.y, half * n.z]
+}
+
+/// Gauss–Legendre over `[a, b]` in pieces no longer than `piece`.
+fn span(a: f64, b: f64, piece: f64, mut f: impl FnMut(f64) -> Sums) -> Sums {
+    let mut sum = [0.0; N];
+    if a == b {
+        return sum;
+    }
+    let pieces = (((b - a).abs() / piece).ceil() as usize).max(1);
+    let step = (b - a) / pieces as f64;
+    for i in 0..pieces {
+        let (lo, half) = (a + step * i as f64, 0.5 * step);
+        for k in 0..5 {
+            add(
+                &mut sum,
+                &f(lo + half * (1.0 + GAUSS_X[k])),
+                GAUSS_W[k] * half,
+            );
+        }
+    }
+    sum
+}
+
+/// How long a stretch of a parameter one Gauss rule can take: the whole
+/// of it where the surface is straight that way, a slice of a turn where
+/// it bends.
+fn stride(s: &Surface, along_v: bool) -> f64 {
+    match (s.kind, along_v) {
+        (SurfKind::Plane, _) | (SurfKind::Cylinder | SurfKind::Cone, true) => f64::INFINITY,
+        _ => PI / 6.0,
+    }
+}
+
+/// Estimate over `[a, b]` and, where its two halves disagree with it, the
+/// halves' halves.
+fn refine(
+    a: f64,
+    b: f64,
+    whole: Sums,
+    scale: &Sums,
+    depth: u32,
+    f: &mut impl FnMut(f64) -> Sums,
+) -> Sums {
+    let mid = 0.5 * (a + b);
+    let left = span(a, mid, f64::INFINITY, &mut *f);
+    let right = span(mid, b, f64::INFINITY, &mut *f);
+    let settled = (0..N).all(|i| (left[i] + right[i] - whole[i]).abs() <= scale[i]);
+    let mut sum = [0.0; N];
+    if depth == 0 || settled {
+        add(&mut sum, &left, 1.0);
+        add(&mut sum, &right, 1.0);
+        return sum;
+    }
+    add(&mut sum, &refine(a, mid, left, scale, depth - 1, f), 1.0);
+    add(&mut sum, &refine(mid, b, right, scale, depth - 1, f), 1.0);
+    sum
+}
+
+/// A pole axis for a sphere that keeps both poles as far from the edges of
+/// face `f` as any of a handful of directions can.
+fn clear_axis(body: &Body, f: u32, s: &Surface) -> V3 {
+    let mut rim: Vec<V3> = Vec::new();
+    for h in body.face_hes(f) {
+        let e = h >> 1;
+        let [t0, t1] = body.e_t[e as usize];
+        for i in 0..=12 {
+            let p = body.e_point(e, t0 + (t1 - t0) * i as f64 / 12.0);
+            rim.push((p - s.f.o).unit());
+        }
+    }
+    let candidates = [
+        s.f.z,
+        s.f.x,
+        s.f.y,
+        (s.f.x + s.f.y + s.f.z).unit(),
+        (s.f.x - s.f.y + s.f.z * 0.5).unit(),
+        (s.f.x * 0.3 - s.f.y - s.f.z).unit(),
+        (s.f.x * -1.0 + s.f.y * 0.4 + s.f.z * 0.7).unit(),
+    ];
+    let clearance = |axis: V3| {
+        rim.iter()
+            .map(|p| 1.0 - p.dot(axis).abs())
+            .fold(f64::INFINITY, f64::min)
+    };
+    candidates
+        .into_iter()
+        .max_by(|a, b| clearance(*a).total_cmp(&clearance(*b)))
+        .unwrap_or(s.f.z)
+}
+
+/// Sums over face `f`, measured from `origin`: the flux terms as they
+/// count towards the solid (outward), and the area as it is. `size` is
+/// the size of the body, for telling an answer from rounding. `None` for a
+/// face whose loops wind round a torus both ways.
+fn face_sums(body: &Body, f: u32, origin: V3, size: f64) -> Option<Sums> {
+    let outward = if body.f_sense[f as usize] { 1.0 } else { -1.0 };
+    let mut s = *body.f_surface(f);
+    if s.kind == SurfKind::Sphere {
+        s = Surface::sphere_axis(s.f.o, clear_axis(body, f, &s), s.r);
+    }
+    let torus = s.kind == SurfKind::Torus;
+    // Where the inner integral starts: the tip of a cone and the upper pole
+    // of a sphere, where a loop round the axis closes on nothing.
+    let from = if s.kind == SurfKind::Sphere {
+        0.5 * PI
+    } else {
+        0.0
+    };
+    let scale = {
+        let l = size.max(1.0);
+        let small = 1.0e-13;
+        [
+            small * l * l * l,
+            small * l * l,
+            small * l * l * l * l,
+            small * l * l * l * l,
+            small * l * l * l * l,
+        ]
+    };
+
+    // On a torus both parameters come round again: follow each loop without
+    // a jump, and see which way it winds.
+    const STEPS: usize = 48;
+    struct Walk {
+        h: u32,
+        u: Vec<f64>,
+        v: Vec<f64>,
+    }
+    let mut walks: Vec<Walk> = Vec::new();
+    let mut across = false;
+    if torus {
+        for l in body.face_loops(f) {
+            let mut last: Option<V2> = None;
+            let (mut first, mut turned) = (v2(0.0, 0.0), v2(0.0, 0.0));
+            for h in body.loop_hes(l) {
+                let e = h >> 1;
+                let [t0, t1] = body.e_t[e as usize];
+                let (a, b) = if h & 1 == 0 { (t0, t1) } else { (t1, t0) };
+                let (mut us, mut vs) = (Vec::new(), Vec::new());
+                for i in 0..=STEPS {
+                    let raw = s.uv(body.e_point(e, a + (b - a) * i as f64 / STEPS as f64));
+                    let q = match last {
+                        None => {
+                            first = raw;
+                            raw
+                        }
+                        Some(prev) => v2(
+                            raw.x + TAU * ((prev.x - raw.x) / TAU).round(),
+                            raw.y + TAU * ((prev.y - raw.y) / TAU).round(),
+                        ),
+                    };
+                    last = Some(q);
+                    us.push(q.x);
+                    vs.push(q.y);
+                }
+                walks.push(Walk { h, u: us, v: vs });
+            }
+            if let Some(end) = last {
+                turned = end - first;
+            }
+            let (round, over) = (
+                (turned.x / TAU).round() as i64,
+                (turned.y / TAU).round() as i64,
+            );
+            if round != 0 && over != 0 {
+                return None;
+            }
+            across |= over != 0;
+        }
+        // Loops over the tube and loops round the axis always cross, so a
+        // face has one kind or the other.
+    }
+
+    let mut sums = [0.0; N];
+    let mut walk = walks.iter();
+    for h in body.face_hes(f) {
+        let e = h >> 1;
+        let c = *body.e_curve_ref(e);
+        let [t0, t1] = body.e_t[e as usize];
+        let (a, b) = if h & 1 == 0 { (t0, t1) } else { (t1, t0) };
+        let followed = walk.next().filter(|w| w.h == h);
+        let mut along = |t: f64| -> Sums {
+            let p = c.point(t);
+            let d = c.deriv(t);
+            let mut q = s.uv(p);
+            if let Some(w) = followed {
+                // The same spot on the walk, to pick the turn.
+                let place = ((t - a) / (b - a) * STEPS as f64).clamp(0.0, STEPS as f64);
+                let i = (place.floor() as usize).min(STEPS - 1);
+                let k = place - i as f64;
+                let near = v2(
+                    w.u[i] + (w.u[i + 1] - w.u[i]) * k,
+                    w.v[i] + (w.v[i + 1] - w.v[i]) * k,
+                );
+                q = v2(
+                    q.x + TAU * ((near.x - q.x) / TAU).round(),
+                    q.y + TAU * ((near.y - q.y) / TAU).round(),
+                );
+            }
+            let (_, su, sv) = at(&s, q.x, q.y);
+            let mut out = [0.0; N];
+            if across {
+                // ∮ Q dv, with Q the integral along u.
+                let rate = sv.len2();
+                if rate < 1.0e-24 {
+                    return out;
+                }
+                let inner = span(0.0, q.x, stride(&s, false), |u| density(&s, u, q.y, origin));
+                add(&mut out, &inner, d.dot(sv) / rate);
+            } else {
+                // ∮ P du, with P minus the integral along v.
+                let rate = su.len2();
+                if rate < 1.0e-24 {
+                    return out;
+                }
+                let inner = span(from, q.y, stride(&s, true), |v| density(&s, q.x, v, origin));
+                add(&mut out, &inner, -d.dot(su) / rate);
+            }
+            out
+        };
+        let pieces = match c.kind {
+            CurveKind::Line => 1,
+            _ => (((b - a).abs() / (PI / 8.0)).ceil() as usize).max(1),
+        };
+        let step = (b - a) / pieces as f64;
+        for i in 0..pieces {
+            let (lo, hi) = (a + step * i as f64, a + step * (i + 1) as f64);
+            let whole = span(lo, hi, f64::INFINITY, &mut along);
+            add(
+                &mut sums,
+                &refine(lo, hi, whole, &scale, 14, &mut along),
+                1.0,
+            );
+        }
+    }
+
+    // What the loops leave out: the lower pole of a sphere when the face
+    // holds it, whole turns of a torus. The area tells, since it has to
+    // come out between nothing and the whole surface.
+    let whole = |s: &Surface| -> Sums {
+        let (lo, hi) = if s.kind == SurfKind::Sphere {
+            (-0.5 * PI, 0.5 * PI)
+        } else {
+            (0.0, TAU)
+        };
+        span(0.0, TAU, PI / 6.0, |u| {
+            span(lo, hi, PI / 6.0, |v| density(s, u, v, origin))
+        })
+    };
+    let mut area = outward * sums[1];
+    let floor = 1.0e-9 * size.max(1.0) * size.max(1.0);
+    match s.kind {
+        SurfKind::Sphere if area <= floor => {
+            let all = whole(&s);
+            add(&mut sums, &all, outward);
+            area += all[1];
+        }
+        SurfKind::Torus => {
+            let all = whole(&s);
+            let turns = if body.face_loops(f).is_empty() {
+                1.0
+            } else {
+                (-area / all[1] - 1.0e-9).ceil()
+            };
+            if turns != 0.0 {
+                add(&mut sums, &all, outward * turns);
+                area += turns * all[1];
+            }
+        }
+        _ => {}
+    }
+    sums[1] = area;
+    Some(sums)
+}
+
+/// Volume, surface area and centre of mass of a solid.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Mass {
+    pub volume: f64,
+    pub area: f64,
+    pub centre: V3,
+    /// Whether every face was integrated exactly. A face whose loops wind
+    /// round a torus both ways is left out, and this is false.
+    pub exact: bool,
+}
+
+/// Volume, area and centre of mass, to rounding: every face is integrated
+/// along its exact edges.
+pub fn mass(body: &Body) -> Mass {
+    let (origin, size) = anchor(body);
+    let mut total = [0.0; N];
+    let mut exact = true;
+    for f in 0..body.face_count() as u32 {
+        match face_sums(body, f, origin, size) {
+            Some(sums) => add(&mut total, &sums, 1.0),
+            None => exact = false,
+        }
+    }
+    let volume = total[0];
+    let centre = if volume.abs() > 1.0e-12 {
+        origin + v3(total[2], total[3], total[4]) / volume
+    } else {
+        origin
+    };
+    Mass {
+        volume,
+        area: total[1],
+        centre,
+        exact,
+    }
+}
+
+/// Volume of a solid, to rounding.
+pub fn volume(body: &Body) -> f64 {
+    mass(body).volume
+}
+
+/// Area of one face, to rounding.
+pub fn face_area(body: &Body, f: u32) -> Option<f64> {
+    let (origin, size) = anchor(body);
+    face_sums(body, f, origin, size).map(|sums| sums[1])
+}
+
+/// A point to measure from, in the middle of the body, and the body's
+/// size. A body with no edge at all (a ball, a ring) has only its surfaces
+/// to go by.
+fn anchor(body: &Body) -> (V3, f64) {
+    let bounds = body.bbox();
+    let mut size = bounds.diagonal();
+    let mut origin = (bounds.lo + bounds.hi) * 0.5;
+    if bounds.is_empty() || !origin.is_finite() {
+        origin = body.surfs.first().map_or(V3::ZERO, |s| s.f.o);
+        size = 0.0;
+    }
+    for s in &body.surfs {
+        if matches!(s.kind, SurfKind::Sphere | SurfKind::Torus) {
+            size = size.max(2.0 * (s.r.abs() + s.s.abs()));
+        }
+    }
+    (origin, size)
 }

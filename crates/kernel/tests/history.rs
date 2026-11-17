@@ -389,3 +389,51 @@ fn names_are_unique_and_indices_from_older_documents_still_work() {
     old.push(fillet(3, &format!("edge:{position}"), 3.0));
     assert!(has_round(body(&run(&mut kernel, old)), 37.0, 3.0, 3.0));
 }
+
+/// The point where a round rim starts is a vertex of the model, and stays
+/// one when a later cut takes a piece out of the rim somewhere else: a
+/// dimension tied to it still finds it. The same rim has the same vertex
+/// whichever of the two cuts came first.
+#[test]
+fn where_a_rim_starts_stays_a_vertex() {
+    use limo_cad_kernel::{boolean, make, v3, Op, Xform, V3};
+    let plate = make::block(V3::ZERO, v3(40.0, 40.0, 10.0)).unwrap();
+    let centre = v3(20.0, 20.0, 0.0);
+    let bore = make::cylinder(centre - V3::Z, V3::Z, 8.0, 12.0).unwrap();
+    let drilled = boolean(&plate, &bore, Op::Cut).unwrap();
+    let rim: Vec<V3> = drilled
+        .verts
+        .iter()
+        .copied()
+        .filter(|p| (p.z - 10.0).abs() < 1.0e-9 && (v3(p.x, p.y, 0.0) - centre).len() < 8.5)
+        .collect();
+    assert_eq!(rim.len(), 1, "a whole rim has the one vertex it starts at");
+    let start = rim[0];
+    // A slot through the far side of the rim.
+    let away = (centre - v3(start.x, start.y, 0.0)).unit();
+    let angle = away.y.atan2(away.x);
+    let slot = make::block(v3(4.0, -1.0, -1.0), v3(30.0, 1.0, 11.0))
+        .unwrap()
+        .transformed(&Xform::rotation(V3::ZERO, V3::Z, angle))
+        .transformed(&Xform::translation(centre));
+    let has = |body: &limo_cad_kernel::Body, p: V3| body.verts.iter().any(|v| v.dist(p) < 1.0e-9);
+    let slotted = boolean(&drilled, &slot, Op::Cut).unwrap();
+    assert!(has(&slotted, start), "the slot took the vertex with it");
+    let other_way = boolean(&boolean(&plate, &slot, Op::Cut).unwrap(), &bore, Op::Cut).unwrap();
+    assert!(
+        has(&other_way, start),
+        "drilled last, the rim starts nowhere"
+    );
+    assert_eq!(
+        (
+            slotted.face_count(),
+            slotted.edge_count(),
+            slotted.verts.len()
+        ),
+        (
+            other_way.face_count(),
+            other_way.edge_count(),
+            other_way.verts.len()
+        )
+    );
+}

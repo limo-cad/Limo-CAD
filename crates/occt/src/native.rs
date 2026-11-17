@@ -522,6 +522,9 @@ impl OcctKernel {
         retain_unintersected: bool,
     ) -> Result<crate::section_review::SectionGeometry, OcctError> {
         request.validate().map_err(OcctError)?;
+        if let Some(limo) = &self.limo {
+            return limo_section_geometry(limo, request, retain_unintersected);
+        }
         let raw = self
             .shapes()?
             .section_geometry(
@@ -593,7 +596,14 @@ impl OcctKernel {
         &self,
         ids: &[limo_cad_core::BodyId],
     ) -> Result<DetachedDrawingKernel, OcctError> {
-        let ids = ids.iter().map(|id| id.0).collect();
+        let ids: Vec<u64> = ids.iter().map(|id| id.0).collect();
+        if let Some(limo) = &self.limo {
+            // Bodies of the Limo kernel are plain shared values: a
+            // snapshot is another kernel holding the same ones.
+            let mut result = Self::new()?;
+            result.limo = Some(Box::new(limo.snapshot(&ids)));
+            return Ok(DetachedDrawingKernel(result));
+        }
         let inner = self
             .shapes()?
             .drawing_snapshot(&ids)
@@ -1051,6 +1061,9 @@ impl OcctKernel {
         {
             return Ok(projection.clone());
         }
+        if let Some(limo) = &self.limo {
+            return limo_drawing_projection(limo, request);
+        }
         // These buffers belong to the native HLR call, not cache lookup.
         // A retained projection must not copy every occurrence pose and body
         // ID merely to discard those buffers on the read-only hit path.
@@ -1140,6 +1153,9 @@ impl OcctKernel {
         a: PlacedBodyQueryDto,
         b: PlacedBodyQueryDto,
     ) -> Result<ExactInterferenceResultDto, OcctError> {
+        if let Some(limo) = &self.limo {
+            return limo_exact_interference(limo, &a, &b);
+        }
         let raw = self
             .shapes()?
             .exact_interference(
@@ -1240,6 +1256,211 @@ impl OcctKernel {
         limo_cad_export::ExportFacade::export_3mf(&meshes, appearances, request)
             .map_err(|error| OcctError(error.to_string()))
     }
+}
+
+/// The line drawing of a view, made by the Limo kernel: edges and outlines
+/// sorted into what the eye sees and what is behind something, and the
+/// outlines of the material a cutting plane goes through.
+/// Clearance and shared volume of two placed bodies of the Limo kernel.
+fn limo_exact_interference(
+    limo: &limo_cad_kernel::Kernel,
+    a: &PlacedBodyQueryDto,
+    b: &PlacedBodyQueryDto,
+) -> Result<ExactInterferenceResultDto, OcctError> {
+    use limo_cad_kernel::{v3, Xform, V3};
+    let placed = |query: &PlacedBodyQueryDto| {
+        let body = limo
+            .body(query.body_id.0)
+            .ok_or_else(|| OcctError("interference query references a missing body".to_string()))?;
+        let [x, y, z] = query.translation;
+        let pose = Xform::rigid(v3(x, y, z), query.rotation, V3::ZERO).ok_or_else(|| {
+            OcctError("interference query transform is not a finite rigid transform".to_string())
+        })?;
+        Ok::<_, OcctError>(body.transformed(&pose))
+    };
+    let (a, b) = (placed(a)?, placed(b)?);
+    let found = limo_cad_kernel::near::clash(&a, &b).map_err(OcctError)?;
+    Ok(ExactInterferenceResultDto {
+        minimum_clearance_mm: found.clearance,
+        overlap_volume_mm3: found.overlap,
+        closest_point_a: found.a.arr(),
+        closest_point_b: found.b.arr(),
+    })
+}
+
+fn limo_drawing_projection(
+    limo: &limo_cad_kernel::Kernel,
+    request: &DrawingProjectionRequest,
+) -> Result<DrawingProjectionDto, OcctError> {
+    use limo_cad_kernel::project::{cut, draw, DrawOptions, View};
+    use limo_cad_kernel::{v3, Body, Xform, V3};
+    let vector = |a: [f64; 3]| v3(a[0], a[1], a[2]);
+    let view = View::new(vector(request.direction), vector(request.up))
+        .ok_or_else(|| OcctError("drawing projection direction and up are parallel".to_string()))?;
+    let mut bodies: Vec<Body> = Vec::new();
+    if request.scope == limo_cad_sketch::DrawingViewScope::Assembly {
+        for pose in request.resolved_occurrences.iter().flatten() {
+            let body = limo.body(pose.body_id.0).ok_or_else(|| {
+                OcctError("drawing occurrence references a missing body".to_string())
+            })?;
+            let placed = Xform::rigid(vector(pose.translation), pose.rotation, V3::ZERO)
+                .ok_or_else(|| {
+                    OcctError(
+                        "drawing occurrence placement is not a finite rigid transform".to_string(),
+                    )
+                })?;
+            bodies.push(body.transformed(&placed));
+        }
+    } else {
+        let mut ids: Vec<u64> = request.body_ids.iter().map(|id| id.0).collect();
+        if ids.is_empty() {
+            ids = limo.body_ids();
+        }
+        let mut seen = std::collections::BTreeSet::new();
+        for id in ids {
+            if seen.insert(id) {
+                bodies.push(
+                    limo.body(id)
+                        .ok_or_else(|| OcctError("selected drawing body is missing".to_string()))?
+                        .clone(),
+                );
+            }
+        }
+    }
+    if bodies.is_empty() {
+        return Err(OcctError(
+            "there are no active bodies to project".to_string(),
+        ));
+    }
+    let deflection = request.deflection.clamp(1.0e-4, 10.0);
+    let polyline = |points: Vec<limo_cad_kernel::V2>| DrawingPolylineDto {
+        points: points.into_iter().map(|p| [p.x, p.y]).collect(),
+    };
+    let mut section = Vec::new();
+    if let Some(plane) = &request.section_plane {
+        let mut kept = Vec::with_capacity(bodies.len());
+        for body in &bodies {
+            let result = cut(
+                body,
+                vector(plane.point),
+                vector(plane.normal),
+                plane.depth,
+                deflection,
+            )
+            .map_err(|error| {
+                OcctError(format!(
+                    "Drawing projection for bodies {:?}, section {:?}: {error}",
+                    request.body_ids, request.section_plane
+                ))
+            })?;
+            section.extend(
+                result
+                    .outlines
+                    .into_iter()
+                    .map(|line| polyline(line.into_iter().map(|p| view.flat(p)).collect())),
+            );
+            kept.extend(result.kept);
+        }
+        bodies = kept;
+    }
+    let shown: Vec<&Body> = bodies.iter().collect();
+    let drawing = draw(
+        &shown,
+        &view,
+        &DrawOptions {
+            hidden: request.include_hidden,
+            smooth_edges: request.include_tangent_edges,
+            deflection,
+        },
+    );
+    let visible: Vec<DrawingPolylineDto> = drawing.visible.into_iter().map(polyline).collect();
+    let hidden: Vec<DrawingPolylineDto> = drawing.hidden.into_iter().map(polyline).collect();
+    let mut bounds = [
+        f64::INFINITY,
+        f64::INFINITY,
+        f64::NEG_INFINITY,
+        f64::NEG_INFINITY,
+    ];
+    for point in visible
+        .iter()
+        .chain(hidden.iter())
+        .chain(section.iter())
+        .flat_map(|line| line.points.iter())
+    {
+        bounds[0] = bounds[0].min(point[0]);
+        bounds[1] = bounds[1].min(point[1]);
+        bounds[2] = bounds[2].max(point[0]);
+        bounds[3] = bounds[3].max(point[1]);
+    }
+    if !bounds.iter().all(|value| value.is_finite()) {
+        bounds = [0.0; 4];
+    }
+    Ok(DrawingProjectionDto {
+        topology_signatures: Default::default(),
+        visible,
+        hidden,
+        anchors: Vec::new(),
+        circles: Vec::new(),
+        section,
+        bounds,
+    })
+}
+
+/// A section through one body, made by the Limo kernel: the outlines of
+/// the material the plane goes through, and on request what is left of the
+/// body on the side that is kept.
+fn limo_section_geometry(
+    limo: &limo_cad_kernel::Kernel,
+    request: &crate::section_review::SectionReviewRequest,
+    retain_unintersected: bool,
+) -> Result<crate::section_review::SectionGeometry, OcctError> {
+    use crate::section_review::{SectionGeometry, SectionOutcome};
+    use limo_cad_kernel::project::cut;
+    use limo_cad_kernel::V3;
+    let body = limo
+        .body(request.body_id.0)
+        .ok_or_else(|| OcctError("Invalid body or section plane".to_string()))?;
+    let axes = [V3::X, V3::Y, V3::Z];
+    let axis = request.plane.axis();
+    let origin = axes[axis] * request.offset_mm;
+    // The outline of the material on the plane is the same whichever side
+    // is kept, so it is always taken from the same cut.
+    let result = cut(body, origin, axes[axis], None, request.deflection_mm).map_err(OcctError)?;
+    let right = if axis == 0 { V3::Y } else { V3::X };
+    let up = if axis == 2 { V3::Y } else { V3::Z };
+    let outcome = if !result.outlines.is_empty() {
+        SectionOutcome::MaterialSection
+    } else if result.touches {
+        SectionOutcome::BoundaryContact
+    } else {
+        SectionOutcome::NoIntersection
+    };
+    let section = result
+        .outlines
+        .iter()
+        .map(|line| DrawingPolylineDto {
+            points: line.iter().map(|p| [p.dot(right), p.dot(up)]).collect(),
+        })
+        .collect();
+    let wanted = request.include_cutaway
+        && (outcome == SectionOutcome::MaterialSection || retain_unintersected);
+    // What is cut away lies in front of the plane.
+    let kept = if !wanted {
+        None
+    } else if request.keep_positive {
+        cut(body, origin, -axes[axis], None, request.deflection_mm)
+            .map_err(OcctError)?
+            .kept
+    } else {
+        result.kept
+    };
+    let cutaway = kept
+        .map(|kept| limo_cad_kernel::session::body_dto(request.body_id.0, &kept, &limo.options));
+    Ok(SectionGeometry {
+        outcome,
+        section,
+        cutaway,
+    })
 }
 
 /// Export meshes straight from the Limo kernel's exact bodies.

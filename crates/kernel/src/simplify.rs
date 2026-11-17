@@ -16,6 +16,14 @@ fn find(parent: &mut [u32], mut i: u32) -> u32 {
     i
 }
 
+/// Whether `t` is where a closed curve begins.
+fn starts_there(curve: &crate::geom::Curve, t: f64) -> bool {
+    curve.periodic() && {
+        let turn = t.rem_euclid(TAU);
+        turn.min(TAU - turn) < 1.0e-9
+    }
+}
+
 pub fn unify(body: &Body) -> Body {
     let nf = body.face_count();
     let ne = body.edge_count();
@@ -87,6 +95,14 @@ pub fn unify(body: &Body) -> Body {
             std::mem::swap(&mut m0, &mut m1);
         }
         let [a0, a1] = e_t[ea as usize];
+        // Where a closed curve starts stays a vertex. A rim that is cut
+        // again later keeps that one point where it was, so whatever was
+        // tied to it — a dimension, a mate — still finds it.
+        if starts_there(ca, e_t[ea as usize][ia as usize])
+            || starts_there(cb, e_t[eb as usize][ib as usize])
+        {
+            continue;
+        }
         // Slide the other span by whole periods until it meets this one.
         let (attach, at) = if ia == 1 { (a1, m0) } else { (a0, m1) };
         let turn = if ca.periodic() {

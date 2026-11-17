@@ -125,17 +125,17 @@ impl Arr {
 }
 
 /// One operand with its trimming data.
-struct Side<'a> {
-    body: &'a Body,
+pub(crate) struct Side<'a> {
+    pub(crate) body: &'a Body,
     mesh: EdgeMesh,
     /// Trimming data of a face, built the first time something asks for it:
     /// most faces of a large body are never touched by a small tool.
     trims: Vec<OnceCell<FaceTrim>>,
     /// Bounds that contain each face.
-    boxes: Vec<Aabb>,
+    pub(crate) boxes: Vec<Aabb>,
     /// Bounds of every edge.
-    eboxes: Vec<Aabb>,
-    bbox: Aabb,
+    pub(crate) eboxes: Vec<Aabb>,
+    pub(crate) bbox: Aabb,
     /// Per face: faces of the other body on the same surface, and whether
     /// the outward normals agree.
     partners: Vec<Vec<(u32, bool)>>,
@@ -148,7 +148,7 @@ struct Side<'a> {
 }
 
 impl<'a> Side<'a> {
-    fn new(body: &'a Body) -> Side<'a> {
+    pub(crate) fn new(body: &'a Body) -> Side<'a> {
         let mesh = EdgeMesh::build(body, SAG, PER_TURN);
         let eboxes: Vec<Aabb> = (0..body.edge_count() as u32)
             .map(|e| {
@@ -182,7 +182,7 @@ impl<'a> Side<'a> {
 }
 
 impl Side<'_> {
-    fn trim(&self, f: u32) -> &FaceTrim {
+    pub(crate) fn trim(&self, f: u32) -> &FaceTrim {
         self.trims[f as usize].get_or_init(|| FaceTrim::build(self.body, &self.mesh, f, SAG))
     }
 }
@@ -273,6 +273,9 @@ enum Cls {
     OnOpp,
 }
 
+/// What an intersection of two bodies that share nothing fails with.
+pub const NO_OVERLAP: &str = "the bodies do not overlap";
+
 pub fn boolean(a: &Body, b: &Body, op: Op) -> Result<Body, String> {
     let result = evaluate(a, b, op);
     if let (Err(error), Some(dir)) = (&result, std::env::var_os("LIMO_CAD_KERNEL_DUMP")) {
@@ -298,7 +301,7 @@ fn evaluate(a: &Body, b: &Body, op: Op) -> Result<Body, String> {
     }
     if b.is_empty() {
         return match op {
-            Op::Intersect => Err("the bodies do not overlap".into()),
+            Op::Intersect => Err(NO_OVERLAP.into()),
             _ => Ok(a.clone()),
         };
     }
@@ -552,7 +555,7 @@ fn evaluate(a: &Body, b: &Body, op: Op) -> Result<Body, String> {
     if out.is_empty() {
         return Err(match op {
             Op::Cut => "the cut removes the entire body".into(),
-            Op::Intersect => "the bodies do not overlap".into(),
+            Op::Intersect => NO_OVERLAP.into(),
             Op::Union => "the union is empty".into(),
         });
     }
@@ -574,7 +577,7 @@ fn disjoint(a: &Body, b: &Body, op: Op) -> Result<Body, String> {
             Ok(out)
         }
         Op::Cut => Ok(a.clone()),
-        Op::Intersect => Err("the bodies do not overlap".into()),
+        Op::Intersect => Err(NO_OVERLAP.into()),
     }
 }
 
@@ -708,6 +711,9 @@ fn section(
         for p in &mut params {
             *p = wrap_from(*p, 0.0);
         }
+        // A closed curve is always cut where it starts, so that the same
+        // rim has the same vertex whichever order the features came in.
+        params.push(0.0);
     }
     // A bounded curve also ends where it ends.
     if let Some((lo, hi)) = c.bounds() {
@@ -1327,7 +1333,7 @@ fn split_face(
 
 /// Is `p` inside the solid? `None` when `p` lies on its boundary or every
 /// probe direction is degenerate.
-fn point_in_solid(side: &Side, p: V3) -> Option<bool> {
+pub(crate) fn point_in_solid(side: &Side, p: V3) -> Option<bool> {
     if !side.bbox.contains(p) {
         return Some(false);
     }
