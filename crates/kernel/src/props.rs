@@ -518,6 +518,17 @@ pub fn volume(body: &Body) -> f64 {
     mass(body).volume
 }
 
+/// Volume inside some of the faces of a body: a closed piece of its skin.
+/// Negative for the skin of a hollow.
+pub fn volume_within(body: &Body, faces: &[u32]) -> f64 {
+    let (origin, size) = anchor(body);
+    faces
+        .iter()
+        .filter_map(|&f| face_sums(body, f, origin, size))
+        .map(|sums| sums[0])
+        .sum()
+}
+
 /// Area of one face, to rounding.
 pub fn face_area(body: &Body, f: u32) -> Option<f64> {
     let (origin, size) = anchor(body);

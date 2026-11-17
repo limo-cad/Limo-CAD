@@ -723,9 +723,6 @@ impl OcctKernel {
         &self,
         feature: limo_cad_core::FeatureId,
     ) -> Result<(Self, limo_cad_core::FeatureId, Vec<String>), OcctError> {
-        if self.limo.is_some() {
-            return Err(OcctError(LIMO_SERVICE_UNAVAILABLE.into()));
-        }
         let jobs = self
             .successful_jobs
             .as_ref()
@@ -738,6 +735,76 @@ impl OcctKernel {
             return Err(OcctError(
                 "Delete remap currently requires the final two solid jobs".into(),
             ));
+        }
+        if let Some(limo) = &self.limo {
+            // The Limo kernel names an edge after the faces it lies
+            // between, not after its place in a list. The finish that
+            // stays is replayed on the history without the deleted one
+            // and finds its edges by the names it already has; an edge
+            // the deleted finish made is gone, and the replay says so.
+            let mut consumer = jobs[at + 1].clone();
+            let consumer_id = consumer.feature_id();
+            let (target, keys) = match &consumer {
+                KernelJobDto::Fillet(j) => (j.target_body_id, j.edge_keys.clone()),
+                KernelJobDto::Chamfer(j) => (j.target_body_id, j.edge_keys.clone()),
+                _ => {
+                    return Err(OcctError(
+                        "Delete remap requires an edge finish consumer".into(),
+                    ))
+                }
+            };
+            let removed_target = match &jobs[at] {
+                KernelJobDto::Fillet(j) => Some(j.target_body_id),
+                KernelJobDto::Chamfer(j) => Some(j.target_body_id),
+                _ => None,
+            };
+            if removed_target != Some(target) {
+                return Err(OcctError(
+                    "Delete remap requires two consecutive finishes on one body".into(),
+                ));
+            }
+            let mut replay = limo_cad_kernel::Kernel::new();
+            replay.options = limo.options;
+            let mut next = jobs[..at].to_vec();
+            let failed = |scene: &KernelSceneDto| {
+                scene
+                    .errors
+                    .first()
+                    .map(|error| OcctError(format!("Feature {}: {}", consumer_id.0, error.message)))
+            };
+            let before = replay.recompute(&RecomputePlanDto {
+                transaction_id: 0,
+                jobs: next.clone(),
+                errors: vec![],
+            });
+            if let Some(error) = failed(&before) {
+                return Err(error);
+            }
+            let keys = replay.edge_names(target.0, &keys).map_err(|_| {
+                OcctError(format!(
+                    "Feature {}: Delete remap: consumed/generated/modified edge has no \
+                     unchanged prefix survivor; reselect support",
+                    consumer_id.0
+                ))
+            })?;
+            match &mut consumer {
+                KernelJobDto::Fillet(j) => j.edge_keys = keys.clone(),
+                KernelJobDto::Chamfer(j) => j.edge_keys = keys.clone(),
+                _ => unreachable!(),
+            }
+            next.push(consumer);
+            let after = replay.recompute(&RecomputePlanDto {
+                transaction_id: 0,
+                jobs: next.clone(),
+                errors: vec![],
+            });
+            if let Some(error) = failed(&after) {
+                return Err(error);
+            }
+            let mut branch = Self::new()?;
+            branch.limo = Some(Box::new(replay));
+            branch.successful_jobs = Some(next);
+            return Ok((branch, consumer_id, keys));
         }
         let mut branch = Self::new()?;
         for job in &jobs[..at] {
@@ -947,6 +1014,9 @@ impl OcctKernel {
             serde_json::to_string(&request.thread_metadata).map_err(|error| {
                 OcctError(format!("could not serialize STEP thread metadata: {error}"))
             })?;
+        if let Some(limo) = &self.limo {
+            return limo_export_step(limo, request, &thread_metadata_json);
+        }
         let mut thread_metadata_hex = String::with_capacity(thread_metadata_json.len() * 2);
         for byte in thread_metadata_json.bytes() {
             write!(&mut thread_metadata_hex, "{byte:02x}")
@@ -1264,6 +1334,76 @@ impl OcctKernel {
 /// The line drawing of a view, made by the Limo kernel: edges and outlines
 /// sorted into what the eye sees and what is behind something, and the
 /// outlines of the material a cutting plane goes through.
+/// The Limo kernel's exact bodies as an AP242 STEP file: the selected
+/// bodies as they are, or one placed copy for every occurrence.
+fn limo_export_step(
+    limo: &limo_cad_kernel::Kernel,
+    request: &StepExportRequest,
+    thread_metadata_json: &str,
+) -> Result<Vec<u8>, OcctError> {
+    use limo_cad_kernel::{v3, Body, Xform, V3};
+    let fail = |message: &str| OcctError(message.to_string());
+    if limo.body_ids().is_empty() {
+        return Err(fail("there are no active bodies to export"));
+    }
+    let mut parts: Vec<(String, Body)> = Vec::new();
+    if !request.occurrences.is_empty() {
+        for occurrence in &request.occurrences {
+            let body = limo
+                .body(occurrence.body_id.0)
+                .ok_or_else(|| fail("assembly STEP occurrence references a missing body"))?;
+            if occurrence
+                .translation
+                .iter()
+                .chain(occurrence.rotation.iter())
+                .any(|value| !value.is_finite())
+            {
+                return Err(OcctError(format!(
+                    "STEP occurrence {} has a non-finite placement",
+                    occurrence.occurrence_id
+                )));
+            }
+            let [x, y, z] = occurrence.translation;
+            let pose =
+                Xform::rigid(v3(x, y, z), occurrence.rotation, V3::ZERO).ok_or_else(|| {
+                    OcctError(format!(
+                        "STEP occurrence {} has a degenerate rotation",
+                        occurrence.occurrence_id
+                    ))
+                })?;
+            let name = if occurrence.name.is_empty() {
+                format!("Body{}", occurrence.body_id.0)
+            } else {
+                occurrence.name.clone()
+            };
+            parts.push((name, body.transformed(&pose)));
+        }
+    } else {
+        let ids: Vec<u64> = if request.body_ids.is_empty() {
+            limo.body_ids()
+        } else {
+            request.body_ids.iter().map(|id| id.0).collect()
+        };
+        for id in ids {
+            let body = limo
+                .body(id)
+                .ok_or_else(|| fail("selected STEP export body is missing"))?;
+            parts.push((format!("Body{id}"), body.clone()));
+        }
+    }
+    // Thread callouts travel in the header, as with the reference kernel.
+    let mut description = String::from("Limo CAD AP242");
+    if thread_metadata_json.len() > 2 {
+        description.push_str("; LIMO_CAD_THREAD_METADATA_V1_HEX=");
+        for byte in thread_metadata_json.bytes() {
+            write!(&mut description, "{byte:02x}")
+                .map_err(|error| OcctError(format!("could not encode STEP metadata: {error}")))?;
+        }
+    }
+    let borrowed: Vec<(String, &Body)> = parts.iter().map(|(n, b)| (n.clone(), b)).collect();
+    Ok(limo_cad_kernel::step::write(&borrowed, &description).into_bytes())
+}
+
 /// Read-only measurements of one or two selections of the Limo kernel's
 /// bodies: what each is, and how they stand to each other.
 fn limo_measure(

@@ -329,3 +329,67 @@ fn a_ridge_and_a_groove_along_a_plate() {
     assert!(volume(&eased) < volume(&groove));
     assert!(seams(&eased).is_empty());
 }
+
+/// A rim between a flat face and a cone, or a cone and a cylinder: the
+/// edge a chamfer leaves behind can be broken again.
+#[test]
+fn rims_on_a_cone() {
+    use limo_cad_kernel::props::mass;
+    use std::f64::consts::TAU;
+    let skin = |body: &Body| {
+        let options = TessOptions::default();
+        if let Err(flaw) = tessellate(body, &options).check(body, &options) {
+            panic!("{flaw}");
+        }
+    };
+    let rod = make::cylinder(V3::ZERO, V3::Z, 10.0, 20.0).unwrap();
+    let rim = |body: &Body, radius: f64, height: f64| -> u32 {
+        (0..body.edge_count() as u32)
+            .find(|&e| {
+                let c = body.e_curve_ref(e);
+                c.kind == CurveKind::Circle
+                    && (c.r - radius).abs() < 1.0e-9
+                    && (c.f.o.z - height).abs() < 1.0e-9
+            })
+            .unwrap()
+    };
+    // What a ring of triangular section takes away: its area round the
+    // circle its middle runs on.
+    let ring = |a: (f64, f64), b: (f64, f64), c: (f64, f64)| {
+        let area = 0.5 * ((b.0 - a.0) * (c.1 - a.1) - (c.0 - a.0) * (b.1 - a.1)).abs();
+        TAU * (a.0 + b.0 + c.0) / 3.0 * area
+    };
+    let whole = mass(&rod).volume;
+    let broken = chamfer(&rod, &[rim(&rod, 10.0, 20.0)], 2.0, None).unwrap();
+    broken.check().unwrap();
+    assert_eq!(count(&broken, SurfKind::Cone), 1);
+    let first = ring((10.0, 18.0), (10.0, 20.0), (8.0, 20.0));
+    assert!((mass(&broken).volume - (whole - first)).abs() < 1.0e-8);
+
+    // The upper rim the chamfer left: between the flat top and the cone.
+    let d = 0.5_f64;
+    let slope = std::f64::consts::FRAC_1_SQRT_2;
+    let again = chamfer(&broken, &[rim(&broken, 8.0, 20.0)], d, None).unwrap();
+    again.check().unwrap();
+    assert_eq!(count(&again, SurfKind::Cone), 2);
+    let second = ring(
+        (8.0, 20.0),
+        (8.0 - d, 20.0),
+        (8.0 + d * slope, 20.0 - d * slope),
+    );
+    assert!((mass(&again).volume - (whole - first - second)).abs() < 1.0e-8);
+    skin(&again);
+
+    // The lower rim: between the cone and the cylinder, rounded.
+    let r = 0.6_f64;
+    let rounded = fillet(&broken, &[rim(&broken, 10.0, 18.0)], r).unwrap();
+    rounded.check().unwrap();
+    assert_eq!(count(&rounded, SurfKind::Torus), 1);
+    // The faces meet at 135 degrees inside the solid: the round takes the
+    // corner between its two tangent points less the sector under its arc.
+    let phi = 0.75 * std::f64::consts::PI;
+    let reach = r / (0.5 * phi).tan();
+    let m = mass(&rounded);
+    assert!(m.volume < whole - first && m.volume > whole - first - TAU * 10.0 * reach * reach);
+    skin(&rounded);
+}

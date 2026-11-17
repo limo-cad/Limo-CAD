@@ -116,6 +116,23 @@ impl Kernel {
         self.state.get(&id).map(|slot| &*slot.body)
     }
 
+    /// The names that the edges `keys` refer to have on body `id` as it
+    /// is now. Names follow the faces an edge lies between, so an edge
+    /// that an earlier feature did not make is found without that feature;
+    /// one that it did make is gone, and says so.
+    pub fn edge_names(&self, id: u64, keys: &[String]) -> Result<Vec<String>, String> {
+        let body = self.body(id).ok_or("the body is missing")?;
+        let names = Names::of(body);
+        let mut found: Vec<String> = Vec::new();
+        for e in edge_indices(&names, keys)? {
+            let name = names.edges[e as usize].clone();
+            if !found.contains(&name) {
+                found.push(name);
+            }
+        }
+        Ok(found)
+    }
+
     /// Geometry generation of every live body. Equal generations mean
     /// identical geometry.
     pub fn generations(&self) -> BTreeMap<u64, u64> {
@@ -545,7 +562,17 @@ impl Kernel {
                 self.put(j.target_body_id.0, result);
                 Ok(())
             }
-            KernelJobDto::ImportStep(_) => Err(unsupported("STEP import")),
+            KernelJobDto::ImportStep(j) => {
+                let bytes = crate::step::from_base64(&j.data_base64)?;
+                let text = String::from_utf8_lossy(&bytes);
+                let mut whole = Body::new();
+                for (nth, mut solid) in crate::step::read(&text)?.into_iter().enumerate() {
+                    solid.retag(|tag| mix(mix(feature, nth as u64), tag));
+                    whole.append(&solid);
+                }
+                self.put(j.result_body_id.0, whole);
+                Ok(())
+            }
         }
     }
 

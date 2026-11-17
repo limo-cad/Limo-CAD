@@ -34,6 +34,7 @@ pub mod roots;
 pub mod session;
 pub mod simplify;
 pub mod ssi;
+pub mod step;
 pub mod tess;
 pub mod topo;
 pub mod trim;

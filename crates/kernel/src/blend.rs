@@ -382,51 +382,43 @@ fn edge_tool(body: &Body, e: u32, shape: Shape) -> Result<Tool, String> {
             ];
             make::extrude(&Region { loops: vec![segs] }, d, 0.0, t1 - t0)?
         }
-        (CurveKind::Circle, SurfKind::Plane, SurfKind::Cylinder)
-        | (CurveKind::Circle, SurfKind::Cylinder, SurfKind::Plane) => {
-            let (fp, fc) = if s1.kind == SurfKind::Plane {
-                (f1, f2)
-            } else {
-                (f2, f1)
-            };
-            let (sp, sc) = (body.f_surface(fp), body.f_surface(fc));
+        (
+            CurveKind::Circle,
+            SurfKind::Plane | SurfKind::Cylinder | SurfKind::Cone,
+            SurfKind::Plane | SurfKind::Cylinder | SurfKind::Cone,
+        ) => {
+            // Both faces are turned about the axis of the edge: a flat face
+            // square to it, a cylinder or a cone round it. In the half-plane
+            // through the axis each is a straight line from the corner.
             let axis = c.f.z;
-            let coaxial = sc.f.z.cross(axis).len() < 1.0e-9
-                && (sc.r - c.r).abs() < 10.0 * TOL
-                && sp.f.z.cross(axis).len() < 1.0e-9
-                && {
-                    let w = c.f.o - sc.f.o;
-                    (w - sc.f.z * w.dot(sc.f.z)).len() < 10.0 * TOL
-                };
-            if !coaxial {
+            let turned = |s: &Surface| {
+                s.f.z.cross(axis).len() < 1.0e-9
+                    && (s.kind == SurfKind::Plane || {
+                        let w = c.f.o - s.f.o;
+                        (w - s.f.z * w.dot(s.f.z)).len() < 10.0 * TOL
+                    })
+            };
+            if !(turned(s1) && turned(s2)) {
                 return Err(unsupported_edge());
             }
             let p0 = c.point(t0);
             let radial = (p0 - c.f.o).unit();
-            let travel = |f: u32| {
+            // Which way each face leaves the edge, in that half-plane.
+            let leaves = |f: u32| {
                 let along = c.deriv(t0).unit();
-                if body.h_face(2 * e) == f {
+                let travel = if body.h_face(2 * e) == f {
                     along
                 } else {
                     -along
-                }
+                };
+                let into = body.f_normal(f, p0).cross(travel);
+                v2(into.dot(radial), into.dot(axis)).unit()
             };
-            // Which way each face leaves the edge, in the half-plane of the
-            // axis: the plane radially, the cylinder axially.
-            let out = body.f_normal(fp, p0).cross(travel(fp)).dot(radial).signum();
-            let up = body.f_normal(fc, p0).cross(travel(fc)).dot(axis).signum();
-            let (u1, u2) = (v2(out, 0.0), v2(0.0, up));
-            // The plane is the first face of a distance-angle chamfer only if
-            // it is the first face of the edge.
-            let (reach_p, reach_c, arc) = if fp == f1 {
-                section(shape, u1, u2)?
-            } else {
-                let (a, b, arc) = section(shape, u2, u1)?;
-                (b, a, arc)
-            };
+            let (u1, u2) = (leaves(f1), leaves(f2));
+            let (reach1, reach2, arc) = section(shape, u1, u2)?;
             let corner = v2(c.r, 0.0);
-            let (a1, a2) = (corner + u1 * reach_p, corner + u2 * reach_c);
-            if a1.x <= TOL {
+            let (a1, a2) = (corner + u1 * reach1, corner + u2 * reach2);
+            if a1.x <= TOL || a2.x <= TOL {
                 return Err(
                     "the blend is larger than the radius of the circular edge it follows".into(),
                 );
