@@ -687,6 +687,212 @@ pub fn taper(
     Ok(body)
 }
 
+/// A solid through a row of flat sections, joined by straight lines from
+/// each to the next.
+///
+/// The sections are either all outlines of straight segments, as many in
+/// each, or all circles. Between two outlines every side has to come out
+/// flat, which it does when the two segments it joins are parallel or would
+/// meet: sections that are scaled, moved or sheared copies of one another.
+/// Circles have to share an axis, and give cones and cylinders. Anything
+/// else would need a twisted surface, which this kernel does not have.
+pub fn loft(sections: &[Vec<Seg>]) -> Result<Body, String> {
+    if sections.len() < 2 {
+        return Err("Loft needs at least two sections".into());
+    }
+    let mut loops: Vec<Vec<Placed>> = Vec::with_capacity(sections.len());
+    for segs in sections {
+        loops.push(chain(segs)?);
+    }
+    let round = |lp: &[Placed]| {
+        matches!(
+            lp,
+            [Placed {
+                seg: Seg::Circle { .. },
+                ..
+            }]
+        )
+    };
+    let straight = |lp: &[Placed]| lp.iter().all(|p| matches!(p.seg, Seg::Line { .. }));
+    let twisted = || {
+        "a loft between these sections would need a twisted surface, which is not supported yet"
+            .to_string()
+    };
+    // Which way the loft runs past each section.
+    let middles: Vec<V3> = loops.iter().map(|lp| wire_barycentre(lp)).collect();
+    let last = loops.len() - 1;
+    let onward = |k: usize| {
+        if k < last {
+            middles[k + 1] - middles[k]
+        } else {
+            middles[k] - middles[k - 1]
+        }
+    };
+    let mut body = Body::new();
+    let side = |band: usize, seg: u32| {
+        Role::Side {
+            lp: band as u32,
+            seg,
+        }
+        .tag()
+    };
+
+    if loops.iter().all(|lp| round(lp)) {
+        // Circles about one axis: a cylinder or a cone between each two.
+        let axis = (middles[last] - middles[0]).unit();
+        if !axis.is_finite() || axis.len2() < 0.5 {
+            return Err("Loft sections lie on top of each other".into());
+        }
+        let mut rings: Vec<(u32, V3, f64)> = Vec::with_capacity(loops.len());
+        for lp in &loops {
+            let Seg::Circle { c, p, n } = lp[0].seg else {
+                unreachable!()
+            };
+            let off = c - middles[0];
+            if n.unit().cross(axis).len() > 1.0e-9 || (off - axis * off.dot(axis)).len() > 1.0e-6 {
+                return Err(twisted());
+            }
+            let r = c.dist(p);
+            if r <= TOL {
+                return Err("profile circle has zero radius".into());
+            }
+            let v = body.add_vert(p);
+            let curve = body.add_curve(Curve::circle(c, axis, p - c, r));
+            rings.push((body.add_edge(curve, 0.0, TAU, v, v), c, r));
+        }
+        for (k, pair) in rings.windows(2).enumerate() {
+            let ((e0, c0, r0), (e1, c1, r1)) = (pair[0], pair[1]);
+            let rise = (c1 - c0).dot(axis);
+            if rise <= TOL {
+                return Err("Loft sections have to follow one another along their axis".into());
+            }
+            let surf = if (r1 - r0).abs() <= 1.0e-9 * r0.max(r1) {
+                Surface::cylinder(c0, axis, r0)
+            } else {
+                // The tip the cone would reach, and the way from it here.
+                let tip = c0 - axis * (r0 * rise / (r1 - r0));
+                let opening = axis * (r1 - r0).signum();
+                Surface::cone(tip, opening, ((r1 - r0).abs() / rise).atan())
+            };
+            let s = body.add_surf(surf);
+            body.add_tagged_face(s, true, &[vec![2 * e0], vec![2 * e1 + 1]], side(k, 0));
+        }
+        let s = body.add_surf(Surface::plane(rings[0].1, -axis));
+        body.add_tagged_face(s, true, &[vec![2 * rings[0].0 + 1]], Role::Start.tag());
+        let s = body.add_surf(Surface::plane(rings[last].1, axis));
+        body.add_tagged_face(s, true, &[vec![2 * rings[last].0]], Role::End.tag());
+        body.check()?;
+        return Ok(body);
+    }
+
+    let count = loops[0].len();
+    if !loops.iter().all(|lp| straight(lp) && lp.len() == count) {
+        return Err(
+            "Loft sections must all be circles, or all be outlines of straight lines with the \
+             same number of sides"
+                .into(),
+        );
+    }
+    // Every outline counter-clockwise seen against the way the loft runs,
+    // and started at the corner nearest the start of the one before.
+    let mut corners: Vec<Vec<V3>> = Vec::with_capacity(loops.len());
+    let mut given: Vec<Vec<u32>> = Vec::with_capacity(loops.len());
+    for (k, lp) in loops.iter_mut().enumerate() {
+        let pts: Vec<V3> = lp.iter().map(Placed::start).collect();
+        let mut around = V3::ZERO;
+        for i in 0..count {
+            around += (pts[i] - middles[k]).cross(pts[(i + 1) % count] - middles[k]);
+        }
+        if around.len2() < 1.0e-18 {
+            return Err("profile encloses no area".into());
+        }
+        if around.dot(onward(k)) < 0.0 {
+            reverse_loop(lp);
+        }
+        let mut pts: Vec<V3> = lp.iter().map(Placed::start).collect();
+        let mut index: Vec<u32> = lp.iter().map(|p| p.index).collect();
+        if let Some(before) = corners.last() {
+            let apart = |shift: usize| -> f64 {
+                (0..count)
+                    .map(|i| (pts[(i + shift) % count] - before[i]).len2())
+                    .sum()
+            };
+            let shift = (0..count)
+                .min_by(|&a, &b| apart(a).total_cmp(&apart(b)))
+                .unwrap();
+            pts.rotate_left(shift);
+            index.rotate_left(shift);
+        }
+        corners.push(pts);
+        given.push(index);
+    }
+    let verts: Vec<Vec<u32>> = corners
+        .iter()
+        .map(|pts| pts.iter().map(|p| body.add_vert(*p)).collect())
+        .collect();
+    let rings: Vec<Vec<u32>> = verts
+        .iter()
+        .map(|v| {
+            (0..count)
+                .map(|i| body.add_line_edge(v[i], v[(i + 1) % count]))
+                .collect()
+        })
+        .collect();
+    for k in 0..last {
+        let rails: Vec<u32> = (0..count)
+            .map(|i| body.add_line_edge(verts[k][i], verts[k + 1][i]))
+            .collect();
+        for i in 0..count {
+            let j = (i + 1) % count;
+            let (a0, a1) = (corners[k][i], corners[k][j]);
+            let (b0, b1) = (corners[k + 1][i], corners[k + 1][j]);
+            let along = a1 - a0;
+            let normal = along.cross(b0 - a0);
+            let size = along.len() * (b0 - a0).len();
+            if normal.len() <= 1.0e-9 * size {
+                return Err("Loft sections lie on top of each other".into());
+            }
+            let outward = normal.unit();
+            if (b1 - a0).dot(outward).abs() > 1.0e-7 * (1.0 + (b1 - a0).len()) {
+                return Err(twisted());
+            }
+            let x = along.unit();
+            let s = body.add_surf(Surface::plane_frame(Frame {
+                o: a0,
+                x,
+                y: outward.cross(x),
+                z: outward,
+            }));
+            body.add_tagged_face(
+                s,
+                true,
+                &[vec![
+                    2 * rings[k][i],
+                    2 * rails[j],
+                    2 * rings[k + 1][i] + 1,
+                    2 * rails[i] + 1,
+                ]],
+                side(k, given[k][i]),
+            );
+        }
+    }
+    let cap = |pts: &[V3], k: usize, flip: f64| {
+        let mut around = V3::ZERO;
+        for i in 0..count {
+            around += (pts[i] - middles[k]).cross(pts[(i + 1) % count] - middles[k]);
+        }
+        Surface::plane(middles[k], around.unit() * flip)
+    };
+    let s = body.add_surf(cap(&corners[0], 0, -1.0));
+    let bottom: Vec<u32> = rings[0].iter().rev().map(|e| 2 * e + 1).collect();
+    body.add_tagged_face(s, true, &[bottom], Role::Start.tag());
+    let s = body.add_surf(cap(&corners[last], last, 1.0));
+    let top: Vec<u32> = rings[last].iter().map(|e| 2 * e).collect();
+    body.add_tagged_face(s, true, &[top], Role::End.tag());
+    body.check()?;
+    Ok(body)
+}
+
 /// Axis-aligned box, mainly for tests and tools.
 pub fn block(min: V3, max: V3) -> Result<Body, String> {
     let (a, b) = (min.min(max), min.max(max));

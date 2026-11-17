@@ -1,0 +1,330 @@
+//! Features as the application asks for them: one job each, checked
+//! against what the shape must measure.
+#![cfg(feature = "dto")]
+mod common;
+
+use common::*;
+use limo_cad_core::{BodyId, FeatureId};
+use limo_cad_kernel::{Body, Kernel, SurfKind};
+use limo_cad_solid::{
+    ExtrudeOperation, KernelCurveDto, KernelExtrudeJobDto, KernelJobDto, KernelLoftJobDto,
+    KernelProfileDto, KernelSceneDto, KernelShellJobDto, KernelSweepJobDto, LoftContinuity,
+    Point3Dto, RecomputePlanDto, SweepOrientation, SweepTransition,
+};
+use std::f64::consts::PI;
+
+fn at(x: f64, y: f64, z: f64) -> Point3Dto {
+    Point3Dto { x, y, z }
+}
+
+/// A rectangle about the origin of the plane `z`, as sketch lines 1 to 4.
+fn rectangle(width: f64, depth: f64, z: f64) -> KernelProfileDto {
+    let (w, d) = (0.5 * width, 0.5 * depth);
+    let corners = [(-w, -d), (w, -d), (w, d), (-w, d)];
+    KernelProfileDto {
+        profile_index: 0,
+        points: corners.iter().map(|&(x, y)| at(x, y, z)).collect(),
+        curves: (0..4)
+            .map(|i| KernelCurveDto::Line {
+                entity_id: i as u64 + 1,
+                start: at(corners[i].0, corners[i].1, z),
+                end: at(corners[(i + 1) % 4].0, corners[(i + 1) % 4].1, z),
+            })
+            .collect(),
+        holes: Vec::new(),
+    }
+}
+
+/// A circle about the z axis in the plane `z`.
+fn circle(radius: f64, z: f64) -> KernelProfileDto {
+    KernelProfileDto {
+        profile_index: 0,
+        points: (0..24)
+            .map(|i| {
+                let a = 2.0 * PI * i as f64 / 24.0;
+                at(radius * a.cos(), radius * a.sin(), z)
+            })
+            .collect(),
+        curves: vec![KernelCurveDto::Circle {
+            entity_id: 7,
+            center: at(0.0, 0.0, z),
+            axis_point: at(radius, 0.0, z),
+            normal: at(0.0, 0.0, 1.0),
+        }],
+        holes: Vec::new(),
+    }
+}
+
+fn extrude(profile: KernelProfileDto, height: f64, taper_angle_deg: f64) -> KernelJobDto {
+    KernelJobDto::Extrude(KernelExtrudeJobDto {
+        feature_id: FeatureId(1),
+        operation: ExtrudeOperation::NewBody,
+        require_single_solid: false,
+        source_face: None,
+        profiles: vec![profile],
+        normal: at(0.0, 0.0, 1.0),
+        start_offset: 0.0,
+        end_offset: height,
+        taper_angle_deg,
+        target_body_ids: Vec::new(),
+        result_body_ids: vec![BodyId(1)],
+    })
+}
+
+fn loft(sections: Vec<KernelProfileDto>, ruled: bool) -> KernelJobDto {
+    KernelJobDto::Loft(KernelLoftJobDto {
+        feature_id: FeatureId(1),
+        operation: ExtrudeOperation::NewBody,
+        sections,
+        ruled,
+        continuity: LoftContinuity::G0,
+        centerline: Vec::new(),
+        guide_rail: Vec::new(),
+        target_body_ids: Vec::new(),
+        result_body_ids: vec![BodyId(1)],
+    })
+}
+
+fn sweep(profile: KernelProfileDto, path: Vec<KernelCurveDto>) -> KernelJobDto {
+    KernelJobDto::Sweep(KernelSweepJobDto {
+        feature_id: FeatureId(1),
+        operation: ExtrudeOperation::NewBody,
+        profile,
+        path,
+        guide_rail: Vec::new(),
+        orientation: SweepOrientation::CorrectedFrenet,
+        transition: SweepTransition::Transformed,
+        force_c1: false,
+        target_body_ids: Vec::new(),
+        result_body_ids: vec![BodyId(1)],
+    })
+}
+
+fn run(kernel: &mut Kernel, jobs: Vec<KernelJobDto>) -> KernelSceneDto {
+    kernel.recompute(&RecomputePlanDto {
+        transaction_id: 0,
+        jobs,
+        errors: Vec::new(),
+    })
+}
+
+/// The one body a plan makes, checked for soundness.
+fn built(jobs: Vec<KernelJobDto>) -> Body {
+    let mut kernel = Kernel::new();
+    let scene = run(&mut kernel, jobs);
+    assert!(scene.errors.is_empty(), "{:?}", scene.errors);
+    let body = kernel.body(1).unwrap().clone();
+    body.check().unwrap();
+    assert_flat_faces_are_covered(&body);
+    assert_mesh_is_a_clean_skin(&body);
+    body
+}
+
+fn refusal(jobs: Vec<KernelJobDto>) -> String {
+    let scene = run(&mut Kernel::new(), jobs);
+    assert_eq!(scene.errors.len(), 1, "{:?}", scene.errors);
+    scene.errors[0].message.clone()
+}
+
+#[test]
+fn tapered_extrusions() {
+    // The corners are 10√2 from the middle; ten degrees there.
+    let rate = 10.0_f64.to_radians().tan() / (10.0 * 2.0_f64.sqrt());
+    let top = 400.0 * (1.0 + rate * 10.0).powi(2);
+    let body = built(vec![extrude(rectangle(20.0, 20.0, 0.0), 10.0, 10.0)]);
+    let exact = 10.0 / 3.0 * (400.0 + top + (400.0 * top).sqrt());
+    assert!((volume(&body) - exact).abs() < 1e-6, "{}", volume(&body));
+    assert_eq!(count(&body, SurfKind::Plane), 6);
+
+    // A disc narrows to a cone.
+    let body = built(vec![extrude(circle(10.0, 0.0), 10.0, -20.0)]);
+    let r1 = 10.0 - 10.0 * 20.0_f64.to_radians().tan();
+    let exact = PI * 10.0 / 3.0 * (100.0 + 10.0 * r1 + r1 * r1);
+    assert!(
+        (volume(&body) - exact).abs() < 1e-4 * exact,
+        "{}",
+        volume(&body)
+    );
+    assert_eq!(count(&body, SurfKind::Cone), 1);
+}
+
+#[test]
+fn a_loft_through_three_rectangles() {
+    let sections = vec![
+        rectangle(20.0, 16.0, 0.0),
+        rectangle(16.0, 12.0, 12.0),
+        rectangle(10.0, 8.0, 24.0),
+    ];
+    let body = built(vec![loft(sections.clone(), true)]);
+    // Two slices of pyramids: by the prismatoid rule.
+    let slice = |a: (f64, f64), b: (f64, f64)| {
+        12.0 / 6.0 * (a.0 * a.1 + (a.0 + b.0) * (a.1 + b.1) + b.0 * b.1)
+    };
+    let exact = slice((20.0, 16.0), (16.0, 12.0)) + slice((16.0, 12.0), (10.0, 8.0));
+    assert!((volume(&body) - exact).abs() < 1e-6, "{}", volume(&body));
+    assert_eq!(body.face_count(), 10);
+    assert_eq!(count(&body, SurfKind::Plane), 10);
+
+    // A smooth loft through three would bulge between them.
+    let smooth = refusal(vec![loft(sections, false)]);
+    assert!(smooth.contains("not supported"), "{smooth}");
+}
+
+#[test]
+fn a_loft_through_circles_and_one_with_a_twist() {
+    let body = built(vec![loft(
+        vec![circle(10.0, 0.0), circle(6.0, 10.0), circle(6.0, 20.0)],
+        true,
+    )]);
+    let exact = PI * 10.0 / 3.0 * (100.0 + 60.0 + 36.0) + PI * 36.0 * 10.0;
+    assert!(
+        (volume(&body) - exact).abs() < 1e-4 * exact,
+        "{}",
+        volume(&body)
+    );
+    assert_eq!(
+        (
+            count(&body, SurfKind::Cone),
+            count(&body, SurfKind::Cylinder)
+        ),
+        (1, 1)
+    );
+
+    // A square turned an eighth of a turn on the way up: its sides would
+    // have to twist.
+    let mut turned = rectangle(20.0, 20.0, 10.0);
+    let spin = |p: &mut Point3Dto| {
+        let (x, y) = (p.x, p.y);
+        let k = 0.5_f64.sqrt();
+        (p.x, p.y) = (k * (x - y), k * (x + y));
+    };
+    turned.points.iter_mut().for_each(spin);
+    for curve in &mut turned.curves {
+        if let KernelCurveDto::Line { start, end, .. } = curve {
+            spin(start);
+            spin(end);
+        }
+    }
+    let twisted = refusal(vec![loft(vec![rectangle(20.0, 20.0, 0.0), turned], true)]);
+    assert!(twisted.contains("twisted"), "{twisted}");
+}
+
+#[test]
+fn a_rod_swept_along_two_arcs() {
+    // Up from the origin, round a quarter turn to the right, then a
+    // quarter turn back up: an S of two bends of radius 20.
+    let k = 0.5_f64.sqrt();
+    let path = vec![
+        KernelCurveDto::Arc {
+            entity_id: 21,
+            start: at(0.0, 0.0, 0.0),
+            mid: at(20.0 - 20.0 * k, 0.0, 20.0 * k),
+            end: at(20.0, 0.0, 20.0),
+        },
+        KernelCurveDto::Arc {
+            entity_id: 22,
+            start: at(20.0, 0.0, 20.0),
+            mid: at(20.0 + 20.0 * k, 0.0, 40.0 - 20.0 * k),
+            end: at(40.0, 0.0, 40.0),
+        },
+    ];
+    let body = built(vec![sweep(circle(2.0, 0.0), path.clone())]);
+    // Pappus: the disc's area times the length its middle travels.
+    let exact = PI * 4.0 * (PI * 20.0);
+    assert!(
+        (volume(&body) - exact).abs() < 1e-4 * exact,
+        "{}",
+        volume(&body)
+    );
+    assert_eq!(count(&body, SurfKind::Torus), 2);
+    assert_eq!(body.face_count(), 4);
+
+    // The same path drawn from its far end is the same sweep.
+    let mut backwards = path;
+    backwards.reverse();
+    for curve in &mut backwards {
+        if let KernelCurveDto::Arc { start, end, .. } = curve {
+            std::mem::swap(start, end);
+        }
+    }
+    let again = built(vec![sweep(circle(2.0, 0.0), backwards)]);
+    assert!((volume(&again) - exact).abs() < 1e-4 * exact);
+}
+
+#[test]
+fn a_bar_swept_along_a_line_and_a_bend() {
+    let path = vec![
+        KernelCurveDto::Line {
+            entity_id: 21,
+            start: at(0.0, 0.0, 0.0),
+            end: at(0.0, 0.0, 15.0),
+        },
+        KernelCurveDto::Arc {
+            entity_id: 22,
+            start: at(0.0, 0.0, 15.0),
+            mid: at(
+                30.0 - 30.0 * 0.5_f64.sqrt(),
+                0.0,
+                15.0 + 30.0 * 0.5_f64.sqrt(),
+            ),
+            end: at(30.0, 0.0, 45.0),
+        },
+    ];
+    let body = built(vec![sweep(rectangle(8.0, 6.0, 0.0), path)]);
+    let exact = 48.0 * (15.0 + 0.5 * PI * 30.0);
+    assert!(
+        (volume(&body) - exact).abs() < 1e-4 * exact,
+        "{}",
+        volume(&body)
+    );
+
+    // A path that turns a corner is not followed.
+    let corner = vec![
+        KernelCurveDto::Line {
+            entity_id: 21,
+            start: at(0.0, 0.0, 0.0),
+            end: at(0.0, 0.0, 15.0),
+        },
+        KernelCurveDto::Line {
+            entity_id: 22,
+            start: at(0.0, 0.0, 15.0),
+            end: at(10.0, 0.0, 15.0),
+        },
+    ];
+    let refused = refusal(vec![sweep(rectangle(8.0, 6.0, 0.0), corner)]);
+    assert!(refused.contains("smoothly"), "{refused}");
+}
+
+#[test]
+fn a_tray_hollowed_through_the_session() {
+    let mut kernel = Kernel::new();
+    let blank = extrude(rectangle(32.0, 24.0, 0.0), 12.0, 0.0);
+    let scene = run(&mut kernel, vec![blank.clone()]);
+    let top = scene.bodies[0]
+        .faces
+        .iter()
+        .find(|f| f.plane.is_some_and(|p| p.normal[2] > 0.999))
+        .unwrap()
+        .key
+        .clone();
+    let shell = KernelJobDto::Shell(KernelShellJobDto {
+        feature_id: FeatureId(2),
+        target_body_id: BodyId(1),
+        face_keys: vec![top],
+        thickness: 1.0,
+        inward: true,
+    });
+    let scene = run(&mut kernel, vec![blank, shell]);
+    assert!(scene.errors.is_empty(), "{:?}", scene.errors);
+    let tray = kernel.body(1).unwrap();
+    assert!((volume(tray) - (32.0 * 24.0 * 12.0 - 30.0 * 22.0 * 11.0)).abs() < 1e-6);
+    // Inside and outside of each wall have different names.
+    let mut names: Vec<&str> = scene.bodies[0]
+        .faces
+        .iter()
+        .map(|f| f.key.as_str())
+        .collect();
+    names.sort_unstable();
+    names.dedup();
+    assert_eq!(names.len(), 11);
+}

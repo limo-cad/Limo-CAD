@@ -438,8 +438,71 @@ impl Kernel {
                 self.put(j.target_body_id.0, result);
                 Ok(())
             }
-            KernelJobDto::Sweep(_) => Err(unsupported("Sweep")),
-            KernelJobDto::Loft(_) => Err(unsupported("Loft")),
+            KernelJobDto::Sweep(j) => {
+                if !j.guide_rail.is_empty() {
+                    return Err(unsupported("A sweep along a guide rail"));
+                }
+                let tool = sweep_tool(&j.profile, &j.path, feature)?;
+                self.profile_job(
+                    j.operation,
+                    false,
+                    vec![tool],
+                    &j.target_body_ids,
+                    &j.result_body_ids,
+                )
+            }
+            KernelJobDto::Loft(j) => {
+                if !j.centerline.is_empty() || !j.guide_rail.is_empty() {
+                    return Err(unsupported("A loft along a centerline or guide rail"));
+                }
+                if j.sections.len() < 2 {
+                    return Err("Loft needs at least two sections".into());
+                }
+                // Two sections are joined by straight lines either way.
+                if !j.ruled && j.sections.len() > 2 {
+                    return Err(unsupported("A smooth loft through more than two sections"));
+                }
+                let holes = j.sections[0].holes.len();
+                if j.sections.iter().any(|s| s.holes.len() != holes) {
+                    return Err(
+                        "Loft sections must contain the same number of profile holes".into(),
+                    );
+                }
+                let through = |pick: &dyn Fn(&KernelProfileDto) -> &KernelProfileDto,
+                               part: u64|
+                 -> Result<Body, String> {
+                    let outlines: Vec<Vec<Seg>> =
+                        j.sections.iter().map(|s| segs_of(pick(s))).collect();
+                    let mut tool = make::loft(&outlines)?;
+                    // A side is named after the sketch line under it and
+                    // the stretch of the loft it belongs to.
+                    tool.retag(|tag| match Role::of(tag) {
+                        Role::Side { lp, seg } => {
+                            let entity = entities(pick(&j.sections[lp as usize]))
+                                .get(seg as usize)
+                                .copied()
+                                .unwrap_or(u64::from(seg));
+                            mix(mix(feature, SIDE), mix(mix(part, u64::from(lp)), entity))
+                        }
+                        Role::Start => mix(mix(feature, START), part),
+                        Role::End => mix(mix(feature, END), part),
+                        Role::Other => mix(feature, tag),
+                    });
+                    Ok(tool)
+                };
+                let mut tool = through(&|s| s, 0)?;
+                for hole in 0..holes {
+                    let cutter = through(&|s| &s.holes[hole], hole as u64 + 1)?;
+                    tool = boolean(&tool, &cutter, Op::Cut).map_err(|e| format!("Loft: {e}"))?;
+                }
+                self.profile_job(
+                    j.operation,
+                    false,
+                    vec![tool],
+                    &j.target_body_ids,
+                    &j.result_body_ids,
+                )
+            }
             KernelJobDto::Shell(j) => {
                 let target = self.get(j.target_body_id, "Shell target")?;
                 let names = Names::of(&target);
@@ -613,30 +676,202 @@ const START: u64 = 1;
 const END: u64 = 2;
 const SIDE: u64 = 3;
 
+/// The sketch entity behind every segment of a profile loop, in the order
+/// `segs_of` lists the segments.
+fn entities(p: &KernelProfileDto) -> Vec<u64> {
+    if p.curves.is_empty() {
+        return (0..p.points.len() as u64)
+            .map(|i| mix(0x90117, i))
+            .collect();
+    }
+    let mut out = Vec::with_capacity(p.curves.len());
+    for curve in &p.curves {
+        match curve {
+            KernelCurveDto::Line { entity_id, .. }
+            | KernelCurveDto::Arc { entity_id, .. }
+            | KernelCurveDto::Circle { entity_id, .. } => out.push(*entity_id),
+            KernelCurveDto::Polyline { entity_id, points } => {
+                out.extend((1..points.len() as u64).map(|piece| mix(*entity_id, piece)))
+            }
+        }
+    }
+    out
+}
+
+/// A profile carried along a path of lines and arcs that run smoothly into
+/// one another, staying square to it: an extrusion along each line, a part
+/// turn about the middle of each arc, joined into one solid.
+fn sweep_tool(
+    profile: &KernelProfileDto,
+    path: &[KernelCurveDto],
+    feature: u64,
+) -> Result<Body, String> {
+    enum Piece {
+        Line(V3, V3),
+        Arc(V3, V3, V3),
+        Ring(V3, V3),
+    }
+    let mut pieces: Vec<Piece> = Vec::new();
+    for curve in path {
+        match curve {
+            KernelCurveDto::Line { start, end, .. } => pieces.push(Piece::Line(p3(start), p3(end))),
+            KernelCurveDto::Arc {
+                start, mid, end, ..
+            } => pieces.push(Piece::Arc(p3(start), p3(mid), p3(end))),
+            KernelCurveDto::Circle { center, normal, .. } => {
+                pieces.push(Piece::Ring(p3(center), p3(normal)))
+            }
+            KernelCurveDto::Polyline { points, .. } => {
+                pieces.extend(points.windows(2).map(|w| Piece::Line(p3(&w[0]), p3(&w[1]))))
+            }
+        }
+    }
+    if pieces.is_empty() {
+        return Err("Sweep needs a path".into());
+    }
+    let mut region = region_of(profile);
+    let entity = {
+        let mut loops = vec![entities(profile)];
+        loops.extend(profile.holes.iter().map(entities));
+        loops
+    };
+    // The plane of the profile: the path has to leave it squarely.
+    let points: Vec<V3> = profile.points.iter().map(p3).collect();
+    if points.len() < 3 {
+        return Err("Sweep needs the outline of its profile".into());
+    }
+    let middle = points.iter().fold(V3::ZERO, |sum, p| sum + *p) / points.len() as f64;
+    let mut around = V3::ZERO;
+    for i in 0..points.len() {
+        around += (points[i] - middle).cross(points[(i + 1) % points.len()] - middle);
+    }
+    let mut facing = around.unit();
+    let height = |p: V3| (p - middle).dot(facing).abs();
+    let ends = |piece: &Piece| match *piece {
+        Piece::Line(a, b) | Piece::Arc(a, _, b) => Some((a, b)),
+        Piece::Ring(..) => None,
+    };
+    // The path may be drawn from either end; it starts where it meets the
+    // profile's plane.
+    if let (Some((first, _)), Some((_, last))) = (ends(&pieces[0]), ends(&pieces[pieces.len() - 1]))
+    {
+        if height(last) < height(first) {
+            pieces.reverse();
+            for piece in &mut pieces {
+                match piece {
+                    Piece::Line(a, b) | Piece::Arc(a, _, b) => std::mem::swap(a, b),
+                    Piece::Ring(..) => {}
+                }
+            }
+        }
+    }
+    let square = || {
+        "a sweep needs its profile square to the path, and the path to run on smoothly from \
+         one piece to the next"
+            .to_string()
+    };
+    let mut whole: Option<Body> = None;
+    let count = pieces.len();
+    for (nth, piece) in pieces.iter().enumerate() {
+        let (mut tool, carry) = match *piece {
+            Piece::Line(a, b) => {
+                let along = b - a;
+                if along.len() <= TOL || along.unit().cross(facing).len() > 1.0e-6 {
+                    return Err(square());
+                }
+                facing = along.unit();
+                (
+                    make::extrude(&region, facing, 0.0, along.len())?,
+                    Xform::translation(along),
+                )
+            }
+            Piece::Arc(a, m, b) => {
+                let (centre, _, axis) =
+                    make::arc_circle(a, m, b).ok_or("the sweep path has a degenerate arc")?;
+                let leaving = axis.cross(a - centre).unit();
+                if leaving.cross(facing).len() > 1.0e-6 {
+                    return Err(square());
+                }
+                let frame = Frame::from_zx(centre, axis, a - centre);
+                let to = frame.local(b);
+                let turn = wrap_from(to.y.atan2(to.x), 1.0e-12);
+                facing = axis.cross(b - centre).unit();
+                (
+                    make::revolve_region(&region, centre, axis, turn)?,
+                    Xform::rotation(centre, axis, turn),
+                )
+            }
+            Piece::Ring(centre, normal) => {
+                if count != 1 {
+                    return Err(unsupported(
+                        "A sweep path with a full circle among other curves",
+                    ));
+                }
+                let axis = normal.unit();
+                if axis.cross(middle - centre).unit().cross(facing).len() > 1.0e-6 {
+                    return Err(square());
+                }
+                (
+                    make::revolve_region(&region, centre, axis, TAU)?,
+                    Xform::IDENTITY,
+                )
+            }
+        };
+        // Sides are named after the sketch line swept and the piece of the
+        // path it was swept along; the two ends after the sweep itself.
+        tool.retag(|tag| match Role::of(tag) {
+            Role::Side { lp, seg } => {
+                let from = entity
+                    .get(lp as usize)
+                    .and_then(|l| l.get(seg as usize))
+                    .copied()
+                    .unwrap_or_else(|| mix(u64::from(lp), u64::from(seg)));
+                mix(mix(feature, SIDE), mix(nth as u64, from))
+            }
+            Role::Start => mix(mix(feature, START), nth as u64),
+            Role::End => mix(mix(feature, END), nth as u64),
+            Role::Other => mix(feature, tag),
+        });
+        whole = Some(match whole {
+            None => tool,
+            Some(so_far) => {
+                boolean(&so_far, &tool, Op::Union).map_err(|e| format!("Sweep: {e}"))?
+            }
+        });
+        region = Region {
+            loops: region
+                .loops
+                .iter()
+                .map(|segs| {
+                    segs.iter()
+                        .map(|seg| match *seg {
+                            Seg::Line { a, b } => Seg::Line {
+                                a: carry.point(a),
+                                b: carry.point(b),
+                            },
+                            Seg::Arc { a, m, b } => Seg::Arc {
+                                a: carry.point(a),
+                                m: carry.point(m),
+                                b: carry.point(b),
+                            },
+                            Seg::Circle { c, p, n } => Seg::Circle {
+                                c: carry.point(c),
+                                p: carry.point(p),
+                                n: carry.vec(n),
+                            },
+                        })
+                        .collect()
+                })
+                .collect(),
+        };
+    }
+    whole.ok_or_else(|| "Sweep needs a path".to_string())
+}
+
 /// Tag the faces of a tool built from a sketch profile: each side after
 /// the sketch entity it was swept from, so that it keeps its name when
 /// other entities come and go, and the ends after the profile.
 fn stamped(mut tool: Body, feature: u64, profile: &KernelProfileDto) -> Body {
-    // Entity behind every segment, loop by loop as `region_of` lists them.
-    let entities = |p: &KernelProfileDto| -> Vec<u64> {
-        if p.curves.is_empty() {
-            return (0..p.points.len() as u64)
-                .map(|i| mix(0x90117, i))
-                .collect();
-        }
-        let mut out = Vec::with_capacity(p.curves.len());
-        for curve in &p.curves {
-            match curve {
-                KernelCurveDto::Line { entity_id, .. }
-                | KernelCurveDto::Arc { entity_id, .. }
-                | KernelCurveDto::Circle { entity_id, .. } => out.push(*entity_id),
-                KernelCurveDto::Polyline { entity_id, points } => {
-                    out.extend((1..points.len() as u64).map(|piece| mix(*entity_id, piece)))
-                }
-            }
-        }
-        out
-    };
     let mut loops = vec![entities(profile)];
     loops.extend(profile.holes.iter().map(entities));
     // The profile is whichever its outline's entities say it is; its place

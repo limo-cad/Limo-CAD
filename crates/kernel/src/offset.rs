@@ -130,12 +130,12 @@ pub fn offset_faces(body: &Body, by: &[f64]) -> Result<Body, String> {
         }
     }
     let mut verts: Vec<V3> = Vec::with_capacity(nv);
-    for v in 0..nv {
+    for (v, around) in around.iter().enumerate() {
         let p = body.verts[v];
         // Faces that meet smoothly here say the same thing twice, as long
         // as they move together; if they do not, they come apart.
         let mut faces: Vec<u32> = Vec::new();
-        for &f in &around[v] {
+        for &f in around {
             let n = body.f_normal(f, p);
             let twin = faces.iter().find(|&&g| {
                 let m = body.f_normal(g, p);
