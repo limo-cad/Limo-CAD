@@ -158,6 +158,33 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f079e83a288787bcd14a6aea84cee5c87a67c5a3e660c30f557a3d24761b3527"
 
 [[package]]
+name = "ciborium"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "42e69ffd6f0917f5c029256a24d0161db17cea3997d185db0d35926308770f0e"
+dependencies = [
+ "ciborium-io",
+ "ciborium-ll",
+ "serde",
+]
+
+[[package]]
+name = "ciborium-io"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "05afea1e0a06c9be33d539b876f1ce3692f4afea2cb41f740e7743225ed1c757"
+
+[[package]]
+name = "ciborium-ll"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "57663b653d948a338bfb3eeba9bb2fd5fcfaecb9e199e87e1eda4d9e8b240fd9"
+dependencies = [
+ "ciborium-io",
+ "half",
+]
+
+[[package]]
 name = "clap"
 version = "4.6.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -282,6 +309,12 @@ name = "crossbeam-utils"
 version = "0.8.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a31eee39dddec8330830986fcd7625edb5a24ec90ea038215273bbc3adb08ac6"
+
+[[package]]
+name = "crunchy"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "460fbee9c2c2f33933d720630a6a0bac33ba7053db5344fac858d4b8952d77d5"
 
 [[package]]
 name = "crypto-common"
@@ -458,9 +491,9 @@ dependencies = [
 
 [[package]]
 name = "find-msvc-tools"
-version = "0.1.14"
+version = "0.1.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aedcfb3409746eddb02b9e19ebda1c3394f759a152e48ee875a0844d1b955484"
+checksum = "1c66915cc5391097de7a2b0b972e8505aa33c0df401fd3a6811dbdb32881ba48"
 
 [[package]]
 name = "flate2"
@@ -608,8 +641,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "300e883d756b2e4ec94e02791f39b04b522276138852cfc41d9fb7e904106099"
 dependencies = [
  "cfg-if",
+ "js-sys",
  "libc",
  "r-efi 6.0.0",
+ "wasm-bindgen",
+]
+
+[[package]]
+name = "half"
+version = "2.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6ea2d84b969582b4b1864a92dc5d27cd2b77b622a8d79306834f1be5ba20d84b"
+dependencies = [
+ "cfg-if",
+ "crunchy",
+ "zerocopy",
 ]
 
 [[package]]
@@ -674,9 +720,9 @@ checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
 
 [[package]]
 name = "js-sys"
-version = "0.3.106"
+version = "0.3.107"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7883d941dae510fb2d978fc3fe018c71c9e2892fd38854de3e8b92c2e5ad9cc5"
+checksum = "8dc09d2154098bbf4ef54eab6b117a3c24cbbffe94046b16ee6d6d4510584d3a"
 dependencies = [
  "cfg-if",
  "futures-util",
@@ -685,9 +731,9 @@ dependencies = [
 
 [[package]]
 name = "jsonschema"
-version = "0.58.6"
+version = "0.60.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f622c574a29fb3034a0a90645afee194dfedc75fc124228801b6e77041075bd1"
+checksum = "a42a11b47492e6a2cc76e9c7bcc8077776cb31dac444e0795d7f61bcc6441c08"
 dependencies = [
  "ahash",
  "bytecount",
@@ -713,23 +759,24 @@ dependencies = [
 
 [[package]]
 name = "jsonschema-regex"
-version = "0.58.6"
+version = "0.60.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a968fffd387b2ab005bf00c1851f5d26e90df05b6f7ad609ed0d620033cca5e7"
+checksum = "107aeb6ff14b8deb5610096a8ce5c554ec89806b521147eaeb3cae05b07edb7a"
 dependencies = [
  "regex-syntax",
 ]
 
 [[package]]
 name = "jsonschema-value"
-version = "0.58.6"
+version = "0.60.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "39b7670345e5ce87371339d13705dbb9276b7e3e934bbe1efa2c6734a1f65a96"
+checksum = "e281d6b177bb4834f2ffd6f92aa0443cffe29c996b251c8d94eb6f456186feba"
 dependencies = [
  "ahash",
  "bytecount",
  "fraction",
  "getrandom 0.3.4",
+ "memchr",
  "num-cmp",
  "num-traits",
  "serde_json",
@@ -750,13 +797,13 @@ dependencies = [
 
 [[package]]
 name = "libc"
-version = "0.2.190"
+version = "0.2.191"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ce5d3ddc6d3fa000eb1536d85e147bfe31aacaba692ed6a876f95cb7c855be78"
+checksum = "65cd87c9a6d60536580b316ad985726104730a5151c99845f2490428ef91240a"
 
 [[package]]
 name = "limo-cad-assembly"
-version = "0.3.0-rc.1"
+version = "0.3.0"
 dependencies = [
  "limo-cad-core",
  "limo-cad-solid",
@@ -765,14 +812,14 @@ dependencies = [
 
 [[package]]
 name = "limo-cad-build-info"
-version = "0.3.0-rc.1"
+version = "0.3.0"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "limo-cad-cam"
-version = "0.3.0-rc.1"
+version = "0.3.0"
 dependencies = [
  "limo-cad-core",
  "serde",
@@ -781,7 +828,7 @@ dependencies = [
 
 [[package]]
 name = "limo-cad-core"
-version = "0.3.0-rc.1"
+version = "0.3.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -789,12 +836,12 @@ dependencies = [
 
 [[package]]
 name = "limo-cad-export"
-version = "0.3.0-rc.1"
+version = "0.3.0"
 dependencies = [
  "limo-cad-assembly",
  "limo-cad-core",
  "limo-cad-solid",
- "roxmltree 0.21.1",
+ "roxmltree 0.21.2",
  "serde",
  "serde_json",
  "sha2",
@@ -802,8 +849,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "limo-cad-fem"
+version = "0.3.0"
+dependencies = [
+ "ciborium",
+ "limo-cad-core",
+ "limo-cad-project-file",
+ "serde",
+]
+
+[[package]]
 name = "limo-cad-help"
-version = "0.3.0-rc.1"
+version = "0.3.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -811,7 +868,7 @@ dependencies = [
 
 [[package]]
 name = "limo-cad-interface"
-version = "0.3.0-rc.1"
+version = "0.3.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -819,9 +876,10 @@ dependencies = [
 
 [[package]]
 name = "limo-cad-mcp"
-version = "0.3.0-rc.1"
+version = "0.3.0"
 dependencies = [
  "base64",
+ "ciborium",
  "enigo",
  "jsonschema",
  "libc",
@@ -831,15 +889,19 @@ dependencies = [
  "limo-cad-help",
  "limo-cad-interface",
  "limo-cad-mcp-mutate",
+ "limo-cad-native-engine",
  "limo-cad-occt",
  "limo-cad-print",
+ "limo-cad-project-file",
  "limo-cad-recipes",
  "limo-cad-script",
+ "limo-cad-session-publication",
  "limo-cad-session-storage",
  "limo-cad-sketch",
  "limo-cad-solid",
  "serde",
  "serde_json",
+ "sha2",
  "windows-capture",
  "windows-sys",
  "zip",
@@ -847,15 +909,31 @@ dependencies = [
 
 [[package]]
 name = "limo-cad-mcp-mutate"
-version = "0.3.0-rc.1"
+version = "0.3.0"
 dependencies = [
  "limo-cad-export",
  "serde_json",
 ]
 
 [[package]]
+name = "limo-cad-native-engine"
+version = "0.3.0"
+dependencies = [
+ "base64",
+ "limo-cad-cam",
+ "limo-cad-core",
+ "limo-cad-export",
+ "limo-cad-occt",
+ "limo-cad-project-file",
+ "limo-cad-sketch",
+ "limo-cad-solid",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "limo-cad-occt"
-version = "0.3.0-rc.1"
+version = "0.3.0"
 dependencies = [
  "cxx",
  "cxx-build",
@@ -873,15 +951,27 @@ dependencies = [
 
 [[package]]
 name = "limo-cad-print"
-version = "0.3.0-rc.1"
+version = "0.3.0"
 dependencies = [
  "png",
  "serde_json",
 ]
 
 [[package]]
+name = "limo-cad-project-file"
+version = "0.3.0"
+dependencies = [
+ "base64",
+ "ciborium",
+ "serde",
+ "serde_json",
+ "sha2",
+ "zip",
+]
+
+[[package]]
 name = "limo-cad-recipes"
-version = "0.3.0-rc.1"
+version = "0.3.0"
 dependencies = [
  "limo-cad-script",
  "serde_json",
@@ -889,25 +979,37 @@ dependencies = [
 
 [[package]]
 name = "limo-cad-script"
-version = "0.3.0-rc.1"
+version = "0.3.0"
 dependencies = [
  "serde_json",
 ]
 
 [[package]]
+name = "limo-cad-session-publication"
+version = "0.3.0"
+dependencies = [
+ "ciborium",
+ "limo-cad-project-file",
+ "limo-cad-session-storage",
+ "serde",
+]
+
+[[package]]
 name = "limo-cad-session-storage"
-version = "0.3.0-rc.1"
+version = "0.3.0"
 dependencies = [
  "libc",
 ]
 
 [[package]]
 name = "limo-cad-sketch"
-version = "0.3.0-rc.1"
+version = "0.3.0"
 dependencies = [
  "limo-cad-assembly",
  "limo-cad-cam",
  "limo-cad-core",
+ "limo-cad-fem",
+ "limo-cad-project-file",
  "limo-cad-solid",
  "serde",
  "serde_json",
@@ -916,7 +1018,7 @@ dependencies = [
 
 [[package]]
 name = "limo-cad-solid"
-version = "0.3.0-rc.1"
+version = "0.3.0"
 dependencies = [
  "limo-cad-core",
  "serde",
@@ -1292,9 +1394,9 @@ dependencies = [
 
 [[package]]
 name = "referencing"
-version = "0.58.6"
+version = "0.60.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "558f3855529c0a7e78a48e409fa653456e55f1b167eab4109c16a255b7727e3f"
+checksum = "f42818036d3b37cda6bd4c494543158a36e431cb717015ef7c93acc6ba214d3b"
 dependencies = [
  "ahash",
  "fluent-uri",
@@ -1344,9 +1446,9 @@ checksum = "6c20b6793b5c2fa6553b250154b78d6d0db37e72700ae35fad9387a46f487c97"
 
 [[package]]
 name = "roxmltree"
-version = "0.21.1"
+version = "0.21.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f1964b10c76125c36f8afe190065a4bf9a87bf324842c05701330bba9f1cacbb"
+checksum = "9da7f59328b09405b181fee1018925fad50f157afb43c0c0f5c522c256dd5907"
 dependencies = [
  "memchr",
 ]
@@ -1603,9 +1705,9 @@ checksum = "d2df906b07856748fa3f6e0ad0cbaa047052d4a7dd609e231c4f72cee8c36f31"
 
 [[package]]
 name = "typed-path"
-version = "0.12.3"
+version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8e28f89b80c87b8fb0cf04ab448d5dd0dd0ade2f8891bae878de66a75a28600e"
+checksum = "9ce898823d8cd0f028662d2f349694b1af0a5cc9be83f1d213a00d3147445e1e"
 
 [[package]]
 name = "typenum"
@@ -1657,9 +1759,9 @@ checksum = "b4ac048d71ede7ee76d585517add45da530660ef4390e49b098733c6e897f254"
 
 [[package]]
 name = "usvg"
-version = "0.48.1"
+version = "0.49.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "977d0a4abdef933f424a99fe09f95576e089b90aebc6f016a3bc813762493e91"
+checksum = "d09b73ee83641d390ad7ffd9000f347b16eb128e437675b6ff277ea5c7fcf22c"
 dependencies = [
  "base64",
  "data-url",
@@ -1669,7 +1771,7 @@ dependencies = [
  "kurbo",
  "log",
  "pico-args",
- "roxmltree 0.21.1",
+ "roxmltree 0.21.2",
  "simplecss",
  "siphasher",
  "skrifa",
@@ -1684,9 +1786,9 @@ dependencies = [
 
 [[package]]
 name = "uuid"
-version = "1.28.0"
+version = "1.29.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7cc1186384beb7dd8eedea376413fd654937285ea6c9cfbb928dc3043ea4b606"
+checksum = "4a06f08a856b009bc7bbaf7d3e79808595d032dd19074c0c2ef26e49e03e6bdc"
 dependencies = [
  "getrandom 0.4.3",
  "js-sys",
@@ -1726,12 +1828,11 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen"
-version = "0.2.129"
+version = "0.2.130"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9bb54f33acc68fd454578d9820b0bde1a1a3d17aa17bb7b6595806d02886d409"
+checksum = "a0181c14ddd6c7b8b0b0132a5f1ea2f32be0d893cd3ea97b6e3b28886b8a3d1c"
 dependencies = [
  "cfg-if",
- "once_cell",
  "rustversion",
  "wasm-bindgen-macro",
  "wasm-bindgen-shared",
@@ -1739,9 +1840,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-macro"
-version = "0.2.129"
+version = "0.2.130"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2e29d0c35b16e224a7eeb5cd2d25e3e1968fbd65604117b44d3b789d00ee8535"
+checksum = "6e931a02a39abdbf66966fc35902b5ed58344750a70885bed4ebb3d8eaf28ed9"
 dependencies = [
  "quote",
  "wasm-bindgen-macro-support",
@@ -1749,9 +1850,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-macro-support"
-version = "0.2.129"
+version = "0.2.130"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6f501a8bc3719dba86ef8ae4728879c08001bea749eb1333ac5b91e040e2a6b7"
+checksum = "2ca4b54280e455bd831e33a6b8e734baf432fe63fbc35c42ac14ce67a043a53a"
 dependencies = [
  "bumpalo",
  "proc-macro2",
@@ -1762,9 +1863,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-shared"
-version = "0.2.129"
+version = "0.2.130"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "23f0c9c52aa7cd7d77769a4cfe2a9adb1b331f489a41d912ce14513d5ab995c6"
+checksum = "3b1f9c3798725016c6ee5f2f57869ec0831e8bbc0ab0310a86e787e97f41389e"
 dependencies = [
  "unicode-ident",
 ]
@@ -2050,16 +2151,18 @@ dependencies = [
 
 [[package]]
 name = "zip"
-version = "9.0.3"
+version = "9.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c2d98561b612a84ae525331a7a094429ef8a5772514ed507ff6db5f54badc971"
+checksum = "ec2e3161de27091f18a831d9494e9c53378a34833af5c1dda35ad85849da18d6"
 dependencies = [
  "crc32fast",
  "flate2",
+ "getrandom 0.4.3",
  "indexmap",
  "memchr",
  "nix",
  "typed-path",
+ "windows-sys",
  "zopfli",
 ]
 

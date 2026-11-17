@@ -4,7 +4,7 @@
 //! workspace reducers must register their own mutation boundaries here.
 
 use super::super::{
-    bump_engine_revision, dispatch_inbox_on_engine, dispatch_project_replacement,
+    bump_engine_revision, dispatch_inbox_on_engine,
     native_history::{self, HistoryState, RedoStep, UndoStep},
     parse_engine_envelope, retire_project_publisher, ProjectPublisher, SessionBridgeState,
     WindowPublisher,
@@ -12,6 +12,7 @@ use super::super::{
 use super::{check_owner, context, NativeMutationResult};
 use crate::state::AppState;
 use limo_cad_interface::DocumentContext;
+use limo_cad_project_file::ProjectSnapshot;
 use serde_json::{json, Value};
 
 fn state(owner: &DocumentContext, project: &ProjectPublisher) -> HistoryState {
@@ -28,12 +29,15 @@ struct MetadataPresentation {
 
 fn prepare_history_restore(
     engine: &AppState,
-    current: &str,
-    target: &str,
+    current: &ProjectSnapshot,
+    target: &ProjectSnapshot,
     preserve_visibility: bool,
-) -> Result<(String, Option<MetadataPresentation>), String> {
-    let mut current: Value = serde_json::from_str(current).map_err(|e| e.to_string())?;
-    let mut target: Value = serde_json::from_str(target).map_err(|e| e.to_string())?;
+) -> Result<(ProjectSnapshot, Option<MetadataPresentation>), String> {
+    let domains_equal = current.intents() == target.intents();
+    let target_intents = target.intents().to_vec();
+    let mut current: Value =
+        serde_json::from_str(current.model_json()).map_err(|e| e.to_string())?;
+    let mut target: Value = serde_json::from_str(target.model_json()).map_err(|e| e.to_string())?;
     let current_intent = current
         .as_object_mut()
         .ok_or("History model must be an object")?
@@ -126,7 +130,7 @@ fn prepare_history_restore(
         visibility["hidden_datum_plane_ids"] = json!(hidden);
         target["visibility"] = visibility;
     }
-    let metadata_only = current == target;
+    let metadata_only = current == target && domains_equal;
     if target_intent.is_null() {
         target_intent = serde_json::to_value(limo_cad_core::PrintIntentDocumentDto::default())
             .map_err(|e| e.to_string())?;
@@ -147,17 +151,27 @@ fn prepare_history_restore(
         .unwrap()
         .insert("print_intent".into(), target_intent);
     let model_json = serde_json::to_string(&target).map_err(|e| e.to_string())?;
+    let snapshot = ProjectSnapshot::new(model_json, target_intents).map_err(|e| e.to_string())?;
     if !metadata_only {
-        return Ok((model_json, None));
+        return Ok((snapshot, None));
     }
     let views = parse_engine_envelope(engine.engine_call("named_views", "{}"))?;
     Ok((
-        model_json,
+        snapshot,
         Some(MetadataPresentation {
             active_view: views["active"].as_str().map(str::to_string),
             visibility: parse_engine_envelope(engine.engine_call("project_visibility", "{}"))?,
         }),
     ))
+}
+
+fn restore_snapshot(
+    engine: &AppState,
+    snapshot: &ProjectSnapshot,
+) -> (Result<Value, String>, bool) {
+    let raw = engine.project_load_snapshot(snapshot);
+    let changed = !super::super::project_replacement_is_unchanged(&raw);
+    (parse_engine_envelope(raw), changed)
 }
 
 fn restore_metadata_presentation(
@@ -324,29 +338,18 @@ impl SessionBridgeState {
                 .native_history
                 .peek_edit_undo(&before)
                 .unwrap();
-            let current = parse_engine_envelope(engine.engine_call("project_export_model", ""))?;
-            let current = current
-                .as_str()
-                .ok_or("Engine did not return an Undo snapshot")?;
-            let (model_json, presentation) = prepare_history_restore(
+            let current = engine.project_snapshot()?;
+            let (snapshot, presentation) = prepare_history_restore(
                 engine,
-                current,
-                ticket.model_json(),
+                &current,
+                ticket.snapshot(),
                 publisher.active_mut().native_history.preserves_visibility(),
             )?;
             let mut replacement = ProjectPublisher::new();
             let after_owner = context(&expected.window_id, &expected.document_id, &replacement);
             let mut history = publisher.active_mut().native_history.clone();
-            history.commit_edit_undo(
-                ticket.clone(),
-                current.to_owned(),
-                state(&after_owner, &replacement),
-            )?;
-            let (outcome, changed) = dispatch_project_replacement(
-                engine,
-                "cad_load_project_model",
-                &json!({"model_json":model_json}),
-            );
+            history.commit_edit_undo(ticket.clone(), current, state(&after_owner, &replacement))?;
+            let (outcome, changed) = restore_snapshot(engine, &snapshot);
             let outcome = outcome
                 .and_then(|value| restore_metadata_presentation(engine, presentation, value));
             if changed {
@@ -389,14 +392,11 @@ impl SessionBridgeState {
                         &json!({"rollback_index":index}),
                     )?,
                     RedoStep::Restore(ticket) => {
-                        let current =
-                            parse_engine_envelope(engine.engine_call("project_export_model", ""))?;
-                        let (model_json, presentation) = prepare_history_restore(
+                        let current = engine.project_snapshot()?;
+                        let (snapshot, presentation) = prepare_history_restore(
                             engine,
-                            current
-                                .as_str()
-                                .ok_or("Engine did not return a Redo snapshot")?,
-                            ticket.model_json(),
+                            &current,
+                            ticket.snapshot(),
                             publisher.active_mut().native_history.preserves_visibility(),
                         )?;
                         let mut replacement = ProjectPublisher::new();
@@ -404,11 +404,7 @@ impl SessionBridgeState {
                             context(&expected.window_id, &expected.document_id, &replacement);
                         let mut history = publisher.active_mut().native_history.clone();
                         history.commit_redo(ticket.clone(), state(&after_owner, &replacement))?;
-                        let (outcome, changed) = dispatch_project_replacement(
-                            engine,
-                            "cad_load_project_model",
-                            &json!({"model_json":model_json}),
-                        );
+                        let (outcome, changed) = restore_snapshot(engine, &snapshot);
                         let outcome = outcome.and_then(|value| {
                             restore_metadata_presentation(engine, presentation, value)
                         });
@@ -441,13 +437,9 @@ impl SessionBridgeState {
                     )?,
                     UndoStep::DeleteLatest => {
                         let feature_id = last_feature_id.ok_or(nothing)?;
-                        let model =
-                            parse_engine_envelope(engine.engine_call("project_export_model", ""))?;
-                        let model = model
-                            .as_str()
-                            .ok_or("Engine did not return a complete Undo model")?;
+                        let model = engine.project_snapshot()?;
                         let history = &publisher.active_mut().native_history;
-                        let ticket = history.prepare_undo(&before, model.to_owned())?;
+                        let ticket = history.prepare_undo(&before, model)?;
                         let mut committed = history.clone();
                         let after = HistoryState {
                             context: expected.clone(),

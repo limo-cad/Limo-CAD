@@ -1,0 +1,13 @@
+[package]
+name = "limo-cad-session-publication"
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+license = "LGPL-2.1-or-later"
+publish = false
+
+[dependencies]
+limo-cad-project-file = { path = "../project-file" }
+limo-cad-session-storage = { path = "../session-storage" }
+serde = { workspace = true, features = ["derive"] }
+ciborium = "=0.2.2"

@@ -18,6 +18,7 @@ mod cam_chamfer;
 mod cam_height_geometry;
 pub use cam_height_geometry::resolve as resolve_cam_height_geometry;
 mod constraint;
+pub mod drafting;
 mod drawing;
 pub mod drawing_commands;
 mod drawing_layout;
@@ -61,6 +62,7 @@ pub use drawing::{
     DrawingTemplateDto, DrawingTitleBlockDto, DrawingToleranceNoteDto, DrawingTolerancePreset,
     DrawingTopologyAnchorRefDto, DrawingViewAlignment, DrawingViewDerivationDto, DrawingViewDto,
     DrawingViewKind, DrawingViewScope, DrawingWeldContour, DrawingWeldSide, DrawingWeldType,
+    MAX_DRAWING_DIMENSION_PRECISION,
 };
 pub use dto::{
     err_json, ok_json, AddConstraintResult, AddLineResult, Arc3PointRequest, ArcCenterRequest,

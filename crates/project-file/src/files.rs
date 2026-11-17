@@ -10,13 +10,13 @@ pub fn read_binary_file(path: &Path) -> Result<Vec<u8>, ProjectFileError> {
     read_bounded(path, MAX_FILE_BYTES)
 }
 
-fn read_bounded(path: &Path, limit: u64) -> Result<Vec<u8>, ProjectFileError> {
+pub(crate) fn read_bounded(path: &Path, limit: u64) -> Result<Vec<u8>, ProjectFileError> {
     let metadata = fs::metadata(path).map_err(|source| failed("could not read file", source))?;
     if !metadata.is_file() {
         return Err(error("the selected path is not a regular file"));
     }
     if metadata.len() > limit {
-        return Err(error("file is larger than the 256 MB safety limit"));
+        return Err(error(format!("file exceeds the {limit} byte safety limit")));
     }
     let file = File::open(path).map_err(|source| failed("could not open file", source))?;
     let mut bytes = Vec::new();
@@ -24,7 +24,9 @@ fn read_bounded(path: &Path, limit: u64) -> Result<Vec<u8>, ProjectFileError> {
         .read_to_end(&mut bytes)
         .map_err(|source| failed("could not read file", source))?;
     if bytes.len() as u64 > limit {
-        return Err(error("file grew beyond the 256 MB safety limit"));
+        return Err(error(format!(
+            "file grew beyond the {limit} byte safety limit"
+        )));
     }
     Ok(bytes)
 }
@@ -79,14 +81,14 @@ fn write_bounded(path: &Path, bytes: &[u8], limit: u64) -> Result<(), ProjectFil
     write_bounded_mode(path, bytes, limit, true)
 }
 
-fn write_bounded_mode(
+pub(crate) fn write_bounded_mode(
     path: &Path,
     bytes: &[u8],
     limit: u64,
     replace: bool,
 ) -> Result<(), ProjectFileError> {
     if bytes.len() as u64 > limit {
-        return Err(error("file is larger than the 256 MB safety limit"));
+        return Err(error(format!("file exceeds the {limit} byte safety limit")));
     }
     if path.file_name().is_none() {
         return Err(error("save path has no valid file name"));
@@ -200,6 +202,41 @@ mod tests {
             1,
             "Only the completed destination remains"
         );
+    }
+
+    #[test]
+    fn replay_file_roundtrip_atomic_replace_and_new_save_preserve_destination() {
+        use crate::ReplayPackage;
+        let directory = Directory::new();
+        let target = directory.0.join("replay.cbor");
+        let first = ReplayPackage::new("script one".into(), vec![0, 255, 7]).unwrap();
+        let second = ReplayPackage::new("script two".into(), vec![128, 0, 42]).unwrap();
+        first.write_file_new(&target).unwrap();
+        assert_eq!(ReplayPackage::read_file(&target).unwrap(), first);
+        assert!(second.write_file_new(&target).is_err());
+        assert_eq!(ReplayPackage::read_file(&target).unwrap(), first);
+        second.write_file_atomic(&target).unwrap();
+        assert_eq!(ReplayPackage::read_file(&target).unwrap(), second);
+        assert_eq!(fs::read_dir(&directory.0).unwrap().count(), 1);
+        let before = fs::read(&target).unwrap();
+        fs::write(&target, &before[..before.len() - 1]).unwrap();
+        assert!(ReplayPackage::read_file(&target).is_err());
+        // A failed read does not repair, truncate or remove the input.
+        assert_eq!(fs::read(&target).unwrap(), before[..before.len() - 1]);
+        assert!(ReplayPackage::read_file(&directory.0).is_err());
+    }
+
+    #[test]
+    fn exact_io_bound_accepts_and_overflow_preserves_existing_file() {
+        let directory = Directory::new();
+        let target = directory.0.join("bounded");
+        write_bounded_mode(&target, b"1234", 4, false).unwrap();
+        assert_eq!(read_bounded(&target, 4).unwrap(), b"1234");
+        let error = read_bounded(&target, 3).unwrap_err().to_string();
+        assert!(error.contains("3 byte safety limit"));
+        assert!(write_bounded_mode(&target, b"12345", 4, true).is_err());
+        assert_eq!(read_bounded(&target, 4).unwrap(), b"1234");
+        assert_eq!(fs::read_dir(&directory.0).unwrap().count(), 1);
     }
 
     #[test]

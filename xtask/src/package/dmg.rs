@@ -1,6 +1,56 @@
 use super::common;
 use anyhow::{bail, ensure, Context, Result};
-use std::{fs, io, path::Path, time::Duration};
+use std::{fs, io, path::Path, process::Command, time::Duration};
+
+pub(crate) fn detach(mount: &Path) -> Result<()> {
+    ensure!(cfg!(target_os = "macos"), "DMG detach requires macOS");
+    ensure!(mount.is_absolute(), "DMG mountpoint must be absolute");
+    ensure!(
+        fs::symlink_metadata(mount)?.is_dir(),
+        "DMG mountpoint must be an ordinary directory"
+    );
+    // Resolve system aliases such as /var before passing a mountpoint to hdiutil.
+    let mount = mount.canonicalize()?;
+    detach_with_busy_retry(
+        &mount,
+        |mount| {
+            let output = Command::new("hdiutil")
+                .env("LC_ALL", "C")
+                .arg("detach")
+                .arg(mount)
+                .output()
+                .context("run hdiutil detach")?;
+            print!("{}", String::from_utf8_lossy(&output.stdout));
+            eprint!("{}", String::from_utf8_lossy(&output.stderr));
+            Ok(output.status.code())
+        },
+        std::thread::sleep,
+    )
+}
+
+/// The caller owns this mount and has finished its readers. Retry Darwin EBUSY
+/// (16) only; never force-unmount a volume or hide a persistent cleanup failure.
+fn detach_with_busy_retry(
+    mount: &Path,
+    mut detach: impl FnMut(&Path) -> Result<Option<i32>>,
+    mut wait: impl FnMut(Duration),
+) -> Result<()> {
+    for attempt in 1..=4 {
+        let code = detach(mount)?;
+        if code == Some(0) {
+            return Ok(());
+        }
+        if code != Some(16) || attempt == 4 {
+            bail!(
+                "hdiutil detach failed for {} (exit {code:?}, attempt {attempt})",
+                mount.display()
+            );
+        }
+        eprintln!("DMG is busy; retrying normal detach after attempt {attempt}");
+        wait(Duration::from_secs(1 << (attempt - 1)));
+    }
+    unreachable!()
+}
 
 pub(super) struct CreateResult {
     pub code: Option<i32>,
@@ -76,6 +126,52 @@ pub(super) fn create_with_busy_retry(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn detach_retries_only_busy_and_propagates_exhaustion() {
+        let cases: &[(&[Option<i32>], bool)] = &[
+            (&[Some(0)], true),
+            (&[Some(16), Some(0)], true),
+            (&[Some(16), Some(16), Some(16), Some(0)], true),
+            (&[Some(16), Some(16), Some(16), Some(16)], false),
+            (&[Some(1)], false),
+            (&[Some(16), Some(13)], false),
+            (&[None], false),
+        ];
+        let mount = Path::new("/owned/mountpoint with spaces");
+        for &(codes, succeeds) in cases {
+            let mut calls = 0;
+            let mut waits = Vec::new();
+            let result = detach_with_busy_retry(
+                mount,
+                |path| {
+                    assert_eq!(path, mount);
+                    let code = codes[calls];
+                    calls += 1;
+                    Ok(code)
+                },
+                |delay| waits.push(delay),
+            );
+            assert_eq!(result.is_ok(), succeeds);
+            assert_eq!(calls, codes.len());
+            let expected: Vec<_> = (0..calls - 1)
+                .map(|index| Duration::from_secs(1 << index))
+                .collect();
+            assert_eq!(waits, expected);
+        }
+        let mut calls = 0;
+        let error = detach_with_busy_retry(
+            mount,
+            |_| {
+                calls += 1;
+                Err(io::Error::new(io::ErrorKind::NotFound, "hdiutil missing").into())
+            },
+            |_| panic!("a failed command must not be retried"),
+        )
+        .unwrap_err();
+        assert_eq!(calls, 1);
+        assert!(error.to_string().contains("hdiutil missing"));
+    }
 
     type Outcome<'a> = (Option<i32>, &'a [u8]);
     type Case<'a> = (&'a [Outcome<'a>], usize, bool);

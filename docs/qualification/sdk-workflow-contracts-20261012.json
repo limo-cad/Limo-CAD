@@ -1,7 +1,7 @@
 {
   "recorded_utc": "2026-10-12T05:14:51.0613028Z",
   "compiled_revision": "e3505cd7b090d208a5f0b4c6175345f7efe4151f",
-  "checkout": "D:/limo-cad-maintenance/ownership-worktree",
+  "checkout": "<local-root>/limo-cad-maintenance/ownership-worktree",
   "source_blobs": {
     "xtask/src/workflow_contracts.rs": "17b25746f181a0c9ebfe0cdc31f6d5fbb0a7e8b1",
     ".github/workflows/codeql.yml": "f5555d7a20332eb3b3eb8daca8786a063a993f2c",
@@ -33,9 +33,9 @@
   "qualification": {
     "helper_sha256": "41ea9a9615c625b56d8deb06f4027afa583b41d085c7fa64523b047c19630c06",
     "wrapper_sha256": "2a20cb5ef20931ee78059fa42293b0df2535f8574760972ea6047bb65f8c9eea",
-    "receipt": "D:/limo-cad-maintenance/backlog-autonomous-20261010/sdk-workflow-contracts-e3505cd7-results.json",
+    "receipt": "<local-root>/limo-cad-maintenance/backlog-autonomous-20261010/sdk-workflow-contracts-e3505cd7-results.json",
     "receipt_sha256": "1c47a1f5863cd2d27f0939d69dc44a6c97610b73b8349ddebd070c2add70d172",
-    "artifact": "D:/noBS-CAD-builds/finish-bevy-rc2/release-target/x86_64-pc-windows-msvc/release/deps/xtask-395a63163e96da73.exe",
+    "artifact": "<local-root>/noBS-CAD-builds/finish-bevy-rc2/release-target/x86_64-pc-windows-msvc/release/deps/xtask-395a63163e96da73.exe",
     "artifact_sha256": "02baf3b80c07f423203c2319601b130a6ea3fed57637f15e854d26f20ee43283",
     "source_and_helper_review": "Root and independent peer CLEAR. Clean exact-revision checks surround compilation and each exact case. Atomic CreateNew receipt reservation prevents duplicate execution; partial reservations remain for reconciliation."
   },

@@ -11,7 +11,7 @@ use std::{
 use toml_edit::{value, DocumentMut, Item};
 
 const DOCS: &[&str] = &[
-    "README.md",
+    // Public README/site downloads move only after the release is published.
     "docs/DEVELOPMENT.md",
     "docs/INSTALL.md",
     "docs/OCCT_PACKAGING.md",
@@ -115,29 +115,86 @@ fn inventory(root: &Path) -> Result<(Vec<Carrier>, BTreeSet<String>)> {
     Ok((carriers, names))
 }
 
-fn document_patterns() -> Vec<Regex> {
+/// How a documented version is spelled: the full SemVer string, or the
+/// platform forms the packages actually carry.
+#[derive(Clone, Copy)]
+enum Form {
+    Full,
+    Apple,
+    Debian,
+}
+
+fn document_patterns() -> Vec<(Regex, Form)> {
+    const APPLE: &str = r"\d+\.\d+\.\d+";
+    const DEBIAN: &str = r"\d+\.\d+\.\d+(?:~[0-9A-Za-z.-]+)?";
     [
         // Published noBS preview filenames are historical; only current Limo
         // package names follow VERSION after the product rename.
-        format!(r"(Limo-CAD-)({VERSION_PATTERN})(-windows-|-ubuntu-)"),
-        format!(r"(Limo\.CAD_)({VERSION_PATTERN})(_)"),
-        format!(r"(/releases/(?:download|tag)/v)({VERSION_PATTERN})([/)#\s]|$)"),
-        format!(r"(\bRelease )({VERSION_PATTERN})([^\w.-]|$)"),
-        format!(r"(\[)({VERSION_PATTERN})( release\])"),
+        (
+            format!(r"(Limo-CAD-)({VERSION_PATTERN})(-windows-|-ubuntu-)"),
+            Form::Full,
+        ),
+        (format!(r"(Limo\.CAD_)({VERSION_PATTERN})(_)"), Form::Full),
+        (
+            format!(r"(/releases/(?:download|tag)/v)({VERSION_PATTERN})([/)#\s]|$)"),
+            Form::Full,
+        ),
+        (
+            format!(r"(\bRelease )({VERSION_PATTERN})([^\w.-]|$)"),
+            Form::Full,
+        ),
+        (format!(r"(\[)({VERSION_PATTERN})( release\])"), Form::Full),
+        // INSTALL.md names the current release in its heading, page link label
+        // and the About dialog, and quotes the platform metadata forms.
+        (
+            format!(r"(?m)(^# Install Limo CAD )({VERSION_PATTERN})($)"),
+            Form::Full,
+        ),
+        (
+            format!(r"(\[)({VERSION_PATTERN})( (?:pre-)?release page\])"),
+            Form::Full,
+        ),
+        (
+            format!(r"(should report\s+\*\*)({VERSION_PATTERN})(\*\*)"),
+            Form::Full,
+        ),
+        (
+            format!(r"(and channel \*\*v)({VERSION_PATTERN})(\*\*)"),
+            Form::Full,
+        ),
+        (
+            format!(r"(Apple bundle metadata uses `)({APPLE})(`)"),
+            Form::Apple,
+        ),
+        (
+            format!(r"(Debian package metadata uses\s+`)({DEBIAN})(`)"),
+            Form::Debian,
+        ),
     ]
-    .iter()
-    .map(|pattern| Regex::new(pattern).expect("document version pattern"))
+    .into_iter()
+    .map(|(pattern, form)| {
+        (
+            Regex::new(&pattern).expect("document version pattern"),
+            form,
+        )
+    })
     .collect()
 }
 
 fn documented(text: &str, version: &str) -> Result<String> {
+    let spelled = |form| match form {
+        Form::Full => Ok(version.to_owned()),
+        Form::Apple => crate::package::common::numeric_version(version),
+        Form::Debian => crate::package::common::debian_version(version),
+    };
     let mut next = text.to_owned();
     let mut found = false;
-    for pattern in document_patterns() {
+    for (pattern, form) in document_patterns() {
         found |= pattern.is_match(text);
+        let spelled = spelled(form)?;
         next = pattern
             .replace_all(&next, |capture: &regex::Captures<'_>| {
-                format!("{}{version}{}", &capture[1], &capture[3])
+                format!("{}{spelled}{}", &capture[1], &capture[3])
             })
             .into_owned();
     }
@@ -350,6 +407,31 @@ mod tests {
     }
 
     #[test]
+    fn install_guide_identity_follows_version_in_each_platform_form() {
+        let source = concat!(
+            "# Install Limo CAD 0.3.0-rc.2\n\n",
+            "Use the packages on the **[0.3.0-rc.2 pre-release page]",
+            "(https://github.com/limo-cad/Limo-CAD/releases/tag/v0.3.0-rc.2)**\n",
+            "The executable should report\n**0.3.0-rc.2** and channel **v0.3.0-rc.2**; ",
+            "Apple bundle metadata uses `0.3.0`, and Debian package metadata uses\n",
+            "`0.3.0~rc.2`, while the executable retains the complete candidate version.\n",
+            "Older builds report **0.2.2**.\n"
+        );
+        let next = documented(source, "0.4.0-beta.1").unwrap();
+        assert!(!next.contains("rc.2"), "{next}");
+        assert!(next.starts_with("# Install Limo CAD 0.4.0-beta.1\n"));
+        assert!(next.contains("**[0.4.0-beta.1 pre-release page](https://github.com/limo-cad/Limo-CAD/releases/tag/v0.4.0-beta.1)**"));
+        assert!(next.contains("**0.4.0-beta.1** and channel **v0.4.0-beta.1**"));
+        assert!(next.contains("Apple bundle metadata uses `0.4.0`"));
+        assert!(next.contains("Debian package metadata uses\n`0.4.0~beta.1`"));
+        assert!(next.contains("Older builds report **0.2.2**."));
+        assert_eq!(documented(&next, "0.4.0-beta.1").unwrap(), next);
+        let stable = documented(&next, "0.4.0").unwrap();
+        assert!(stable.contains("`0.4.0`, and Debian package metadata uses\n`0.4.0`"));
+        assert!(stable.contains("**0.4.0** and channel **v0.4.0**"));
+    }
+
+    #[test]
     fn version_bumps_preserve_published_pre_rename_artifacts() {
         let source = concat!(
             "/releases/download/bevy-preview-0.2.2-20261004.1/",
@@ -387,7 +469,7 @@ mod tests {
     }
 
     #[test]
-    fn release_bump_preserves_crlf_and_historical_notes() {
+    fn release_bump_preserves_crlf_history_and_published_downloads() {
         let root = super::super::root();
         let version = read(root).unwrap();
         assert!(plan(root, &version).unwrap().is_empty());
@@ -403,6 +485,28 @@ mod tests {
                 .replace("\r\n", "\n");
             fs::write(target, source.replace('\n', "\r\n")).unwrap();
         }
+        let published_downloads: Vec<_> = [
+            "README.md",
+            "README.de.md",
+            "README.es.md",
+            "README.zh-CN.md",
+            "knowledge/home.html",
+            "knowledge/home.de.html",
+            "knowledge/home.es.html",
+            "knowledge/home.zh-CN.html",
+        ]
+        .into_iter()
+        .map(|file| {
+            let source = fs::read_to_string(root.join(file))
+                .unwrap()
+                .replace("\r\n", "\n")
+                .replace('\n', "\r\n");
+            let target = temp.path().join(file);
+            fs::create_dir_all(target.parent().unwrap()).unwrap();
+            fs::write(target, &source).unwrap();
+            (file, source)
+        })
+        .collect();
         let historical = temp
             .path()
             .join(format!("docs/release-notes/v{version}.md"));
@@ -419,6 +523,12 @@ mod tests {
             fs::read_to_string(historical).unwrap(),
             "historical notes\r\n"
         );
+        for (file, source) in published_downloads {
+            assert!(
+                fs::read_to_string(temp.path().join(file)).unwrap() == source,
+                "version bumps must preserve published downloads in {file}"
+            );
+        }
         assert!(notes(temp.path(), target_version).is_err());
         let file = temp
             .path()

@@ -127,3 +127,78 @@ fn angle_cursor_changes_arc_radius_and_radial_cursor_follows_freely() {
     )
     .is_none());
 }
+
+#[test]
+fn single_arc_angle_leaders_follow_native_sweep_and_reposition_radially() {
+    let center = Point::new(20., 20.);
+    for (start, end, middle, expected_start, expected_end) in [
+        (0_f64, 90_f64, 45_f64, [1., 0.], [0., 1.]),
+        (
+            350.,
+            10.,
+            360.,
+            [350_f64.to_radians().cos(), 350_f64.to_radians().sin()],
+            [10_f64.to_radians().cos(), 10_f64.to_radians().sin()],
+        ),
+        (0., 270., 135., [1., 0.], [0., -1.]),
+        (0., 360., 180., [1., 0.], [1., 0.]),
+        (0., -360., 180., [1., 0.], [1., 0.]),
+    ] {
+        let sketch = sketch(vec![EntityDto::Arc {
+            id: EntityId(7),
+            center,
+            radius: 6.,
+            fully_defined: false,
+            start_angle: start.to_radians(),
+            end_angle: end.to_radians(),
+        }]);
+        let mut dim = dimension("angle", &[7]);
+        let middle = middle.to_radians();
+        dim.text_pos = center + Point::new(middle.cos(), middle.sin()) * 3.3;
+        let leaders = dimension_leaders(&dim, &sketch, 0.25);
+        assert_eq!(leaders.len(), 52, "bounded angle arc and two arrowheads");
+        assert!(
+            leaders[4][0].distance(center + Point::new(expected_start[0], expected_start[1]) * 3.3)
+                < 1e-8
+        );
+        assert!(
+            leaders.last().unwrap()[1]
+                .distance(center + Point::new(expected_end[0], expected_end[1]) * 3.3)
+                < 1e-8
+        );
+        let cursor = center + Point::new(3., 4.);
+        assert_position(
+            preview_position(&dim, &sketch, cursor),
+            center + Point::new(middle.cos(), middle.sin()) * 5.,
+        );
+        // The displayed/reference value can be rounded or stale while editing.
+        // It must not replace the actual entity's measured span.
+        dim.value = -999.;
+        dim.text = "rounded reference".into();
+        assert_eq!(dimension_leaders(&dim, &sketch, 0.25), leaders);
+    }
+}
+
+#[test]
+fn single_arc_angle_leaders_reject_invalid_or_empty_geometry() {
+    for (radius, start, end) in [
+        (6., 0., 0.),
+        (0., 0., 1.),
+        (-1., 0., 1.),
+        (6., f64::NAN, 1.),
+        (6., 0., f64::INFINITY),
+        (6., -f64::MAX, f64::MAX),
+    ] {
+        let sketch = sketch(vec![EntityDto::Arc {
+            id: EntityId(7),
+            center: Point::new(20., 20.),
+            radius,
+            start_angle: start,
+            end_angle: end,
+            fully_defined: false,
+        }]);
+        let dim = dimension("angle", &[7]);
+        assert!(dimension_leaders(&dim, &sketch, 0.25).is_empty());
+        assert!(preview_position(&dim, &sketch, Point::new(30., 30.)).is_none());
+    }
+}

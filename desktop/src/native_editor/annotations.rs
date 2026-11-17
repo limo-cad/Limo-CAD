@@ -17,6 +17,7 @@ use crate::session_bridge::native_interface::controller::chrome::{rect, Widgets}
 use limo_cad_sketch::{ConstraintKind, DimensionDto, EntityDto, Vec2 as Point};
 
 mod layout;
+pub(crate) mod teaching;
 
 #[cfg(test)]
 #[path = "annotations/context_tests.rs"]
@@ -153,6 +154,34 @@ fn leaders(dim: &DimensionDto, entities: &[EntityDto], arrow: f64) -> Vec<[Point
 }
 
 fn angle_geometry(refs: &[&EntityDto]) -> Option<(Point, f64, f64)> {
+    if let [EntityDto::Arc {
+        center,
+        radius,
+        start_angle,
+        end_angle,
+        ..
+    }] = refs
+    {
+        if ![center.x, center.y, *radius, *start_angle, *end_angle]
+            .into_iter()
+            .all(f64::is_finite)
+            || *radius <= 0.
+        {
+            return None;
+        }
+        let delta = end_angle - start_angle;
+        if !delta.is_finite() {
+            return None;
+        }
+        // Match the sketch's authoritative arc_span convention, including
+        // wrapped, reflex and full-turn arcs. Never infer geometry from text.
+        let sweep = if delta.abs() >= std::f64::consts::TAU - 1e-9 {
+            std::f64::consts::TAU
+        } else {
+            delta.rem_euclid(std::f64::consts::TAU)
+        };
+        return (sweep > 1e-12).then_some((*center, *start_angle, sweep));
+    }
     let [first, second] = refs else { return None };
     let ((a, b), (c, d)) = (line(first)?, line(second)?);
     let u = b - a;

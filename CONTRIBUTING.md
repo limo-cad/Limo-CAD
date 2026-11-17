@@ -52,9 +52,25 @@ git checkout -b fix/short-slug origin/main
 [Git worktrees](https://git-scm.com/docs/git-worktree) are helpful for
 **parallel** or agent work. They are **not** required for every contribution.
 
+## Shared project policy
+
+These agreements apply to humans and coding tools alike. Personal editor and
+agent configuration and instruction files stay local, including AGENTS.md.
+Project policy lives here and in the linked documents.
+
+Before UI/MCP qualification, read the surface policy and coverage ledger below.
+Respect a paused run until the user resumes it. Preserve incoming work, documents
+and recovery data throughout review and cleanup.
+
+- [Grouped PRs, draft/review states, approval and squash merge](docs/contributing/pr-lifecycle.md)
+- [Localization and native text validation](docs/contributing/localized-ui.md)
+- [Reference comparison, operational GIFs and measured performance](docs/contributing/visual-evidence.md)
+- [UI-first and MCP-second qualification](docs/contributing/surface-qualification.md)
+- [Private workspace state, CI trust and cleanup](docs/contributing/workspace-and-ci.md)
+
 ## 3. While you work
 
-- Keep diffs focused. Prefer small PRs.
+- Keep one coherent feature or fix in each PR. Related implementation steps belong as commits in its grouped branch, not separate review requests.
 - Add or extend tests when you change geometry/MCP behavior.
 - Do not commit secrets, `.env*` files, machine-local OCCT paths, or personal
   editor/agent state (those paths are gitignored).
@@ -65,7 +81,9 @@ git checkout -b fix/short-slug origin/main
 - Title: imperative and scoped (`mcp: clarify stdio setup`, not `updates`).
 - Link an issue when one exists (`Fixes #N` / `Refs #N`).
 - Include a short **test plan** proportional to the change (see template).
-- Keep the PR mergeable with `main`.
+- Keep the PR mergeable with its stated base and group related changes before requesting review.
+- Open unfinished work as draft; return to draft when changes are requested.
+- UI changes need current screenshots and operational GIFs of the native flow.
 
 ### Validation (proportional)
 
@@ -96,7 +114,7 @@ Stay with the PR until it is ready to merge:
 2. Resolve conflicts intentionally.
 3. Fix CI failures caused by the PR.
 
-Maintainers merge when the above holds and required reviews pass.
+Maintainers use squash merge when the above holds, required reviews cover the current head and the task authorizes merging. An explicit instruction not to merge takes precedence.
 
 ## 6. Branch protection (maintainers)
 

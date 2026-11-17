@@ -1,6 +1,7 @@
 use crate::{error, failed, ProjectFileError, MAX_EXPANDED_BYTES, MAX_FILE_BYTES};
 use serde::Deserialize;
 use serde_json::{json, Value};
+use std::collections::BTreeMap;
 use std::io::{self, Cursor, Read, Seek, SeekFrom, Write};
 use zip::{write::SimpleFileOptions, CompressionMethod, ZipArchive, ZipWriter};
 
@@ -20,10 +21,12 @@ pub struct SaveMetadata<'a> {
 /// The JSON model remains authoritative and opaque to this container layer.
 /// Keep the opened container to preserve ancillary images, recipes and future
 /// extension entries on native re-save without inflating/recompressing them.
+#[derive(Clone)]
 pub struct ProjectArchive {
     manifest: Value,
     model_json: String,
-    original: Option<Vec<u8>>,
+    original: Option<std::sync::Arc<[u8]>>,
+    attachments: BTreeMap<String, Option<std::sync::Arc<[u8]>>>,
 }
 
 #[derive(Deserialize)]
@@ -38,9 +41,73 @@ impl ProjectArchive {
             manifest: json!({}),
             model_json: String::new(),
             original: None,
+            attachments: BTreeMap::new(),
         };
         archive.update_model(model_json, metadata)?;
         Ok(archive)
+    }
+
+    /// Capture model text and every retained domain intent together. Other
+    /// ancillary archive entries remain with this container, not history.
+    pub fn snapshot(&self) -> Result<crate::ProjectSnapshot, ProjectFileError> {
+        let mut names = std::collections::BTreeSet::new();
+        if let Some(original) = &self.original {
+            let mut source = ZipArchive::new(Cursor::new(original))
+                .map_err(|e| failed("could not read snapshot intents", e))?;
+            for index in 0..source.len() {
+                let entry = source
+                    .by_index_raw(index)
+                    .map_err(|e| failed("could not read snapshot entry", e))?;
+                let name = entry
+                    .name()
+                    .map_err(|e| failed("invalid snapshot entry name", e))?;
+                if name.starts_with("intent/") && !entry.is_dir() {
+                    names.insert(name.into_owned());
+                }
+            }
+        }
+        names.extend(self.attachments.keys().cloned());
+        let mut intents = Vec::new();
+        let mut remaining = crate::MAX_SNAPSHOT_BYTES
+            .checked_sub(self.model_json.len())
+            .ok_or_else(|| error("snapshot model exceeds size limit"))?;
+        for name in names {
+            let limit = remaining
+                .checked_sub(name.len())
+                .ok_or_else(|| error("snapshot intents exceed size limit"))?;
+            if let Some(payload) = self.read_intent(&name, limit)? {
+                remaining = limit - payload.len();
+                if intents.len() >= 64 {
+                    return Err(error("too many snapshot intents"));
+                }
+                intents.push(crate::SnapshotIntent { name, payload });
+            }
+        }
+        crate::ProjectSnapshot::from_archive(self.model_json.clone(), intents)
+    }
+
+    /// Build a complete replacement candidate. The original stays unchanged if
+    /// any preparation fails. The caller validates domain semantics and adopts
+    /// this candidate only with its successful live project transaction.
+    pub fn with_snapshot(
+        &self,
+        snapshot: &crate::ProjectSnapshot,
+        metadata: SaveMetadata<'_>,
+    ) -> Result<Self, ProjectFileError> {
+        let prior = self.snapshot()?;
+        let mut candidate = self.clone();
+        candidate.update_model(snapshot.model_json().to_owned(), metadata)?;
+        // Snapshot restoration preserves original text, including its newline.
+        candidate.model_json = snapshot.model_json().to_owned();
+        for previous in prior.intents() {
+            if !snapshot.intents().iter().any(|i| i.name == previous.name) {
+                candidate.set_intent(&previous.name, None)?;
+            }
+        }
+        for intent in snapshot.intents() {
+            candidate.set_intent(&intent.name, Some(intent.payload.clone()))?;
+        }
+        Ok(candidate)
     }
 
     pub fn manifest(&self) -> &Value {
@@ -85,15 +152,30 @@ impl ProjectArchive {
         Self::decode_bounded(bytes, MAX_FILE_BYTES, MAX_EXPANDED_BYTES)
     }
 
+    /// Decode with caller-specific admission limits, clamped to the product limits.
+    /// Expanded size is checked before reading model/manifest entries. This is
+    /// an archive admission bound, not a bound on later geometry computation.
+    pub fn decode_with_limits(
+        bytes: Vec<u8>,
+        archive_limit: u64,
+        expanded_limit: u64,
+    ) -> Result<Self, ProjectFileError> {
+        Self::decode_bounded(
+            bytes,
+            archive_limit.min(MAX_FILE_BYTES),
+            expanded_limit.min(MAX_EXPANDED_BYTES),
+        )
+    }
+
     fn decode_bounded(
         bytes: Vec<u8>,
         archive_limit: u64,
         expanded_limit: u64,
     ) -> Result<Self, ProjectFileError> {
         if bytes.len() < 4 || bytes.len() as u64 > archive_limit {
-            return Err(error(
-                "the project archive is empty or exceeds the 256 MB safety limit",
-            ));
+            return Err(error(format!(
+                "the project archive is empty or exceeds the {archive_limit} byte safety limit"
+            )));
         }
         if !bytes.starts_with(b"PK") {
             return Err(error("this is not a ZIP-based .limo project"));
@@ -109,7 +191,9 @@ impl ProjectArchive {
                 .checked_add(entry.size())
                 .ok_or_else(|| error("expanded project size overflow"))?;
             if expanded > expanded_limit {
-                return Err(error("expanded project exceeds the 512 MB safety limit"));
+                return Err(error(format!(
+                    "expanded project exceeds the {expanded_limit} byte safety limit"
+                )));
             }
         }
         let manifest_json = read_entry(&mut archive, "manifest.json", expanded_limit)?;
@@ -142,8 +226,76 @@ impl ProjectArchive {
         Ok(Self {
             manifest,
             model_json,
-            original: Some(bytes),
+            original: Some(bytes.into()),
+            attachments: BTreeMap::new(),
         })
+    }
+
+    /// Read an owned domain intent without extracting files. The caller supplies
+    /// its domain byte limit; CRC/decompression errors are not treated as absence.
+    pub fn read_intent(
+        &self,
+        name: &str,
+        limit: usize,
+    ) -> Result<Option<Vec<u8>>, ProjectFileError> {
+        validate_intent_name(name)?;
+        let limit = (limit as u64).min(MAX_EXPANDED_BYTES);
+        if let Some(staged) = self.attachments.get(name) {
+            if staged.as_ref().is_some_and(|b| b.len() as u64 > limit) {
+                return Err(error("project intent exceeds caller limit"));
+            }
+            return Ok(staged.as_ref().map(|b| b.to_vec()));
+        }
+        let Some(original) = &self.original else {
+            return Ok(None);
+        };
+        let mut zip = ZipArchive::new(Cursor::new(original))
+            .map_err(|e| failed("could not read project intents", e))?;
+        let entry = match zip.by_name(name) {
+            Ok(entry) => entry,
+            Err(zip::result::ZipError::FileNotFound) => return Ok(None),
+            Err(e) => return Err(failed("could not read project intent", e)),
+        };
+        if entry.is_dir() || entry.is_symlink() || entry.encrypted() || entry.size() > limit {
+            return Err(error("invalid or excessive project intent"));
+        }
+        let mut bytes = Vec::new();
+        entry
+            .take(limit + 1)
+            .read_to_end(&mut bytes)
+            .map_err(|e| failed("could not decode project intent", e))?;
+        if bytes.len() as u64 > limit {
+            return Err(error("project intent exceeds caller limit"));
+        }
+        Ok(Some(bytes))
+    }
+
+    /// Stage an explicitly owned intent replacement/removal. Other entries are
+    /// retained by encode. Decode domain content before calling this method.
+    /// This changes only the in-memory candidate; disk writes remain atomic at
+    /// the existing file boundary. Core manifest/model names are never accepted.
+    pub fn set_intent(
+        &mut self,
+        name: &str,
+        bytes: Option<Vec<u8>>,
+    ) -> Result<(), ProjectFileError> {
+        validate_intent_name(name)?;
+        if !self.attachments.contains_key(name) && self.attachments.len() >= 64 {
+            return Err(error("too many staged project intents"));
+        }
+        let total = self
+            .attachments
+            .iter()
+            .filter(|(key, _)| key.as_str() != name)
+            .map(|(_, value)| value.as_ref().map_or(0, |b| b.len() as u64))
+            .sum::<u64>()
+            + bytes.as_ref().map_or(0, |b| b.len() as u64);
+        if total > MAX_EXPANDED_BYTES {
+            return Err(error("staged project intents exceed size limit"));
+        }
+        self.attachments
+            .insert(name.to_owned(), bytes.map(Into::into));
+        Ok(())
     }
 
     pub fn encode(&self) -> Result<Vec<u8>, ProjectFileError> {
@@ -160,7 +312,9 @@ impl ProjectArchive {
         manifest.push(b'\n');
         let mut expanded = manifest.len() as u64 + self.model_json.len() as u64;
         if expanded > expanded_limit {
-            return Err(error("expanded project exceeds the 512 MB safety limit"));
+            return Err(error(format!(
+                "expanded project exceeds the {expanded_limit} byte safety limit"
+            )));
         }
         let mut writer = ZipWriter::new(BoundedOutput {
             cursor: Cursor::new(Vec::new()),
@@ -217,14 +371,18 @@ impl ProjectArchive {
                 {
                     return Err(error(format!("cannot preserve opaque ZIP metadata for entry '{name}'; keep the original project archive")));
                 }
-                if matches!(name.as_str(), "manifest.json" | "model.json") {
+                if matches!(name.as_str(), "manifest.json" | "model.json")
+                    || self.attachments.contains_key(&name)
+                {
                     continue;
                 }
                 expanded = expanded
                     .checked_add(entry.size())
                     .ok_or_else(|| error("expanded project size overflow"))?;
                 if expanded > expanded_limit {
-                    return Err(error("expanded project exceeds the 512 MB safety limit"));
+                    return Err(error(format!(
+                        "expanded project exceeds the {expanded_limit} byte safety limit"
+                    )));
                 }
                 if entry.is_dir() {
                     if entry.size() != 0 {
@@ -244,11 +402,45 @@ impl ProjectArchive {
                 }
             }
         }
+        for (name, bytes) in &self.attachments {
+            let Some(bytes) = bytes else { continue };
+            expanded = expanded
+                .checked_add(bytes.len() as u64)
+                .ok_or_else(|| error("expanded project size overflow"))?;
+            if expanded > expanded_limit {
+                return Err(error(format!(
+                    "expanded project exceeds the {expanded_limit} byte safety limit"
+                )));
+            }
+            writer
+                .start_file(name, options)
+                .map_err(|source| failed("could not create project intent", source))?;
+            writer
+                .write_all(bytes)
+                .map_err(|source| failed("could not write project intent", source))?;
+        }
         let output = writer
             .finish()
             .map_err(|source| failed("could not finish project archive", source))?;
         Ok(output.cursor.into_inner())
     }
+}
+
+pub(crate) fn validate_intent_name(name: &str) -> Result<(), ProjectFileError> {
+    if !name.starts_with("intent/")
+        || name.len() > 256
+        || name
+            .split('/')
+            .any(|part| part.is_empty() || part == "." || part == "..")
+        || !name
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b"/_-.".contains(&b))
+    {
+        return Err(error(
+            "project intent requires a safe relative name under intent/",
+        ));
+    }
+    Ok(())
 }
 
 fn integer(value: &Value) -> bool {
@@ -269,7 +461,9 @@ fn read_entry<R: Read + Seek>(
         )
     })?;
     if entry.size() > limit {
-        return Err(error("expanded project exceeds the 512 MB safety limit"));
+        return Err(error(format!(
+            "expanded project exceeds the {limit} byte safety limit"
+        )));
     }
     let mut bytes = Vec::new();
     entry
@@ -277,7 +471,9 @@ fn read_entry<R: Read + Seek>(
         .read_to_end(&mut bytes)
         .map_err(|source| failed("could not read project JSON", source))?;
     if bytes.len() as u64 > limit {
-        return Err(error("expanded project exceeds the 512 MB safety limit"));
+        return Err(error(format!(
+            "expanded project exceeds the {limit} byte safety limit"
+        )));
     }
     String::from_utf8(bytes).map_err(|source| failed("project JSON is not valid UTF-8", source))
 }
@@ -294,9 +490,10 @@ impl Write for BoundedOutput {
             .checked_add(bytes.len() as u64)
             .is_none_or(|end| end > self.limit)
         {
-            return Err(io::Error::other(
-                "project archive exceeds the 256 MB safety limit",
-            ));
+            return Err(io::Error::other(format!(
+                "project archive exceeds the {} byte safety limit",
+                self.limit
+            )));
         }
         self.cursor.write(bytes)
     }

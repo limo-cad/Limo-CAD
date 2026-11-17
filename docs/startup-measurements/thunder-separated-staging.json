@@ -1,5 +1,5 @@
 {
-    "executable":  "D:\\limo-startup-candidate-separated-runtime\\nbcad.exe",
+    "executable":  "<local-root>\\limo-startup-candidate-separated-runtime\\nbcad.exe",
     "sha256":  "e77ea3a6a09da71be2862e4c17d517fd2c71a6206254243a230801bb6688d308",
     "profile":  "dev app opt-level 1, dependencies opt-level 3",
     "bundle":  "index-3K4FOBp_.js",

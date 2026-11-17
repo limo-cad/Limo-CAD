@@ -1,0 +1,405 @@
+{
+  "$schema": "./limo-cad-script.schema.json",
+  "version": 1,
+  "name": "Revolve a bored spacer",
+  "starting_state": "empty",
+  "steps": [
+    {
+      "chapter": "Prepared inputs",
+      "note": "A located 5 x 12 mm radial section is prepared on XY, from radius 5 to 10 mm. The Y axis is the rotation axis.",
+      "duration_ms": 1000
+    },
+    {
+      "id": "empty_scene",
+      "call": {
+        "group": "solid/check",
+        "operation": "solid_scene",
+        "arguments": {}
+      }
+    },
+    {
+      "id": "section_begin",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_begin",
+        "arguments": {
+          "name": "section",
+          "plane": {
+            "type": "origin_plane",
+            "plane": "xy"
+          }
+        }
+      }
+    },
+    {
+      "call": {
+        "group": "sketch/selection",
+        "operation": "sketch_set_grid_snap",
+        "arguments": {
+          "enabled": false
+        }
+      }
+    },
+    {
+      "id": "section_rectangle",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_rectangle_locked",
+        "arguments": {
+          "mode": "two_point",
+          "anchor": {
+            "x": 5,
+            "y": 0
+          },
+          "corner_hint": {
+            "x": 10,
+            "y": 12
+          },
+          "width_mm": 5,
+          "height_mm": 12,
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "section_locate",
+      "call": {
+        "group": "sketch/constrain",
+        "operation": "sketch_add_constraint",
+        "arguments": {
+          "type": "fix",
+          "entity": {
+            "$select": {
+              "from": {
+                "$ref": "section_rectangle",
+                "pointer": "/sketch"
+              },
+              "path": "/entities",
+              "where": {
+                "/kind": "point",
+                "/position/x": 5,
+                "/position/y": 0
+              },
+              "take": "one",
+              "pointer": "/id"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "section_finish",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_finish",
+        "arguments": {}
+      }
+    },
+    {
+      "chapter": "Revolve",
+      "note": "Select the radial section and Y axis. Preview 120 degrees, then complete a 360-degree turn. The bore remains open.",
+      "duration_ms": 1000
+    },
+    {
+      "id": "preview",
+      "call": {
+        "group": "solid/build",
+        "operation": "solid_revolve",
+        "arguments": {
+          "sketch_name": "section",
+          "profile_indices": [
+            0
+          ],
+          "axis_origin": {
+            "x": 0,
+            "y": 0
+          },
+          "axis_direction": {
+            "x": 0,
+            "y": 1
+          },
+          "axis_line_entity_id": null,
+          "angle_deg": 120,
+          "flip": false,
+          "operation": "new_body",
+          "target_body_ids": []
+        }
+      }
+    },
+    {
+      "let": {
+        "lesson_feature": {
+          "$select": {
+            "from": {
+              "$ref": "preview"
+            },
+            "path": "/document/features",
+            "where": {},
+            "take": "last",
+            "pointer": "/id"
+          }
+        }
+      }
+    },
+    {
+      "id": "result",
+      "call": {
+        "group": "solid/build",
+        "operation": "solid_edit_revolve",
+        "arguments": {
+          "feature_id": {
+            "$ref": "lesson_feature"
+          },
+          "revolve": {
+            "sketch_name": "section",
+            "profile_indices": [
+              0
+            ],
+            "axis_origin": {
+              "x": 0,
+              "y": 0
+            },
+            "axis_direction": {
+              "x": 0,
+              "y": 1
+            },
+            "axis_line_entity_id": null,
+            "angle_deg": 360,
+            "flip": false,
+            "operation": "new_body",
+            "target_body_ids": []
+          }
+        }
+      }
+    }
+  ],
+  "checks": [
+    {
+      "id": "final_scene",
+      "call": {
+        "group": "solid/check",
+        "operation": "solid_scene",
+        "arguments": {}
+      },
+      "expect": {
+        "/errors": []
+      }
+    },
+    {
+      "assert": {
+        "$count": {
+          "$ref": "final_scene",
+          "pointer": "/bodies"
+        }
+      },
+      "equals": 1
+    },
+    {
+      "id": "definitions",
+      "call": {
+        "group": "solid/build",
+        "operation": "solid_revolve_definitions",
+        "arguments": {}
+      }
+    },
+    {
+      "assert": {
+        "$count": {
+          "$ref": "definitions"
+        }
+      },
+      "equals": 1
+    },
+    {
+      "assert": {
+        "$ref": "definitions",
+        "pointer": "/0/angle_deg"
+      },
+      "equals": 360
+    },
+    {
+      "assert": {
+        "$ref": "definitions",
+        "pointer": "/0/axis_direction"
+      },
+      "equals": {
+        "x": 0,
+        "y": 1
+      }
+    },
+    {
+      "assert": {
+        "$ref": "definitions",
+        "pointer": "/0/axis_origin"
+      },
+      "equals": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "assert": {
+        "$ref": "definitions",
+        "pointer": "/0/profile_indices"
+      },
+      "equals": [
+        0
+      ]
+    },
+    {
+      "assert": {
+        "$ref": "final_scene",
+        "pointer": "/bodies"
+      },
+      "equals": {
+        "$ref": "result",
+        "pointer": "/scene/bodies"
+      }
+    },
+    {
+      "let": {
+        "spacer": {
+          "$select": {
+            "from": {
+              "$ref": "final_scene"
+            },
+            "path": "/bodies",
+            "where": {},
+            "take": "one"
+          }
+        }
+      }
+    },
+    {
+      "assert": {
+        "$count": {
+          "$select": {
+            "from": {
+              "$ref": "spacer"
+            },
+            "path": "/faces",
+            "where": {
+              "/cylinder/radius": 5
+            },
+            "take": "all"
+          }
+        }
+      },
+      "equals": 1
+    },
+    {
+      "assert": {
+        "$count": {
+          "$select": {
+            "from": {
+              "$ref": "spacer"
+            },
+            "path": "/faces",
+            "where": {
+              "/cylinder/radius": 10
+            },
+            "take": "all"
+          }
+        }
+      },
+      "equals": 1
+    }
+  ],
+  "exports": {
+    "lessons": {
+      "revolve": [
+        {
+          "caption": "revolve.inputs",
+          "scene": {
+            "$ref": "empty_scene"
+          },
+          "cue": "profile",
+          "duration_ms": 1400,
+          "finish": "satin_aluminum",
+          "profile": {
+            "$ref": "section_locate",
+            "pointer": "/sketch"
+          }
+        },
+        {
+          "caption": "revolve.preview",
+          "scene": {
+            "$ref": "preview",
+            "pointer": "/scene"
+          },
+          "cue": "dimension",
+          "duration_ms": 1400,
+          "finish": "satin_aluminum"
+        },
+        {
+          "caption": "revolve.parameter",
+          "scene": {
+            "$ref": "result",
+            "pointer": "/scene"
+          },
+          "cue": "dimension",
+          "duration_ms": 1400,
+          "finish": "satin_aluminum"
+        },
+        {
+          "caption": "revolve.apply",
+          "scene": {
+            "$ref": "result",
+            "pointer": "/scene"
+          },
+          "cue": "apply",
+          "duration_ms": 1400,
+          "finish": "satin_aluminum"
+        }
+      ]
+    },
+    "preview_frames": [
+      {
+        "caption": "revolve.inputs",
+        "scene": {
+          "$ref": "empty_scene"
+        },
+        "cue": "profile",
+        "duration_ms": 1400,
+        "finish": "satin_aluminum",
+        "profile": {
+          "$ref": "section_locate",
+          "pointer": "/sketch"
+        }
+      },
+      {
+        "caption": "revolve.preview",
+        "scene": {
+          "$ref": "preview",
+          "pointer": "/scene"
+        },
+        "cue": "dimension",
+        "duration_ms": 1400,
+        "finish": "satin_aluminum"
+      },
+      {
+        "caption": "revolve.parameter",
+        "scene": {
+          "$ref": "result",
+          "pointer": "/scene"
+        },
+        "cue": "dimension",
+        "duration_ms": 1400,
+        "finish": "satin_aluminum"
+      },
+      {
+        "caption": "revolve.apply",
+        "scene": {
+          "$ref": "result",
+          "pointer": "/scene"
+        },
+        "cue": "apply",
+        "duration_ms": 1400,
+        "finish": "satin_aluminum"
+      }
+    ],
+    "final_scene": {
+      "$ref": "final_scene"
+    }
+  }
+}

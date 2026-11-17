@@ -532,24 +532,52 @@ fn bootstrap_rebinding_republishes_snapshot_ownership_before_input() {
         .bridge
         .publish_native_document(&services.engine, &bootstrap, "solid")
         .unwrap();
-    let session = services
+    let previous_session = services
         .bridge
         .session_id_for_window("main")
         .unwrap()
         .unwrap();
+    let previous_directory = path(&previous_session);
+    let previous_publication =
+        limo_cad_session_publication::read_committed(&previous_directory).unwrap();
+    let previous_commit =
+        std::fs::read(previous_directory.join("publication-commit.cbor")).unwrap();
+    let stale_export = services.bridge.reserve_for_window("main").unwrap();
+    let file_epoch = {
+        let mut publishers = services.bridge.publishers.lock().unwrap();
+        let publisher = publishers.get_mut("main").unwrap();
+        publisher.pending_controls.insert(
+            "bootstrap-reply".into(),
+            (previous_session.clone(), u64::MAX),
+        );
+        publisher.active_mut().native_file_epoch
+    };
     let mut workspace = DocumentWorkspace::default();
     let current = workspace
         .observe(&services.bridge, &services.engine, "main")
         .unwrap();
     assert_ne!(current.owner.document_id, bootstrap.document_id);
+    assert_eq!(current.owner.epoch, bootstrap.epoch);
+    let session = services
+        .bridge
+        .session_id_for_window("main")
+        .unwrap()
+        .unwrap();
+    assert_ne!(session, previous_session);
+    assert!(previous_directory.join("closed.json").is_file());
     assert_eq!(
-        services
-            .bridge
-            .session_id_for_window("main")
-            .unwrap()
-            .unwrap(),
-        session
+        std::fs::read(previous_directory.join("publication-commit.cbor")).unwrap(),
+        previous_commit
     );
+    assert_eq!(
+        limo_cad_session_publication::read_committed(&previous_directory).unwrap(),
+        previous_publication
+    );
+    let publication = limo_cad_session_publication::read_committed(&path(&session)).unwrap();
+    assert_eq!(publication.receipt().session_id, session);
+    assert_eq!(publication.receipt().document_id, current.owner.document_id);
+    assert_eq!(publication.receipt().epoch, current.owner.epoch);
+    assert_eq!(publication.receipt().engine_revision, current.revision);
     for name in ["heartbeat.json", "focus.json"] {
         let metadata: Value =
             serde_json::from_slice(&std::fs::read(path(&format!("{session}/{name}"))).unwrap())
@@ -574,6 +602,37 @@ fn bootstrap_rebinding_republishes_snapshot_ownership_before_input() {
         current.owner.document_id
     );
     assert_eq!(lease["windows"][0]["active_session_id"], session);
+    {
+        let mut publishers = services.bridge.publishers.lock().unwrap();
+        let publisher = publishers.get_mut("main").unwrap();
+        assert_eq!(
+            publisher.pending_controls["bootstrap-reply"],
+            (previous_session.clone(), u64::MAX)
+        );
+        let project = publisher.active_mut();
+        assert_eq!(project.native_file_epoch, file_epoch);
+        assert!(project.pending_exports.is_empty());
+    }
+    let rejected = services
+        .bridge
+        .write_for_window(
+            "main",
+            crate::session_bridge::PublishPayload {
+                focus: "solid".into(),
+                snapshot: None,
+                model_json: None,
+                active_sketch_json: None,
+                generation: stale_export["generation"].as_u64().unwrap(),
+                session_id: Some(previous_session),
+                project_session_id: Some(bootstrap.document_id.clone()),
+            },
+        )
+        .unwrap();
+    assert_eq!(rejected["reason"], "session_identity_mismatch");
+    assert_eq!(
+        limo_cad_session_publication::read_committed(&path(&session)).unwrap(),
+        publication
+    );
     assert!(services
         .bridge
         .with_native_document_owner(&services.engine, &bootstrap, || Ok(()))
@@ -582,6 +641,33 @@ fn bootstrap_rebinding_republishes_snapshot_ownership_before_input() {
         services.bridge.engine_revision_for_window("main").unwrap(),
         Some(current.revision)
     );
+}
+
+#[test]
+fn uncommitted_bootstrap_binding_retains_its_transport_and_export_sequence() {
+    let _lock = crate::session_bridge::tests::TEST_LOCK.lock().unwrap();
+    let _directory = Fixture::new();
+    let services = NativeServices::default();
+    let bootstrap = services
+        .bridge
+        .native_document_context("main", &services.engine)
+        .unwrap();
+    let reserved = services.bridge.reserve_for_window("main").unwrap();
+    let mut workspace = DocumentWorkspace::default();
+    let current = workspace
+        .observe(&services.bridge, &services.engine, "main")
+        .unwrap();
+    let session = services
+        .bridge
+        .session_id_for_window("main")
+        .unwrap()
+        .unwrap();
+    assert_eq!(session, reserved["session_id"].as_str().unwrap());
+    assert_eq!(current.owner.epoch, bootstrap.epoch);
+    let publication = limo_cad_session_publication::read_committed(&path(&session)).unwrap();
+    assert_eq!(publication.receipt().document_id, current.owner.document_id);
+    assert!(publication.receipt().export_sequence > reserved["generation"].as_u64().unwrap());
+    assert!(!path(&format!("{session}/closed.json")).exists());
 }
 
 #[test]
@@ -597,32 +683,41 @@ fn failed_bootstrap_publication_is_retried_without_replacing_the_new_design() {
         .bridge
         .publish_native_document(&services.engine, &bootstrap, "solid")
         .unwrap();
+    let previous_session = services
+        .bridge
+        .session_id_for_window("main")
+        .unwrap()
+        .unwrap();
+    let mut workspace = DocumentWorkspace::default();
+    let owner = workspace
+        .prepare_owner(&services.bridge, &services.engine, "main")
+        .unwrap();
     let session = services
         .bridge
         .session_id_for_window("main")
         .unwrap()
         .unwrap();
+    assert_ne!(session, previous_session);
+    assert_ne!(owner.document_id, bootstrap.document_id);
     let blocked = path(&format!("{session}/focus.json"));
-    std::fs::remove_file(&blocked).unwrap();
+    std::fs::create_dir_all(blocked.parent().unwrap()).unwrap();
     std::fs::create_dir(&blocked).unwrap();
-    let mut workspace = DocumentWorkspace::default();
     assert!(workspace
         .observe(&services.bridge, &services.engine, "main")
         .is_err());
-    let owner = services
-        .bridge
-        .native_document_context("main", &services.engine)
-        .unwrap();
     assert!(workspace
         .summaries(&services.bridge, &owner)
         .unwrap()
         .is_empty());
     let document = services.engine.active_project_session_id();
-    assert_ne!(document, bootstrap.document_id);
+    assert_eq!(document, owner.document_id);
+    let committed = limo_cad_session_publication::read_committed(&path(&session)).unwrap();
+    assert_eq!(committed.receipt().document_id, document);
     std::fs::remove_dir(&blocked).unwrap();
     let current = workspace
         .observe(&services.bridge, &services.engine, "main")
         .unwrap();
+    assert_eq!(current.owner, owner);
     assert_eq!(current.owner.document_id, document);
     assert_eq!(
         services
@@ -635,6 +730,8 @@ fn failed_bootstrap_publication_is_retried_without_replacing_the_new_design() {
     let metadata: Value = serde_json::from_slice(&std::fs::read(blocked).unwrap()).unwrap();
     assert_eq!(metadata["document_id"], document);
     assert_eq!(metadata["generation"], current.revision);
+    let retried = limo_cad_session_publication::read_committed(&path(&session)).unwrap();
+    assert!(retried.receipt().export_sequence > committed.receipt().export_sequence);
 }
 
 #[test]

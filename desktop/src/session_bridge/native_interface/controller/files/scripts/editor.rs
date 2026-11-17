@@ -12,6 +12,7 @@ pub(super) enum Change {
         generation: u64,
         path: PathBuf,
         source: String,
+        artifact: Artifact,
     },
 }
 
@@ -130,17 +131,9 @@ pub(crate) fn discard(world: &mut World) -> Result<Value, String> {
     Ok(json!({"discarded":true}))
 }
 
+#[cfg(test)]
 fn inspect_source(path: Option<PathBuf>, source: &str) -> Result<Loaded, String> {
-    let mut arguments = json!({"source":source});
-    if let Some(path) = &path {
-        let base = path
-            .parent()
-            .and_then(|path| path.to_str())
-            .ok_or("Script include directory must be valid Unicode")?;
-        arguments["include_base"] = json!(base);
-    }
-    let inspection = limo_cad_mcp::inspect_script(arguments)?;
-    inspected(path, inspection)
+    Artifact::Text.inspect(path, source)
 }
 
 fn start(
@@ -169,24 +162,27 @@ fn start(
 pub(crate) fn validate(world: &mut World, handle: &NativeInterfaceHandle) -> Result<Value, String> {
     available(world)?;
     source_ready(world)?;
-    let (path, source, generation) = {
+    let (path, source, generation, artifact) = {
         let state = &mut world.resource_mut::<Files>().script;
         state
             .loaded
             .as_ref()
             .ok_or("Open a script before validating it")?;
+        let artifact = state.loaded.as_ref().unwrap().artifact.clone();
         let path = state.source_path.clone();
         let source = state.source.clone();
         state.advance()?;
         state.validated = false;
-        (path, source, state.generation)
+        (path, source, state.generation, artifact)
     };
     start(
         world,
         handle,
         "Validating source and includes; no commands have run",
         move || {
-            inspect_source(path, &source).map(|loaded| Change::Validated { generation, loaded })
+            artifact
+                .inspect(path, &source)
+                .map(|loaded| Change::Validated { generation, loaded })
         },
     )
 }
@@ -210,7 +206,7 @@ pub(crate) fn save_as(
         .map(|name| name.to_string_lossy().into_owned())
         .unwrap_or_else(|| {
             format!(
-                "{}.limo.jsonc",
+                "{}{}",
                 loaded
                     .name
                     .chars()
@@ -219,16 +215,25 @@ pub(crate) fn save_as(
                     } else {
                         ch
                     })
-                    .collect::<String>()
+                    .collect::<String>(),
+                if loaded.artifact.is_project() {
+                    artifact::PACKAGE_SUFFIX
+                } else {
+                    ".limo.jsonc"
+                }
             )
         });
     let generation = state.generation;
-    let (dialog, parent) = super::dialog::parented(
-        world,
-        rfd::FileDialog::new()
-            .set_title("Save Limo CAD script")
-            .add_filter("Limo CAD command script (.limo.jsonc)", &["jsonc"]),
-    )?;
+    let dialog = rfd::FileDialog::new().set_title("Save Limo CAD script");
+    let dialog = if loaded.artifact.is_project() {
+        dialog.add_filter(
+            crate::native_viewport::localization::translate(world, "projectReplay.filter"),
+            &["cbor"],
+        )
+    } else {
+        dialog.add_filter("Limo CAD command script (.limo.jsonc)", &["jsonc"])
+    };
+    let (dialog, parent) = super::dialog::parented(world, dialog)?;
     let (send, receive) = mpsc::channel();
     let wake = handle.clone();
     std::thread::Builder::new()
@@ -252,7 +257,11 @@ pub(crate) fn save_as(
     Ok(json!({"awaiting_input":true}))
 }
 
-fn write_source(path: &std::path::Path, source: &str, maximum: usize) -> Result<(), String> {
+pub(super) fn write_source(
+    path: &std::path::Path,
+    source: &str,
+    maximum: usize,
+) -> Result<(), String> {
     if !path.is_absolute()
         || !path
             .to_str()
@@ -285,12 +294,14 @@ pub(crate) fn save(
         .as_ref()
         .ok_or("Open a script before saving source")?
         .maximum;
+    let artifact = state.loaded.as_ref().unwrap().artifact.clone();
     start(world, handle, "Saving authored script source", move || {
-        write_source(&path, &source, maximum)?;
+        let artifact = artifact.save(&path, &source, maximum)?;
         Ok(Change::Saved {
             generation,
             path,
             source,
+            artifact,
         })
     })
 }
@@ -301,12 +312,18 @@ fn apply(state: &mut State, change: Change) -> Result<(), String> {
             if generation != state.generation
                 || loaded.authored() != state.source
                 || state.source_path != loaded.path
+                || !state
+                    .loaded
+                    .as_ref()
+                    .is_some_and(|current| current.artifact.same_baseline(&loaded.artifact))
             {
                 return Err("Script changed before validation completed; Validate again".into());
             }
             state.loaded = Some(Arc::new(loaded));
             state.validated = true;
-            state.status = Some(if state.dirty() {
+            state.status = Some(if state.loaded.as_ref().unwrap().artifact.is_project() {
+                "Replay source is valid. Run uses this source and the retained project baseline; validation does not save edits."
+            } else if state.dirty() {
                 "Valid script; edits are unsaved. Run uses this validated source and include snapshot."
             } else { "Valid script; Run uses this validated source and include snapshot." }.into());
         }
@@ -314,20 +331,34 @@ fn apply(state: &mut State, change: Change) -> Result<(), String> {
             generation,
             path,
             source,
+            artifact,
         } => {
-            if generation != state.generation || source != state.source {
+            if generation != state.generation
+                || source != state.source
+                || !state
+                    .loaded
+                    .as_ref()
+                    .is_some_and(|current| current.artifact.same_baseline(&artifact))
+            {
                 return Err(
                     "An earlier script snapshot was saved; current edits remain unsaved".into(),
                 );
             }
             state.advance()?;
+            let mut loaded = state.loaded.as_ref().unwrap().as_ref().clone();
+            loaded.artifact = artifact;
+            state.loaded = Some(Arc::new(loaded));
             state.path = path.to_string_lossy().into_owned();
             state.source_path = Some(path);
             state.baseline = source;
             state.validated = false;
             state.status = Some(
-                "Authored source saved. Validate again: includes resolve beside the saved file."
-                    .into(),
+                if state.loaded.as_ref().unwrap().artifact.is_project() {
+                    "Project replay saved with its retained baseline. Validate before Run."
+                } else {
+                    "Authored source saved. Validate again: includes resolve beside the saved file."
+                }
+                .into(),
             );
         }
     }
@@ -356,10 +387,14 @@ pub(super) fn poll(world: &mut World) {
             })
         });
     let Some(result) = result else { return };
+    let locale = crate::native_viewport::localization::locale(world);
     let state = &mut world.resource_mut::<Files>().script;
     state.job = None;
     if let Err(error) = result.and_then(|change| apply(state, change)) {
+        let error = artifact::message(locale, &error);
         state.status = Some(format!("Script: {error}"));
+    } else if let Some(status) = state.status.take() {
+        state.status = Some(artifact::message(locale, &status));
     }
 }
 

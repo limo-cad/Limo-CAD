@@ -138,6 +138,7 @@ fn exporter_keeps_derivation_spacing_and_horizontal_angle_convention() {
     .unwrap();
     let expected = svg(
         &Paper {
+            dimensions: Vec::new(),
             size: [297., 210.],
             items: expected,
         },

@@ -4,7 +4,7 @@
   "recorded_utc": "2026-10-11T12:04:36.0501777Z",
   "qualification": "focused_source_checks_passed_live_acceptance_pending",
   "integration": "PR124; both Bevy aliases; main unchanged",
-  "results_receipt": "D:/limo-cad-maintenance/backlog-autonomous-20261010/export-ownership-9e16fade-results.json",
+  "results_receipt": "<local-root>/limo-cad-maintenance/backlog-autonomous-20261010/export-ownership-9e16fade-results.json",
   "strict_windows_packages": ["desktop", "native-engine", "OCCT", "export"],
   "desktop_artifact_sha256": "7a4f6789ff0597d48668246cebc932fab8705678182cc255bdd101b740289d4a",
   "exact_checks_passed_once": [
@@ -23,14 +23,14 @@
     {
       "revision": "9cdf863daec924c67e90bd28d4bd7fc4a863eb98",
       "filter": "native_print::windows::tests::returned_print_to_file_option_sets_spooler_output_without_changing_title",
-      "receipt": "D:/limo-cad-maintenance/backlog-autonomous-20261010/bambu-write-print-9cdf863d-unrun-print-results.json",
+      "receipt": "<local-root>/limo-cad-maintenance/backlog-autonomous-20261010/bambu-write-print-9cdf863d-unrun-print-results.json",
       "scope": "Actual returned Print-to-File flag sets DOCINFOW output FILE: while preserving title; no OS dialog/spooler/physical print qualification"
     },
     {"receipt":"docs/qualification/detached-drawing-output-20261011.json","new_exact_passes":6,"earlier_exact_passes":3,"scope":"Retain original revisions and scopes; no passing filter repeated"}
   ],
   "preserved_failure": {
     "revision": "9cdf863daec924c67e90bd28d4bd7fc4a863eb98",
-    "receipt": "D:/limo-cad-maintenance/backlog-autonomous-20261010/bambu-write-print-9cdf863d-results.json",
+    "receipt": "<local-root>/limo-cad-maintenance/backlog-autonomous-20261010/bambu-write-print-9cdf863d-results.json",
     "cause": "New authentic-template write fixture omitted explicit consent for its actual reported layout warnings; production correctly refused before native build",
     "correction": "2e237dce retains all original assertions and adds explicit no-consent refusal/build-zero/no-output coverage before deliberately consenting for the existing write/cancellation cases",
     "production_guards_weakened": false

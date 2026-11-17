@@ -38,9 +38,23 @@ struct Input {
 struct Fetcher {
     root: PathBuf,
     fetch: bool,
+    agent: ureq::Agent,
     seen: BTreeMap<String, (Value, MaterialSource)>,
 }
 impl Fetcher {
+    fn new(root: PathBuf, fetch: bool) -> Self {
+        Self {
+            root,
+            fetch,
+            agent: ureq::Agent::config_builder()
+                .https_only(true)
+                .timeout_global(Some(Duration::from_secs(45)))
+                .build()
+                .into(),
+            seen: BTreeMap::new(),
+        }
+    }
+
     fn read(&mut self, input: &Input, path: &str) -> Result<(Value, MaterialSource)> {
         ensure!(
             matches!(
@@ -77,27 +91,24 @@ impl Fetcher {
                 input.revision,
                 path.replace(' ', "%20").replace('@', "%40")
             );
-            let agent: ureq::Agent = ureq::Agent::config_builder()
-                .https_only(true)
-                .timeout_global(Some(Duration::from_secs(45)))
-                .build()
-                .into();
-            let mut response = agent
-                .get(&url)
-                .header("User-Agent", "Limo-CAD-material-catalog")
-                .call()
-                .with_context(|| format!("Fetch {url}"))?;
-            let mut bytes = vec![];
-            response
-                .body_mut()
-                .as_reader()
-                .take(2_000_001)
-                .read_to_end(&mut bytes)?;
-            ensure!(
-                bytes.len() <= 2_000_000,
-                "Material source exceeds size limit"
-            );
-            bytes
+            fetch_bytes(
+                || {
+                    let mut response = self
+                        .agent
+                        .get(&url)
+                        .header("User-Agent", "Limo-CAD-material-catalog")
+                        .call()?;
+                    let mut bytes = vec![];
+                    response
+                        .body_mut()
+                        .as_reader()
+                        .take(2_000_001)
+                        .read_to_end(&mut bytes)?;
+                    Ok(bytes)
+                },
+                std::thread::sleep,
+            )
+            .with_context(|| format!("Fetch {url}"))?
         } else {
             fs::read(&cached)
                 .with_context(|| format!("Missing cached source {path}; use --fetch"))?
@@ -143,6 +154,49 @@ impl Fetcher {
     }
 }
 
+fn transient_fetch_error(error: &ureq::Error) -> bool {
+    match error {
+        ureq::Error::Io(error) => matches!(
+            error.kind(),
+            std::io::ErrorKind::ConnectionReset
+                | std::io::ErrorKind::ConnectionAborted
+                | std::io::ErrorKind::ConnectionRefused
+                | std::io::ErrorKind::BrokenPipe
+                | std::io::ErrorKind::TimedOut
+                | std::io::ErrorKind::UnexpectedEof
+        ),
+        ureq::Error::Timeout(_) => true,
+        _ => false,
+    }
+}
+
+fn fetch_bytes(
+    mut read: impl FnMut() -> std::result::Result<Vec<u8>, ureq::Error>,
+    mut wait: impl FnMut(Duration),
+) -> Result<Vec<u8>> {
+    // Only the idempotent transport/body read is retried. Each attempt owns a
+    // fresh byte buffer and response; parsing, size admission and catalog drift
+    // never re-enter this loop. The existing 45 s timeout bounds each attempt.
+    let mut delays = [Duration::from_secs(1), Duration::from_secs(2)].into_iter();
+    let bytes = loop {
+        match read() {
+            Ok(bytes) => break bytes,
+            Err(error) => {
+                let Some(delay) = delays.next().filter(|_| transient_fetch_error(&error)) else {
+                    return Err(error.into());
+                };
+                eprintln!("Transient material fetch error; retrying in {delay:?}: {error}");
+                wait(delay);
+            }
+        }
+    };
+    ensure!(
+        bytes.len() <= 2_000_000,
+        "Material source exceeds size limit"
+    );
+    Ok(bytes)
+}
+
 pub fn run(args: impl Iterator<Item = String>) -> Result<()> {
     let mut fetch = false;
     let mut check = false;
@@ -172,11 +226,7 @@ pub fn run(args: impl Iterator<Item = String>) -> Result<()> {
             .context("Catalog entry must be an object")?
             .remove("material");
     }
-    let mut fetcher = Fetcher {
-        root: root.into(),
-        fetch,
-        seen: BTreeMap::new(),
-    };
+    let mut fetcher = Fetcher::new(root.into(), fetch);
     for input in &manifest.sources {
         ensure!(
             matches!(input.kind.as_str(), "plastic" | "metal"),
@@ -498,19 +548,22 @@ fn quantity(text: &str) -> Result<(MaterialValue, String)> {
     if let Ok(n) = number.parse::<f64>() {
         ensure!(n.is_finite(), "Nonfinite material property");
         let unit = text[split..].trim();
-        let (factor, unit) = match unit {
-            "MPa" => (1e6, "Pa"),
-            "GPa" => (1e9, "Pa"),
-            "g/cm^3" | "g/cm³" => (1000., "kg/m^3"),
-            "µm/m/K" => (1e-6, "1/K"),
-            "m/m/K" => (1., "1/K"),
-            _ => (1., unit),
+        // Keep the existing catalog normalization policy, but share numerical
+        // conversion and dimension checks with runtime material consumers.
+        use limo_cad_core::PhysicalDimension;
+        let dimension = match unit {
+            "MPa" | "GPa" => Some(PhysicalDimension::Pressure),
+            "g/cm^3" | "g/cm³" => Some(PhysicalDimension::Density),
+            "µm/m/K" | "m/m/K" => Some(PhysicalDimension::ThermalExpansionCoefficient),
+            _ => None,
         };
-        ensure!(
-            (n * factor).is_finite(),
-            "Material unit conversion overflow"
-        );
-        Ok((MaterialValue::Number(n * factor), unit.into()))
+        if let Some(dimension) = dimension {
+            let value =
+                limo_cad_core::physical_value_si(n, unit, dimension).map_err(anyhow::Error::msg)?;
+            Ok((MaterialValue::Number(value), dimension.si_unit().into()))
+        } else {
+            Ok((MaterialValue::Number(n), unit.into()))
+        }
     } else {
         ensure!(text.len() <= 4096, "Material value too long");
         Ok((MaterialValue::Text(text.into()), String::new()))
@@ -544,8 +597,13 @@ fn slicer_quantity(name: &str, v: &Value) -> Result<(String, MaterialValue, Stri
     let mut unit = String::new();
     let name: String = if name == "filament_density" {
         if let MaterialValue::Number(n) = &mut value {
-            *n *= 1000.;
-            ensure!(*n > 0. && n.is_finite(), "Invalid filament density");
+            *n = limo_cad_core::physical_value_si(
+                *n,
+                "g/cm^3",
+                limo_cad_core::PhysicalDimension::Density,
+            )
+            .map_err(anyhow::Error::msg)?;
+            ensure!(*n > 0., "Invalid filament density");
         } else {
             bail!("Filament density must be numeric");
         }
@@ -608,6 +666,92 @@ fn assess(material: &MaterialDetails) -> Vec<String> {
 mod tests {
     use super::*;
     #[test]
+    fn material_fetch_retries_transient_failure_then_uses_only_complete_response_bytes() {
+        for first_error in [
+            std::io::Error::from(std::io::ErrorKind::ConnectionReset).into(),
+            ureq::Error::Timeout(ureq::Timeout::Global),
+        ] {
+            let mut first_error = Some(first_error);
+            let mut calls = 0;
+            let mut waits = vec![];
+            let bytes = fetch_bytes(
+                || {
+                    calls += 1;
+                    match first_error.take() {
+                        Some(error) => Err(error),
+                        None => Ok(b"complete source".to_vec()),
+                    }
+                },
+                |delay| waits.push(delay),
+            )
+            .unwrap();
+            assert_eq!(bytes, b"complete source");
+            assert_eq!(calls, 2);
+            assert_eq!(waits, [Duration::from_secs(1)]);
+        }
+    }
+
+    #[test]
+    fn material_fetch_persistent_transport_error_stops_after_three_attempts() {
+        let mut calls = 0;
+        let mut waits = vec![];
+        let error = fetch_bytes(
+            || {
+                calls += 1;
+                Err(std::io::Error::from(std::io::ErrorKind::ConnectionReset).into())
+            },
+            |delay| waits.push(delay),
+        )
+        .unwrap_err();
+        assert_eq!(calls, 3);
+        assert_eq!(waits, [Duration::from_secs(1), Duration::from_secs(2)]);
+        assert!(
+            matches!(error.downcast_ref::<ureq::Error>(), Some(ureq::Error::Io(error))
+            if error.kind() == std::io::ErrorKind::ConnectionReset)
+        );
+    }
+
+    #[test]
+    fn material_fetch_http_tls_and_nontransient_io_errors_are_not_retried() {
+        for error in [
+            ureq::Error::StatusCode(404),
+            ureq::Error::StatusCode(403),
+            ureq::Error::StatusCode(503),
+            ureq::Error::Tls("certificate rejected"),
+            std::io::Error::from(std::io::ErrorKind::InvalidData).into(),
+        ] {
+            let expected = error.to_string();
+            let mut error = Some(error);
+            let mut calls = 0;
+            let result = fetch_bytes(
+                || {
+                    calls += 1;
+                    Err(error.take().expect("Terminal failure must not be retried"))
+                },
+                |_| panic!("Terminal failure must not wait"),
+            )
+            .unwrap_err();
+            assert_eq!(calls, 1);
+            assert_eq!(result.to_string(), expected);
+        }
+    }
+
+    #[test]
+    fn material_fetch_oversized_success_fails_admission_without_a_retry() {
+        let mut calls = 0;
+        let error = fetch_bytes(
+            || {
+                calls += 1;
+                Ok(vec![0; 2_000_001])
+            },
+            |_| panic!("Successful transport must not wait"),
+        )
+        .unwrap_err();
+        assert_eq!(calls, 1);
+        assert!(error.to_string().contains("size limit"));
+    }
+
+    #[test]
     fn freecad_inheritance_preserves_parent_provenance_and_child_overrides() {
         let root = tempfile::tempdir().unwrap();
         let input = Input {
@@ -632,11 +776,7 @@ mod tests {
         let child = "General:\n  Name: Aluminum 6061\n  License: CC-BY-4.0\n  Author: Child author\nInherits:\n  Parent:\n    UUID: parent-uuid\nModels:\n  Mechanical:\n    YoungsModulus: 68.9 GPa\n";
         fs::write(cache.join("parent.FCMat"), parent).unwrap();
         fs::write(cache.join("child.FCMat"), child).unwrap();
-        let mut fetcher = Fetcher {
-            root: root.path().into(),
-            fetch: false,
-            seen: BTreeMap::new(),
-        };
+        let mut fetcher = Fetcher::new(root.path().into(), false);
         let parents = BTreeMap::from([("parent-uuid".into(), "cards/parent.FCMat".into())]);
         let mut sources = BTreeMap::new();
         let (label, properties) = freecad(
@@ -720,11 +860,7 @@ mod tests {
             json!({"name":"Child","inherits":"parent","filament_density":["1.24"]}).to_string(),
         )
         .unwrap();
-        let mut fetcher = Fetcher {
-            root: root.path().into(),
-            fetch: false,
-            seen: BTreeMap::new(),
-        };
+        let mut fetcher = Fetcher::new(root.path().into(), false);
         let mut sources = BTreeMap::new();
         let resolved = slicer(
             &input,

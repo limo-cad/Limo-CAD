@@ -138,7 +138,7 @@ pub(super) fn run(args: impl Iterator<Item = String>) -> Result<()> {
     view(c, "View name", Some("Height layout"))?;
     view(c, "Capture current camera and visibility", None)?;
     view(c, "Save view", None)?;
-    view(c, "Recall saved view", None)?;
+    view(c, "Activate view", None)?;
     view(c, "Close named views", None)?;
     let views = c.call("named_views", json!({}))?;
     let layout_id = views["views"]
@@ -245,7 +245,7 @@ pub(super) fn run(args: impl Iterator<Item = String>) -> Result<()> {
         view(c, "View offset Z", Some("150 mm"))?;
     }
     view(c, "Save view", None)?;
-    view(c, "Recall saved view", None)?;
+    view(c, "Activate view", None)?;
     view(c, "Close named views", None)?;
     ui(
         c,

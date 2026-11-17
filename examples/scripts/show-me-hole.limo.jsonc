@@ -1,0 +1,1131 @@
+{
+  "$schema": "./limo-cad-script.schema.json",
+  "version": 1,
+  "name": "Drill bracket mounting holes",
+  "starting_state": "empty",
+  "steps": [
+    {
+      "chapter": "Prepared inputs",
+      "note": "The prepared bracket is 32 x 40 x 44 mm with 8 mm walls. Its sketch and extrusion already exist; this guide teaches only the named operation.",
+      "duration_ms": 1000
+    },
+    {
+      "id": "empty_scene",
+      "call": {
+        "group": "solid/check",
+        "operation": "solid_scene",
+        "arguments": {}
+      }
+    },
+    {
+      "id": "bracket_begin",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_begin",
+        "arguments": {
+          "name": "Bracket / prepared 32 by 44 section",
+          "plane": {
+            "type": "origin_plane",
+            "plane": "xz"
+          }
+        }
+      }
+    },
+    {
+      "call": {
+        "group": "sketch/selection",
+        "operation": "sketch_set_grid_snap",
+        "arguments": {
+          "enabled": false
+        }
+      }
+    },
+    {
+      "id": "bracket_line_0",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 0,
+            "y": 0
+          },
+          "to_raw": {
+            "x": 32,
+            "y": 0
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "let": {
+        "bracket_edge_0": {
+          "$select": {
+            "from": {
+              "$ref": "bracket_line_0",
+              "pointer": "/sketch"
+            },
+            "path": "/entities",
+            "where": {
+              "/kind": "line"
+            },
+            "take": "last",
+            "pointer": "/id"
+          }
+        }
+      }
+    },
+    {
+      "id": "bracket_line_1",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 32,
+            "y": 0
+          },
+          "to_raw": {
+            "x": 32,
+            "y": 8
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "let": {
+        "bracket_edge_1": {
+          "$select": {
+            "from": {
+              "$ref": "bracket_line_1",
+              "pointer": "/sketch"
+            },
+            "path": "/entities",
+            "where": {
+              "/kind": "line"
+            },
+            "take": "last",
+            "pointer": "/id"
+          }
+        }
+      }
+    },
+    {
+      "id": "bracket_line_2",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 32,
+            "y": 8
+          },
+          "to_raw": {
+            "x": 8,
+            "y": 8
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "let": {
+        "bracket_edge_2": {
+          "$select": {
+            "from": {
+              "$ref": "bracket_line_2",
+              "pointer": "/sketch"
+            },
+            "path": "/entities",
+            "where": {
+              "/kind": "line"
+            },
+            "take": "last",
+            "pointer": "/id"
+          }
+        }
+      }
+    },
+    {
+      "id": "bracket_line_3",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 8,
+            "y": 8
+          },
+          "to_raw": {
+            "x": 8,
+            "y": 44
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "let": {
+        "bracket_edge_3": {
+          "$select": {
+            "from": {
+              "$ref": "bracket_line_3",
+              "pointer": "/sketch"
+            },
+            "path": "/entities",
+            "where": {
+              "/kind": "line"
+            },
+            "take": "last",
+            "pointer": "/id"
+          }
+        }
+      }
+    },
+    {
+      "id": "bracket_line_4",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 8,
+            "y": 44
+          },
+          "to_raw": {
+            "x": 0,
+            "y": 44
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "let": {
+        "bracket_edge_4": {
+          "$select": {
+            "from": {
+              "$ref": "bracket_line_4",
+              "pointer": "/sketch"
+            },
+            "path": "/entities",
+            "where": {
+              "/kind": "line"
+            },
+            "take": "last",
+            "pointer": "/id"
+          }
+        }
+      }
+    },
+    {
+      "id": "bracket_line_5",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 0,
+            "y": 44
+          },
+          "to_raw": {
+            "x": 0,
+            "y": 0
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "let": {
+        "bracket_edge_5": {
+          "$select": {
+            "from": {
+              "$ref": "bracket_line_5",
+              "pointer": "/sketch"
+            },
+            "path": "/entities",
+            "where": {
+              "/kind": "line"
+            },
+            "take": "last",
+            "pointer": "/id"
+          }
+        }
+      }
+    },
+    {
+      "id": "bracket_locate",
+      "call": {
+        "group": "sketch/constrain",
+        "operation": "sketch_add_constraint",
+        "arguments": {
+          "type": "fix",
+          "entity": {
+            "$select": {
+              "from": {
+                "$ref": "bracket_line_5",
+                "pointer": "/sketch"
+              },
+              "path": "/entities",
+              "where": {
+                "/id": {
+                  "$ref": "bracket_edge_0"
+                }
+              },
+              "take": "one",
+              "pointer": "/start_id"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "bracket_square",
+      "call": {
+        "group": "sketch/constrain",
+        "operation": "sketch_add_constraints",
+        "arguments": {
+          "constraints": [
+            {
+              "type": "horizontal",
+              "entity": {
+                "$ref": "bracket_edge_0"
+              }
+            },
+            {
+              "type": "vertical",
+              "entity": {
+                "$ref": "bracket_edge_1"
+              }
+            },
+            {
+              "type": "horizontal",
+              "entity": {
+                "$ref": "bracket_edge_2"
+              }
+            },
+            {
+              "type": "vertical",
+              "entity": {
+                "$ref": "bracket_edge_3"
+              }
+            },
+            {
+              "type": "horizontal",
+              "entity": {
+                "$ref": "bracket_edge_4"
+              }
+            },
+            {
+              "type": "vertical",
+              "entity": {
+                "$ref": "bracket_edge_5"
+              }
+            },
+            {
+              "type": "coincident",
+              "a": {
+                "$select": {
+                  "from": {
+                    "$ref": "bracket_line_5",
+                    "pointer": "/sketch"
+                  },
+                  "path": "/entities",
+                  "where": {
+                    "/id": {
+                      "$ref": "bracket_edge_0"
+                    }
+                  },
+                  "take": "one",
+                  "pointer": "/end_id"
+                }
+              },
+              "b": {
+                "$select": {
+                  "from": {
+                    "$ref": "bracket_line_5",
+                    "pointer": "/sketch"
+                  },
+                  "path": "/entities",
+                  "where": {
+                    "/id": {
+                      "$ref": "bracket_edge_1"
+                    }
+                  },
+                  "take": "one",
+                  "pointer": "/start_id"
+                }
+              }
+            },
+            {
+              "type": "coincident",
+              "a": {
+                "$select": {
+                  "from": {
+                    "$ref": "bracket_line_5",
+                    "pointer": "/sketch"
+                  },
+                  "path": "/entities",
+                  "where": {
+                    "/id": {
+                      "$ref": "bracket_edge_1"
+                    }
+                  },
+                  "take": "one",
+                  "pointer": "/end_id"
+                }
+              },
+              "b": {
+                "$select": {
+                  "from": {
+                    "$ref": "bracket_line_5",
+                    "pointer": "/sketch"
+                  },
+                  "path": "/entities",
+                  "where": {
+                    "/id": {
+                      "$ref": "bracket_edge_2"
+                    }
+                  },
+                  "take": "one",
+                  "pointer": "/start_id"
+                }
+              }
+            },
+            {
+              "type": "coincident",
+              "a": {
+                "$select": {
+                  "from": {
+                    "$ref": "bracket_line_5",
+                    "pointer": "/sketch"
+                  },
+                  "path": "/entities",
+                  "where": {
+                    "/id": {
+                      "$ref": "bracket_edge_2"
+                    }
+                  },
+                  "take": "one",
+                  "pointer": "/end_id"
+                }
+              },
+              "b": {
+                "$select": {
+                  "from": {
+                    "$ref": "bracket_line_5",
+                    "pointer": "/sketch"
+                  },
+                  "path": "/entities",
+                  "where": {
+                    "/id": {
+                      "$ref": "bracket_edge_3"
+                    }
+                  },
+                  "take": "one",
+                  "pointer": "/start_id"
+                }
+              }
+            },
+            {
+              "type": "coincident",
+              "a": {
+                "$select": {
+                  "from": {
+                    "$ref": "bracket_line_5",
+                    "pointer": "/sketch"
+                  },
+                  "path": "/entities",
+                  "where": {
+                    "/id": {
+                      "$ref": "bracket_edge_3"
+                    }
+                  },
+                  "take": "one",
+                  "pointer": "/end_id"
+                }
+              },
+              "b": {
+                "$select": {
+                  "from": {
+                    "$ref": "bracket_line_5",
+                    "pointer": "/sketch"
+                  },
+                  "path": "/entities",
+                  "where": {
+                    "/id": {
+                      "$ref": "bracket_edge_4"
+                    }
+                  },
+                  "take": "one",
+                  "pointer": "/start_id"
+                }
+              }
+            },
+            {
+              "type": "coincident",
+              "a": {
+                "$select": {
+                  "from": {
+                    "$ref": "bracket_line_5",
+                    "pointer": "/sketch"
+                  },
+                  "path": "/entities",
+                  "where": {
+                    "/id": {
+                      "$ref": "bracket_edge_4"
+                    }
+                  },
+                  "take": "one",
+                  "pointer": "/end_id"
+                }
+              },
+              "b": {
+                "$select": {
+                  "from": {
+                    "$ref": "bracket_line_5",
+                    "pointer": "/sketch"
+                  },
+                  "path": "/entities",
+                  "where": {
+                    "/id": {
+                      "$ref": "bracket_edge_5"
+                    }
+                  },
+                  "take": "one",
+                  "pointer": "/start_id"
+                }
+              }
+            },
+            {
+              "type": "coincident",
+              "a": {
+                "$select": {
+                  "from": {
+                    "$ref": "bracket_line_5",
+                    "pointer": "/sketch"
+                  },
+                  "path": "/entities",
+                  "where": {
+                    "/id": {
+                      "$ref": "bracket_edge_5"
+                    }
+                  },
+                  "take": "one",
+                  "pointer": "/end_id"
+                }
+              },
+              "b": {
+                "$select": {
+                  "from": {
+                    "$ref": "bracket_line_5",
+                    "pointer": "/sketch"
+                  },
+                  "path": "/entities",
+                  "where": {
+                    "/id": {
+                      "$ref": "bracket_edge_0"
+                    }
+                  },
+                  "take": "one",
+                  "pointer": "/start_id"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "bracket_dimension_0",
+      "call": {
+        "group": "sketch/dimension",
+        "operation": "sketch_add_dimension",
+        "arguments": {
+          "entities": [
+            {
+              "$ref": "bracket_edge_0"
+            }
+          ],
+          "text_pos": {
+            "x": 20,
+            "y": -6
+          },
+          "value_text": "32"
+        }
+      }
+    },
+    {
+      "id": "bracket_dimension_1",
+      "call": {
+        "group": "sketch/dimension",
+        "operation": "sketch_add_dimension",
+        "arguments": {
+          "entities": [
+            {
+              "$ref": "bracket_edge_1"
+            }
+          ],
+          "text_pos": {
+            "x": 47,
+            "y": 2.5
+          },
+          "value_text": "8"
+        }
+      }
+    },
+    {
+      "id": "bracket_dimension_4",
+      "call": {
+        "group": "sketch/dimension",
+        "operation": "sketch_add_dimension",
+        "arguments": {
+          "entities": [
+            {
+              "$ref": "bracket_edge_4"
+            }
+          ],
+          "text_pos": {
+            "x": 2.5,
+            "y": 37
+          },
+          "value_text": "8"
+        }
+      }
+    },
+    {
+      "id": "bracket_dimension_5",
+      "call": {
+        "group": "sketch/dimension",
+        "operation": "sketch_add_dimension",
+        "arguments": {
+          "entities": [
+            {
+              "$ref": "bracket_edge_5"
+            }
+          ],
+          "text_pos": {
+            "x": -7,
+            "y": 15
+          },
+          "value_text": "44"
+        }
+      }
+    },
+    {
+      "id": "bracket_finish",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_finish",
+        "arguments": {}
+      }
+    },
+    {
+      "id": "bracket_build",
+      "call": {
+        "group": "solid/build",
+        "operation": "solid_extrude",
+        "arguments": {
+          "sketch_name": "Bracket / prepared 32 by 44 section",
+          "profile_indices": [
+            0
+          ],
+          "operation": "new_body",
+          "extent": {
+            "type": "distance",
+            "distance": 40
+          },
+          "taper_angle_deg": 0,
+          "flip": true,
+          "target_body_ids": []
+        }
+      }
+    },
+    {
+      "let": {
+        "bracket_feature": {
+          "$select": {
+            "from": {
+              "$ref": "bracket_build"
+            },
+            "path": "/document/features",
+            "take": "last",
+            "pointer": "/id"
+          }
+        }
+      }
+    },
+    {
+      "let": {
+        "bracket_body": {
+          "$select": {
+            "from": {
+              "$ref": "bracket_build"
+            },
+            "path": "/scene/bodies",
+            "where": {
+              "/feature_id": {
+                "$ref": "bracket_feature"
+              }
+            },
+            "take": "one"
+          }
+        }
+      }
+    },
+    {
+      "assert": {
+        "$count": {
+          "$ref": "bracket_build",
+          "pointer": "/scene/bodies"
+        }
+      },
+      "equals": 1
+    },
+    {
+      "let": {
+        "support_face": {
+          "$select": {
+            "from": {
+              "$ref": "bracket_body"
+            },
+            "path": "/faces",
+            "where": {
+              "/plane/normal/2": 1,
+              "/plane/origin/2": 8
+            },
+            "take": "one"
+          }
+        }
+      }
+    },
+    {
+      "chapter": "Hole",
+      "note": "Select the flat base and the two prepared centers. Compare 3 mm blind holes with 7 mm diameter holes through the 8 mm base.",
+      "duration_ms": 1000
+    },
+    {
+      "id": "preview",
+      "call": {
+        "group": "solid/refine",
+        "operation": "solid_hole",
+        "arguments": {
+          "body_id": {
+            "$ref": "bracket_body",
+            "pointer": "/id"
+          },
+          "face_id": {
+            "$ref": "support_face",
+            "pointer": "/id"
+          },
+          "position": {
+            "$project": {
+              "point": [
+                24,
+                12,
+                8
+              ],
+              "basis": {
+                "$ref": "support_face",
+                "pointer": "/plane"
+              }
+            }
+          },
+          "positions": [
+            {
+              "position": {
+                "$project": {
+                  "point": [
+                    24,
+                    12,
+                    8
+                  ],
+                  "basis": {
+                    "$ref": "support_face",
+                    "pointer": "/plane"
+                  }
+                }
+              }
+            },
+            {
+              "position": {
+                "$project": {
+                  "point": [
+                    24,
+                    28,
+                    8
+                  ],
+                  "basis": {
+                    "$ref": "support_face",
+                    "pointer": "/plane"
+                  }
+                }
+              }
+            }
+          ],
+          "diameter": 5,
+          "extent": {
+            "type": "distance",
+            "depth": 3
+          },
+          "style": "simple",
+          "counterbore_diameter": 0,
+          "counterbore_depth": 0,
+          "countersink_diameter": 0,
+          "countersink_angle_deg": 90,
+          "bottom_style": "flat",
+          "drill_point_angle_deg": 118,
+          "thread": null,
+          "flip": false
+        }
+      }
+    },
+    {
+      "let": {
+        "lesson_feature": {
+          "$select": {
+            "from": {
+              "$ref": "preview"
+            },
+            "path": "/document/features",
+            "where": {},
+            "take": "last",
+            "pointer": "/id"
+          }
+        }
+      }
+    },
+    {
+      "let": {
+        "current_support_face": {
+          "$select": {
+            "from": {
+              "$ref": "preview"
+            },
+            "path": "/scene/bodies",
+            "where": {
+              "/id": {
+                "$ref": "bracket_body",
+                "pointer": "/id"
+              }
+            },
+            "take": "one",
+            "pointer": "/faces"
+          }
+        }
+      }
+    },
+    {
+      "let": {
+        "edited_support_face": {
+          "$select": {
+            "from": {
+              "$ref": "current_support_face"
+            },
+            "path": "",
+            "where": {
+              "/plane/normal/2": 1,
+              "/plane/origin/2": 8
+            },
+            "take": "one"
+          }
+        }
+      }
+    },
+    {
+      "id": "result",
+      "call": {
+        "group": "solid/refine",
+        "operation": "solid_edit_hole",
+        "arguments": {
+          "feature_id": {
+            "$ref": "lesson_feature"
+          },
+          "hole": {
+            "body_id": {
+              "$ref": "bracket_body",
+              "pointer": "/id"
+            },
+            "face_id": {
+              "$ref": "edited_support_face",
+              "pointer": "/id"
+            },
+            "position": {
+              "$project": {
+                "point": [
+                  24,
+                  12,
+                  8
+                ],
+                "basis": {
+                  "$ref": "edited_support_face",
+                  "pointer": "/plane"
+                }
+              }
+            },
+            "positions": [
+              {
+                "position": {
+                  "$project": {
+                    "point": [
+                      24,
+                      12,
+                      8
+                    ],
+                    "basis": {
+                      "$ref": "edited_support_face",
+                      "pointer": "/plane"
+                    }
+                  }
+                }
+              },
+              {
+                "position": {
+                  "$project": {
+                    "point": [
+                      24,
+                      28,
+                      8
+                    ],
+                    "basis": {
+                      "$ref": "edited_support_face",
+                      "pointer": "/plane"
+                    }
+                  }
+                }
+              }
+            ],
+            "diameter": 7,
+            "extent": {
+              "type": "through_all"
+            },
+            "style": "simple",
+            "counterbore_diameter": 0,
+            "counterbore_depth": 0,
+            "countersink_diameter": 0,
+            "countersink_angle_deg": 90,
+            "bottom_style": "flat",
+            "drill_point_angle_deg": 118,
+            "thread": null,
+            "flip": false
+          }
+        }
+      }
+    }
+  ],
+  "checks": [
+    {
+      "id": "final_scene",
+      "call": {
+        "group": "solid/check",
+        "operation": "solid_scene",
+        "arguments": {}
+      },
+      "expect": {
+        "/errors": []
+      }
+    },
+    {
+      "assert": {
+        "$count": {
+          "$ref": "final_scene",
+          "pointer": "/bodies"
+        }
+      },
+      "equals": 1
+    },
+    {
+      "id": "definitions",
+      "call": {
+        "group": "solid/refine",
+        "operation": "solid_hole_definitions",
+        "arguments": {}
+      }
+    },
+    {
+      "assert": {
+        "$count": {
+          "$ref": "definitions"
+        }
+      },
+      "equals": 1
+    },
+    {
+      "assert": {
+        "$ref": "definitions",
+        "pointer": "/0/diameter"
+      },
+      "equals": 7
+    },
+    {
+      "assert": {
+        "$ref": "definitions",
+        "pointer": "/0/extent"
+      },
+      "equals": {
+        "type": "through_all"
+      }
+    },
+    {
+      "assert": {
+        "$ref": "definitions",
+        "pointer": "/0/style"
+      },
+      "equals": "simple"
+    },
+    {
+      "assert": {
+        "$ref": "definitions",
+        "pointer": "/0/body_id"
+      },
+      "equals": {
+        "$ref": "bracket_body",
+        "pointer": "/id"
+      }
+    },
+    {
+      "assert": {
+        "$ref": "final_scene",
+        "pointer": "/bodies"
+      },
+      "equals": {
+        "$ref": "result",
+        "pointer": "/scene/bodies"
+      }
+    },
+    {
+      "assert": {
+        "$count": {
+          "$ref": "definitions",
+          "pointer": "/0/positions"
+        }
+      },
+      "equals": 2
+    },
+    {
+      "let": {
+        "drilled": {
+          "$select": {
+            "from": {
+              "$ref": "final_scene"
+            },
+            "path": "/bodies",
+            "where": {},
+            "take": "one"
+          }
+        }
+      }
+    },
+    {
+      "assert": {
+        "$count": {
+          "$select": {
+            "from": {
+              "$ref": "drilled"
+            },
+            "path": "/faces",
+            "where": {
+              "/cylinder/radius": 3.5
+            },
+            "take": "all"
+          }
+        }
+      },
+      "equals": 2
+    }
+  ],
+  "exports": {
+    "lessons": {
+      "hole": [
+        {
+          "caption": "hole.inputs",
+          "scene": {
+            "$ref": "bracket_build",
+            "pointer": "/scene"
+          },
+          "cue": "body",
+          "duration_ms": 1400,
+          "finish": "satin_aluminum"
+        },
+        {
+          "caption": "hole.preview",
+          "scene": {
+            "$ref": "preview",
+            "pointer": "/scene"
+          },
+          "cue": "depth",
+          "duration_ms": 1400,
+          "finish": "satin_aluminum"
+        },
+        {
+          "caption": "hole.parameter",
+          "scene": {
+            "$ref": "result",
+            "pointer": "/scene"
+          },
+          "cue": "dimension",
+          "duration_ms": 1400,
+          "finish": "satin_aluminum"
+        },
+        {
+          "caption": "hole.apply",
+          "scene": {
+            "$ref": "result",
+            "pointer": "/scene"
+          },
+          "cue": "apply",
+          "duration_ms": 1400,
+          "finish": "satin_aluminum"
+        }
+      ]
+    },
+    "preview_frames": [
+      {
+        "caption": "hole.inputs",
+        "scene": {
+          "$ref": "bracket_build",
+          "pointer": "/scene"
+        },
+        "cue": "body",
+        "duration_ms": 1400,
+        "finish": "satin_aluminum"
+      },
+      {
+        "caption": "hole.preview",
+        "scene": {
+          "$ref": "preview",
+          "pointer": "/scene"
+        },
+        "cue": "depth",
+        "duration_ms": 1400,
+        "finish": "satin_aluminum"
+      },
+      {
+        "caption": "hole.parameter",
+        "scene": {
+          "$ref": "result",
+          "pointer": "/scene"
+        },
+        "cue": "dimension",
+        "duration_ms": 1400,
+        "finish": "satin_aluminum"
+      },
+      {
+        "caption": "hole.apply",
+        "scene": {
+          "$ref": "result",
+          "pointer": "/scene"
+        },
+        "cue": "apply",
+        "duration_ms": 1400,
+        "finish": "satin_aluminum"
+      }
+    ],
+    "final_scene": {
+      "$ref": "final_scene"
+    }
+  }
+}

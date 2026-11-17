@@ -1,0 +1,48 @@
+﻿; Thermal-study intent, CBOR v1. Maps use text keys. No derived results.
+; Runtime also enforces finite numbers, unique nonzero study IDs, provenance,
+; UTF-8 byte limits, array limits, 16 MiB payload and depth <= 32.
+thermal-studies = {
+  format: "limo-cad-thermal-studies",
+  version: 1,
+  studies: [*64 study]
+}
+study = { id: uint .gt 0, name: tstr, input: thermal-input }
+thermal-input = {
+  mesh: { points_m: [*65536 point], elements: [*262144 tetrahedron] },
+  materials: [*256 thermal-material],
+  prescribed_k: [*65536 [index, finite-number]],
+  nodal_load_w: [*65536 finite-number],
+  surfaces: [*262144 surface],
+  options: {
+    max_nodes: index, max_elements: index, max_iterations: index,
+    relative_tolerance: finite-number, absolute_tolerance_w: finite-number
+  }
+}
+point = [finite-number, finite-number, finite-number]
+index = 0..4294967295
+finite-number = int / float ; finite only
+; Unresolved indices and unsolvable drafts may be stored, never called solved.
+tetrahedron = { nodes: [index, index, index, index], material: index, source_w_m3: finite-number }
+surface = {
+  nodes: [index, index, index], heat_flux_in_w_m2: finite-number,
+  ? convection: null / { coefficient_w_m2_k: finite-number, ambient_k: finite-number }
+}
+thermal-material = {
+  details: material-details,
+  ? context: null / tstr,
+  ? source_id: null / tstr
+}
+; Same catalog record used by body appearance and constitutive response.
+material-details = {
+  kind: tstr, catalog_id: tstr,
+  ? properties: [*2048 material-property],
+  ? sources: [*64 material-source],
+  ? print_profiles: [*64 print-profile],
+  ? warnings: [*64 tstr]
+}
+material-property = { name: tstr, value: finite-number / tstr, unit: tstr, context: tstr, source_id: tstr }
+material-source = {
+  id: tstr, repository: tstr, revision: tstr, path: tstr,
+  sha256: tstr, license: tstr, author: tstr, ? reference: tstr
+}
+print-profile = { name: tstr, source_id: tstr, compatible_printers: [*1024 tstr] }

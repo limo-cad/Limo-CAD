@@ -534,16 +534,26 @@ impl ApplicationHandler<WinitUserEvent> for WinitAppRunnerState {
     }
 
     fn exiting(&mut self, _event_loop: &ActiveEventLoop) {
-        // Drop windows while event loop is still active, before TLS destruction.
-        // Prevents panic on macOS when exiting from exclusive fullscreen.
-        WINIT_WINDOWS.with(|ww| ww.borrow_mut().windows.clear());
-
-        let world = self.world_mut();
-        world.clear_all();
+        self.cleanup();
     }
 }
 
 impl WinitAppRunnerState {
+    fn cleanup(&mut self) {
+        let world = self.world_mut();
+        // despawn_windows keeps closing windows in a system Local. Preserve
+        // those owners while render resources drain their final frame: dropping
+        // Schedules first can leave the last window reference on the render
+        // thread, which synchronously waits for this thread on macOS.
+        let schedules = world.remove_resource::<Schedules>();
+        world.clear_all();
+        drop(schedules);
+
+        // Retain still-open windows too (e.g. an OS-driven exit without AppExit).
+        // Release them while the event loop is active, before TLS destruction.
+        WINIT_WINDOWS.with(|ww| ww.borrow_mut().windows.clear());
+    }
+
     fn redraw_requested(&mut self, event_loop: &ActiveEventLoop) {
         let mut redraw_message_cursor = MessageCursor::<RequestRedraw>::default();
         let mut close_message_cursor = MessageCursor::<WindowCloseRequested>::default();
@@ -1152,6 +1162,78 @@ mod tests {
     use bevy_app::Update;
 
     use super::*;
+
+    #[test]
+    fn exit_keeps_retired_windows_on_main_thread_until_render_resources_finish() {
+        use bevy_window::WindowWrapper;
+        use std::sync::{mpsc, Arc, Mutex};
+        use std::thread::{self, JoinHandle, ThreadId};
+        use std::time::Duration;
+
+        struct NativeWindow(mpsc::Sender<ThreadId>);
+        impl Drop for NativeWindow {
+            fn drop(&mut self) {
+                self.0.send(thread::current().id()).unwrap();
+            }
+        }
+
+        #[derive(Resource)]
+        struct FinalRenderFrame {
+            start: mpsc::Sender<()>,
+            finished: Mutex<mpsc::Receiver<()>>,
+            thread: Option<JoinHandle<()>>,
+        }
+        impl Drop for FinalRenderFrame {
+            fn drop(&mut self) {
+                self.start.send(()).unwrap();
+                self.finished
+                    .get_mut()
+                    .unwrap()
+                    .recv_timeout(Duration::from_secs(5))
+                    .expect("final render frame did not finish");
+                self.thread.take().unwrap().join().unwrap();
+            }
+        }
+
+        let main_thread = thread::current().id();
+        let (dropped, observed) = mpsc::channel();
+        let window = Arc::new(NativeWindow(dropped));
+        let mut wrapper = Some(WindowWrapper::new(window.clone()));
+        let mut app = App::new();
+        // despawn_windows retains closing native windows in a system Local.
+        // The final render frame still owns an extracted window reference.
+        app.add_systems(
+            Update,
+            move |mut retired: Local<Vec<WindowWrapper<Arc<NativeWindow>>>>| {
+                if let Some(wrapper) = wrapper.take() {
+                    retired.push(wrapper);
+                }
+            },
+        );
+        app.update();
+        let (start, render_start) = mpsc::channel();
+        let (finished, render_finished) = mpsc::channel();
+        let render_thread = thread::spawn(move || {
+            render_start.recv_timeout(Duration::from_secs(5)).unwrap();
+            drop(window);
+            finished.send(()).unwrap();
+        });
+        app.insert_resource(FinalRenderFrame {
+            start,
+            finished: Mutex::new(render_finished),
+            thread: Some(render_thread),
+        });
+        let mut runner = WinitAppRunnerState::new(app);
+
+        runner.cleanup();
+
+        assert_eq!(
+            observed.recv_timeout(Duration::from_secs(5)).unwrap(),
+            main_thread,
+            "the final native window was destroyed by the render thread; macOS waits for the main thread here"
+        );
+        assert!(!runner.world().contains_resource::<FinalRenderFrame>());
+    }
 
     #[test]
     fn pointer_button_updates_separate_motion_and_transitions_without_idle_polling() {

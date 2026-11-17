@@ -68,7 +68,7 @@ impl CadServer {
             .validate(
                 &self
                     .manager
-                    .export_project_model()
+                    .project_model_projection()
                     .map_err(|e| e.to_string())?,
             )
             .map_err(|e| e.to_string())?;

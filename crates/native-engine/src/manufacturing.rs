@@ -151,7 +151,7 @@ fn capture_bambu_preview(
         .validate(
             &inner
                 .manager
-                .export_project_model()
+                .project_model_projection()
                 .map_err(|e| e.to_string())?,
         )
         .map_err(|e| e.to_string())?;
@@ -299,7 +299,7 @@ impl NativeEngineHost {
         let inner = workspace.active();
         if inner
             .manager
-            .export_project_model()
+            .project_model_projection()
             .map_err(|e| e.to_string())?
             != finished.model
         {
@@ -340,7 +340,7 @@ impl NativeEngineHost {
                 .validate(
                     &inner
                         .manager
-                        .export_project_model()
+                        .project_model_projection()
                         .map_err(|e| e.to_string())?,
                 )
                 .map_err(|e| e.to_string())?;

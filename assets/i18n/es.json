@@ -1,4 +1,31 @@
 {
+  "namedViews": {
+    "activate": "Activar vista",
+    "edit": "Editar vista guardada {name}",
+    "discard": "Descartar cambios",
+    "finishEdits": "Guarda o descarta los cambios antes de cambiar de vista.",
+    "finishOperation": "Termina la operación actual antes de activar una vista guardada."
+  },
+  "projectReplay": {
+    "previewAssemblyNotices": "Avisos de ensamblaje: {count}. Ejecute en un nuevo diseño para ver los detalles.",
+    "previewOpen": "Vista del proyecto",
+    "previewTitle": "Vista previa del proyecto",
+    "previewBaseline": "Proyecto inicial",
+    "previewFinal": "Tras el script",
+    "previewScope": "Solo geometría y ensamblaje. No se muestra el resto del proyecto.",
+    "previewPreparing": "Preparando la vista previa aislada del proyecto...",
+    "previewCancelled": "Preparación de la vista previa cancelada",
+    "previewTimedOut": "Se agotó el tiempo de preparación de la vista previa",
+    "needsRepair": "Corrija el código y valídelo antes de ejecutar.",
+    "filter": "Reproducción de proyecto Limo CAD (.limo.replay.cbor)",
+    "savePath": "Guarde la reproducción del proyecto en una ruta absoluta .limo.replay.cbor",
+    "openPath": "Abra la reproducción del proyecto desde una ruta absoluta",
+    "saved": "Reproducción guardada con su proyecto inicial. Valide antes de ejecutar.",
+    "changed": "El script cambió antes de iniciar la ejecución preparada",
+    "handoff": "La transferencia del script preparado no está disponible",
+    "retired": "Se canceló la transferencia de preparación del script",
+    "validSource": "El código es válido. La ejecución usa este código y el proyecto inicial conservado; validar no guarda los cambios."
+  },
   "runtimeActivity": {
     "title": "Actividad",
     "current": "En curso",
@@ -290,7 +317,7 @@
       "patternCircular": "Patrón circular",
       "patternOnPath": "Patrón en trayectoria",
       "mirror": "Espejo",
-      "fillet": "Radio",
+      "fillet": "Redondeo",
       "chamfer": "Chamfer",
       "shell": "Cascarón",
       "draft": "Desmoldeo",
@@ -435,7 +462,7 @@
       "patternCircular": "Patrón circular",
       "sketchDimension": "Cota de croquis",
       "fillet": "Radio",
-      "chamfer": "Chamfrado",
+      "chamfer": "Chaflán",
       "offset": "Desplazamiento",
       "trim": "Recortar",
       "extend": "Extender",
@@ -780,8 +807,8 @@
     "toNextNeedsTarget": "«Hasta la siguiente» necesita Agregar, Sustraer o Común para tener un cuerpo objetivo donde detenerse."
   },
   "solidEdge": {
-    "fillet": "Chamferado sólido",
-    "editFillet": "Editar chamferado sólido",
+    "fillet": "Redondeo del sólido",
+    "editFillet": "Editar redondeo del sólido",
     "chamfer": "Chamfer sólido",
     "editChamfer": "Editar chamfer sólido",
     "loading": "Cargando topología sólida…",

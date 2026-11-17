@@ -45,7 +45,7 @@ current implementation.
 ## Consequences
 
 - Body appearances are persisted project data, separate from application theme.
-  The shared catalog and its frontend mirror must stay aligned; see
+  The native interface and MCP consume one embedded Rust catalog; see
   [the materials model](../manufacturing/materials.md).
 - The Rust writer validates mesh integrity before producing a 3MF package.
   Geometry repair or print qualification is not silently inferred from export.

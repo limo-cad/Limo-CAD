@@ -7,12 +7,12 @@
   "queries": [
     {
       "image": "cargo.exe",
-      "output": "\"Image Name\",\"PID\",\"Session Name\",\"Session#\",\"Mem Usage\",\"Status\",\"User Name\",\"CPU Time\",\"Window Title\"\r\n\"cargo.exe\",\"32536\",\"Console\",\"1\",\"11,360 K\",\"Unknown\",\"THUNDER\\jeffg\",\"0:00:00\",\"N/A\"\r\n\"cargo.exe\",\"50316\",\"Console\",\"1\",\"24,560 K\",\"Unknown\",\"THUNDER\\jeffg\",\"0:00:00\",\"N/A\"\r\n",
+      "output": "\"Image Name\",\"PID\",\"Session Name\",\"Session#\",\"Mem Usage\",\"Status\",\"User Name\",\"CPU Time\",\"Window Title\"\r\n\"cargo.exe\",\"32536\",\"Console\",\"1\",\"11,360 K\",\"Unknown\",\"<local-account>\",\"0:00:00\",\"N/A\"\r\n\"cargo.exe\",\"50316\",\"Console\",\"1\",\"24,560 K\",\"Unknown\",\"<local-account>\",\"0:00:00\",\"N/A\"\r\n",
       "error": null
     },
     {
       "image": "rustc.exe",
-      "output": "\"Image Name\",\"PID\",\"Session Name\",\"Session#\",\"Mem Usage\",\"Status\",\"User Name\",\"CPU Time\",\"Window Title\"\r\n\"rustc.exe\",\"51208\",\"Console\",\"1\",\"278,508 K\",\"Unknown\",\"THUNDER\\jeffg\",\"0:00:01\",\"N/A\"\r\n",
+      "output": "\"Image Name\",\"PID\",\"Session Name\",\"Session#\",\"Mem Usage\",\"Status\",\"User Name\",\"CPU Time\",\"Window Title\"\r\n\"rustc.exe\",\"51208\",\"Console\",\"1\",\"278,508 K\",\"Unknown\",\"<local-account>\",\"0:00:01\",\"N/A\"\r\n",
       "error": null
     },
     {

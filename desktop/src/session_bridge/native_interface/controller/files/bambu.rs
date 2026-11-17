@@ -406,7 +406,7 @@ pub(super) fn check_output(
 }
 
 fn context(engine: &AppState, intent: &io::ExportIntent) -> Result<Value, String> {
-    let model = parse_engine_envelope(engine.engine_call("project_export_model", ""))?;
+    let model = engine.project_model_projection()?;
     let document = parse_engine_envelope(engine.engine_call("print_intent_get", ""))?;
     let solution: limo_cad_sketch::AssemblySolutionDto =
         serde_json::from_value(parse_engine_envelope(engine.engine_call(

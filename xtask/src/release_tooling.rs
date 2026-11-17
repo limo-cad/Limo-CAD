@@ -1,3 +1,4 @@
+pub mod advisory_exceptions;
 pub mod tag;
 pub mod version;
 

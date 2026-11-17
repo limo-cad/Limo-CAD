@@ -123,6 +123,27 @@ mod tests {
     use super::*;
 
     #[test]
+    fn named_view_copy_is_present_in_each_dictionary_without_fallback() {
+        for locale in SUPPORTED {
+            for key in [
+                "activate",
+                "edit",
+                "discard",
+                "finishEdits",
+                "finishOperation",
+            ] {
+                let key = format!("namedViews.{key}");
+                let text = lookup(dictionary(locale).unwrap(), &key)
+                    .unwrap_or_else(|| panic!("Missing {locale:?} translation for {key}"));
+                assert!(
+                    !text.trim().is_empty(),
+                    "Empty {locale:?} translation for {key}"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn supported_codes_are_exact_and_native_names_preserve_unicode() {
         for (locale, value, name) in [
             (Locale::En, "en", "English"),

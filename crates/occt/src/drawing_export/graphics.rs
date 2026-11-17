@@ -105,7 +105,7 @@ impl PaperGraphicsBudget {
         self.usage.peak_scratch_bytes = self.usage.peak_scratch_bytes.max(bytes);
         Ok(())
     }
-    fn retained(&mut self, bytes: usize) -> Result<(), String> {
+    pub(super) fn retained(&mut self, bytes: usize) -> Result<(), String> {
         let next = self
             .usage
             .retained_bytes

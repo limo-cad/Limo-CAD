@@ -13,7 +13,7 @@ impl OwnedWindow {
         ensure!(pid > 0 && pid != parent, "Invalid owned desktop PID");
         let pid = Pid::from_u32(pid);
         let parent = Pid::from_u32(parent);
-        let mut system = System::new();
+        let mut system = System::new().context("Cannot inspect the launched desktop process")?;
         refresh(&mut system, pid);
         let process = system
             .process(pid)

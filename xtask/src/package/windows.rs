@@ -151,6 +151,7 @@ fn stage(
         &runtime_bin(sdk)?,
         &directory,
     )?;
+    crate::windows_runtime::verify_zlib_consumers(&directory)?;
     let commit = source.stamp();
     let capability = if computer_control {
         "Guarded native mouse/keyboard computer control is ENABLED in this opt-in build."

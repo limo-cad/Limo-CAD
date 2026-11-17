@@ -3,6 +3,8 @@ use anyhow::{ensure, Context, Result};
 use regex::Regex;
 use serde_yaml_ng::Value;
 use std::fs;
+
+mod dependency_graph;
 fn read(file: &str) -> String {
     fs::read_to_string(crate::release_tooling::root().join(file))
         .unwrap()
@@ -35,6 +37,102 @@ fn ordered(text: &str, first: &str, second: &str) {
 
 fn workflow(file: &str) -> Value {
     serde_yaml_ng::from_str(&read(file)).unwrap_or_else(|error| panic!("invalid {file}: {error}"))
+}
+
+#[cfg(unix)]
+#[test]
+fn macos_package_cleanup_restores_stage_and_preserves_failures() {
+    let source = workflow(".github/workflows/desktop-packages.yml");
+    let (_, step) = named_step(
+        &source["jobs"]["build-macos-apple-silicon"],
+        "Verify default packaged desktop stdio",
+    )
+    .unwrap();
+    let run = step["run"].as_str().unwrap();
+    let commands = r#"
+    hdiutil() {
+      if [[ "$1" == attach ]]; then return "$FAKE_ATTACH"; fi
+      test "$1" = detach || return 98
+      test "$2" = "$RUNNER_TEMP/limo-cad-mcp-dmg" || return 98
+      printf 'detach\n' >>"$RUNNER_TEMP/calls"
+      return "$FAKE_DETACH"
+    }
+    python3() { cat >/dev/null; return "$FAKE_PLIST"; }
+    cargo() {
+      if [[ "$1 $2" == "xtask verify-package-mcp" ]]; then
+        printf 'verify\n' >>"$RUNNER_TEMP/calls"
+        return "$FAKE_VERIFY"
+      fi
+      test "$1 $2 $3" = "xtask package detach-dmg" || return 98
+      test "$4" = "$RUNNER_TEMP/limo-cad-mcp-dmg" || return 98
+      printf 'detach\n' >>"$RUNNER_TEMP/calls"
+      return "$FAKE_DETACH"
+    }
+    mv() {
+      if [[ "$1" == "$GITHUB_WORKSPACE/desktop/occt-libs.mcp-verification" ]]; then
+        printf 'restore\n' >>"$RUNNER_TEMP/calls"
+        if [[ "$FAKE_RESTORE" != 0 ]]; then return "$FAKE_RESTORE"; fi
+      fi
+      command mv "$@"
+    }
+    "#;
+    // Successful cleanup, each isolated failure, and competing failures. Failed
+    // attach must not detach anything; failed restore must still attempt detach.
+    for (attach, plist, verify, restore, detach, expected) in [
+        (0, 0, 0, 0, 0, 0),
+        (0, 0, 17, 0, 0, 17),
+        (0, 0, 0, 0, 9, 9),
+        (0, 0, 17, 0, 9, 17),
+        (0, 0, 0, 8, 0, 8),
+        (0, 0, 17, 8, 9, 17),
+        (7, 0, 0, 0, 0, 7),
+        (0, 11, 0, 0, 9, 11),
+    ] {
+        let temporary = tempfile::tempdir().unwrap();
+        let workspace = temporary.path().join("workspace with spaces");
+        let runner = temporary.path().join("runner temp");
+        let bundles = workspace.join("desktop/target/release/bundle/dmg");
+        let stage = workspace.join("desktop/occt-libs");
+        let hidden = workspace.join("desktop/occt-libs.mcp-verification");
+        fs::create_dir_all(&bundles).unwrap();
+        fs::create_dir_all(&stage).unwrap();
+        fs::create_dir_all(&runner).unwrap();
+        fs::write(bundles.join("test image.dmg"), b"fixture").unwrap();
+        fs::write(stage.join("library"), b"preserved SDK library").unwrap();
+        fs::write(runner.join("calls"), b"").unwrap();
+        let output = std::process::Command::new("bash")
+            .args(["-c", &format!("{commands}\n{run}")])
+            .current_dir(&workspace)
+            .env("GITHUB_WORKSPACE", &workspace)
+            .env("RUNNER_TEMP", &runner)
+            .env("FAKE_ATTACH", attach.to_string())
+            .env("FAKE_PLIST", plist.to_string())
+            .env("FAKE_VERIFY", verify.to_string())
+            .env("FAKE_RESTORE", restore.to_string())
+            .env("FAKE_DETACH", detach.to_string())
+            .output()
+            .unwrap();
+        assert_eq!(
+            output.status.code(),
+            Some(expected),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let calls = fs::read_to_string(runner.join("calls")).unwrap();
+        assert_eq!(calls.contains("detach\n"), attach == 0);
+        assert_eq!(calls.contains("restore\n"), attach == 0 && plist == 0);
+        let retained_stage = if attach == 0 && plist == 0 && restore != 0 {
+            assert!(!stage.exists());
+            &hidden
+        } else {
+            assert!(!hidden.exists());
+            &stage
+        };
+        assert_eq!(
+            fs::read(retained_stage.join("library")).unwrap(),
+            b"preserved SDK library"
+        );
+    }
 }
 
 fn uses_action(step: &Value, action: &str) -> bool {
@@ -339,6 +437,171 @@ fn check_package_gates(source: &Value) -> Result<()> {
     Ok(())
 }
 
+const GRYPE_EXCEPTIONS: &str = crate::release_tooling::advisory_exceptions::CONFIG;
+const RELEASE_GRYPE_SCAN: &str = "if grype \"sbom:$sbom\" --fail-on high --output json --config .github/grype/exceptions.yaml > \"$report\"; then";
+const RESCAN_GRYPE_SCAN: &str = "if ! grype \"sbom:$sbom\" --fail-on high --output json --config .github/grype/exceptions.yaml > \"$sbom.grype.json\"; then";
+const PACKAGE_SECURITY_EVENTS: &str = "github.event_name == 'pull_request' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))";
+
+#[test]
+fn version_guard_checks_review_deadlines_before_packaging() {
+    let source = workflow(".github/workflows/version-guard.yml");
+    let guard = executable_job(&source, "version_guard").unwrap();
+    let (check_index, check) = named_step(guard, "Check reviewed advisory exceptions").unwrap();
+    assert!(check["if"].is_null());
+    assert_eq!(
+        check["run"].as_str(),
+        Some("cargo xtask advisory-exceptions")
+    );
+    let (tests_index, _) = named_step(guard, "Unit-test the version carriers").unwrap();
+    assert!(check_index < tests_index);
+}
+
+#[cfg(unix)]
+#[test]
+fn package_security_verifies_pr_inventories_and_requires_tag_attestations() {
+    let source = workflow(".github/workflows/desktop-packages.yml");
+    let (_, verify) = named_step(
+        &source["jobs"]["release_security"],
+        "Verify complete SBOM coverage and archive identities",
+    )
+    .unwrap();
+    let run = verify["run"].as_str().unwrap();
+    let fake_cargo = r#"cargo() { printf '%s\n' "$*"; return "$FAKE_STATUS"; }"#;
+    for (event, expected) in [
+        ("pull_request", "xtask sbom verify --directory dist\n"),
+        (
+            "push",
+            "xtask sbom verify --directory dist --require-release-evidence\n",
+        ),
+    ] {
+        for status in [0, 17] {
+            let output = std::process::Command::new("bash")
+                .args(["-c", &format!("{fake_cargo}\n{run}")])
+                .env("GITHUB_EVENT_NAME", event)
+                .env("FAKE_STATUS", status.to_string())
+                .output()
+                .unwrap();
+            assert_eq!(output.status.code(), Some(status));
+            assert_eq!(String::from_utf8(output.stdout).unwrap(), expected);
+        }
+    }
+}
+
+// Every grype scan loads the reviewed exceptions, and only after the checker
+// has rejected expired, malformed, unmatched or broadened rules in that step.
+fn check_exception_scan(step: &Value, command: &str) -> Result<()> {
+    let run = step["run"].as_str().context("scan run command")?;
+    let lines: Vec<_> = run.lines().map(str::trim).collect();
+    ensure!(
+        lines.first() == Some(&"set -euo pipefail"),
+        "exception validation failures must stop the scan loop"
+    );
+    let scans: Vec<_> = lines
+        .iter()
+        .enumerate()
+        .filter(|(_, line)| line.contains("grype "))
+        .collect();
+    ensure!(
+        scans.len() == 1,
+        "scan loop runs one approved grype command"
+    );
+    for (index, line) in scans {
+        ensure!(
+            index > 0 && lines[index - 1] == "cargo xtask advisory-exceptions",
+            "check advisory exceptions immediately before every grype scan"
+        );
+        ensure!(
+            *line == command,
+            "every grype scan applies only the reviewed exceptions: {line}"
+        );
+    }
+    Ok(())
+}
+
+fn check_rescan_exceptions(source: &Value) -> Result<()> {
+    let job = executable_job(source, "released-native-dependencies")?;
+    let steps = executable_steps(job)?;
+    let rust = steps
+        .iter()
+        .position(|step| step["uses"].as_str() == Some("./.github/actions/setup-rust"))
+        .context("scheduled rescan builds the exception checker")?;
+    let (check_index, check) = named_step(job, "Check reviewed advisory exceptions")?;
+    ensure!(
+        check_index == rust + 1
+            && check["if"].is_null()
+            && check["run"].as_str() == Some("cargo xtask advisory-exceptions"),
+        "validate exceptions unconditionally immediately after Rust setup, even without SBOMs"
+    );
+    let (find_index, _) = named_step(job, "Find signed SBOMs on the latest published release")?;
+    let (scan_index, scan) = named_step(job, "Check newly disclosed native vulnerabilities")?;
+    ensure!(
+        check_index < find_index && find_index < scan_index,
+        "validate before release discovery"
+    );
+    check_exception_scan(scan, RESCAN_GRYPE_SCAN)
+}
+
+#[test]
+fn both_native_scans_check_reviewed_exceptions_before_applying_them() {
+    let release = workflow(".github/workflows/desktop-packages.yml");
+    let rescan = workflow(".github/workflows/dependency-security.yml");
+    let job = &rescan["jobs"]["released-native-dependencies"];
+    let (_, scan) = named_step(job, "Check newly disclosed native vulnerabilities").unwrap();
+    check_rescan_exceptions(&rescan).unwrap();
+    let (_, release_scan) = named_step(
+        &release["jobs"]["release_security"],
+        "Check native and compiled release advisories",
+    )
+    .unwrap();
+    check_exception_scan(release_scan, RELEASE_GRYPE_SCAN).unwrap();
+    for (scan, command) in [
+        (scan, RESCAN_GRYPE_SCAN),
+        (release_scan, RELEASE_GRYPE_SCAN),
+    ] {
+        assert!(command.contains(&format!(" --config {GRYPE_EXCEPTIONS} >")));
+        let run = scan["run"].as_str().unwrap();
+        let mut broken_runs = vec![
+            run.replace("cargo xtask advisory-exceptions\n", ""),
+            run.replace("  cargo xtask advisory-exceptions\n", ""),
+            run.replace("cargo xtask advisory-exceptions\n", "")
+                .replace(
+                    "exit \"$failed\"",
+                    "cargo xtask advisory-exceptions\nexit \"$failed\"",
+                ),
+            run.replace(&format!(" --config {GRYPE_EXCEPTIONS}"), ""),
+            run.replace(
+                &format!(" --config {GRYPE_EXCEPTIONS}"),
+                &format!(" --config {GRYPE_EXCEPTIONS} --config other.yaml"),
+            ),
+        ];
+        for flag in ["--only-fixed", "-c other.yaml"] {
+            broken_runs.push(run.replace(
+                command,
+                &command.replace("grype ", &format!("grype {flag} ")),
+            ));
+            broken_runs.push(run.replace(
+                command,
+                &command.replace("; then", &format!(" {flag}; then")),
+            ));
+        }
+        for broken in broken_runs {
+            assert_ne!(broken, run);
+            let mut step = scan.clone();
+            step["run"] = Value::String(broken);
+            assert!(check_exception_scan(&step, command).is_err());
+        }
+    }
+    let (check_index, _) = named_step(job, "Check reviewed advisory exceptions").unwrap();
+    for condition in [
+        Value::Bool(false),
+        Value::String("steps.release.outputs.available == 'true'".into()),
+    ] {
+        let mut conditional = rescan.clone();
+        conditional["jobs"]["released-native-dependencies"]["steps"][check_index]["if"] = condition;
+        assert!(check_rescan_exceptions(&conditional).is_err());
+    }
+}
+
 fn check_release_sbom_gates(source: &Value) -> Result<()> {
     for (id, upload, glob) in [
         (
@@ -403,6 +666,10 @@ fn check_release_sbom_gates(source: &Value) -> Result<()> {
     }
     let scanner = executable_job(source, "release_security")?;
     ensure!(
+        scanner["if"].as_str() == Some(PACKAGE_SECURITY_EVENTS),
+        "check package advisories on pull requests as well as release tags"
+    );
+    ensure!(
         needs(scanner)?
             == [
                 "build-windows-portable",
@@ -426,14 +693,7 @@ fn check_release_sbom_gates(source: &Value) -> Result<()> {
         "cargo xtask sbom verify --directory dist --require-release-evidence",
     )?;
     let (scan_index, scan) = named_step(scanner, "Check native and compiled release advisories")?;
-    ensure!(
-        scan["run"]
-            .as_str()
-            .is_some_and(|run| run.lines().any(|line| line
-                .trim()
-                .starts_with("if grype \"sbom:$sbom\" --fail-on high --output json"))),
-        "retain all findings and block high/critical advisories"
-    );
+    check_exception_scan(scan, RELEASE_GRYPE_SCAN)?;
     requires_command(scan, "test \"$checked\" -eq 5")?;
     requires_command(scan, "exit \"$failed\"")?;
     ensure!(
@@ -471,6 +731,11 @@ fn check_release_sbom_gates(source: &Value) -> Result<()> {
 fn release_sbom_gates_reject_omitted_inventories_bypassed_scans_and_unsigned_publication() {
     let source = workflow(".github/workflows/desktop-packages.yml");
     check_release_sbom_gates(&source).unwrap();
+    let mut tag_only = source.clone();
+    tag_only["jobs"]["release_security"]["if"] = Value::String(
+        "github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')".into(),
+    );
+    assert!(check_release_sbom_gates(&tag_only).is_err());
     let inventory_index = named_step(
         &source["jobs"]["build-linux-appimage"],
         "Generate release SBOMs and tag attestations",
@@ -501,6 +766,20 @@ fn release_sbom_gates_reject_omitted_inventories_bypassed_scans_and_unsigned_pub
     ignored["jobs"]["release_security"]["steps"][scan_index]["continue-on-error"] =
         Value::Bool(true);
     assert!(check_release_sbom_gates(&ignored).is_err());
+    let run = source["jobs"]["release_security"]["steps"][scan_index]["run"]
+        .as_str()
+        .unwrap();
+    for flag in ["--only-fixed", "-c other.yaml"] {
+        for command in [
+            RELEASE_GRYPE_SCAN.replace("grype ", &format!("grype {flag} ")),
+            RELEASE_GRYPE_SCAN.replace("; then", &format!(" {flag}; then")),
+        ] {
+            let mut bypass = source.clone();
+            bypass["jobs"]["release_security"]["steps"][scan_index]["run"] =
+                Value::String(run.replace(RELEASE_GRYPE_SCAN, &command));
+            assert!(check_release_sbom_gates(&bypass).is_err());
+        }
+    }
     let signature_index = named_step(
         &source["jobs"]["publish_release"],
         "Verify inventories and their signed release identity",
@@ -638,6 +917,7 @@ fn check_mcp_provenance(source: &Value) -> Result<()> {
             "native geometry must survive MCP failure after successful native lint, but stop on cancellation"
         );
         requires_command(geometry, "cargo test --locked -p limo-cad-occt --features native-occt --tests -- --test-threads=1")?;
+        requires_command(geometry, "cargo test --locked -p limo-cad-native-engine --features native-occt --lib --test issue536_delete --test issue537 -- --test-threads=1")?;
         ensure!(
             geometry["env"]["CARGO_TARGET_DIR"].as_str()
                 == Some("${{ github.workspace }}/mcp-server/target"),
@@ -939,6 +1219,59 @@ fn sdk_cache_keys_keep_all_abi_inputs_and_arm_runner_is_default_branch_only() {
 }
 
 #[test]
+fn windows_arm_sdk_and_consumers_share_the_pinned_compiler() {
+    let config: serde_json::Value =
+        serde_json::from_str(&read("vcpkg-configuration.json")).unwrap();
+    assert_eq!(
+        config["overlay-triplets"],
+        serde_json::json!(["native/occt-overlay/triplets"])
+    );
+    let pin = "native/occt-overlay/triplets/msvc-arm64-version.txt";
+    assert!(Regex::new(r"^\d+\.\d+\.\d+\s*$")
+        .unwrap()
+        .is_match(&read(pin)));
+    let triplet = read("native/occt-overlay/triplets/arm64-windows.cmake");
+    for setting in [
+        "set(VCPKG_TARGET_ARCHITECTURE arm64)",
+        "set(VCPKG_CRT_LINKAGE dynamic)",
+        "set(VCPKG_LIBRARY_LINKAGE dynamic)",
+        "set(VCPKG_PLATFORM_TOOLSET v143)",
+        "file(STRINGS \"${CMAKE_CURRENT_LIST_DIR}/msvc-arm64-version.txt\"\n    VCPKG_PLATFORM_TOOLSET_VERSION LIMIT_COUNT 1)",
+        "set(VCPKG_HASH_ADDITIONAL_FILES \"${CMAKE_CURRENT_LIST_DIR}/msvc-arm64-version.txt\")",
+    ] {
+        assert!(triplet.contains(setting), "missing ARM64 ABI setting: {setting}");
+    }
+    let action = workflow(".github/actions/setup-windows-occt/action.yml");
+    let (_, step) = named_step(&action["runs"], "Detect MSVC toolset").unwrap();
+    let detect = step["run"].as_str().unwrap();
+    assert!(detect.contains(pin));
+    assert!(detect.contains("$env:VCPKG_TRIPLET -eq 'arm64-windows'"));
+    assert!(detect.contains("-vcvars_ver=$toolset"));
+    assert!(detect.contains("Required MSVC compiler is missing"));
+    assert!(detect.contains("(Get-Command cl.exe -ErrorAction Stop).Source -ine $compiler"));
+    for name in [
+        "PATH",
+        "INCLUDE",
+        "LIB",
+        "VCToolsVersion",
+        "VCINSTALLDIR",
+        "VSCMD_ARG_TGT_ARCH",
+    ] {
+        assert!(
+            detect.contains(&format!("'{name}'")),
+            "missing consumer environment: {name}"
+        );
+    }
+    assert!(detect.contains("$env:GITHUB_ENV"));
+    assert!(detect.contains("VCPKG_VISUAL_STUDIO_PATH=$installationRoot"));
+    let (_, qualify) =
+        named_step(&action["runs"], "Qualify checked header and actual runtime").unwrap();
+    let qualify = qualify["run"].as_str().unwrap();
+    assert!(qualify.contains("cargo xtask verify-occt-storage"));
+    assert!(!qualify.contains("Launch-VsDevShell"));
+}
+
+#[test]
 fn native_shards_keep_geometry_workshop_and_exact_same_run_artifact_provenance() {
     let caller = workflow(".github/workflows/mcp-server.yml");
     let shared = workflow(".github/workflows/mcp-acceptance.yml");
@@ -1200,6 +1533,22 @@ fn package_gates_reject_dependencies_disabled_commands_and_foreign_artifacts() {
 }
 
 #[test]
+fn historical_topology_regressions_execute_on_macos() {
+    let native = workflow(".github/workflows/native-host-tests.yml");
+    let (_, step) = named_step(
+        &native["jobs"]["macos-native-host-tests"],
+        "Test historical topology regressions",
+    )
+    .unwrap();
+    assert!(step["if"].is_null() && step["continue-on-error"].is_null());
+    assert_eq!(
+        step["env"]["CARGO_TARGET_DIR"].as_str(),
+        Some("${{ github.workspace }}/desktop/target")
+    );
+    requires_command(step, "cargo test --locked -p limo-cad-native-engine --features native-occt --lib --test issue536_delete --test issue537 -- --test-threads=1").unwrap();
+}
+
+#[test]
 fn mcp_provenance_rejects_missing_shards_bypassed_geometry_and_stale_inputs() {
     let valid = mcp_acceptance_workflow(
         &workflow(".github/workflows/mcp-server.yml"),
@@ -1239,6 +1588,14 @@ fn mcp_provenance_rejects_missing_shards_bypassed_geometry_and_stale_inputs() {
     let mut missing_lint_identity = valid.clone();
     missing_lint_identity["jobs"]["mcp-windows"]["steps"][lint_index]["id"] = Value::Null;
     assert!(check_mcp_provenance(&missing_lint_identity).is_err());
+    let mut missing_native_host_unit_tests = valid.clone();
+    let run = missing_native_host_unit_tests["jobs"]["mcp-windows"]["steps"][geometry_index]["run"]
+        .as_str()
+        .unwrap()
+        .replace("--lib --test issue536_delete", "--test issue536_delete");
+    missing_native_host_unit_tests["jobs"]["mcp-windows"]["steps"][geometry_index]["run"] =
+        Value::String(run);
+    assert!(check_mcp_provenance(&missing_native_host_unit_tests).is_err());
     let mut ignored_geometry = valid.clone();
     ignored_geometry["jobs"]["mcp-windows"]["steps"][geometry_index]["continue-on-error"] =
         Value::Bool(true);
@@ -1602,19 +1959,223 @@ fn native_font_and_visual_commands_require_nonempty_compiled_inventory() {
         .unwrap();
     upload["with"]["if-no-files-found"] = Value::String("warn".into());
     assert!(check_visual_acceptance(&missing_evidence).is_err());
+    let mut missing_lesson = visual.clone();
+    missing_lesson["jobs"]["native-visual"]["steps"]
+        .as_sequence_mut()
+        .unwrap()
+        .retain(|step| {
+            step["name"].as_str() != Some("Verify the Extrude lesson profile and solid on the GPU")
+        });
+    assert!(check_visual_acceptance(&missing_lesson).is_err());
+    for field in ["if", "continue-on-error"] {
+        let mut bypass = visual.clone();
+        let steps = bypass["jobs"]["native-visual"]["steps"]
+            .as_sequence_mut()
+            .unwrap();
+        let lesson = steps
+            .iter_mut()
+            .find(|step| {
+                step["name"].as_str()
+                    == Some("Verify the Extrude lesson profile and solid on the GPU")
+            })
+            .unwrap();
+        lesson[field] = Value::Bool(field == "continue-on-error");
+        assert!(check_visual_acceptance(&bypass).is_err());
+    }
+}
+
+#[test]
+fn native_visual_reserves_a_bounded_budget_for_the_complete_guide_catalog() {
+    let visual = workflow(".github/workflows/native-visual.yml");
+    check_visual_acceptance(&visual).unwrap();
+    for budget in [
+        Value::Null,
+        Value::Number(45_u64.into()),
+        Value::Number(91_u64.into()),
+        Value::String("${{ inputs.timeout }}".into()),
+    ] {
+        let mut drift = visual.clone();
+        drift["jobs"]["native-visual"]["timeout-minutes"] = budget;
+        assert!(check_visual_acceptance(&drift).is_err());
+    }
+}
+
+#[test]
+fn native_guide_authoring_precedes_capture_and_cannot_be_skipped() {
+    let visual = workflow(".github/workflows/native-visual.yml");
+    check_visual_acceptance(&visual).unwrap();
+    let position = named_step(
+        &visual["jobs"]["native-visual"],
+        "Generate Show me snapshots with the checked out engine",
+    )
+    .unwrap()
+    .0;
+    for field in ["if", "continue-on-error"] {
+        let mut bypass = visual.clone();
+        bypass["jobs"]["native-visual"]["steps"][position][field] =
+            Value::Bool(field == "continue-on-error");
+        assert!(check_visual_acceptance(&bypass).is_err());
+    }
+    for suffix in [" || true", " --out another-directory", " > /dev/null; true"] {
+        let mut bypass = visual.clone();
+        let run = bypass["jobs"]["native-visual"]["steps"][position]["run"]
+            .as_str()
+            .unwrap();
+        let command = "cargo run --locked --manifest-path mcp-server/Cargo.toml --example generate_show_me -- --out desktop/assets/show-me";
+        bypass["jobs"]["native-visual"]["steps"][position]["run"] =
+            Value::String(run.replacen(command, &format!("{command}{suffix}"), 1));
+        assert!(check_visual_acceptance(&bypass).is_err());
+    }
+    let mut reordered = visual.clone();
+    let steps = reordered["jobs"]["native-visual"]["steps"]
+        .as_sequence_mut()
+        .unwrap();
+    let authoring = steps.remove(position);
+    steps.push(authoring);
+    assert!(check_visual_acceptance(&reordered).is_err());
+}
+
+#[test]
+fn native_visual_requires_targeted_navigation_and_menu_focus_regressions() {
+    let visual = workflow(".github/workflows/native-visual.yml");
+    check_visual_acceptance(&visual).unwrap();
+    let (position, step) = named_step(
+        &visual["jobs"]["native-visual"],
+        "Verify bundled lesson source freshness and geometry budgets",
+    )
+    .unwrap();
+    let run = step["run"].as_str().unwrap();
+    for command in [
+        "cargo test --locked --manifest-path desktop/Cargo.toml --lib preview::navigation_tests:: -- --test-threads=1",
+        "cargo test --locked --manifest-path desktop/Cargo.toml --lib preview::evidence::ink:: -- --test-threads=1",
+        "cargo test --locked --manifest-path desktop/Cargo.toml --lib native_script_preview_book_focus_waits_only_for_its_dismissed_menu -- --test-threads=1",
+    ] {
+        assert_eq!(run.matches(command).count(), 1);
+        for mutated in [
+            run.lines().filter(|line| line.trim() != command).collect::<Vec<_>>().join("\n") + "\n",
+            run.replacen(command, &format!("{command} || true"), 1),
+            run.replacen(command, &command.replace("--test-threads=1", "--test-threads=2"), 1),
+        ] {
+            let mut bypass = visual.clone();
+            bypass["jobs"]["native-visual"]["steps"][position]["run"] = Value::String(mutated);
+            assert!(check_visual_acceptance(&bypass).is_err());
+        }
+    }
+    for field in ["if", "continue-on-error"] {
+        let mut bypass = visual.clone();
+        bypass["jobs"]["native-visual"]["steps"][position][field] =
+            Value::Bool(field == "continue-on-error");
+        assert!(check_visual_acceptance(&bypass).is_err());
+    }
+    let transition = "cargo test --locked --manifest-path desktop/Cargo.toml --lib preview::transition_tests:: -- --test-threads=1";
+    assert_eq!(run.matches(transition).count(), 1);
+    let mut duplicate = visual.clone();
+    duplicate["jobs"]["native-visual"]["steps"][position]["run"] =
+        Value::String(run.replacen(transition, &format!("{transition}\n{transition}"), 1));
+    assert!(check_visual_acceptance(&duplicate).is_err());
+    let mut reordered = visual;
+    let steps = reordered["jobs"]["native-visual"]["steps"]
+        .as_sequence_mut()
+        .unwrap();
+    let regressions = steps.remove(position);
+    steps.insert(0, regressions);
+    assert!(check_visual_acceptance(&reordered).is_err());
 }
 
 fn check_visual_acceptance(visual: &Value) -> Result<()> {
     let job = &visual["jobs"]["native-visual"];
     ensure!(
+        job["timeout-minutes"].as_u64() == Some(90),
+        "Keep a bounded 90 minute budget for cold SDK setup and the complete native guide catalog"
+    );
+    ensure!(
         job["if"].is_null() && job["continue-on-error"].is_null(),
         "GPU acceptance must execute and propagate failures on relevant PRs"
+    );
+    let (authoring_index, authoring) = named_step(
+        job,
+        "Generate Show me snapshots with the checked out engine",
+    )?;
+    requires_command(authoring, "cargo run --locked --manifest-path mcp-server/Cargo.toml --example generate_show_me -- --out desktop/assets/show-me")?;
+    ensure!(
+        authoring["run"].as_str().map(|run| run.lines().map(str::trim).collect::<Vec<_>>())
+            == Some(vec![
+                "# Cargo examples do not inherit the desktop binary's SDK rpath.",
+                r#"DYLD_LIBRARY_PATH="$OCCT_ROOT/lib${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}" \"#,
+                "cargo run --locked --manifest-path mcp-server/Cargo.toml --example generate_show_me -- --out desktop/assets/show-me",
+                "mkdir -p docs/qa/native-boundary/show-me-generated",
+                "cp desktop/assets/show-me/*.cbor desktop/assets/show-me/provenance.json docs/qa/native-boundary/show-me-generated/",
+            ])
+            && authoring["env"]["CARGO_TARGET_DIR"].as_str()
+                == Some("${{ github.workspace }}/desktop/target"),
+        "Guide generation must propagate failures, retain its exact inputs and reuse the native build lane"
+    );
+    ensure!(
+        authoring["if"].is_null() && authoring["continue-on-error"].is_null(),
+        "Trusted guide recipes and assertions must run before native capture"
+    );
+    let (first_native_compile, _) = named_step(
+        job,
+        "Verify projected boundaries and thin-wall occlusion on the GPU",
+    )?;
+    ensure!(
+        authoring_index < first_native_compile,
+        "Native capture must compile the snapshots generated by its own engine"
+    );
+    let (regressions_index, regressions) = named_step(
+        job,
+        "Verify bundled lesson source freshness and geometry budgets",
+    )?;
+    ensure!(
+        regressions["run"].as_str().map(|run| run.lines().map(str::trim).collect::<Vec<_>>())
+            == Some(vec![
+                "cargo test --locked --manifest-path desktop/Cargo.toml --lib native_script_preview_bundled_assets",
+                "cargo test --locked --manifest-path desktop/Cargo.toml --lib chamfer_form",
+                "cargo test --locked --manifest-path desktop/Cargo.toml --lib preview::transition_tests:: -- --test-threads=1",
+                "cargo test --locked --manifest-path desktop/Cargo.toml --lib preview::navigation_tests:: -- --test-threads=1",
+                "cargo test --locked --manifest-path desktop/Cargo.toml --lib preview::evidence::ink:: -- --test-threads=1",
+                "cargo test --locked --manifest-path desktop/Cargo.toml --lib native_script_preview_book_focus_waits_only_for_its_dismissed_menu -- --test-threads=1",
+                "cargo test --locked --manifest-path desktop/Cargo.toml --lib native_script_preview_tabs_after_extrude_in_the_production_ribbon -- --test-threads=1",
+            ])
+            && regressions["if"].is_null()
+            && regressions["continue-on-error"].is_null()
+            && authoring_index < regressions_index,
+        "Native guide regressions must remain exact, serial and unconditional after generation"
     );
     let (_, check) = named_step(
         job,
         "Verify projected boundaries and thin-wall occlusion on the GPU",
     )?;
     requires_command(check, "cargo xtask ci native-ignored-test sketch-visual")?;
+    let (_, lesson) = named_step(
+        job,
+        "Verify the Extrude lesson profile and solid on the GPU",
+    )?;
+    requires_command(lesson, "cargo xtask ci native-ignored-test extrude-preview")?;
+    requires_command(lesson, "cargo xtask ci native-ignored-test show-me-ui")?;
+    ensure!(
+        lesson["env"]["RUST_TEST_THREADS"].as_i64() == Some(1)
+            && lesson["env"]["LIMO_CAD_BUILD_REVISION"].as_str() == Some("${{ github.sha }}"),
+        "Operational GPU fixtures must run serially and attest the compiled source revision"
+    );
+    requires_command(
+        lesson,
+        "cargo xtask ci native-ignored-test show-me-lifecycle",
+    )?;
+    ensure!(
+        lesson["if"].is_null() && lesson["continue-on-error"].is_null(),
+        "Extrude GPU acceptance must execute and propagate failures"
+    );
+    ensure!(
+        lesson["env"]["LIMO_CAD_PREVIEW_PROOF_DIR"].as_str()
+            == Some("${{ github.workspace }}/docs/qa/native-boundary"),
+        "Extrude GPU captures must be included in the retained visual evidence"
+    );
+    ensure!(
+        lesson["env"]["LIMO_CAD_SHOW_ME_PROOF_DIR"].as_str()
+            == Some("${{ github.workspace }}/docs/qa/native-boundary/show-me"),
+        "Show me UI captures must be included in the retained visual evidence"
+    );
     let (_, evidence) = named_step(job, "Retain native visual evidence")?;
     ensure!(
         evidence["with"]["if-no-files-found"].as_str() == Some("error"),
@@ -1634,9 +2195,29 @@ fn check_visual_acceptance(visual: &Value) -> Result<()> {
         .context("renderer PR paths")?;
     for path in [
         "desktop/src/native_viewport/**",
+        "desktop/src/session_bridge/native_interface/controller/files/scripts/preview/**",
+        "desktop/src/session_bridge/native_interface/controller/files/scripts/preview.rs",
+        "desktop/src/session_bridge/native_interface/controller/chrome.rs",
+        "desktop/src/session_bridge/native_interface/controller/files.rs",
+        "desktop/src/session_bridge/native_interface/controller/files/panel.rs",
         "crates/occt/**",
         "crates/sketch/**",
+        "crates/recipes/**",
+        "crates/help/**",
+        "knowledge/concepts/bracket-sketch.md",
+        "knowledge/concepts/bracket-cut.md",
+        "crates/script/**",
+        "mcp-server/src/**",
+        "mcp-server/Cargo.toml",
+        "examples/scripts/extrude-basics.limo.jsonc",
+        "examples/scripts/show-me-*.limo.jsonc",
+        "examples/scripts/show-me-sketch.lessons.json",
+        "knowledge/concepts/show-me-*.md",
+        "interface/demonstrations.json",
+        "interface/catalog.json",
+        "assets/i18n/**",
         "xtask/src/repository_ci.rs",
+        "xtask/src/workflow_contracts.rs",
         ".github/workflows/native-visual.yml",
     ] {
         ensure!(

@@ -6,7 +6,7 @@
   "build_pair": "matched",
   "runtime_modified": false,
   "operator": "One operator, guarded individual Rust computer control; read-only inspection",
-  "fixture": "D:\\limo-cad-maintenance\\ui-models\\Tangent check.limo",
+  "fixture": "<local-root>\\limo-cad-maintenance\\ui-models\\Tangent check.limo",
   "checkpoint": "examples/checkpoints/surface-ui-sketch-tangent-human-ui.limo",
   "reopened_session": "d9da69c1-2c5e-430e-aeb1-055ca661ce1e",
   "passed": [
@@ -23,7 +23,7 @@
   "interaction": "passed",
   "polish": "passed for exercised controls",
   "scope": "Line-circle and disjoint unequal-circle representative modes. Failure prevents full command acceptance; no repaired runtime claim.",
-  "evidence_root": "D:\\limo-cad-maintenance",
+  "evidence_root": "<local-root>\\limo-cad-maintenance",
   "evidence": [
     "tangent-applied-20261010.json",
     "tangent-applied-20261010.png",

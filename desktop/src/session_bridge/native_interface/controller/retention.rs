@@ -10,14 +10,14 @@ pub(super) struct Wake {
     pressure: Arc<AtomicU8>,
 }
 pub(super) struct Watch {
-    memory: sysinfo::System,
+    memory: Option<sysinfo::System>,
     next: Instant,
     wake: Wake,
 }
 impl Watch {
     pub(super) fn new(wake: Wake) -> Self {
         Self {
-            memory: sysinfo::System::new(),
+            memory: sysinfo::System::new().ok(),
             next: Instant::now() + PROBE_INTERVAL,
             wake,
         }
@@ -27,11 +27,21 @@ impl Watch {
             return false;
         }
         self.next = now + PROBE_INTERVAL;
-        self.memory.refresh_memory();
-        let pressure = MemoryPressure::from_physical_memory(
-            self.memory.total_memory(),
-            self.memory.available_memory(),
-        );
+        // Memory probing is optional. Retry an unavailable probe at the next
+        // interval without inferring pressure or preventing ordinary retention.
+        if self.memory.is_none() {
+            self.memory = sysinfo::System::new().ok();
+        }
+        let pressure = self
+            .memory
+            .as_mut()
+            .map_or(MemoryPressure::Normal, |memory| {
+                memory.refresh_memory();
+                MemoryPressure::from_physical_memory(
+                    memory.total_memory(),
+                    memory.available_memory(),
+                )
+            });
         self.wake.pressure.store(
             match pressure {
                 MemoryPressure::Normal => 0,

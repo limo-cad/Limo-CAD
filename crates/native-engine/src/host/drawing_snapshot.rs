@@ -176,6 +176,7 @@ impl NativeEngineHost {
         let inner = workspace.active();
         let drawing = inner.manager.drawing_document_snapshot();
         drawing.validate()?;
+        drawing.ensure_projected_sheet_supported(request.sheet_id)?;
         let sheet = drawing
             .sheets
             .iter()

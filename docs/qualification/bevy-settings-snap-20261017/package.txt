@@ -1,6 +1,6 @@
-/Users/jack/Code/noBS-CAD/artifacts/pr420-visual-parity-20261016/v12/widgets/Limo CAD PR420 Widgets V12.app/Contents/MacOS/limo-cad: replacing existing signature
-/Users/jack/Code/noBS-CAD/artifacts/pr420-visual-parity-20261016/v12/widgets/Limo CAD PR420 Widgets V12.app/Contents/MacOS/launch-review: replacing existing signature
-/Users/jack/Code/noBS-CAD/artifacts/pr420-visual-parity-20261016/v12/widgets/Limo CAD PR420 Widgets V12.app: replacing existing signature
+/Users/<user>/Code/noBS-CAD/artifacts/pr420-visual-parity-20261016/v12/widgets/Limo CAD PR420 Widgets V12.app/Contents/MacOS/limo-cad: replacing existing signature
+/Users/<user>/Code/noBS-CAD/artifacts/pr420-visual-parity-20261016/v12/widgets/Limo CAD PR420 Widgets V12.app/Contents/MacOS/launch-review: replacing existing signature
+/Users/<user>/Code/noBS-CAD/artifacts/pr420-visual-parity-20261016/v12/widgets/Limo CAD PR420 Widgets V12.app: replacing existing signature
 {
   "recorded_utc": "2026-10-17T23:27:39.178760+00:00",
   "build": {
@@ -12,11 +12,11 @@
   "features": [
     "experimental-ui-widgets"
   ],
-  "application": "/Users/jack/Code/noBS-CAD/artifacts/pr420-visual-parity-20261016/v12/widgets/Limo CAD PR420 Widgets V12.app",
+  "application": "/Users/<user>/Code/noBS-CAD/artifacts/pr420-visual-parity-20261016/v12/widgets/Limo CAD PR420 Widgets V12.app",
   "engine_sha256": "890cece594e782a1e1b8361f63b76be06ebc603f000c2af37b447ce1d25ff2f3",
   "signature": "ad-hoc; deep strict verification passed",
   "bundled_occt_loaded": true,
-  "source_worktree": "/Users/jack/.codex/worktrees/pr420-visual-parity/noBS-CAD",
+  "source_worktree": "/Users/<user>/.codex/worktrees/pr420-visual-parity/noBS-CAD",
   "baseline": "ac7e293bf0c59e64dc4f57b3805cd51f3b4fc05e",
   "pr433": "5cde5c0d7444c1a65ab912ae9de861d4d2c95150",
   "pr434": "fcbde1b7fefe5ad47f3db7c551d4036e10b2f0d2"

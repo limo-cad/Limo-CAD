@@ -15,23 +15,23 @@
 Diseña piezas mecánicas, ensamblajes y planos en tu propio equipo, a mano o con
 tu agente de IA, y mantén editable cada croquis y cada operación.
 
-[![Vista previa de Bevy](https://img.shields.io/badge/Bevy-0.20.0--rc.2-blue)](https://github.com/limo-cad/Limo-CAD/releases/tag/bevy-preview-0.2.2-20261004.1)
+[![Versión candidata](https://img.shields.io/badge/release-0.3.0--rc.3-blue)](https://github.com/limo-cad/Limo-CAD/releases/tag/v0.3.0-rc.3)
 [![Licencia: LGPL 2.1+](https://img.shields.io/badge/license-LGPL%202.1%2B-blue)](LICENSE)
 [![Discussions](https://img.shields.io/github/discussions/limo-cad/Limo-CAD?label=discussions)](https://github.com/limo-cad/Limo-CAD/discussions)
 
-**Pre-alfa · Vista previa de Bevy rc.2 · Versión de la aplicación 0.2.2**
-· [Notas, revisión de origen y comprobaciones](https://github.com/limo-cad/Limo-CAD/releases/tag/bevy-preview-0.2.2-20261004.1)
+**Pre-alfa · Versión candidata 0.3.0-rc.3**
+· [Notas de la versión, revisión de origen y comprobaciones (en inglés)](https://github.com/limo-cad/Limo-CAD/releases/tag/v0.3.0-rc.3)
 · [Ayuda de instalación (en inglés)](docs/INSTALL.md)
 
 | Plataforma | Descarga |
 |---|---|
-| Windows 11 | [ZIP x64](https://github.com/limo-cad/Limo-CAD/releases/download/bevy-preview-0.2.2-20261004.1/noBS-CAD-0.2.2-windows-x64.zip) |
-| Linux | [DEB para Ubuntu 26.04 x64](https://github.com/limo-cad/Limo-CAD/releases/download/bevy-preview-0.2.2-20261004.1/noBS.CAD_0.2.2_amd64.deb) |
+| Windows 11 | [ZIP x64](https://github.com/limo-cad/Limo-CAD/releases/download/v0.3.0-rc.3/Limo-CAD-0.3.0-rc.3-windows-x64.zip) · [ZIP ARM64](https://github.com/limo-cad/Limo-CAD/releases/download/v0.3.0-rc.3/Limo-CAD-0.3.0-rc.3-windows-arm64.zip) |
+| macOS (Apple silicon) | [DMG](https://github.com/limo-cad/Limo-CAD/releases/download/v0.3.0-rc.3/Limo.CAD_0.3.0-rc.3_aarch64.dmg) |
+| Linux | [DEB para Ubuntu 26.04 x64](https://github.com/limo-cad/Limo-CAD/releases/download/v0.3.0-rc.3/Limo.CAD_0.3.0-rc.3_amd64.deb) · [AppImage x64 (glibc 2.35+)](https://github.com/limo-cad/Limo-CAD/releases/download/v0.3.0-rc.3/Limo.CAD_0.3.0-rc.3_amd64.AppImage) |
 
-Estos paquetes usan la revisión `9b082687`; todavía no incluyen las correcciones
-de integración posteriores. Windows ARM64, macOS y AppImage siguen pendientes de
-calificación. La interfaz Bevy para el navegador está en desarrollo. Los nombres
-publicados conservan el nombre anterior del producto. Consulta el
+Los cinco paquetes usan la revisión `ca5b1ca6`; el DMG de macOS está firmado y
+notarizado. Esta versión candidata no sustituye a 0.2.2 como última versión
+estable. La interfaz Bevy para el navegador está en desarrollo. Consulta el
 [estado de la transición (en inglés)](docs/native-transition-status.md).
 
 Los paquetes de Windows no están firmados. SmartScreen puede advertir en el primer

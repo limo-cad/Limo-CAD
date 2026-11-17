@@ -58,6 +58,11 @@ struct WidgetActions(Vec<NativeInterfaceAction>);
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct WidgetLayout;
 
+#[cfg(test)]
+pub(crate) fn install_test(app: &mut App) {
+    install(app);
+}
+
 pub(super) fn install(app: &mut App) {
     super::dialogs::install(app);
     if !app.is_plugin_added::<bevy::input::InputPlugin>() {
@@ -208,11 +213,15 @@ fn navigate_tab(
 
 fn synchronize(world: &mut World) {
     let handle = world.resource::<NativeInterfaceHandle>().clone();
-    let Ok((context, frame, excluded)) = handle.shared.lock().map(|shared| {
+    let Ok((context, frame, tab_order)) = handle.shared.lock().map(|shared| {
         (
             shared.registry.context().cloned(),
             shared.registry.frame().clone(),
-            shared.tab_excluded.clone(),
+            shared
+                .registry
+                .context()
+                .map(|context| tab_order(&shared, context))
+                .unwrap_or_default(),
         )
     }) else {
         return;
@@ -247,7 +256,7 @@ fn synchronize(world: &mut World) {
         world.entity_mut(entity).insert(Pickable::default());
     }
     let mut retired = false;
-    for (index, published) in frame.controls.iter().enumerate() {
+    for published in &frame.controls {
         let entity = Entity::from_bits(published.key.0);
         let Some(control) = world.get::<InterfaceControl>(entity).cloned() else {
             continue;
@@ -271,11 +280,12 @@ fn synchronize(world: &mut World) {
         }
         let mut target = world.entity_mut(entity);
         if eligible && next != Some(WidgetKind::Tab) {
-            target.insert(TabIndex(if excluded.contains(&published.key) {
-                -1
-            } else {
-                index as i32
-            }));
+            target.insert(TabIndex(
+                tab_order
+                    .iter()
+                    .position(|key| *key == published.key)
+                    .map_or(-1, |index| index as i32),
+            ));
         } else if next != Some(WidgetKind::Tab) {
             target.remove::<TabIndex>();
         }

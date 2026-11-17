@@ -698,6 +698,7 @@ pub(super) fn cad_render_plugin() -> RenderPlugin {
 
 /// The application viewport and immutable script previews run these exact systems
 /// in separate worlds. A preview never replaces the live model or camera.
+#[cfg(any(test, feature = "dev-ui-lab"))]
 pub(super) fn install_cad_scene(app: &mut bevy::app::App) {
     install_cad_renderer(app, true);
 }
@@ -3937,8 +3938,8 @@ fn grid_layout(
     }
 }
 
-fn draw_grid_on_basis(
-    gizmos: &mut Gizmos,
+fn draw_grid_on_basis<Config: GizmoConfigGroup>(
+    gizmos: &mut Gizmos<Config>,
     basis: &PlaneBasis,
     layout: GridLayout,
     camera: ViewportCamera,
@@ -5246,12 +5247,24 @@ pub(crate) fn interface_world_point(
     if world.resource::<ModelResource>().session_id != session_id {
         return Err("Native viewport has not bound the requested document".into());
     }
+    let size = world.resource::<ViewportSizeResource>();
+    project_world_point(
+        world.resource::<CameraResource>().camera,
+        [size.logical_width, size.logical_height],
+        point,
+    )
+}
+
+/// Read-only camera projection shared by live and isolated teaching annotations.
+pub(crate) fn project_world_point(
+    camera: ViewportCamera,
+    size: [f32; 2],
+    point: [f64; 3],
+) -> Result<Option<[f32; 2]>, String> {
     if point.iter().any(|value| !value.is_finite()) {
         return Err("World point must be finite".into());
     }
-    let size = world.resource::<ViewportSizeResource>();
-    let viewport = (size.logical_width, size.logical_height);
-    let camera = world.resource::<CameraResource>().camera;
+    let viewport = (size[0], size[1]);
     let Some(basis) = camera_projection(camera, viewport) else {
         return Ok(None);
     };
@@ -6880,6 +6893,85 @@ mod tests {
         assert_eq!(profile.profiles[0].nesting_depth, 0);
         assert_eq!(profile.profiles[0].points.len(), 4);
         assert!((profile.basis.origin[2] - 10.0).abs() < 1.0e-9);
+    }
+
+    #[test]
+    fn offset_plane_first_mesh_update_needs_no_unrelated_model_operation() {
+        use bevy::ecs::system::RunSystemOnce;
+        let state = crate::state::AppState::new();
+        let mut app = interface_scene_fixture();
+        app.world_mut()
+            .init_resource::<Assets<ReferencePlaneMaterial>>();
+        apply_interface_model(
+            app.world_mut(),
+            crate::session_bridge::native_interface::model_snapshot(&state),
+        )
+        .unwrap();
+        interface_geometry_fixture_snapshot(app.world_mut());
+        assert_eq!(
+            app.world_mut()
+                .query::<&NativeDatumPlane>()
+                .iter(app.world())
+                .count(),
+            0
+        );
+
+        assert_engine_ok(state.engine_call(
+            "datum_plane_create",
+            r#"{"source":{"type":"offset","reference":{"type":"origin_plane","plane":"xy"},"distance":25}}"#,
+        ));
+        let frame = crate::session_bridge::native_interface::model_snapshot(&state);
+        let datum_id = frame.document.datum_planes[0].datum_id.0;
+        apply_interface_model(app.world_mut(), frame).unwrap();
+        interface_geometry_fixture_snapshot(app.world_mut());
+        app.world_mut()
+            .run_system_once(apply_native_presentation_styles)
+            .unwrap();
+        let mut query = app
+            .world_mut()
+            .query::<(&NativeDatumPlane, &Visibility, &Mesh3d)>();
+        let rows: Vec<_> = query.iter(app.world()).collect();
+        assert_eq!(
+            rows.len(),
+            1,
+            "First mesh update must publish the new plane"
+        );
+        assert_eq!(rows[0].0.datum_id, datum_id);
+        assert_eq!(*rows[0].1, Visibility::Inherited);
+        let mesh = app
+            .world()
+            .resource::<Assets<Mesh>>()
+            .get(&rows[0].2 .0)
+            .unwrap();
+        let Some(bevy::mesh::VertexAttributeValues::Float32x3(points)) =
+            mesh.attribute(Mesh::ATTRIBUTE_POSITION)
+        else {
+            panic!("Construction plane must contain actual vertex positions")
+        };
+        assert!(!points.is_empty());
+        assert!(points.iter().all(|p| (p[2] - 25.).abs() < 1e-5));
+        let entity_count = rows.len();
+
+        for hidden in [true, false] {
+            app.world_mut()
+                .resource_mut::<PresentationResource>()
+                .0
+                .hidden_datum_plane_ids = if hidden { vec![datum_id] } else { vec![] };
+            app.world_mut()
+                .run_system_once(apply_native_presentation_styles)
+                .unwrap();
+            let mut query = app.world_mut().query::<(&NativeDatumPlane, &Visibility)>();
+            let rows: Vec<_> = query.iter(app.world()).collect();
+            assert_eq!(rows.len(), entity_count);
+            assert_eq!(
+                *rows[0].1,
+                if hidden {
+                    Visibility::Hidden
+                } else {
+                    Visibility::Inherited
+                }
+            );
+        }
     }
 
     #[test]

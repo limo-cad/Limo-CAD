@@ -21,7 +21,7 @@
         "completed_at": "2026-10-11T22:13:35Z"
       }
     ],
-    "log_path": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\ci-batch-c11a51cd-job-114582275682.log",
+    "log_path": "<local-root>\\limo-cad-maintenance\\backlog-autonomous-20261010\\ci-batch-c11a51cd-job-114582275682.log",
     "log_sha256": "0885b9eacb2a69a0a7e19c36e8988d5b3f8f0b083820da179a76628e4e53d092",
     "job_url": "https://github.com/limo-cad/Limo-CAD/actions/runs/38177297870/job/114582275682",
     "diagnostic": "surface_submission.rs:124 configure_surfaces: this function has too many arguments (8/7)",
@@ -62,14 +62,14 @@
   },
   "qualification_receipt": {
     "revision": "ab1de7314a1d2cf33888d0078ff04a2ca4e952b4",
-    "checkout": "D:\\limo-cad-maintenance\\ownership-worktree",
+    "checkout": "<local-root>\\limo-cad-maintenance\\ownership-worktree",
     "desktop_filters": [],
     "native_filters": [],
     "export_filters": [],
     "mcp_filters": [],
-    "occt_root": "D:\\limo-cad-maintenance\\checked-occt-sdk",
+    "occt_root": "<local-root>\\limo-cad-maintenance\\checked-occt-sdk",
     "occt_inputs_sha256": "ee748d2c13627776e1bc70d88b916e7be7393023d2ff0a9ce77c7350b52b831b",
-    "target": "D:\\noBS-CAD-builds\\finish-bevy-rc2\\release-target",
+    "target": "<local-root>\\noBS-CAD-builds\\finish-bevy-rc2\\release-target",
     "msvc": "14.44.35207",
     "windows_sdk": "10.0.26100.0\\",
     "profile_flags": [
@@ -118,7 +118,7 @@
       "--config",
       "profile.release.package.limo-cad-wasm.opt-level=1"
     ],
-    "unit_session_registry": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\apple-surface-signature-ab1de731-unit-session-registry",
+    "unit_session_registry": "<local-root>\\limo-cad-maintenance\\backlog-autonomous-20261010\\apple-surface-signature-ab1de731-unit-session-registry",
     "rustc": "rustc 1.99.0 (b940084d7 2026-09-28)",
     "cargo": "cargo 1.99.0 (5f94df478 2026-08-27)",
     "recorded_utc": "2026-10-11T22:19:39.9891855Z",
@@ -192,7 +192,7 @@
           "-D",
           "warnings"
         ],
-        "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\apple-surface-signature-ab1de731-strict-desktop.log"
+        "log": "<local-root>\\limo-cad-maintenance\\backlog-autonomous-20261010\\apple-surface-signature-ab1de731-strict-desktop.log"
       }
     ],
     "scope": "Strict changed Desktop Windows compile/lint check after the one-line Apple signature repair groups the existing shared gate and mutable RenderQueue as a tuple SystemParam. Independent review of the pinned tuple implementation preserves main-thread marker, access, lifetime, identity and delegate behavior. No unchanged CPU regression or other passing test is repeated. The actual cfg Apple compilation remains normal hosted CI acceptance. No suite, test execution, recipe replay, GUI, live data mutation, runtime change, main change, Jack PR action or CI rerun."
@@ -221,7 +221,7 @@
       "unwaived_apple_lint_acceptance": "Pending normal final-head hosted CI; f41 strict lint ran with the waiver present."
     },
     "job_url": "https://github.com/limo-cad/Limo-CAD/actions/runs/38184109357/job/114602735133",
-    "receipt_path": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\ci-batch-f41b9240-mac-host-success-steps.json",
+    "receipt_path": "<local-root>\\limo-cad-maintenance\\backlog-autonomous-20261010\\ci-batch-f41b9240-mac-host-success-steps.json",
     "receipt_sha256": "070b2e6f8d7ac048916c36cbb4699e10d829e26b017b17e5d86082491ef70957",
     "observed_at": "2026-10-12T00:02:40.924Z",
     "job": {

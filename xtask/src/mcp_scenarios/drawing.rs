@@ -77,7 +77,9 @@ pub(super) fn run(s: &mut Scenario) -> Result<()> {
             r["fallback_point"] = json!([99, 99, 99]);
             r
         }),
-        ("/precision", json!(7)),
+        // Keep this a representable but unsupported precision as normal
+        // drawing precision evolves; seven places is now valid.
+        ("/precision", json!(u8::MAX)),
         ("/first/body_id", json!(999)),
         ("/first/circle_center", json!(true)),
     ] {

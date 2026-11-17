@@ -7,7 +7,7 @@
   "queries": [
     {
       "image": "cargo.exe",
-      "output": "\"Image Name\",\"PID\",\"Session Name\",\"Session#\",\"Mem Usage\",\"Status\",\"User Name\",\"CPU Time\",\"Window Title\"\r\n\"cargo.exe\",\"42172\",\"Console\",\"1\",\"10,416 K\",\"Unknown\",\"THUNDER\\jeffg\",\"0:00:00\",\"N/A\"\r\n\"cargo.exe\",\"50520\",\"Console\",\"1\",\"21,708 K\",\"Unknown\",\"THUNDER\\jeffg\",\"0:00:00\",\"N/A\"\r\n\"cargo.exe\",\"46476\",\"Console\",\"1\",\"10,432 K\",\"Unknown\",\"THUNDER\\jeffg\",\"0:00:00\",\"N/A\"\r\n\"cargo.exe\",\"37608\",\"Console\",\"1\",\"15,652 K\",\"Unknown\",\"THUNDER\\jeffg\",\"0:00:00\",\"N/A\"\r\n",
+      "output": "\"Image Name\",\"PID\",\"Session Name\",\"Session#\",\"Mem Usage\",\"Status\",\"User Name\",\"CPU Time\",\"Window Title\"\r\n\"cargo.exe\",\"42172\",\"Console\",\"1\",\"10,416 K\",\"Unknown\",\"<local-account>\",\"0:00:00\",\"N/A\"\r\n\"cargo.exe\",\"50520\",\"Console\",\"1\",\"21,708 K\",\"Unknown\",\"<local-account>\",\"0:00:00\",\"N/A\"\r\n\"cargo.exe\",\"46476\",\"Console\",\"1\",\"10,432 K\",\"Unknown\",\"<local-account>\",\"0:00:00\",\"N/A\"\r\n\"cargo.exe\",\"37608\",\"Console\",\"1\",\"15,652 K\",\"Unknown\",\"<local-account>\",\"0:00:00\",\"N/A\"\r\n",
       "error": null
     },
     {

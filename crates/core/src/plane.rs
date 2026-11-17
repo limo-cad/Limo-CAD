@@ -41,6 +41,33 @@ impl fmt::Display for PlaneError {
 
 impl std::error::Error for PlaneError {}
 
+/// Failure to construct a finite orthogonal projection.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PlaneProjectionError {
+    NonFiniteInput,
+    ZeroNormal,
+    OutOfRange,
+}
+
+impl fmt::Display for PlaneProjectionError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::NonFiniteInput => "plane origin, normal and point must be finite",
+            Self::ZeroNormal => "projection plane normal must be nonzero",
+            Self::OutOfRange => "plane projection exceeds finite coordinate range",
+        })
+    }
+}
+
+impl std::error::Error for PlaneProjectionError {}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PlaneProjection {
+    pub point: [f64; 3],
+    /// Distance in model units, positive on the side pointed to by the normal.
+    pub signed_distance: f64,
+}
+
 /// Concrete placement of a sketch or planar B-rep face in Z-up world space.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct PlaneBasis {
@@ -51,6 +78,41 @@ pub struct PlaneBasis {
 }
 
 impl PlaneBasis {
+    /// Project onto the plane defined by `origin` and `normal`.
+    ///
+    /// The normal need not be unit length; its magnitude does not affect the
+    /// result. The in-plane `u`/`v` axes are not used. This does not validate a
+    /// sketch coordinate frame or resolve a persistent plane reference.
+    pub fn project_point(&self, point: [f64; 3]) -> Result<PlaneProjection, PlaneProjectionError> {
+        if self
+            .origin
+            .iter()
+            .chain(&self.normal)
+            .chain(&point)
+            .any(|x| !x.is_finite())
+        {
+            return Err(PlaneProjectionError::NonFiniteInput);
+        }
+        // Scale before squaring so finite very large/small normals remain usable.
+        let scale = self.normal.iter().map(|x| x.abs()).fold(0.0, f64::max);
+        if scale == 0.0 {
+            return Err(PlaneProjectionError::ZeroNormal);
+        }
+        let scaled = self.normal.map(|x| x / scale);
+        let length = scaled[0].hypot(scaled[1]).hypot(scaled[2]);
+        let normal = scaled.map(|x| x / length);
+        let delta: [f64; 3] = std::array::from_fn(|i| point[i] - self.origin[i]);
+        let distance = delta[0] * normal[0] + delta[1] * normal[1] + delta[2] * normal[2];
+        let projected = std::array::from_fn(|i| (-distance).mul_add(normal[i], point[i]));
+        if !distance.is_finite() || projected.iter().any(|x| !x.is_finite()) {
+            return Err(PlaneProjectionError::OutOfRange);
+        }
+        Ok(PlaneProjection {
+            point: projected,
+            signed_distance: distance,
+        })
+    }
+
     pub fn to_3d(&self, p: [f64; 2]) -> [f64; 3] {
         [
             self.origin[0] + self.u[0] * p[0] + self.v[0] * p[1],
@@ -148,5 +210,79 @@ mod tests {
         let w = b.to_3d(p);
         assert_eq!(w, [12.5, 0.0, -3.0]);
         assert_eq!(b.to_2d(w), p);
+    }
+
+    fn near(actual: [f64; 3], expected: [f64; 3]) {
+        for (a, e) in actual.into_iter().zip(expected) {
+            assert!((a - e).abs() < 1e-12, "{actual:?} != {expected:?}");
+        }
+    }
+
+    #[test]
+    fn projection_matches_translated_and_oblique_plane_oracles() {
+        let mut basis = PlaneRef::ORIGIN_PLANES[0].origin_basis().unwrap();
+        basis.origin = [0.0, 0.0, 1.0];
+        let result = basis.project_point([3.0, 4.0, 5.0]).unwrap();
+        near(result.point, [3.0, 4.0, 1.0]);
+        assert_eq!(result.signed_distance, 4.0);
+        // x + y + z = 3, independent of the in-plane sketch axes.
+        basis.origin = [1.0; 3];
+        basis.normal = [1.0; 3];
+        let result = basis.project_point([4.0, 4.0, 4.0]).unwrap();
+        near(result.point, [1.0; 3]);
+        assert!((result.signed_distance - 27.0_f64.sqrt()).abs() < 1e-12);
+        near(
+            basis.project_point(result.point).unwrap().point,
+            result.point,
+        );
+    }
+
+    #[test]
+    fn projection_is_normal_scale_invariant_and_orientation_sensitive() {
+        let mut basis = PlaneRef::ORIGIN_PLANES[0].origin_basis().unwrap();
+        for scale in [1e-300, 1.0, 1e300] {
+            basis.normal = [0.0, 3.0 * scale, 4.0 * scale];
+            let positive = basis.project_point([2.0, 3.0, 4.0]).unwrap();
+            near(positive.point, [2.0, 0.0, 0.0]);
+            assert!((positive.signed_distance - 5.0).abs() < 1e-12);
+            basis.normal = basis.normal.map(|x| -x);
+            let negative = basis.project_point([2.0, 3.0, 4.0]).unwrap();
+            near(positive.point, negative.point);
+            assert_eq!(positive.signed_distance, -negative.signed_distance);
+        }
+    }
+
+    #[test]
+    fn projection_rejects_invalid_and_unrepresentable_geometry() {
+        let mut basis = PlaneRef::ORIGIN_PLANES[0].origin_basis().unwrap();
+        for invalid in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            assert_eq!(
+                basis.project_point([invalid, 0.0, 0.0]),
+                Err(PlaneProjectionError::NonFiniteInput)
+            );
+            basis.normal = [0.0, 0.0, invalid];
+            assert_eq!(
+                basis.project_point([0.0; 3]),
+                Err(PlaneProjectionError::NonFiniteInput)
+            );
+            basis.normal = [0.0, 0.0, 1.0];
+            basis.origin = [invalid, 0.0, 0.0];
+            assert_eq!(
+                basis.project_point([0.0; 3]),
+                Err(PlaneProjectionError::NonFiniteInput)
+            );
+            basis.origin = [0.0; 3];
+        }
+        basis.normal = [0.0; 3];
+        assert_eq!(
+            basis.project_point([0.0; 3]),
+            Err(PlaneProjectionError::ZeroNormal)
+        );
+        basis.normal = [0.0, 0.0, 1.0];
+        basis.origin = [0.0, 0.0, -f64::MAX];
+        assert_eq!(
+            basis.project_point([0.0, 0.0, f64::MAX]),
+            Err(PlaneProjectionError::OutOfRange)
+        );
     }
 }

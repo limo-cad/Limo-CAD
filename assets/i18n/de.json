@@ -1,4 +1,31 @@
 {
+  "namedViews": {
+    "activate": "Ansicht aktivieren",
+    "edit": "Gespeicherte Ansicht {name} bearbeiten",
+    "discard": "Änderungen verwerfen",
+    "finishEdits": "Speichere oder verwirf deine Änderungen, bevor du die Ansicht wechselst.",
+    "finishOperation": "Beende den aktuellen Vorgang, bevor du eine gespeicherte Ansicht aktivierst."
+  },
+  "projectReplay": {
+    "previewAssemblyNotices": "Baugruppenhinweise: {count}. Details nach Ausführung in einem neuen Entwurf.",
+    "previewOpen": "Projektvorschau",
+    "previewTitle": "Projektvorschau",
+    "previewBaseline": "Ausgangsprojekt",
+    "previewFinal": "Nach dem Skript",
+    "previewScope": "Nur Geometrie und Baugruppe. Weitere Projektinhalte werden nicht angezeigt.",
+    "previewPreparing": "Isolierte Projektvorschau wird vorbereitet...",
+    "previewCancelled": "Vorbereitung der Vorschau abgebrochen",
+    "previewTimedOut": "Zeitlimit bei der Vorbereitung der Vorschau erreicht",
+    "needsRepair": "Quelltext korrigieren; vor dem Start validieren.",
+    "filter": "Limo CAD Projektwiedergabe (.limo.replay.cbor)",
+    "savePath": "Projektwiedergabe unter einem absoluten .limo.replay.cbor-Pfad speichern",
+    "openPath": "Projektwiedergabe von einem absoluten Pfad öffnen",
+    "saved": "Projektwiedergabe mit erhaltenem Ausgangsprojekt gespeichert. Vor dem Start validieren.",
+    "changed": "Das Skript wurde vor dem vorbereiteten Start geändert",
+    "handoff": "Die Übergabe des vorbereiteten Skripts ist nicht verfügbar",
+    "retired": "Die Übergabe der Skriptvorbereitung wurde beendet",
+    "validSource": "Der Quelltext ist gültig. Der Start verwendet diesen Quelltext und das erhaltene Ausgangsprojekt; die Validierung speichert keine Änderungen."
+  },
   "runtimeActivity": {
     "title": "Aktivität",
     "current": "In Bearbeitung",
@@ -290,7 +317,7 @@
       "patternCircular": "Kreisförmiges Muster",
       "patternOnPath": "Muster entlang Pfad",
       "mirror": "Spiegeln",
-      "fillet": "Fase",
+      "fillet": "Verrundung",
       "chamfer": "Kante",
       "shell": "Hohlkörper",
       "draft": "Zug",
@@ -435,7 +462,7 @@
       "patternCircular": "Kreisförmiges Muster",
       "sketchDimension": "Skizzenbemaßung",
       "fillet": "Fillet",
-      "chamfer": "Kante",
+      "chamfer": "Fase",
       "offset": "Abstand",
       "trim": "Kürzen",
       "extend": "Verlängern",
@@ -780,8 +807,8 @@
     "toNextNeedsTarget": "„Bis zur nächsten“ benötigt Hinzufügen, Abziehen oder Gemeinsam, damit es einen Zielkörper zum Anhalten gibt."
   },
   "solidEdge": {
-    "fillet": "Körper-Entfernung",
-    "editFillet": "Körper-Entfernung bearbeiten",
+    "fillet": "Körperverrundung",
+    "editFillet": "Körperverrundung bearbeiten",
     "chamfer": "Körper-Entwässerung",
     "editChamfer": "Körper-Entwässerung bearbeiten",
     "loading": "Körpertopologie wird geladen…",

@@ -1,5 +1,6 @@
 use super::super::tests::Fixture;
 use super::*;
+use crate::session_bridge::engine_text;
 use std::fs;
 
 fn metadata() -> SaveMetadata<'static> {
@@ -607,4 +608,5 @@ fn rejected_open_keeps_current_model_path_and_incarnation_then_valid_open_replac
     );
 }
 
+mod composite;
 mod retention;

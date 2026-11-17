@@ -57,8 +57,11 @@ struct UpsertHandoffRequest {
     expected_model_json: String,
 }
 pub(super) fn guard(manager: &SketchManager, expected: &str) -> Result<(), SessionError> {
-    limo_cad_solid::check_export_model_snapshot(Some(expected), &manager.export_project_model()?)
-        .map_err(|error| SessionError::Solid(error.into()))
+    limo_cad_solid::check_export_model_snapshot(
+        Some(expected),
+        &manager.project_model_projection()?,
+    )
+    .map_err(|error| SessionError::Solid(error.into()))
 }
 
 pub(super) fn handle_read_only(

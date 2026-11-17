@@ -47,6 +47,46 @@ pub fn script_source(arguments: &Value) -> Result<String, String> {
     load_script(arguments).map(|loaded| loaded.expanded)
 }
 
+/// Read exact authored text without parsing or expanding includes. The native
+/// repair editor uses the same file admission and byte bounds as normal loading.
+pub fn read_authored_script(file: &std::path::Path) -> Result<String, String> {
+    let path = file.to_str().ok_or("script path must be valid Unicode")?;
+    if !file.is_absolute() || !path.to_lowercase().ends_with(".limo.jsonc") {
+        return Err("script path must be an absolute .limo.jsonc file path".into());
+    }
+    read_script_file(file, &format!("script {path}"))
+}
+
+fn read_script_file(path: &std::path::Path, label: &str) -> Result<String, String> {
+    let metadata = std::fs::metadata(path).map_err(|e| format!("read {label}: {e}"))?;
+    if !metadata.is_file() || metadata.len() > MAX_SCRIPT_BYTES as u64 {
+        return Err(format!(
+            "{label} must be a regular file no larger than 16 MiB"
+        ));
+    }
+    let file = std::fs::File::open(path).map_err(|e| format!("read {label}: {e}"))?;
+    let metadata = file.metadata().map_err(|e| format!("read {label}: {e}"))?;
+    if !metadata.is_file() || metadata.len() > MAX_SCRIPT_BYTES as u64 {
+        return Err(format!(
+            "{label} must be a regular file no larger than 16 MiB"
+        ));
+    }
+    read_text_bounded(file, MAX_SCRIPT_BYTES).map_err(|e| format!("read {label}: {e}"))
+}
+
+fn read_text_bounded(reader: impl std::io::Read, limit: usize) -> Result<String, String> {
+    use std::io::Read;
+    let mut bytes = Vec::new();
+    reader
+        .take(limit as u64 + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|e| e.to_string())?;
+    if bytes.len() > limit {
+        return Err("script exceeds 16 MiB".into());
+    }
+    String::from_utf8(bytes).map_err(|e| format!("script is not valid UTF-8: {e}"))
+}
+
 pub fn load_script(arguments: &Value) -> Result<LoadedScript, String> {
     let recipe = arguments.get("recipe");
     let source = arguments.get("source");
@@ -91,16 +131,7 @@ pub fn load_script(arguments: &Value) -> Result<LoadedScript, String> {
         (None, Some(path)) => {
             let path = path.as_str().ok_or("script path must be a string")?;
             let file = std::path::Path::new(path);
-            if !file.is_absolute() || !path.to_lowercase().ends_with(".limo.jsonc") {
-                return Err("script path must be an absolute .limo.jsonc file path".into());
-            }
-            let metadata =
-                std::fs::metadata(file).map_err(|e| format!("read script {path}: {e}"))?;
-            if !metadata.is_file() || metadata.len() > MAX_SCRIPT_BYTES as u64 {
-                return Err("script must be a regular file no larger than 16 MiB".into());
-            }
-            let text =
-                std::fs::read_to_string(file).map_err(|e| format!("read script {path}: {e}"))?;
+            let text = read_authored_script(file)?;
             let base = file
                 .parent()
                 .ok_or("script path has no parent directory")?
@@ -158,11 +189,7 @@ fn expand_includes_if_needed(
         if !canon.is_file() {
             return Err(format!("include {rel} is not a file"));
         }
-        let meta = std::fs::metadata(&canon).map_err(|e| e.to_string())?;
-        if meta.len() > MAX_SCRIPT_BYTES as u64 {
-            return Err(format!("include {rel} exceeds 16 MiB"));
-        }
-        std::fs::read_to_string(&canon).map_err(|e| format!("read include {rel}: {e}"))
+        read_script_file(&canon, &format!("include {rel}"))
     })
 }
 
@@ -170,7 +197,11 @@ fn expand_includes_if_needed(
 pub use limo_cad_interface::catalog::{group_for, groups};
 
 pub fn validate_script(script: &limo_cad_script::Script) -> Result<(), String> {
-    script.validate_calls(|group, operation| match group_for(operation) {
+    script.validate_calls(validate_script_call)
+}
+
+pub(super) fn validate_script_call(group: &str, operation: &str) -> Result<(), String> {
+    match group_for(operation) {
         _ if operation == "cad_computer_control" => Err(
             "Computer control requires one observed interactive action at a time, outside scripts"
                 .into(),
@@ -178,13 +209,69 @@ pub fn validate_script(script: &limo_cad_script::Script) -> Result<(), String> {
         Some(expected) if group == expected => Ok(()),
         Some(expected) => Err(format!("{operation} belongs to {expected}, not {group}")),
         None => Err(format!("Unknown interface operation {operation}")),
-    })
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn bounded_reader_stops_after_limit_plus_one_and_rejects_invalid_utf8() {
+        struct Growing {
+            bytes: usize,
+        }
+        impl std::io::Read for Growing {
+            fn read(&mut self, output: &mut [u8]) -> std::io::Result<usize> {
+                output.fill(b'x');
+                self.bytes += output.len();
+                Ok(output.len())
+            }
+        }
+        let mut growing = Growing { bytes: 0 };
+        assert!(read_text_bounded(&mut growing, 8).is_err());
+        assert_eq!(growing.bytes, 9, "Do not read an unbounded growing file");
+        assert_eq!(read_text_bounded(&b"12345678"[..], 8).unwrap(), "12345678");
+        assert!(read_text_bounded(&[255][..], 8).is_err());
+        assert_eq!(read_text_bounded(&b""[..], 8).unwrap(), "");
+    }
+
+    #[test]
+    fn authored_reader_retains_invalid_text_but_enforces_file_admission() {
+        let directory = std::env::temp_dir().join(format!(
+            "limo-authored-reader-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir(&directory).unwrap();
+        let path = directory.join("unfinished.limo.jsonc");
+        let source = "// original comment\n{";
+        std::fs::write(&path, source).unwrap();
+        assert_eq!(read_authored_script(&path).unwrap(), source);
+        assert!(load_script(&json!({"path":path})).is_err());
+        assert!(read_authored_script(std::path::Path::new("relative.limo.jsonc")).is_err());
+        assert!(read_authored_script(&directory.join("wrong.json")).is_err());
+        let folder = directory.join("folder.limo.jsonc");
+        std::fs::create_dir(&folder).unwrap();
+        assert!(read_authored_script(&folder).is_err());
+        std::fs::write(&path, [255]).unwrap();
+        assert!(read_authored_script(&path).is_err());
+        std::fs::File::options()
+            .write(true)
+            .open(&path)
+            .unwrap()
+            .set_len(MAX_SCRIPT_BYTES as u64 + 1)
+            .unwrap();
+        assert!(read_authored_script(&path).is_err());
+        assert!(read_script_file(&path, "include fixture").is_err());
+        std::fs::remove_file(path).unwrap();
+        std::fs::remove_dir(folder).unwrap();
+        std::fs::remove_dir(directory).unwrap();
+    }
 
     #[test]
     fn file_schema_exposes_sheet_and_exact_profile_exports() {

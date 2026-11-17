@@ -772,3 +772,128 @@ pub(crate) fn assert_motion_csv(csv: &str, rate: usize) {
         }
     }
 }
+
+#[test]
+fn composite_command_retires_owner_only_after_valid_snapshot_load() {
+    let _lock = super::super::tests::TEST_LOCK.lock().unwrap();
+    let fixture = Fixture::new();
+    let owner = fixture.owner();
+    let original = fixture.engine.project_snapshot().unwrap();
+    let snapshot = limo_cad_project_file::ProjectSnapshot::new(
+        original.model_json().to_owned(),
+        vec![limo_cad_project_file::SnapshotIntent {
+            name: "intent/command.cbor".into(),
+            payload: vec![0, 255, 7],
+        }],
+    )
+    .unwrap();
+    let loaded = fixture
+        .bridge
+        .apply_native_mutation(
+            &fixture.engine,
+            &owner,
+            "cad_load_project_snapshot",
+            &json!({"snapshot_cbor_base64":snapshot.encode_base64().unwrap()}),
+            || Ok(()),
+        )
+        .unwrap();
+    assert_ne!(loaded.context, owner);
+    assert_eq!(
+        fixture.engine.project_snapshot().unwrap().intents(),
+        snapshot.intents()
+    );
+    assert!(fixture
+        .bridge
+        .apply_native_mutation(
+            &fixture.engine,
+            &loaded.context,
+            "cad_load_project_snapshot",
+            &json!({"snapshot_cbor_base64":"***"}),
+            || Ok(())
+        )
+        .is_err());
+    assert_eq!(fixture.owner(), loaded.context);
+    assert_eq!(
+        fixture.engine.project_snapshot().unwrap().intents(),
+        snapshot.intents()
+    );
+}
+
+#[test]
+fn drafting_dispatch_shares_native_history_and_rejects_stale_owners() {
+    let _lock = crate::session_bridge::tests::TEST_LOCK.lock().unwrap();
+    let fixture = Fixture::new();
+    let export = || ok(fixture.engine.engine_call("project_export_model", ""));
+    let before = export();
+    let owner = fixture.owner();
+    let command = json!({"type":"create_layer","arguments":{
+        "name":"Geometry","visible":true,"locked":false,"plottable":true,
+        "style":{"line_type":null,"color_rgb":[0,0,0],"width_mm":0.25}
+    }});
+    let inbox_error =
+        dispatch_inbox_on_engine(&fixture.engine, "drawing_drafting_apply", &command).unwrap_err();
+    assert!(inbox_error.contains("unsupported inbox mutate"));
+    assert_eq!(export(), before);
+    let created = fixture
+        .bridge
+        .apply_native_mutation(
+            &fixture.engine,
+            &owner,
+            "drawing_drafting_apply",
+            &command,
+            || Ok(()),
+        )
+        .unwrap();
+    assert_eq!(created.value["drafting"]["layers"][0]["id"], 1);
+    let after = export();
+    assert_ne!(after, before);
+    let receipt = fixture
+        .bridge
+        .native_document_receipt(&fixture.engine, &owner)
+        .unwrap();
+    assert!(fixture
+        .bridge
+        .apply_native_mutation(
+            &fixture.engine,
+            &owner,
+            "drawing_drafting_apply",
+            &json!({"type":"delete_entity","arguments":{"id":99}}),
+            || Ok(())
+        )
+        .is_err());
+    assert_eq!(export(), after);
+    assert_eq!(
+        fixture
+            .bridge
+            .native_document_receipt(&fixture.engine, &owner)
+            .unwrap()
+            .revision,
+        receipt.revision
+    );
+    fixture
+        .bridge
+        .apply_native_history(&fixture.engine, &owner, false, || Ok(()))
+        .unwrap();
+    assert_eq!(
+        export(),
+        before,
+        "Failed edit must not insert an extra undo entry"
+    );
+    assert_ne!(fixture.owner(), owner);
+    assert!(fixture
+        .bridge
+        .apply_native_mutation(
+            &fixture.engine,
+            &owner,
+            "drawing_drafting_apply",
+            &command,
+            || Ok(())
+        )
+        .is_err());
+    assert_eq!(export(), before);
+    fixture
+        .bridge
+        .apply_native_history(&fixture.engine, &fixture.owner(), true, || Ok(()))
+        .unwrap();
+    assert_eq!(export(), after);
+}

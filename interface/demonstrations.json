@@ -1,0 +1,1523 @@
+{
+  "schema_version": 1,
+  "inventory_complete": false,
+  "inventory_note": "Sketch and Solid Modeling are the first rollout; Drawings, Assembly and CAM follow. Catalog controls are inventoried; non-ribbon workflow entries still require reconciliation. Authored means source and bundled geometry exist; native interaction, visual evidence and performance acceptance are separate gates. The broader surface qualification campaign remains paused. Selection is split by actual native command: Solid select -> selection_solid; Sketch select -> selection_sketch. Assembly browser/joints and remaining workflow audits stay deferred.",
+  "guides": [
+    {
+      "id": "sketch",
+      "state": "authored",
+      "entry_points": [
+        {
+          "workspace": "solid",
+          "control": "createSketch",
+          "label_key": "ribbon.solid.createSketch"
+        }
+      ]
+    },
+    {
+      "id": "extrude",
+      "state": "authored",
+      "entry_points": [
+        {
+          "workspace": "solid",
+          "control": "extrude",
+          "label_key": "ribbon.solid.extrude"
+        }
+      ]
+    },
+    {
+      "id": "revolve",
+      "state": "authored",
+      "entry_points": [
+        {
+          "workspace": "solid",
+          "control": "revolve",
+          "label_key": "ribbon.solid.revolve"
+        }
+      ]
+    },
+    {
+      "id": "sweep",
+      "state": "authored",
+      "entry_points": [
+        {
+          "workspace": "solid",
+          "control": "sweep",
+          "label_key": "ribbon.solid.sweep"
+        }
+      ]
+    },
+    {
+      "id": "loft",
+      "state": "authored",
+      "entry_points": [
+        {
+          "workspace": "solid",
+          "control": "loft",
+          "label_key": "ribbon.solid.loft"
+        }
+      ]
+    },
+    {
+      "id": "rib",
+      "state": "authored",
+      "entry_points": [
+        {
+          "workspace": "solid",
+          "control": "rib",
+          "label_key": "ribbon.solid.rib"
+        }
+      ]
+    },
+    {
+      "id": "hole",
+      "state": "authored",
+      "entry_points": [
+        {
+          "workspace": "solid",
+          "control": "hole",
+          "label_key": "ribbon.solid.hole"
+        }
+      ]
+    },
+    {
+      "id": "external_thread",
+      "state": "authored",
+      "entry_points": [
+        {
+          "workspace": "solid",
+          "control": "externalThread",
+          "label_key": "ribbon.solid.externalThread"
+        }
+      ]
+    },
+    {
+      "id": "fillet",
+      "state": "authored",
+      "entry_points": [
+        {
+          "workspace": "solid",
+          "control": "fillet",
+          "label_key": "ribbon.solid.fillet"
+        }
+      ]
+    },
+    {
+      "id": "chamfer",
+      "state": "authored",
+      "entry_points": [
+        {
+          "workspace": "solid",
+          "control": "chamfer",
+          "label_key": "ribbon.solid.chamfer"
+        }
+      ]
+    },
+    {
+      "id": "shell",
+      "state": "authored",
+      "entry_points": [
+        {
+          "workspace": "solid",
+          "control": "shell",
+          "label_key": "ribbon.solid.shell"
+        }
+      ]
+    },
+    {
+      "id": "mirror",
+      "state": "authored",
+      "entry_points": [
+        {
+          "workspace": "solid",
+          "control": "mirror",
+          "label_key": "ribbon.solid.mirror"
+        }
+      ]
+    },
+    {
+      "id": "rectangular_pattern",
+      "state": "authored",
+      "entry_points": [
+        {
+          "workspace": "solid",
+          "control": "patternRectangular",
+          "label_key": "ribbon.solid.patternRectangular"
+        }
+      ]
+    },
+    {
+      "id": "circular_pattern",
+      "state": "authored",
+      "entry_points": [
+        {
+          "workspace": "solid",
+          "control": "patternCircular",
+          "label_key": "ribbon.solid.patternCircular"
+        }
+      ]
+    },
+    {
+      "id": "move_copy",
+      "state": "authored",
+      "entry_points": [
+        {
+          "workspace": "solid",
+          "control": "moveCopy",
+          "label_key": "ribbon.solid.moveCopy"
+        }
+      ]
+    },
+    {
+      "id": "combine",
+      "state": "authored",
+      "entry_points": [
+        {
+          "workspace": "solid",
+          "control": "combine",
+          "label_key": "ribbon.solid.combine"
+        }
+      ]
+    },
+    {
+      "id": "split_body",
+      "state": "authored",
+      "entry_points": [
+        {
+          "workspace": "solid",
+          "control": "splitBody",
+          "label_key": "ribbon.solid.splitBody"
+        }
+      ]
+    },
+    {
+      "id": "construction_visibility",
+      "state": "authored",
+      "entry_points": [
+        {
+          "workspace": "solid",
+          "control": "constructionVisibility",
+          "label_key": "ribbon.solid.constructionVisibility"
+        }
+      ]
+    },
+    {
+      "id": "offset_plane",
+      "state": "authored",
+      "entry_points": [
+        {
+          "workspace": "solid",
+          "control": "offsetPlane",
+          "label_key": "ribbon.solid.offsetPlane"
+        }
+      ]
+    },
+    {
+      "id": "midplane",
+      "state": "authored",
+      "entry_points": [
+        {
+          "workspace": "solid",
+          "control": "midplane",
+          "label_key": "ribbon.solid.midplane"
+        }
+      ]
+    },
+    {
+      "id": "plane_at_angle",
+      "state": "authored",
+      "entry_points": [
+        {
+          "workspace": "solid",
+          "control": "planeAtAngle",
+          "label_key": "ribbon.solid.planeAtAngle"
+        }
+      ]
+    },
+    {
+      "id": "measure",
+      "state": "authored",
+      "entry_points": [
+        {
+          "workspace": "solid",
+          "control": "measure",
+          "label_key": "ribbon.solid.measure"
+        }
+      ]
+    },
+    {
+      "id": "section_analysis",
+      "state": "authored",
+      "entry_points": [
+        {
+          "workspace": "solid",
+          "control": "sectionAnalysis",
+          "label_key": "ribbon.solid.sectionAnalysis"
+        }
+      ]
+    },
+    {
+      "id": "assembly_workspace",
+      "state": "pending",
+      "entry_points": [
+        {
+          "workspace": "solid",
+          "control": "assemblyBrowser",
+          "label_key": "ribbon.tabs.assembly"
+        }
+      ]
+    },
+    {
+      "id": "assembly_joint",
+      "state": "pending",
+      "entry_points": [
+        {
+          "workspace": "solid",
+          "control": "createJoint",
+          "label_key": "ribbon.assembly.joint"
+        },
+        {
+          "workspace": "assembly",
+          "control": "createJoint",
+          "label_key": "ribbon.assembly.joint"
+        }
+      ]
+    },
+    {
+      "id": "sketch_line",
+      "state": "authored",
+      "entry_points": [
+        {
+          "workspace": "sketch",
+          "control": "line",
+          "label_key": "ribbon.sketch.line"
+        }
+      ]
+    },
+    {
+      "id": "sketch_arc",
+      "state": "authored",
+      "entry_points": [
+        {
+          "workspace": "sketch",
+          "control": "arc",
+          "label_key": "ribbon.sketch.arc"
+        },
+        {
+          "workspace": "sketch",
+          "control": "arc3pt",
+          "label_key": "ribbon.sketch.arc3pt"
+        },
+        {
+          "workspace": "sketch",
+          "control": "arcCenter",
+          "label_key": "ribbon.sketch.arcCenter"
+        }
+      ]
+    },
+    {
+      "id": "sketch_rectangle",
+      "state": "authored",
+      "entry_points": [
+        {
+          "workspace": "sketch",
+          "control": "rectangle",
+          "label_key": "ribbon.sketch.rectangle"
+        },
+        {
+          "workspace": "sketch",
+          "control": "rect2pt",
+          "label_key": "ribbon.sketch.rect2pt"
+        },
+        {
+          "workspace": "sketch",
+          "control": "rectCenter",
+          "label_key": "ribbon.sketch.rectCenter"
+        }
+      ]
+    },
+    {
+      "id": "sketch_circle",
+      "state": "authored",
+      "entry_points": [
+        {
+          "workspace": "sketch",
+          "control": "circle",
+          "label_key": "ribbon.sketch.circle"
+        },
+        {
+          "workspace": "sketch",
+          "control": "circleCenter",
+          "label_key": "ribbon.sketch.circleCenter"
+        },
+        {
+          "workspace": "sketch",
+          "control": "circle2pt",
+          "label_key": "ribbon.sketch.circle2pt"
+        }
+      ]
+    },
+    {
+      "id": "sketch_spline",
+      "state": "authored",
+      "entry_points": [
+        {
+          "workspace": "sketch",
+          "control": "spline",
+          "label_key": "ribbon.sketch.spline"
+        },
+        {
+          "workspace": "sketch",
+          "control": "splineFit",
+          "label_key": "ribbon.sketch.splineFit"
+        }
+      ]
+    },
+    {
+      "id": "sketch_slot",
+      "state": "authored",
+      "entry_points": [
+        {
+          "workspace": "sketch",
+          "control": "slot",
+          "label_key": "ribbon.sketch.slot"
+        },
+        {
+          "workspace": "sketch",
+          "control": "slotCenterToCenter",
+          "label_key": "ribbon.sketch.slotCenterToCenter"
+        },
+        {
+          "workspace": "sketch",
+          "control": "slotOverall",
+          "label_key": "ribbon.sketch.slotOverall"
+        },
+        {
+          "workspace": "sketch",
+          "control": "slotCenterPoint",
+          "label_key": "ribbon.sketch.slotCenterPoint"
+        }
+      ]
+    },
+    {
+      "id": "sketch_polygon",
+      "state": "authored",
+      "entry_points": [
+        {
+          "workspace": "sketch",
+          "control": "polygon",
+          "label_key": "ribbon.sketch.polygon"
+        },
+        {
+          "workspace": "sketch",
+          "control": "polygonInscribed",
+          "label_key": "ribbon.sketch.polygonInscribed"
+        },
+        {
+          "workspace": "sketch",
+          "control": "polygonCircumscribed",
+          "label_key": "ribbon.sketch.polygonCircumscribed"
+        }
+      ]
+    },
+    {
+      "id": "sketch_midpoint_line",
+      "state": "authored",
+      "entry_points": [
+        {
+          "workspace": "sketch",
+          "control": "midpointLine",
+          "label_key": "ribbon.sketch.midpointLine"
+        }
+      ]
+    },
+    {
+      "id": "sketch_point",
+      "state": "authored",
+      "entry_points": [
+        {
+          "workspace": "sketch",
+          "control": "point",
+          "label_key": "ribbon.sketch.point"
+        }
+      ]
+    },
+    {
+      "id": "sketch_move_copy",
+      "state": "authored",
+      "entry_points": [
+        {
+          "workspace": "sketch",
+          "control": "moveCopy",
+          "label_key": "ribbon.sketch.moveCopy"
+        }
+      ]
+    },
+    {
+      "id": "sketch_trim",
+      "state": "authored",
+      "entry_points": [
+        {
+          "workspace": "sketch",
+          "control": "trim",
+          "label_key": "ribbon.sketch.trim"
+        }
+      ]
+    },
+    {
+      "id": "sketch_extend",
+      "state": "authored",
+      "entry_points": [
+        {
+          "workspace": "sketch",
+          "control": "extend",
+          "label_key": "ribbon.sketch.extend"
+        }
+      ]
+    },
+    {
+      "id": "sketch_offset",
+      "state": "authored",
+      "entry_points": [
+        {
+          "workspace": "sketch",
+          "control": "offset",
+          "label_key": "ribbon.sketch.offset"
+        }
+      ]
+    },
+    {
+      "id": "sketch_fillet",
+      "state": "authored",
+      "entry_points": [
+        {
+          "workspace": "sketch",
+          "control": "fillet",
+          "label_key": "ribbon.sketch.fillet"
+        }
+      ]
+    },
+    {
+      "id": "sketch_chamfer",
+      "state": "authored",
+      "entry_points": [
+        {
+          "workspace": "sketch",
+          "control": "chamfer",
+          "label_key": "ribbon.sketch.chamfer"
+        }
+      ]
+    },
+    {
+      "id": "sketch_scale",
+      "state": "authored",
+      "entry_points": [
+        {
+          "workspace": "sketch",
+          "control": "sketchScale",
+          "label_key": "ribbon.sketch.sketchScale"
+        }
+      ]
+    },
+    {
+      "id": "sketch_break",
+      "state": "authored",
+      "entry_points": [
+        {
+          "workspace": "sketch",
+          "control": "break",
+          "label_key": "ribbon.sketch.break"
+        }
+      ]
+    },
+    {
+      "id": "sketch_dimension",
+      "state": "authored",
+      "entry_points": [
+        {
+          "workspace": "sketch",
+          "control": "sketchDimension",
+          "label_key": "ribbon.sketch.sketchDimension"
+        }
+      ]
+    },
+    {
+      "id": "sketch_mirror",
+      "state": "authored",
+      "entry_points": [
+        {
+          "workspace": "sketch",
+          "control": "mirror",
+          "label_key": "ribbon.sketch.mirror"
+        }
+      ]
+    },
+    {
+      "id": "sketch_rectangular_pattern",
+      "state": "authored",
+      "entry_points": [
+        {
+          "workspace": "sketch",
+          "control": "patternRectangular",
+          "label_key": "ribbon.sketch.patternRectangular"
+        }
+      ]
+    },
+    {
+      "id": "sketch_circular_pattern",
+      "state": "authored",
+      "entry_points": [
+        {
+          "workspace": "sketch",
+          "control": "patternCircular",
+          "label_key": "ribbon.sketch.patternCircular"
+        }
+      ]
+    },
+    {
+      "id": "sketch_coincident",
+      "state": "authored",
+      "entry_points": [
+        {
+          "workspace": "sketch",
+          "control": "coincident",
+          "label_key": "ribbon.sketch.coincident"
+        }
+      ]
+    },
+    {
+      "id": "sketch_horizontal_vertical",
+      "state": "authored",
+      "entry_points": [
+        {
+          "workspace": "sketch",
+          "control": "horizontalVertical",
+          "label_key": "ribbon.sketch.horizontalVertical"
+        }
+      ]
+    },
+    {
+      "id": "sketch_tangent",
+      "state": "authored",
+      "entry_points": [
+        {
+          "workspace": "sketch",
+          "control": "tangent",
+          "label_key": "ribbon.sketch.tangent"
+        }
+      ]
+    },
+    {
+      "id": "sketch_parallel",
+      "state": "authored",
+      "entry_points": [
+        {
+          "workspace": "sketch",
+          "control": "parallel",
+          "label_key": "ribbon.sketch.parallel"
+        }
+      ]
+    },
+    {
+      "id": "sketch_perpendicular",
+      "state": "authored",
+      "entry_points": [
+        {
+          "workspace": "sketch",
+          "control": "perpendicular",
+          "label_key": "ribbon.sketch.perpendicular"
+        }
+      ]
+    },
+    {
+      "id": "sketch_equal",
+      "state": "authored",
+      "entry_points": [
+        {
+          "workspace": "sketch",
+          "control": "equal",
+          "label_key": "ribbon.sketch.equal"
+        }
+      ]
+    },
+    {
+      "id": "sketch_fix_unfix",
+      "state": "authored",
+      "entry_points": [
+        {
+          "workspace": "sketch",
+          "control": "fixUnfix",
+          "label_key": "ribbon.sketch.fixUnfix"
+        }
+      ]
+    },
+    {
+      "id": "sketch_midpoint",
+      "state": "authored",
+      "entry_points": [
+        {
+          "workspace": "sketch",
+          "control": "midpoint",
+          "label_key": "ribbon.sketch.midpoint"
+        }
+      ]
+    },
+    {
+      "id": "sketch_collinear",
+      "state": "authored",
+      "entry_points": [
+        {
+          "workspace": "sketch",
+          "control": "collinear",
+          "label_key": "ribbon.sketch.collinear"
+        }
+      ]
+    },
+    {
+      "id": "sketch_concentric",
+      "state": "authored",
+      "entry_points": [
+        {
+          "workspace": "sketch",
+          "control": "concentric",
+          "label_key": "ribbon.sketch.concentric"
+        }
+      ]
+    },
+    {
+      "id": "sketch_symmetry",
+      "state": "authored",
+      "entry_points": [
+        {
+          "workspace": "sketch",
+          "control": "symmetry",
+          "label_key": "ribbon.sketch.symmetry"
+        }
+      ]
+    },
+    {
+      "id": "drawing_sheet",
+      "state": "pending",
+      "entry_points": [
+        {
+          "workspace": "drawing",
+          "control": "newSheet",
+          "label_key": "ribbon.drawing.newSheet"
+        }
+      ]
+    },
+    {
+      "id": "drawing_auto_layout",
+      "state": "pending",
+      "entry_points": [
+        {
+          "workspace": "drawing",
+          "control": "autoLayout",
+          "label_key": "ribbon.drawing.autoLayout"
+        }
+      ]
+    },
+    {
+      "id": "drawing_projected_view",
+      "state": "pending",
+      "entry_points": [
+        {
+          "workspace": "drawing",
+          "control": "frontView",
+          "label_key": "ribbon.drawing.front"
+        },
+        {
+          "workspace": "drawing",
+          "control": "isometricView",
+          "label_key": "ribbon.drawing.isometric"
+        },
+        {
+          "workspace": "drawing",
+          "control": "drawingFrontViewMenu",
+          "label_key": "ribbon.drawing.front"
+        },
+        {
+          "workspace": "drawing",
+          "control": "drawingTopViewMenu",
+          "label_key": "ribbon.drawing.top"
+        },
+        {
+          "workspace": "drawing",
+          "control": "drawingLeftViewMenu",
+          "label_key": "ribbon.drawing.left"
+        },
+        {
+          "workspace": "drawing",
+          "control": "drawingRightViewMenu",
+          "label_key": "ribbon.drawing.right"
+        },
+        {
+          "workspace": "drawing",
+          "control": "drawingIsometricViewMenu",
+          "label_key": "ribbon.drawing.isometric"
+        }
+      ]
+    },
+    {
+      "id": "drawing_section_view",
+      "state": "pending",
+      "entry_points": [
+        {
+          "workspace": "drawing",
+          "control": "drawingSectionView",
+          "label_key": "ribbon.drawing.sectionView"
+        },
+        {
+          "workspace": "drawing",
+          "control": "drawingSectionViewMenu",
+          "label_key": "ribbon.drawing.sectionView"
+        }
+      ]
+    },
+    {
+      "id": "drawing_detail_view",
+      "state": "pending",
+      "entry_points": [
+        {
+          "workspace": "drawing",
+          "control": "drawingDetailViewMenu",
+          "label_key": "ribbon.drawing.detailView"
+        }
+      ]
+    },
+    {
+      "id": "drawing_auxiliary_view",
+      "state": "pending",
+      "entry_points": [
+        {
+          "workspace": "drawing",
+          "control": "drawingAuxiliaryViewMenu",
+          "label_key": "ribbon.drawing.auxiliaryView"
+        }
+      ]
+    },
+    {
+      "id": "drawing_broken_view",
+      "state": "pending",
+      "entry_points": [
+        {
+          "workspace": "drawing",
+          "control": "drawingBrokenViewMenu",
+          "label_key": "ribbon.drawing.brokenView"
+        }
+      ]
+    },
+    {
+      "id": "drawing_removed_section",
+      "state": "pending",
+      "entry_points": [
+        {
+          "workspace": "drawing",
+          "control": "drawingRemovedSectionMenu",
+          "label_key": "ribbon.drawing.removedSection"
+        }
+      ]
+    },
+    {
+      "id": "drawing_dimension",
+      "state": "pending",
+      "entry_points": [
+        {
+          "workspace": "drawing",
+          "control": "drawingDimension",
+          "label_key": "ribbon.drawing.dimension"
+        },
+        {
+          "workspace": "drawing",
+          "control": "drawingDimensionMenu",
+          "label_key": "ribbon.drawing.dimension"
+        }
+      ]
+    },
+    {
+      "id": "drawing_chain_dimension",
+      "state": "pending",
+      "entry_points": [
+        {
+          "workspace": "drawing",
+          "control": "drawingChainDimensionMenu",
+          "label_key": "ribbon.drawing.chainDimension"
+        }
+      ]
+    },
+    {
+      "id": "drawing_baseline_dimension",
+      "state": "pending",
+      "entry_points": [
+        {
+          "workspace": "drawing",
+          "control": "drawingBaselineDimensionMenu",
+          "label_key": "ribbon.drawing.baselineDimension"
+        }
+      ]
+    },
+    {
+      "id": "drawing_continued_dimension",
+      "state": "pending",
+      "entry_points": [
+        {
+          "workspace": "drawing",
+          "control": "drawingContinuedDimensionMenu",
+          "label_key": "ribbon.drawing.continuedDimension"
+        }
+      ]
+    },
+    {
+      "id": "drawing_ordinate_dimension",
+      "state": "pending",
+      "entry_points": [
+        {
+          "workspace": "drawing",
+          "control": "drawingOrdinateDimensionMenu",
+          "label_key": "ribbon.drawing.ordinateDimension"
+        }
+      ]
+    },
+    {
+      "id": "drawing_diameter",
+      "state": "pending",
+      "entry_points": [
+        {
+          "workspace": "drawing",
+          "control": "drawingDiameterMenu",
+          "label_key": "ribbon.drawing.diameter"
+        }
+      ]
+    },
+    {
+      "id": "drawing_radius",
+      "state": "pending",
+      "entry_points": [
+        {
+          "workspace": "drawing",
+          "control": "drawingRadiusMenu",
+          "label_key": "ribbon.drawing.radius"
+        }
+      ]
+    },
+    {
+      "id": "drawing_arc_length",
+      "state": "pending",
+      "entry_points": [
+        {
+          "workspace": "drawing",
+          "control": "drawingArcLengthMenu",
+          "label_key": "ribbon.drawing.arcLength"
+        }
+      ]
+    },
+    {
+      "id": "drawing_jogged_radius",
+      "state": "pending",
+      "entry_points": [
+        {
+          "workspace": "drawing",
+          "control": "drawingJoggedRadiusMenu",
+          "label_key": "ribbon.drawing.joggedRadius"
+        }
+      ]
+    },
+    {
+      "id": "drawing_angle",
+      "state": "pending",
+      "entry_points": [
+        {
+          "workspace": "drawing",
+          "control": "drawingAngleMenu",
+          "label_key": "ribbon.drawing.angle"
+        }
+      ]
+    },
+    {
+      "id": "drawing_center_line",
+      "state": "pending",
+      "entry_points": [
+        {
+          "workspace": "drawing",
+          "control": "drawingCenterLine",
+          "label_key": "ribbon.drawing.centerLine"
+        },
+        {
+          "workspace": "drawing",
+          "control": "drawingCenterLineMenu",
+          "label_key": "ribbon.drawing.centerLine"
+        }
+      ]
+    },
+    {
+      "id": "drawing_hole_note",
+      "state": "pending",
+      "entry_points": [
+        {
+          "workspace": "drawing",
+          "control": "drawingHoleNote",
+          "label_key": "ribbon.drawing.holeNote"
+        },
+        {
+          "workspace": "drawing",
+          "control": "drawingHoleNoteMenu",
+          "label_key": "ribbon.drawing.holeNote"
+        }
+      ]
+    },
+    {
+      "id": "drawing_note",
+      "state": "pending",
+      "entry_points": [
+        {
+          "workspace": "drawing",
+          "control": "drawingNote",
+          "label_key": "ribbon.drawing.note"
+        },
+        {
+          "workspace": "drawing",
+          "control": "drawingNoteMenu",
+          "label_key": "ribbon.drawing.note"
+        }
+      ]
+    },
+    {
+      "id": "drawing_center_mark",
+      "state": "pending",
+      "entry_points": [
+        {
+          "workspace": "drawing",
+          "control": "drawingCenterMarkMenu",
+          "label_key": "ribbon.drawing.centerMark"
+        }
+      ]
+    },
+    {
+      "id": "drawing_symmetry_axis",
+      "state": "pending",
+      "entry_points": [
+        {
+          "workspace": "drawing",
+          "control": "drawingSymmetryAxisMenu",
+          "label_key": "ribbon.drawing.symmetryAxis"
+        }
+      ]
+    },
+    {
+      "id": "drawing_bolt_circle",
+      "state": "pending",
+      "entry_points": [
+        {
+          "workspace": "drawing",
+          "control": "drawingBoltCircleMenu",
+          "label_key": "ribbon.drawing.boltCircle"
+        }
+      ]
+    },
+    {
+      "id": "drawing_chamfer_note",
+      "state": "pending",
+      "entry_points": [
+        {
+          "workspace": "drawing",
+          "control": "drawingChamferNoteMenu",
+          "label_key": "ribbon.drawing.chamferNote"
+        }
+      ]
+    },
+    {
+      "id": "drawing_datum",
+      "state": "pending",
+      "entry_points": [
+        {
+          "workspace": "drawing",
+          "control": "drawingDatum",
+          "label_key": "ribbon.drawing.datum"
+        },
+        {
+          "workspace": "drawing",
+          "control": "drawingDatumMenu",
+          "label_key": "ribbon.drawing.datum"
+        }
+      ]
+    },
+    {
+      "id": "drawing_gdt",
+      "state": "pending",
+      "entry_points": [
+        {
+          "workspace": "drawing",
+          "control": "drawingGdt",
+          "label_key": "ribbon.drawing.gdt"
+        },
+        {
+          "workspace": "drawing",
+          "control": "drawingGdtMenu",
+          "label_key": "ribbon.drawing.gdt"
+        }
+      ]
+    },
+    {
+      "id": "drawing_surface_texture",
+      "state": "pending",
+      "entry_points": [
+        {
+          "workspace": "drawing",
+          "control": "drawingSurfaceTextureMenu",
+          "label_key": "ribbon.drawing.surfaceTexture"
+        }
+      ]
+    },
+    {
+      "id": "drawing_edge_requirement",
+      "state": "pending",
+      "entry_points": [
+        {
+          "workspace": "drawing",
+          "control": "drawingEdgeRequirementMenu",
+          "label_key": "ribbon.drawing.edgeRequirement"
+        }
+      ]
+    },
+    {
+      "id": "drawing_weld",
+      "state": "pending",
+      "entry_points": [
+        {
+          "workspace": "drawing",
+          "control": "drawingWeldMenu",
+          "label_key": "ribbon.drawing.weld"
+        }
+      ]
+    },
+    {
+      "id": "drawing_balloon",
+      "state": "pending",
+      "entry_points": [
+        {
+          "workspace": "drawing",
+          "control": "drawingBalloonMenu",
+          "label_key": "ribbon.drawing.balloon"
+        }
+      ]
+    },
+    {
+      "id": "drawing_revision_cloud",
+      "state": "pending",
+      "entry_points": [
+        {
+          "workspace": "drawing",
+          "control": "drawingRevisionCloudMenu",
+          "label_key": "ribbon.drawing.revisionCloud"
+        }
+      ]
+    },
+    {
+      "id": "drawing_export_drawing_dxf",
+      "state": "pending",
+      "entry_points": [
+        {
+          "workspace": "drawing",
+          "control": "exportDrawingDxf",
+          "label_key": "ribbon.drawing.exportDxf"
+        }
+      ]
+    },
+    {
+      "id": "drawing_print_drawing",
+      "state": "pending",
+      "entry_points": [
+        {
+          "workspace": "drawing",
+          "control": "printDrawing",
+          "label_key": "ribbon.drawing.print"
+        }
+      ]
+    },
+    {
+      "id": "drawing_export_dxf",
+      "state": "pending",
+      "entry_points": [
+        {
+          "workspace": "drawing",
+          "control": "exportDrawingDxfMenu",
+          "label_key": "ribbon.drawing.exportDxf"
+        }
+      ]
+    },
+    {
+      "id": "drawing_export_profile_dxf",
+      "state": "pending",
+      "entry_points": [
+        {
+          "workspace": "drawing",
+          "control": "exportDrawingProfileDxfMenu",
+          "label_key": "ribbon.drawing.exportProfileDxf"
+        }
+      ]
+    },
+    {
+      "id": "drawing_print",
+      "state": "pending",
+      "entry_points": [
+        {
+          "workspace": "drawing",
+          "control": "printDrawingMenu",
+          "label_key": "ribbon.drawing.print"
+        }
+      ]
+    },
+    {
+      "id": "cam_return_model",
+      "state": "pending",
+      "entry_points": [
+        {
+          "workspace": "cam",
+          "control": "returnModel",
+          "label_key": "ribbon.cam.model"
+        }
+      ]
+    },
+    {
+      "id": "cam_new_setup",
+      "state": "pending",
+      "entry_points": [
+        {
+          "workspace": "cam",
+          "control": "newSetup",
+          "label_key": "ribbon.cam.newSetup"
+        }
+      ]
+    },
+    {
+      "id": "cam_tool_library",
+      "state": "pending",
+      "entry_points": [
+        {
+          "workspace": "cam",
+          "control": "toolLibrary",
+          "label_key": "ribbon.cam.toolLibrary"
+        }
+      ]
+    },
+    {
+      "id": "cam_face",
+      "state": "pending",
+      "entry_points": [
+        {
+          "workspace": "cam",
+          "control": "camFace",
+          "label_key": "ribbon.cam.face"
+        }
+      ]
+    },
+    {
+      "id": "cam_adaptive3d",
+      "state": "pending",
+      "entry_points": [
+        {
+          "workspace": "cam",
+          "control": "camAdaptive",
+          "label_key": "ribbon.cam.adaptive"
+        }
+      ]
+    },
+    {
+      "id": "cam_flat3d",
+      "state": "pending",
+      "entry_points": [
+        {
+          "workspace": "cam",
+          "control": "camFlat",
+          "label_key": "ribbon.cam.flat"
+        }
+      ]
+    },
+    {
+      "id": "cam_contour2d",
+      "state": "pending",
+      "entry_points": [
+        {
+          "workspace": "cam",
+          "control": "camContour",
+          "label_key": "ribbon.cam.contour"
+        }
+      ]
+    },
+    {
+      "id": "cam_pocket2d",
+      "state": "pending",
+      "entry_points": [
+        {
+          "workspace": "cam",
+          "control": "camPocket",
+          "label_key": "ribbon.cam.pocket"
+        }
+      ]
+    },
+    {
+      "id": "cam_chamfer2d",
+      "state": "pending",
+      "entry_points": [
+        {
+          "workspace": "cam",
+          "control": "camChamfer",
+          "label_key": "ribbon.cam.chamfer"
+        }
+      ]
+    },
+    {
+      "id": "cam_drill",
+      "state": "pending",
+      "entry_points": [
+        {
+          "workspace": "cam",
+          "control": "camDrill",
+          "label_key": "ribbon.cam.drill"
+        }
+      ]
+    },
+    {
+      "id": "cam_thread",
+      "state": "pending",
+      "entry_points": [
+        {
+          "workspace": "cam",
+          "control": "camThread",
+          "label_key": "ribbon.cam.thread"
+        }
+      ]
+    },
+    {
+      "id": "cam_cam_sim",
+      "state": "pending",
+      "entry_points": [
+        {
+          "workspace": "cam-simulate",
+          "control": "camSim",
+          "label_key": "ribbon.cam.simulate"
+        }
+      ]
+    },
+    {
+      "id": "cam_nc_sim",
+      "state": "pending",
+      "entry_points": [
+        {
+          "workspace": "cam-simulate",
+          "control": "ncSim",
+          "label_key": "ribbon.cam.simulateNc"
+        }
+      ]
+    },
+    {
+      "id": "cam_post_nc",
+      "state": "pending",
+      "entry_points": [
+        {
+          "workspace": "cam-output",
+          "control": "postNc",
+          "label_key": "ribbon.cam.post"
+        }
+      ]
+    },
+    {
+      "id": "cam_post_events",
+      "state": "pending",
+      "entry_points": [
+        {
+          "workspace": "cam-output",
+          "control": "postEvents",
+          "label_key": "ribbon.cam.events"
+        }
+      ]
+    },
+    {
+      "id": "cut",
+      "state": "authored",
+      "entry_points": [
+        {
+          "workspace": "solid",
+          "control": "extrude",
+          "label_key": "ribbon.solid.extrude"
+        }
+      ]
+    },
+    {
+      "id": "selection_solid",
+      "state": "authored",
+      "entry_points": [
+        {
+          "workspace": "solid",
+          "control": "select",
+          "label_key": "ribbon.solid.select"
+        }
+      ]
+    },
+    {
+      "id": "selection_sketch",
+      "state": "authored",
+      "entry_points": [
+        {
+          "workspace": "sketch",
+          "control": "select",
+          "label_key": "ribbon.sketch.select"
+        }
+      ]
+    }
+  ],
+  "unavailable_controls": [
+    {
+      "workspace": "solid",
+      "control": "draft",
+      "label_key": "ribbon.solid.draft"
+    },
+    {
+      "workspace": "solid",
+      "control": "patternOnPath",
+      "label_key": "ribbon.solid.patternOnPath"
+    },
+    {
+      "workspace": "solid",
+      "control": "scale",
+      "label_key": "ribbon.solid.scale"
+    },
+    {
+      "workspace": "solid",
+      "control": "axisThrough",
+      "label_key": "ribbon.solid.axisThrough"
+    },
+    {
+      "workspace": "solid",
+      "control": "pointAtVertex",
+      "label_key": "ribbon.solid.pointAtVertex"
+    },
+    {
+      "workspace": "solid",
+      "control": "interference",
+      "label_key": "ribbon.solid.interference"
+    },
+    {
+      "workspace": "sketch",
+      "control": "arcTangent",
+      "label_key": "ribbon.sketch.arcTangent"
+    },
+    {
+      "workspace": "sketch",
+      "control": "splineControl",
+      "label_key": "ribbon.sketch.splineControl"
+    },
+    {
+      "workspace": "sketch",
+      "control": "rect3pt",
+      "label_key": "ribbon.sketch.rect3pt"
+    },
+    {
+      "workspace": "sketch",
+      "control": "circle3pt",
+      "label_key": "ribbon.sketch.circle3pt"
+    },
+    {
+      "workspace": "sketch",
+      "control": "polygonEdge",
+      "label_key": "ribbon.sketch.polygonEdge"
+    },
+    {
+      "workspace": "sketch",
+      "control": "slotThreePointArc",
+      "label_key": "ribbon.sketch.slotThreePointArc"
+    },
+    {
+      "workspace": "sketch",
+      "control": "slotCenterPointArc",
+      "label_key": "ribbon.sketch.slotCenterPointArc"
+    },
+    {
+      "workspace": "sketch",
+      "control": "ellipse",
+      "label_key": "ribbon.sketch.ellipse"
+    },
+    {
+      "workspace": "sketch",
+      "control": "conicCurve",
+      "label_key": "ribbon.sketch.conicCurve"
+    },
+    {
+      "workspace": "sketch",
+      "control": "text",
+      "label_key": "ribbon.sketch.text"
+    },
+    {
+      "workspace": "sketch",
+      "control": "autoConstrain",
+      "label_key": "ribbon.sketch.autoConstrain"
+    },
+    {
+      "workspace": "sketch",
+      "control": "curvature",
+      "label_key": "ribbon.sketch.curvature"
+    }
+  ],
+  "workflow_areas": [
+    {
+      "id": "app-startup",
+      "scope": "Launch, foreground/control banner, recovery, missing runtime, crash/error messages",
+      "state": "pending_entry_audit"
+    },
+    {
+      "id": "document-tabs-files",
+      "scope": "New, open, save, save-as, rename, dirty/close behavior, import/export menus, overwrite dialogs",
+      "state": "pending_entry_audit"
+    },
+    {
+      "id": "browser-history",
+      "scope": "Selection, visibility, context menus, feature edit/rename/delete/reorder/rollback, Undo/Redo",
+      "state": "pending_entry_audit"
+    },
+    {
+      "id": "navigation-picking",
+      "scope": "Fit, zoom/wheel, pan/orbit, orientation dial, hover, geometry/annotation picking, keyboard shortcuts",
+      "state": "pending_entry_audit"
+    },
+    {
+      "id": "preferences-units",
+      "scope": "Settings, units, theme, locale, defaults, persistence and readable labels",
+      "state": "pending_entry_audit"
+    },
+    {
+      "id": "appearance-named-views",
+      "scope": "Body appearance, materials, component/instance names, visibility, placements and named views",
+      "state": "pending_entry_audit"
+    },
+    {
+      "id": "drawing-sheet-dialogs",
+      "scope": "Sheet/view/dimension/annotation/table editing, paper navigation, selection, PDF/print layouts",
+      "state": "pending_entry_audit"
+    },
+    {
+      "id": "cam-dialogs-libraries",
+      "scope": "Machines/tools/setups/operations/WCS, geometry selection, simulation/playback, reports and NC export",
+      "state": "pending_entry_audit"
+    },
+    {
+      "id": "print-intent-handoff",
+      "scope": "Print settings/modifiers/layouts, preflight, portable exports, supported slicer handoffs and errors",
+      "state": "pending_entry_audit"
+    },
+    {
+      "id": "scripts-help-transport",
+      "scope": "Help/scripts/MCP status/presentation surfaces; restrictions remain explicit and no replay is authorized",
+      "state": "pending_entry_audit"
+    },
+    {
+      "id": "assembly-dynamic-panels",
+      "scope": "Explicit native Structure, joint-definition/motion, named positions, motion-study and Inspect behaviors reconciled after fresh rendered UI discovery.",
+      "state": "pending_entry_audit"
+    },
+    {
+      "id": "measure",
+      "scope": "Native solid Measure controls and disposable result presentation; source inventory awaiting fresh rendered control reconciliation.",
+      "state": "pending_entry_audit"
+    }
+  ]
+}

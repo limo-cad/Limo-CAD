@@ -17,6 +17,24 @@ pub(super) fn enabled() -> bool {
     std::env::var("LIMO_CAD_NATIVE_SCRIPT_INPUT").as_deref() == Ok("1")
 }
 
+pub(super) fn capture_name(title: &str, path: &str) -> Result<String> {
+    let kind = match title {
+        "Open Limo CAD script" => "open",
+        "Save Limo CAD script" => "save",
+        _ => anyhow::bail!("Unexpected script chooser title"),
+    };
+    let name = Path::new(path)
+        .file_name()
+        .context("Script chooser file name")?
+        .to_string_lossy();
+    let safe: String = name
+        .chars()
+        .take(128)
+        .map(|ch| if ch.is_ascii_alphanumeric() { ch } else { '-' })
+        .collect();
+    Ok(format!("script-dialog-{kind}-{safe}.png"))
+}
+
 pub(super) fn complete_dialog(
     client: &mut Client,
     out: &Path,
@@ -46,46 +64,46 @@ pub(super) fn complete_dialog(
     }
     #[cfg(not(windows))]
     {
-        let _ = (client, out);
-        std::env::set_var("LIMO_CAD_SCRIPT_DIALOG_TITLE", title);
-        invoke("script-dialog", Some(path), Duration::from_secs(30))
+        let _ = client;
+        invoke(out, title, path, Duration::from_secs(30))
     }
 }
 
 #[cfg(not(windows))]
-fn invoke(operation: &str, input: Option<&str>, timeout: Duration) -> Result<()> {
+fn invoke(out: &Path, title: &str, path: &str, timeout: Duration) -> Result<()> {
     let pid = std::env::var("LIMO_CAD_NATIVE_OWNED_PID")
         .context("LIMO_CAD_NATIVE_OWNED_PID")?
         .parse::<u32>()
         .context("LIMO_CAD_NATIVE_OWNED_PID")?;
-    let mut command = helper(pid, operation)?;
+    let mut command = helper(pid, "script-dialog")?;
     command
+        .env("LIMO_CAD_SCRIPT_DIALOG_TITLE", title)
+        .env(
+            "LIMO_CAD_SCRIPT_DIALOG_CAPTURE",
+            out.join(capture_name(title, path)?),
+        )
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     let mut child = command.spawn().context("Start script chooser helper")?;
-    if let Some(input) = input {
-        child
-            .stdin
-            .take()
-            .context("script chooser helper stdin")?
-            .write_all(input.as_bytes())?;
-    } else {
-        drop(child.stdin.take());
-    }
+    child
+        .stdin
+        .take()
+        .context("script chooser helper stdin")?
+        .write_all(path.as_bytes())?;
     let deadline = Instant::now() + timeout;
     while child.try_wait()?.is_none() {
         if Instant::now() >= deadline {
             let _ = child.kill();
             let _ = child.wait();
-            bail!("Script chooser helper {operation} exceeded {timeout:?}");
+            bail!("Script chooser helper exceeded {timeout:?}");
         }
         thread::sleep(Duration::from_millis(25));
     }
     let output = child.wait_with_output()?;
     ensure!(
         output.status.success(),
-        "Script chooser helper {operation} failed: {}",
+        "Script chooser helper failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
     Ok(())

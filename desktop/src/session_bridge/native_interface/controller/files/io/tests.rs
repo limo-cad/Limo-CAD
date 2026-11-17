@@ -1,5 +1,6 @@
 use super::super::tests::{drain, path, setup};
 use super::*;
+use crate::session_bridge::engine_text;
 use crate::session_bridge::native_interface::tests::Fixture;
 
 fn solid(fixture: &Fixture) {

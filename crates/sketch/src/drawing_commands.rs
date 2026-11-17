@@ -254,6 +254,8 @@ impl SketchManager {
             }
             DrawingCommand::DeleteSheet(r) => {
                 sheet(&mut next, r.sheet_id)?;
+                next.ensure_sheet_deletable(r.sheet_id)
+                    .map_err(SessionError::Solid)?;
                 next.sheets.retain(|s| s.id != r.sheet_id);
                 if next.active_sheet_id == Some(r.sheet_id) {
                     next.active_sheet_id = next.sheets.first().map(|s| s.id);

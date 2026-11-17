@@ -20,6 +20,7 @@ serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true, features = ["float_roundtrip", "raw_value"] }
 serde_yaml_ng = "0.10.0"
 limo-cad-core = { path = "../crates/core" }
+limo-cad-project-file = { path = "../crates/project-file" }
 limo-cad-recipes = { path = "../crates/recipes" }
 regex.workspace = true
 semver.workspace = true
@@ -34,6 +35,6 @@ flate2 = { workspace = true, features = ["rust_backend"] }
 sysinfo = { workspace = true, features = ["system"] }
 
 [target.'cfg(windows)'.dependencies]
-arboard = { version = "=3.6.1", default-features = false, optional = true }
-find-msvc-tools = "=0.1.14"
+arboard = { version = "=3.7.0", default-features = false, optional = true }
+find-msvc-tools = "=0.1.15"
 windows = { workspace = true, features = ["Win32_UI_WindowsAndMessaging"] }

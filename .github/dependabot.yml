@@ -9,6 +9,18 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    # Bevy 0.20 shares these crate types with the app and patched widgets.
+    # Migrate routine minor/major bumps with Bevy; patches and security updates
+    # remain eligible. Update-type ignores do not suppress security updates.
+    ignore:
+      - dependency-name: accesskit
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: accesskit_winit
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: parley
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: smol_str
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
     groups:
       rust-workspaces:
         patterns: ["*"]

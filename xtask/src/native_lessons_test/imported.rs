@@ -4,6 +4,7 @@ use super::*;
 use crate::replay::Client;
 use std::path::Path;
 mod os_input;
+mod portable;
 mod preview;
 
 pub(super) fn exercise(c: &mut Client, out: &Path) -> Result<Value> {
@@ -48,6 +49,11 @@ pub(super) fn exercise(c: &mut Client, out: &Path) -> Result<Value> {
         serde_json::to_vec_pretty(&json!({"root":source,"fragment":fragment}))?,
     )?;
     control(c, "Scripts", None)?;
+    // Reopening Scripts retains the previous lesson's source editor.
+    let scripts = ui(c, json!({"action":"inspect"}))?;
+    if controls(&scripts).any(|row| row["label"] == "Authored script source") {
+        control(c, "Back to Scripts", None)?;
+    }
     if os_input::enabled() {
         let opened = control(c, "Open script...", None)?;
         ensure!(
@@ -248,11 +254,25 @@ pub(super) fn exercise(c: &mut Client, out: &Path) -> Result<Value> {
         "Imported source modified the retained original lesson"
     );
     capture(c, out, "scripts-retained-original")?;
-    let catalog = exercise_catalog(c, out, &original, &edited)?;
+    // Run closes Scripts while retaining its source editor.
+    let scripts = ui(c, json!({"action":"inspect"}))?;
+    if controls(&scripts).any(|row| row["label"] == "Scripts" && row["selected"] == false) {
+        control(c, "Scripts", None)?;
+    }
+    // Source Save as clears dirty state. Recreate a deliberate unsaved edit for
+    // the catalog's existing Save/Discard/Cancel decision instead of assuming it.
+    let catalog_source = format!("{edited}\n// Unsaved catalog decision fixture.\n");
+    control(c, "Authored script source", Some(&catalog_source))?;
+    let catalog = exercise_catalog(c, out, &original, &catalog_source)?;
+    let portable = if cfg!(target_os = "linux") && os_input::enabled() {
+        portable::exercise(c, out, &original, &original_session)?
+    } else {
+        json!({"state":"not_run","reason":"Requires the disposable owned Scripts OS-input launcher"})
+    };
     Ok(
         json!({"state_checks_passed":true,"pixel_review":"required","loaded_ui":loaded,
         "source_editor":editor,"invalid_draft":invalid,"validated_draft":validated,
-        "catalog":catalog,
+        "catalog":catalog,"portable_package":portable,
         "started":started,"presentation":presentation,"model":model,"original":original,
         "checks":["inspect-does-not-run","authored-multiline-editor","invalid-draft-blocks-run",
             "shared-source-validation","validation-keeps-unsaved-state","no-implicit-source-write",

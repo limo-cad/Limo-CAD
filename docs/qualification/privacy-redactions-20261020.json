@@ -1,0 +1,815 @@
+{
+  "source_revision": "0dc4a95b91ac909299fe20983592b57007a43690",
+  "purpose": "Sanitize developer home directories, local accounts, local drive roots and a private project label in retained evidence. Measurements, tested revisions, results and qualification state are unchanged. Hashes distinguish the original records from these redacted copies.",
+  "artifacts": [
+    {
+      "path": "docs/qualification/apple-surface-signature-20261011.json",
+      "original_sha256": "74b9c765ec132d8bc0ecfea89ab2775f71cb11ccc70a5a62d0debb21c93a9d1e",
+      "redacted_sha256": "dfec024f94e41c88da58678c98a8544d608574469bd5e2f4950a809b3425004b",
+      "redactions": [
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/qualification/bevy-controls-20261017.json",
+      "original_sha256": "5e2e381800fccd54b82abd3d448b7ee6ef74e496438b65629b688c5137c9839f",
+      "redacted_sha256": "e54136b349778b19a5adee3107e6e8b60ff0b217dcef7d9d0e96e2c09c83822b",
+      "redactions": [
+        "developer home directory"
+      ]
+    },
+    {
+      "path": "docs/qualification/bevy-dialogs-20261017.json",
+      "original_sha256": "f18072f42cbd9ddeda5afeb7bb0fea3842a2b4d45f8c7371d875142f06c50d8d",
+      "redacted_sha256": "8b18e190b24e2626f3d710cf61492391fa0332819985a016f81e6c7d053285f4",
+      "redactions": [
+        "developer home directory"
+      ]
+    },
+    {
+      "path": "docs/qualification/bevy-independent-ui-20261011.json",
+      "original_sha256": "7395f6b341a2f9e9a41c33692b70223eb22caa097e0c012cf7caa9636ae6fd5c",
+      "redacted_sha256": "a9d7f0e99d2f52c8ce896c8ab20bb3889400d2fef4f8d001e5edd54378b760f4",
+      "redactions": [
+        "developer home directory"
+      ]
+    },
+    {
+      "path": "docs/qualification/bevy-ownership-audit.md",
+      "original_sha256": "68991fe59f3d00a4d6e618a46b6ba07d9c83dfc8b5d221e9ab5aceddc60d951c",
+      "redacted_sha256": "ff3bd3d99de2b2ecfdb28fa7f676b436b72c3560bc551ca833ee417275d6e5ff",
+      "redactions": [
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/qualification/bevy-settings-drag-20261018.json",
+      "original_sha256": "d2ddc3c3aeb193d1fc8b0e0befa04cae4e896f95214a664c7fcdf09f86008123",
+      "redacted_sha256": "cc0f5b70284182051646fb568cee54e74eaf187238952e87105fde20c9b6d5e0",
+      "redactions": [
+        "developer home directory"
+      ]
+    },
+    {
+      "path": "docs/qualification/bevy-settings-drag-20261018/build-identity.json",
+      "original_sha256": "6b5967733d8370147bed1fa228acb735bd16970dc18e1a52ca46c50ce8635ced",
+      "redacted_sha256": "db4978fd321886e52e320610c59aecd18c5d4abec3f8ceae622590d769a475ab",
+      "redactions": [
+        "developer home directory"
+      ]
+    },
+    {
+      "path": "docs/qualification/bevy-settings-drag-20261018/clippy.txt",
+      "original_sha256": "904b4c7189ef88941f54686593df0201f9f9adf9134adca4301c9079bd1133c2",
+      "redacted_sha256": "93fc074da1fa27227fbfb4a690247dced254b283ff3c88177b86a3a6d90051eb",
+      "redactions": [
+        "developer home directory"
+      ]
+    },
+    {
+      "path": "docs/qualification/bevy-settings-drag-20261018/package.txt",
+      "original_sha256": "d338570f4778cc00a9c735c167a331b43dc2e3571e000082f00cd1c88fabae69",
+      "redacted_sha256": "29ed7e2ad888f9b179db37a33885b74bb5401b174ebae75af4fb1c390380f18e",
+      "redactions": [
+        "developer home directory"
+      ]
+    },
+    {
+      "path": "docs/qualification/bevy-settings-drag-20261018/runner-test.txt",
+      "original_sha256": "e51214bf30ab9a5a52866e751eeaa64702da58e971dc7cd4741c9d63120fa324",
+      "redacted_sha256": "024ae0011a5a3387cf84317f44404c6509a3ae70a87db057810b40d435c4df61",
+      "redactions": [
+        "developer home directory"
+      ]
+    },
+    {
+      "path": "docs/qualification/bevy-settings-snap-20261017.json",
+      "original_sha256": "a779b0f781126a95d9a32efa17e7a1279fc959eab254d76d2fe8345dca761c6b",
+      "redacted_sha256": "d40d206696fafaefb126a826e93227adfc5a58c4801c628db3b2afa137e18c80",
+      "redactions": [
+        "developer home directory"
+      ]
+    },
+    {
+      "path": "docs/qualification/bevy-settings-snap-20261017/clippy.txt",
+      "original_sha256": "2c862861af2dd65d51fae33b60e950d1c0d838fab7e25321e7a7489883df538c",
+      "redacted_sha256": "170f6fe09f8dc7145aa14d25ba6fd34e8b16135a0cde826a73cefb7e1e91f953",
+      "redactions": [
+        "developer home directory"
+      ]
+    },
+    {
+      "path": "docs/qualification/bevy-settings-snap-20261017/interface-tests.txt",
+      "original_sha256": "e3fcb394b78151bb21bb2a9d6634f52ffb5cb5c5c8b764f4e81263c18978562c",
+      "redacted_sha256": "93861a6c82d6f157b98075d739c70ff46384a47db3d19ffe89ce476748c73048",
+      "redactions": [
+        "developer home directory"
+      ]
+    },
+    {
+      "path": "docs/qualification/bevy-settings-snap-20261017/package.txt",
+      "original_sha256": "3c98d6e42656d65083e19fd8e97fd44d1115cd24b760f412c8e61e822595a313",
+      "redacted_sha256": "b032ac0cc393023ababa281a73c9273faa175beede745888208bafbced7b6f0e",
+      "redactions": [
+        "developer home directory"
+      ]
+    },
+    {
+      "path": "docs/qualification/bevy-startup-20261011.json",
+      "original_sha256": "a6428642f58b00ace586c2f8e8363fb48476760c7ecd82f8beb6d7985d2469b3",
+      "redacted_sha256": "37cb3dc61b43085266ea229cb669e20d6202b49612460734efa5e9c5b0c75860",
+      "redactions": [
+        "developer home directory"
+      ]
+    },
+    {
+      "path": "docs/qualification/bevy-widgets-standard-input-20261017.json",
+      "original_sha256": "bc660c177c6c6aa603394fa90ee7a8890f1154ce3c5ffc34c377615d5010516d",
+      "redacted_sha256": "283bcaac131d202994f91610e912ade0a3906d87133f91ec8f2596e25ad51b14",
+      "redactions": [
+        "developer home directory"
+      ]
+    },
+    {
+      "path": "docs/qualification/ci-macos-dmg-ebusy-20261012.json",
+      "original_sha256": "405ac98d8d7726ea6e99a55be00c73e65e5c052d693ac26618314abfc67828ae",
+      "redacted_sha256": "4f571cfd0e11b6d8cd2594c40b2764f17c24e26114087a514eef0061252a9e64",
+      "redactions": [
+        "developer home directory",
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/qualification/concentric-human-ui-20261010.json",
+      "original_sha256": "a2f990efb163158d09708e841454637a547ab08977c54d1c684e6fa43445b1b4",
+      "redacted_sha256": "8b4ed3fcadf478b9b809f54f6de241de6f74f4fb348f3aa7301879b387477c38",
+      "redactions": [
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/qualification/detached-drawing-output-20261011.json",
+      "original_sha256": "08b8bfaa04d2186414c9463cbf1b69ca95012ec4b290801469410492a516f71a",
+      "redacted_sha256": "7afea6526b135e472f52bd437d2b14a7061eb74ad4b977e805b5008a8df32510",
+      "redactions": [
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/qualification/detached-export-ownership-20261011.json",
+      "original_sha256": "afdc65973283dc65bb69b1b8dff23af9e18fd604f6f82a93f7647bfd2919ab90",
+      "redacted_sha256": "2e8e6d8c69b433cd2f5b1dd3d1731d5ad0c50a58f68fd9746efd1b9c249163ea",
+      "redactions": [
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/qualification/detached-motion-csv-20261011.json",
+      "original_sha256": "200a053535fbc69719979a20408d8078cf3ba0ab17e6a982e33759d40ea32170",
+      "redacted_sha256": "641457139792d83e8eaf5c6c59629b6ae452d5f5767f1227bb892387f8bb0430",
+      "redactions": [
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/qualification/detached-section-interference-20261011.json",
+      "original_sha256": "ff4a3a61585e49a8c8b05b62ca693b05d83b5bbe771e2aa452fe8c339d43fbab",
+      "redacted_sha256": "1139857f6e8c3e76e7860f38bffed68c220d74ffb442d9f9360d3d92f24234de",
+      "redactions": [
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/qualification/detached-step-drawing-20261011.json",
+      "original_sha256": "d8ffb7b7bccd00aa03e56f18ade6110f7d23e53fc6ab84493ae1a2f9a4d9eac1",
+      "redacted_sha256": "91a3c07b7c717f859da9b26b2a64d709701894d2886b15536fceffa55c942e04",
+      "redactions": [
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/qualification/detached-swept-contact-20261011.json",
+      "original_sha256": "4bf967d285349523986d8def392e5094268d2c16dd6900d8af50e63f9ad86a6e",
+      "redacted_sha256": "be92b36a4a7572de2cea368424955d130e8f4a3fe4d25c055f62699ac7ea8858",
+      "redactions": [
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/qualification/equal-human-ui-20261010.json",
+      "original_sha256": "ec2cfb060b73e6d5ac1b0132eef303c86bbd8a975ca0a754a1a2a1593f7a4032",
+      "redacted_sha256": "7983dce25297e7ae4abc9c5f6aa7043f8e06ffc0851999450d2bab3d97be304e",
+      "redactions": [
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/qualification/file-open-lessons-localized-20261011.json",
+      "original_sha256": "9fa34e39ce5fdecf5858ecdbb95ca80edb6184867d231e1347df4cf5fe529b11",
+      "redacted_sha256": "64d9acda1ccbc7bf262cee0461f0af71fd9659ee86203ffc0206fe3ecfb8d3a8",
+      "redactions": [
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/qualification/fillet-repair-20261010.json",
+      "original_sha256": "bae6d673415924315e61bdd2073428b7fb916d59bb6c194504ac6d20816b1010",
+      "redacted_sha256": "4ef045c8a2ecc1da6008c87aa3a3b4009a9610be6b5fe05b43de887daf1690a1",
+      "redactions": [
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/qualification/garden-bench-sheet-review-20261011.json",
+      "original_sha256": "ade34e86e0327e4a2ea6b9d0b9601f8e50362bef480a568a28d2621c1c58d6b3",
+      "redacted_sha256": "94e271617f4ce460eee071abb081e9aa007e2e5694122417f9d1420a67037455",
+      "redactions": [
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/qualification/manual-ui-stop-20261009.json",
+      "original_sha256": "978e79b525d14381547558eac3f5cec240d98bcee4d738a7a1d980835d9f5251",
+      "redacted_sha256": "d59b2351ceec66a20c7ec22e295fa50557d3bc6561f4581128727d6c30d920d9",
+      "redactions": [
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/qualification/native-control-receipt-wake-20261012.json",
+      "original_sha256": "08299755622a0ef80a6daff3fdd945d977645104d3ebf57f3dfa27d6281c928c",
+      "redacted_sha256": "d2b4dd0029da92e38a7ece51f1d1a64af20a78165225f86604abe4616a5ff48e",
+      "redactions": [
+        "developer home directory",
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/qualification/packaged-default-startup-20261012.json",
+      "original_sha256": "f7bb25cc678138ce46302a9df30776f371a48a607cbf72a85ba5e03f4e4bf353",
+      "redacted_sha256": "e18c41ef8ecb53e2d7ba3075d2d9fce2af71085c07752398fa0ae27d1073c6e8",
+      "redactions": [
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/qualification/parallel-human-ui-20261010.json",
+      "original_sha256": "f3453c53a8646e75ef9afadab87d27b66142dcd66a96851825161f9aa6fb3f1a",
+      "redacted_sha256": "135b7ff96698bfafc9bb5091f6df7e9b131a2bde4402f91227c1cb258cb11e77",
+      "redactions": [
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/qualification/perpendicular-human-ui-20261010.json",
+      "original_sha256": "169e1b68d601231d2db9572c196ab0bf5885cd829099df13bea2ca4658d23db4",
+      "redacted_sha256": "d27035fcd3de5bdc53e8431f70e5c3de07e9c670cce8cb2876bdb938e744875f",
+      "redactions": [
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/qualification/receipt-only-status-20261011.json",
+      "original_sha256": "a3ff4203d12315f543d6e9652cccbbc5af5b3844952ce0f5605e40593fbc621d",
+      "redacted_sha256": "b7fd84a8b3bf9d51d95170685380615903152b0afc8db5c9c7d9b251252c910b",
+      "redactions": [
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/qualification/refinement-budget-helper-20261010.json",
+      "original_sha256": "73ef12d9979b6f04a7e8e311b202463af776f234363ea8aad5a11798d7fefd00",
+      "redacted_sha256": "8c266fbfc3411cfa1470b54959c980b48b9676bbad86f8428b325eae21271b7e",
+      "redactions": [
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/qualification/runtime-worker-restart-20261011.json",
+      "original_sha256": "dcc23bf85ee7be2554a3dfedbe4c4476c109c699cc10361bcc8317911deee82d",
+      "redacted_sha256": "cff0570b2dafd0d4203be09a5b8736737f3d4a5a4557d1929eaa772f5174abca",
+      "redactions": [
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/qualification/sdk-workflow-contracts-20261012.json",
+      "original_sha256": "975ee912ce5095b88fd39dad402070d7b9783496ca5cc7124bc7c2624776a317",
+      "redacted_sha256": "8b9807707389acd4e75878f6de356241ffc42e9d4616e4b4f50644ababf23d26",
+      "redactions": [
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/qualification/sibling-menu-switch-20261011.json",
+      "original_sha256": "ebe62ac19f3d8c72cac1df0b9f3102e20142d112d44bef073bc993ef7a38e174",
+      "redacted_sha256": "0be2acf323c1f799a8fb116b7913a5386cb104ee5f046dbaa39048efa8d546ac",
+      "redactions": [
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/qualification/snapshot-ownership-audit.md",
+      "original_sha256": "c8a021747aa8420ffc9deffa4d3652af7fe156a1200e33ccf70b642b09a1639d",
+      "redacted_sha256": "79e8cb0e38dec6bccc318141d7c47bc419ff7492fb392794158beea78f0017a5",
+      "redactions": [
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/qualification/surface-coverage.json",
+      "original_sha256": "183856591f5609b96d85931646cdc814b4523d594000305ebb2d889defd163e2",
+      "redacted_sha256": "c8fd4237618b77c62d1eb97b3eafabd0c5db2382b7d2704a07589dfc131c4e5f",
+      "redactions": [
+        "developer home directory",
+        "local drive root",
+        "private project label"
+      ]
+    },
+    {
+      "path": "docs/qualification/surface-toolpath-tangent-20261011.json",
+      "original_sha256": "45edce7e1baef6b7c2fa7b649aa61422721adbe5ab2aeffb33337857e6a3a2ab",
+      "redacted_sha256": "229a3a3910f8f2734d9c709b3c24e24d7ec521fb2307c80eed071e05ba0f01e4",
+      "redactions": [
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/qualification/tangent-human-ui-20261010.json",
+      "original_sha256": "39d5ed9245674cb5bf1478757848c3d016da882fd3be888805704aff5f1d5b73",
+      "redacted_sha256": "72d540ff42cc08194c7b5152ffa6a3cec84bb78332adec17dddee75f25fee62b",
+      "redactions": [
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/startup-measurements/baseline-empty-en.json",
+      "original_sha256": "53cfdb06a3fa198dd8b46c5eaf3b88833ef270dd0c08a07ee5ca83a2dabea158",
+      "redacted_sha256": "eae19fbb9c552330b68f62d92eacdeddf9f337c61e86644bca3a11115a712c12",
+      "redactions": [
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/startup-measurements/baseline-optimized-document-en.json",
+      "original_sha256": "90f6bfab12ce30f76a6c6f60ec65162f2494fca6841fce96eab556688790579f",
+      "redacted_sha256": "3075ace956a39cafa3503d640b678edf35b7878fa52136f1d9fd4bf7708953e7",
+      "redactions": [
+        "developer home directory",
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/startup-measurements/baseline-optimized-empty-en.json",
+      "original_sha256": "76b661f5d49e3c580de9e60e407bdeaad1561ddb09af3c1840aab44d3f8f0323",
+      "redacted_sha256": "85940f8d167d9400d3450403389c4eef2d6b522ced7b7ef0f530d9d1302376f5",
+      "redactions": [
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/startup-measurements/candidate-dev0-document-diagnostic.json",
+      "original_sha256": "d4e74efb4220c956e8da24c13f8f3b97bef9d61ceb2c7a093c5869677c3f6c52",
+      "redacted_sha256": "31f4b71246c6dbfd10aa015505a724dd57604144b23d794a10ea92ba0d56b9b3",
+      "redactions": [
+        "developer home directory",
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/startup-measurements/candidate-dev0-empty-discovery.json",
+      "original_sha256": "b60a6449ff8f89afd7627971d0d09ce8ef5d524ce585fec236df2a10bda59064",
+      "redacted_sha256": "85aac1af88aee025576ae21779beb2ce0792681e77897c377fd21f2fda406f9b",
+      "redactions": [
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/startup-measurements/candidate-optimized-document-diagnostic.json",
+      "original_sha256": "55c950fb20d3c96d8cbc9b74891f2ab58e91571b160a4e0587401cf4daede5be",
+      "redacted_sha256": "ec1cbde4e43c5cb3d1f546dc691da7213da05624221c04ddfb4d542d1fe501c5",
+      "redactions": [
+        "developer home directory",
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/startup-measurements/candidate-optimized-document-en.json",
+      "original_sha256": "88cbcd42009e4477cbebdcdf00ec981e05e4cdb0afc9b71d50a1a8caa66256e6",
+      "redacted_sha256": "3a1091a2fbb91c04f82fbb58ed0bf2e61b2ae8462f08e2928f11df5c9e6d0c85",
+      "redactions": [
+        "developer home directory",
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/startup-measurements/candidate-optimized-empty-diagnostic.json",
+      "original_sha256": "ce8da3b5b5074c4d8e99404442562566eeb306816c7b97f59298329adc760eeb",
+      "redacted_sha256": "9eb702670db6d1b7dc2be15b67389987863c0028d6fe6fcd85c052ae47929ab8",
+      "redactions": [
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/startup-measurements/candidate-optimized-empty-en.json",
+      "original_sha256": "cf0d8bab76f2782e515db2df646ceb08e4bd2005294938fafa58d3b1af95d856",
+      "redacted_sha256": "b33153d3d548e7a0341a526427d4498234a701981f4e19cd8b0b342b943b8fa5",
+      "redactions": [
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/startup-measurements/compact-after-compact-document-en.json",
+      "original_sha256": "515f2a5f7b5aa6b98fc473d75506374d0424e779aa4bcf6dcd50256d5a2bf0d9",
+      "redacted_sha256": "868b07b34179999889e16b1f40924245cc919ce929de2c821869e5461eaedf58",
+      "redactions": [
+        "developer home directory",
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/startup-measurements/compact-after-compact-empty-en.json",
+      "original_sha256": "71d25519de7a7905a11768f3a3bab381b155f2895e7421986d5ba9b52451d468",
+      "redacted_sha256": "836eb2236b8a97548f340af0dc027c5fedfdde28642c4d52ea11871e5da92089",
+      "redactions": [
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/startup-measurements/compact-background-compilers-end.json",
+      "original_sha256": "1a7b91d8977382a0115df66da5fa90d9b20b170dd4047b15cfaab7597931e947",
+      "redacted_sha256": "cf0c2418971c5740d4945b420000c21046e62b0970f6a93183cddc4e47f90851",
+      "redactions": [
+        "local account"
+      ]
+    },
+    {
+      "path": "docs/startup-measurements/compact-background-compilers-start.json",
+      "original_sha256": "b96f263de907976f38b32ca3cd6be65e6b03b0ad90b73a78eaa0a4258e0dda3d",
+      "redacted_sha256": "2b4b7cef9b6abcafb51f136c0bb30d9ecd920828d55c7ec91dbf69ceb4a8d5d6",
+      "redactions": [
+        "local account"
+      ]
+    },
+    {
+      "path": "docs/startup-measurements/compact-before-v3-document-en.json",
+      "original_sha256": "52b8e7026eaf15f034bc3e37d2e9a5ed8080cc78c6e59a72cf3638155b109e0e",
+      "redacted_sha256": "fe8db6101f80b49fdb78e79a8d5f47ad5e36b350a8b1593622d746d874873788",
+      "redactions": [
+        "developer home directory",
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/startup-measurements/compact-before-v3-empty-en.json",
+      "original_sha256": "2729d9f6e2f15527c68f7f0947d28d91f59b4584d6ce2bdf6437bd7e904b4c46",
+      "redacted_sha256": "6710597133691bd6ba74ceb95c7fc1879759591bb3f96ba0237abc8f12122e7c",
+      "redactions": [
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/startup-measurements/compact-native-build.log",
+      "original_sha256": "92173fa1f178a9b726033f52e85876e2c971594b082aae28d24f2efb482f1eae",
+      "redacted_sha256": "13095e62fc5081dabdb63f8621f9a02317b7bfe4b07785c5a1f1c7caa8f09942",
+      "redactions": [
+        "developer home directory",
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/startup-measurements/compact-poll-after-compact-poll-document-en.json",
+      "original_sha256": "bb1e0700a2fa466c87eb4b0ec7f17ef7ee9827b8483c99293dfd1c316d49e4a7",
+      "redacted_sha256": "03882ef25c8e35c11fb6aacf87d64a99117356e89c49f68f50f9a8d6ed391da4",
+      "redactions": [
+        "developer home directory",
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/startup-measurements/compact-poll-after-compact-poll-empty-en.json",
+      "original_sha256": "722198817fb344d49563eb72a2fbedf94e0e19cd85440ae4fc7df13c8c0bf5e3",
+      "redacted_sha256": "c22a95b256101adc843ccbba9a718c3dfe6fc687151f2aa02c1961a5edbed09d",
+      "redactions": [
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/startup-measurements/compact-poll-background-compilers-end.json",
+      "original_sha256": "7964554d3eebd0f212c399755a16de45ba72ddf23bbeac35c30edb47d3293848",
+      "redacted_sha256": "07643ef2c200aa9be47452033d7e4585bdfa10b71c86fdb12c7a43e3fdaf83f0",
+      "redactions": [
+        "local account"
+      ]
+    },
+    {
+      "path": "docs/startup-measurements/compact-poll-background-compilers-start.json",
+      "original_sha256": "0fa608f2d21e53a8d6125cbeb63a3a633bd32bf3d7a27b5aad36d6d56a097341",
+      "redacted_sha256": "307bc11939422a598f24b830d11a431ca9c9668088307ffcf7ef849f1da8a69f",
+      "redactions": [
+        "local account"
+      ]
+    },
+    {
+      "path": "docs/startup-measurements/compact-poll-before-v3-document-en.json",
+      "original_sha256": "64556c28152611a9c185652907fe62376d3bc3a4b62ebbf78a1ad3c93df54dae",
+      "redacted_sha256": "2f74818f5a1490dd1b1eaca9989ede552fe5cbf26059ac76df6fc37bf5b4c7e5",
+      "redactions": [
+        "developer home directory",
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/startup-measurements/compact-poll-before-v3-empty-en.json",
+      "original_sha256": "205f4a2f1eb2250f2b3696b0208c29db756384af7d3abf1e415fd25465239623",
+      "redacted_sha256": "20b8236548522873b2d818d321f5d90dfa04a3a8ffdab79f2def5c96d1dd6ce0",
+      "redactions": [
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/startup-measurements/compact-poll-frontend-build.log",
+      "original_sha256": "3a5e5827040216c61dfac65d69655c8f74cdb17b5065c96977e636beb467413d",
+      "redacted_sha256": "bb7ff0740d386a1be48d92fef605fcaf0eb3c327e6165d4bb912f1063e8581ea",
+      "redactions": [
+        "developer home directory",
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/startup-measurements/compact-poll-native-build.log",
+      "original_sha256": "05e89e6d8e4a67c43643f75bf4fc5c538b1b399b053a2de7282f71605f0c112f",
+      "redacted_sha256": "38c867e9e1a4a481357f0b8335fe314e748f5543fb774c3ce336d90b022f221d",
+      "redactions": [
+        "developer home directory",
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/startup-measurements/floating-native-build.log",
+      "original_sha256": "9c7ed7171b614e59dec3fdaa037d148d9d2de0c5b7364b25d3c99e1757541309",
+      "redacted_sha256": "5a4813f873490e36aee7ee94ed377604c7222d0b5af6bb7ee5e0290abd5d3174",
+      "redactions": [
+        "developer home directory",
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/startup-measurements/floating-native-empty-verification.json",
+      "original_sha256": "96975244f7ac904e2804671f44468b9c21896ae5b894e500064d1fbe15c5933d",
+      "redacted_sha256": "000bb1199ffc8ecf1cfd8a4195ba3f5fe0cfe5293e5f12b110f502864d4b8504",
+      "redactions": [
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/startup-measurements/floating-staging.json",
+      "original_sha256": "97548bd0a5df14d4ebcd018079bfd7010cb44b0dd93e72c504708929fb3277ec",
+      "redacted_sha256": "714055d7855388f6e92e9c1323043fb7fbb8132f843ca348ec34ae8498911f7a",
+      "redactions": [
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/startup-measurements/frontend-file-progress-build.log",
+      "original_sha256": "b71d11a2c08478032fba0cebd0cba17864c3bd3225b8e238551a466a813bcd56",
+      "redacted_sha256": "9cf794d7839172d781770f30523767988d7fd60d1972ed3866e5a0e17983906f",
+      "redactions": [
+        "developer home directory",
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/startup-measurements/frontend-floating-startup-build.log",
+      "original_sha256": "bb3554cdb623e2e0a553258777b039e888cdf0069eaca818da1f5717d66649df",
+      "redacted_sha256": "64fad208dfba99866c6cac4094715fed052579a8f2fb60f63447c01de6b3381f",
+      "redactions": [
+        "developer home directory",
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/startup-measurements/frontend-standard-drag-build.log",
+      "original_sha256": "a851b9a35f278a31e767c00c0d47e7e299bf6576041f2fc946f06c86c2dfba15",
+      "redacted_sha256": "45f61064bcbe493cb11f6bc5eb2a87942ce1adb5091d1a13888c4aba0cc8e614",
+      "redactions": [
+        "developer home directory",
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/startup-measurements/native-no-warmup-build.log",
+      "original_sha256": "fd507ae10977d211a54f99f4e0867a04887f3be8b5ea30034ff5dcf60d8451c1",
+      "redacted_sha256": "4f4b0fca71e52411a97a87fc9c2ad93c20e3081d6dd8dd20f317cd77ec05e6ba",
+      "redactions": [
+        "developer home directory",
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/startup-measurements/no-warmup-background-compilers-end.json",
+      "original_sha256": "f09a3fc01bbe66ae417380bd95ee7010c69a6d36d6ff986a3fa0f2343b528102",
+      "redacted_sha256": "d5b04fc8da99bd8d8db31f4879ada83c22db971d2ba1e87eb2b67377fe1fc39d",
+      "redactions": [
+        "local account"
+      ]
+    },
+    {
+      "path": "docs/startup-measurements/no-warmup-baseline-document-en.json",
+      "original_sha256": "579d68692f203829aaf61714bdb740cd11c7c2c1745961507c2f6c3658053328",
+      "redacted_sha256": "1187a992f3f42566404567210f2ee5598e7d34275b3a900b9aad8e1b00e4de2e",
+      "redactions": [
+        "developer home directory",
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/startup-measurements/no-warmup-baseline-empty-en.json",
+      "original_sha256": "dd85f9181feb02ff0b4a5d2a88e615dcb1f6e7a10afcc7ab552a1e7b5585a053",
+      "redacted_sha256": "79b5c3bfe46c35fc1374e0f0d3c18721671696694f85d0abf4024cab69c2452f",
+      "redactions": [
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/startup-measurements/no-warmup-candidate-document-en.json",
+      "original_sha256": "a760e402e7d29c7003f3b6b847cd4ebcadb881310c500a6fe8aa2ca533a73316",
+      "redacted_sha256": "6c51fa01166a3e5bcf39e2de06db00dbf1c829c31ca8f6cbb41ce75b85a754ed",
+      "redactions": [
+        "developer home directory",
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/startup-measurements/no-warmup-candidate-empty-en.json",
+      "original_sha256": "002ff9b5f49227ea1829b306d2a847c67150d9c7594e2f83defa634a3557706b",
+      "redacted_sha256": "d451da3714c3150544540d4858b38472260c2e1d507c32551e8d6bce607476d9",
+      "redactions": [
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/startup-measurements/pr-native-test-build.log",
+      "original_sha256": "409f5bf4b4c80d9999f07c34a3732fe0d82a9407b9159cb08ae7c685b26fb651",
+      "redacted_sha256": "c19b6e9ba35abf177f300f6e4a53adf2bcf79294f7fe2a494c40fcd9041ef5e6",
+      "redactions": [
+        "developer home directory",
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/startup-measurements/runtime-frontend-build.log",
+      "original_sha256": "e647f993d48e59057eda469d4ecb79c59876b751848c4c3dae90292ff4537f14",
+      "redacted_sha256": "30a998bce70b7a8e5208e1c3d0571ad2e2d7d857fa63c59be48f52c0335b93e0",
+      "redactions": [
+        "developer home directory",
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/startup-measurements/runtime-native-app-build-keyboard-final.log",
+      "original_sha256": "504159a0b6aa9524aca640c73e14871c96583df4049926c21967c873f0f59211",
+      "redacted_sha256": "ab3b93b90db6fc96b1a271dc9b32bdaad263b0cdade31ad1fe0d530cc7f1e1c4",
+      "redactions": [
+        "developer home directory",
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/startup-measurements/runtime-native-build.log",
+      "original_sha256": "12ffe35816e711dea6ce149685be88ee2dccd20aaf56796526e075467ac5fbbf",
+      "redacted_sha256": "3923740386d2a1fda4b3c9113b3ab476a1aebdaca2bffd03b1aa3d58ec3b738a",
+      "redactions": [
+        "developer home directory",
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/startup-measurements/standard-drag-empty-verification.json",
+      "original_sha256": "1688675065b8afd988260e6aec159eb8db14f47d13dc4260dc9412784399aa0f",
+      "redacted_sha256": "cd1388d4ca78e2ffb8d94112834d5d77db120902152a5f58f2806eaa3648b373",
+      "redactions": [
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/startup-measurements/standard-drag-native-build.log",
+      "original_sha256": "38b71f9b75b2c16573c6e293ae3e022fd4de7eaafbc23ad450588b72ad2a33b7",
+      "redacted_sha256": "5754f2075e45c0a6e786d99b45712f1a2ec00f2a1d2838464f93b80063479ae3",
+      "redactions": [
+        "developer home directory",
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/startup-measurements/standard-drag-runtime-file-verification.json",
+      "original_sha256": "fb0e2a269575793de8a208f0b8b1326e26ff3c60036986ca722b07bf2b57d7b3",
+      "redacted_sha256": "bd187cf972b19720039033ee392d8cefb03e42f25b622ea955b2ab2874132a9e",
+      "redactions": [
+        "developer home directory",
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/startup-measurements/standard-drag-staging.json",
+      "original_sha256": "762b447741e42697b9bae0770a390e392f19c2860f94d876c1d4067808373e99",
+      "redacted_sha256": "252254dfdf9ecaccbf0c5317bb59b19a998d7324f72862db97aed08bd650b243",
+      "redactions": [
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/startup-measurements/thunder-fresh-f9d-background-compilers-end.json",
+      "original_sha256": "1f43690b65770cded08722246986f3ada1a5a66036eaa7eb6dde657317d4c721",
+      "redacted_sha256": "364dfcfce4763768f716b2754559b1b00c621995a218c9e0055d49b37931a00d",
+      "redactions": [
+        "local account"
+      ]
+    },
+    {
+      "path": "docs/startup-measurements/thunder-fresh-f9d-background-compilers-start.json",
+      "original_sha256": "ba54431367eb8e3dada1dc797f633451a117001017a1fd35d2136fd0be818fc6",
+      "redacted_sha256": "38e1904dc5cf0dd232d724a45f5f610e49f02019e1d89930ab717c3a6e3e88de",
+      "redactions": [
+        "local account"
+      ]
+    },
+    {
+      "path": "docs/startup-measurements/thunder-fresh-f9d-document-en.json",
+      "original_sha256": "907614fe053fed62b04bdaaa8aa870d35841b8008090de917f4b632ccd7b10e9",
+      "redacted_sha256": "5dcc389c8796da763ab6b16d6fb3ab9fb306d8485fa5e41aa95a61a1d2074fa8",
+      "redactions": [
+        "developer home directory",
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/startup-measurements/thunder-fresh-f9d-empty-en.json",
+      "original_sha256": "82c3dff590480862a65b58ff635e8c37825cdcbf9c966154628cd25258de6b6b",
+      "redacted_sha256": "2da3da9a686a9060b65caa31ff8524dff4002bb58aaba70e9efcc9e9486a607c",
+      "redactions": [
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/startup-measurements/thunder-native-application-build.log",
+      "original_sha256": "71e55d1a0aac20322ae5358326df4a63919ef938a54b5d165d971acad504bdbf",
+      "redacted_sha256": "42264d01beaf5a437bcab19cdbacffdc58c9d12bf13c97460034771180649b18",
+      "redactions": [
+        "developer home directory",
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/startup-measurements/thunder-native-test-build.log",
+      "original_sha256": "5c59a28f1f5323d4d0087621889d7bfd088de18a8122e621ce0f5a24f0474b39",
+      "redacted_sha256": "832f4661c9c3835edef25b5b06096451b89bf00e494d90238bdff4a5f3a50ef0",
+      "redactions": [
+        "developer home directory",
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/startup-measurements/thunder-separated-background-compilers-end.json",
+      "original_sha256": "bd789a2d7e98408a6d79170632fa779778e954d4fb9b3a99f52a72cebf5adadc",
+      "redacted_sha256": "a80eb75e60ffb83689e4eb56adf0bdfd95b122a143580225e09c33e6f07e551c",
+      "redactions": [
+        "local account"
+      ]
+    },
+    {
+      "path": "docs/startup-measurements/thunder-separated-background-compilers-start.json",
+      "original_sha256": "4190ca972a3dd89c799deabf5fc461f88ac159b08c588cdbe64d8f6e433ebcf6",
+      "redacted_sha256": "5f90248799075407a67a85f95a09436debea985a9698005c4334112b16be3dd7",
+      "redactions": [
+        "local account",
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/startup-measurements/thunder-separated-empty-en.json",
+      "original_sha256": "a4fbbc04e314084c20a9320da141f1eb0814a89b7cdc124f5b7e270c22a6089a",
+      "redacted_sha256": "2b8ddb9a9618cd7789ffdac8b9bdecfd0eb68855987aa0513cdb82642f06a2a5",
+      "redactions": [
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/startup-measurements/thunder-separated-runtime-document-en.json",
+      "original_sha256": "b3841bd8e8e1d957bcea87ea2fa9a216ce35104710f7955b3e322d194ef52c4b",
+      "redacted_sha256": "2e3f38408dc5244db6784c5c10be5768e9e6148621a28b8ca70e98b627489b78",
+      "redactions": [
+        "developer home directory",
+        "local drive root"
+      ]
+    },
+    {
+      "path": "docs/startup-measurements/thunder-separated-staging.json",
+      "original_sha256": "cbe61c79c772b008481014ddde5b137122d0a05bb0492949cf92099746ef43de",
+      "redacted_sha256": "58f0c049fcf6b7b39066549ebc673fc30d5fbbb7cd74743c88149231052f51c3",
+      "redactions": [
+        "local drive root"
+      ]
+    }
+  ]
+}

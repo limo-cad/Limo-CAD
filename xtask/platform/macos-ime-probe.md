@@ -3,7 +3,7 @@
 Use the registered workflow on the reviewed feature branch:
 
 ```sh
-gh workflow run native-host-tests.yml --repo limo-cad/Limo-CAD --ref feat/bevy-interface -f ime-probe-only=true -f ime-probe-macos=true
+gh workflow run native-host-tests.yml --repo limo-cad/Limo-CAD --ref main -f ime-probe-only=true -f ime-probe-macos=true
 ```
 
 This defaults to inventory of installed TIS input sources, enabled/selected
@@ -16,7 +16,7 @@ To additionally enable the installed Apple Japanese Romaji/Hiragana source and
 exercise it on the disposable runner:
 
 ```sh
-gh workflow run native-host-tests.yml --repo limo-cad/Limo-CAD --ref feat/bevy-interface -f ime-probe-only=true -f ime-probe-macos=true -f ime-provision-japanese=true -f ime-exercise=true
+gh workflow run native-host-tests.yml --repo limo-cad/Limo-CAD --ref main -f ime-probe-only=true -f ime-probe-macos=true -f ime-provision-japanese=true -f ime-exercise=true
 ```
 
 Unlike the Windows capability step, the macOS enable flag only enables the

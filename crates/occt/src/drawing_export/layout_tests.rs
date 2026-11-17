@@ -35,12 +35,7 @@ fn caption_clears_six_mm_dimension_and_labels_clear_neighbors_and_dxf_keeps_glyp
     *offset = 6.;
     let naive = sheet.views[0].position[1] + 6.;
     let ink = layout::dimension_ink_y(naive, naive, sheet.style.dimension.width_mm, true);
-    let naive_top = text::label_bounds(
-        [0., naive],
-        "",
-        sheet.style.small_text_height_mm,
-        0.,
-    )[1];
+    let naive_top = text::label_bounds([0., naive], "", sheet.style.small_text_height_mm, 0.)[1];
     assert!(
         naive_top < ink,
         "a caption 6 mm under the view must start on the dimension"
@@ -56,30 +51,40 @@ fn caption_clears_six_mm_dimension_and_labels_clear_neighbors_and_dxf_keeps_glyp
         "kind":"note","id":2,"text":glyphs,"position":weld_label
     }))
     .unwrap();
-    sheet.annotations.push(serde_json::from_value(json!({
-        "kind":"note","id":3,"text":"NOTE-CLOUD","position":caption
-    }))
-    .unwrap());
-    sheet.annotations.push(serde_json::from_value(json!({
-        "kind":"note","id":4,"text":"NOTE-BOM","position":bom_at
-    }))
-    .unwrap());
-    sheet.annotations.push(serde_json::from_value(json!({
-        "kind":"note","id":5,"text":"NOTE-REV","position":revision_at
-    }))
-    .unwrap());
-    sheet.annotations.push(serde_json::from_value(json!({
-        "kind":"weld_symbol","id":6,"view_id":1,
-        "attachment":{"body_id":1,"edge_id":1,"edge_key":"bottom",
-            "fallback_start":[999.,999.,999.],"fallback_end":[998.,999.,999.]},
-        "position":[40.,50.],"weld_type":"fillet","side":"arrow","size":6.25,
-        "contour":"none","finish":"","all_around":false,"field_weld":false,"tail":""
-    }))
-    .unwrap());
-    sheet.annotations.push(serde_json::from_value(json!({
-        "kind":"revision_cloud","id":7,"revision":"CLOUDQA","points":points
-    }))
-    .unwrap());
+    sheet.annotations.push(
+        serde_json::from_value(json!({
+            "kind":"note","id":3,"text":"NOTE-CLOUD","position":caption
+        }))
+        .unwrap(),
+    );
+    sheet.annotations.push(
+        serde_json::from_value(json!({
+            "kind":"note","id":4,"text":"NOTE-BOM","position":bom_at
+        }))
+        .unwrap(),
+    );
+    sheet.annotations.push(
+        serde_json::from_value(json!({
+            "kind":"note","id":5,"text":"NOTE-REV","position":revision_at
+        }))
+        .unwrap(),
+    );
+    sheet.annotations.push(
+        serde_json::from_value(json!({
+            "kind":"weld_symbol","id":6,"view_id":1,
+            "attachment":{"body_id":1,"edge_id":1,"edge_key":"bottom",
+                "fallback_start":[999.,999.,999.],"fallback_end":[998.,999.,999.]},
+            "position":[40.,50.],"weld_type":"fillet","side":"arrow","size":6.25,
+            "contour":"none","finish":"","all_around":false,"field_weld":false,"tail":""
+        }))
+        .unwrap(),
+    );
+    sheet.annotations.push(
+        serde_json::from_value(json!({
+            "kind":"revision_cloud","id":7,"revision":"CLOUDQA","points":points
+        }))
+        .unwrap(),
+    );
     doc.next_annotation_id = 8;
     doc.next_revision_id = 2;
     doc.next_bom_item_id = 2;
@@ -90,18 +95,23 @@ fn caption_clears_six_mm_dimension_and_labels_clear_neighbors_and_dxf_keeps_glyp
     .unwrap()];
     sheet.bom_table_position = Some(bom_at);
     sheet.revision_table_position = Some([150., 40.]);
-    sheet.revisions.push(serde_json::from_value(json!({
-        "id":1,"revision":"A","description":"Moved","date":"2026-09-10",
-        "author":"A","checked_by":"B","approved_by":"C","change_order":"CO","status":"draft"
-    }))
-    .unwrap());
+    sheet.revisions.push(
+        serde_json::from_value(json!({
+            "id":1,"revision":"A","description":"Moved","date":"2026-09-10",
+            "author":"A","checked_by":"B","approved_by":"C","change_order":"CO","status":"draft"
+        }))
+        .unwrap(),
+    );
 
     let export = |format| {
         export_sheet(
             &doc,
             &scene,
             &AssemblyDocumentDto::default(),
-            &DrawingExportRequest { sheet_id: 1, format },
+            &DrawingExportRequest {
+                sheet_id: 1,
+                format,
+            },
             |_| Ok(projection.clone()),
         )
     };
@@ -147,7 +157,10 @@ fn caption_clears_six_mm_dimension_and_labels_clear_neighbors_and_dxf_keeps_glyp
         let (x, y, parsed_h) = svg_anchor(&svg, needle);
         let (nx, ny, nh) = svg_anchor(&svg, neighbor);
         assert!(
-            !overlaps(box_at([x, y], value, parsed_h), box_at([nx, ny], neighbor, nh)),
+            !overlaps(
+                box_at([x, y], value, parsed_h),
+                box_at([nx, ny], neighbor, nh)
+            ),
             "{needle} still overlaps {neighbor}"
         );
         let before = box_at(origin, value, height);
@@ -160,15 +173,118 @@ fn caption_clears_six_mm_dimension_and_labels_clear_neighbors_and_dxf_keeps_glyp
     }
 
     let dxf = export(DrawingExportFormat::Dxf).unwrap();
-    assert!(dxf.contains(glyphs), "CJK and technical characters must remain in the DXF text");
+    assert!(
+        dxf.contains(glyphs),
+        "CJK and technical characters must remain in the DXF text"
+    );
     assert!(!dxf.contains("NOBS_EMBEDDED_FONT"));
-    assert!(dxf.contains("0\nHATCH\n"), "Unicode labels have actual filled font outlines");
-    let text_start = dxf.find(&format!("1\n{glyphs}\n")).unwrap();
-    assert!(dxf[text_start..].starts_with(&format!("1\n{glyphs}\n60\n1\n")),
-        "mixed labels must not double paint their source TEXT over the glyphs");
+    assert!(
+        dxf.contains("0\nHATCH\n"),
+        "Unicode labels have actual filled font outlines"
+    );
+    let record = dxf
+        .split("0\nTEXT\n")
+        .skip(1)
+        .map(|tail| tail.split("\n0\n").next().unwrap())
+        .find(|record| record.contains(&format!("1\n{glyphs}\n")))
+        .unwrap();
+    assert!(
+        record.contains("60\n1\n100\nAcDbText\n"),
+        "mixed labels must retain invisible source TEXT in AcDbEntity"
+    );
     assert!(
         dxf.contains("1000\nArial\n"),
         "the sheet family is still recorded"
     );
     assert!(dxf.ends_with("0\nEOF\n"));
+}
+
+#[test]
+fn bom_export_respects_saved_visibility_without_removing_rows() {
+    for position in [None, Some([24., 130.])] {
+        for has_rows in [false, true] {
+            let (mut document, scene, projection) = fixture(12.8);
+            let sheet = &mut document.sheets[0];
+            sheet.bom_table_position = position;
+            if has_rows {
+                sheet.bom.push(
+                    serde_json::from_value(json!({
+                        "id":1,"item_number":"1","part_number":"BOM-VISIBILITY-PART",
+                        "description":"Retained hidden row","quantity":2.,
+                        "material":"BOM-VISIBILITY-MATERIAL","finish":"BOM-VISIBILITY-FINISH"
+                    }))
+                    .unwrap(),
+                );
+                document.next_bom_item_id = 2;
+            }
+            let encoded = serde_json::to_vec(&document).unwrap();
+            let restored: DrawingDocumentDto = serde_json::from_slice(&encoded).unwrap();
+            assert_eq!(restored, document);
+            for format in [DrawingExportFormat::Svg, DrawingExportFormat::Dxf] {
+                let output = export_sheet(
+                    &restored,
+                    &scene,
+                    &AssemblyDocumentDto::default(),
+                    &DrawingExportRequest {
+                        sheet_id: 1,
+                        format,
+                    },
+                    |_| Ok(projection.clone()),
+                )
+                .unwrap();
+                assert_eq!(
+                    output.contains("ITEM   PART / DESCRIPTION"),
+                    position.is_some(),
+                    "Header visibility must match native table visibility, including empty tables"
+                );
+                for text in [
+                    "BOM-VISIBILITY-PART",
+                    "BOM-VISIBILITY-MATERIAL",
+                    "BOM-VISIBILITY-FINISH",
+                ] {
+                    assert_eq!(output.contains(text), position.is_some() && has_rows);
+                }
+                assert_eq!(
+                    serde_json::to_vec(&restored).unwrap(),
+                    encoded,
+                    "Hiding or exporting must not delete rows or rewrite the saved document"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn legacy_missing_bom_position_keeps_native_hidden_state_and_saved_rows() {
+    let (mut document, scene, projection) = fixture(12.8);
+    document.sheets[0].bom.push(
+        serde_json::from_value(json!({
+            "id":1,"item_number":"1","part_number":"LEGACY-HIDDEN-BOM",
+            "description":"Preserved","quantity":1.,"material":"Steel","finish":"Paint"
+        }))
+        .unwrap(),
+    );
+    document.next_bom_item_id = 2;
+    let mut legacy = serde_json::to_value(&document).unwrap();
+    legacy["sheets"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("bom_table_position");
+    let loaded: DrawingDocumentDto = serde_json::from_value(legacy).unwrap();
+    assert!(loaded.sheets[0].bom_table_position.is_none());
+    assert_eq!(loaded.sheets[0].bom, document.sheets[0].bom);
+    for format in [DrawingExportFormat::Svg, DrawingExportFormat::Dxf] {
+        let output = export_sheet(
+            &loaded,
+            &scene,
+            &AssemblyDocumentDto::default(),
+            &DrawingExportRequest {
+                sheet_id: 1,
+                format,
+            },
+            |_| Ok(projection.clone()),
+        )
+        .unwrap();
+        assert!(!output.contains("LEGACY-HIDDEN-BOM"));
+    }
 }

@@ -27,7 +27,7 @@
   "preserved_incoming_bevy_revision": "ec010757bb414d5711c5d846f772477e4c114424",
   "qualification": {
     "revision": "67cb9e15c70823837c37f95c4eb6484b7c2d6d01",
-    "checkout": "D:\\limo-cad-maintenance\\ownership-worktree",
+    "checkout": "<local-root>\\limo-cad-maintenance\\ownership-worktree",
     "desktop_filters": [
       "session_bridge::native_interface::controller::assembly::inspect::tests::ordered_interference_review_releases_live_guards_and_rejects_stale_reports",
       "session_bridge::native_control::tests::native_interference_query_releases_live_guards_and_fences_original_completion_once"
@@ -36,9 +36,9 @@
       "host::interference_snapshot::tests::detached_static_interference_preserves_repeated_poses_and_rejects_stale_sources",
       "host::section_snapshot::tests::detached_section_preserves_real_geometry_and_rejects_uncommitted_native_sources"
     ],
-    "occt_root": "D:\\limo-cad-maintenance\\checked-occt-sdk",
+    "occt_root": "<local-root>\\limo-cad-maintenance\\checked-occt-sdk",
     "occt_inputs_sha256": "ee748d2c13627776e1bc70d88b916e7be7393023d2ff0a9ce77c7350b52b831b",
-    "target": "D:\\noBS-CAD-builds\\finish-bevy-rc2\\release-target",
+    "target": "<local-root>\\noBS-CAD-builds\\finish-bevy-rc2\\release-target",
     "msvc": "14.44.35207",
     "windows_sdk": "10.0.26100.0\\",
     "rustc": "rustc 1.99.0 (b940084d7 2026-09-28)",
@@ -47,12 +47,12 @@
     "artifacts": [
       {
         "kind": "desktop",
-        "path": "D:\\noBS-CAD-builds\\finish-bevy-rc2\\release-target\\x86_64-pc-windows-msvc\\release\\deps\\limo_cad-9b90afe074be23da.exe",
+        "path": "<local-root>\\noBS-CAD-builds\\finish-bevy-rc2\\release-target\\x86_64-pc-windows-msvc\\release\\deps\\limo_cad-9b90afe074be23da.exe",
         "sha256": "53d80ae2435b7e56225fcbe458ffee1a6d02a05eac642159f39ee0f05537dd38"
       },
       {
         "kind": "native-engine",
-        "path": "D:\\noBS-CAD-builds\\finish-bevy-rc2\\release-target\\x86_64-pc-windows-msvc\\release\\deps\\limo_cad_native_engine-ff1a5f47721e5df5.exe",
+        "path": "<local-root>\\noBS-CAD-builds\\finish-bevy-rc2\\release-target\\x86_64-pc-windows-msvc\\release\\deps\\limo_cad_native_engine-ff1a5f47721e5df5.exe",
         "sha256": "ef61bbe84901072b874c3d6d78db7df107a369dee68f0ebe1c28abbcd6353483"
       }
     ],
@@ -61,20 +61,20 @@
         "kind": "strict-desktop",
         "exit_code": 0,
         "elapsed_seconds": 53.855091699999996,
-        "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\detached-section-interference-67cb9e15-strict-desktop.log"
+        "log": "<local-root>\\limo-cad-maintenance\\backlog-autonomous-20261010\\detached-section-interference-67cb9e15-strict-desktop.log"
       },
       {
         "kind": "strict-native-engine-occt",
         "exit_code": 0,
         "elapsed_seconds": 17.9833094,
-        "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\detached-section-interference-67cb9e15-strict-native-engine-occt.log"
+        "log": "<local-root>\\limo-cad-maintenance\\backlog-autonomous-20261010\\detached-section-interference-67cb9e15-strict-native-engine-occt.log"
       },
       {
         "kind": "desktop_artifact_compile",
         "exit_code": 0,
         "elapsed_seconds": 545.9927626,
-        "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\detached-section-interference-67cb9e15-desktop-compile.jsonl",
-        "stderr": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\detached-section-interference-67cb9e15-desktop-compile.stderr.log"
+        "log": "<local-root>\\limo-cad-maintenance\\backlog-autonomous-20261010\\detached-section-interference-67cb9e15-desktop-compile.jsonl",
+        "stderr": "<local-root>\\limo-cad-maintenance\\backlog-autonomous-20261010\\detached-section-interference-67cb9e15-desktop-compile.stderr.log"
       },
       {
         "kind": "desktop_regression",
@@ -83,7 +83,7 @@
         "exact_one_pass": true,
         "elapsed_seconds": 0.3074134,
         "binary_sha256": "53d80ae2435b7e56225fcbe458ffee1a6d02a05eac642159f39ee0f05537dd38",
-        "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\detached-section-interference-67cb9e15-desktop-test-0.log"
+        "log": "<local-root>\\limo-cad-maintenance\\backlog-autonomous-20261010\\detached-section-interference-67cb9e15-desktop-test-0.log"
       },
       {
         "kind": "desktop_regression",
@@ -92,14 +92,14 @@
         "exact_one_pass": true,
         "elapsed_seconds": 0.378052,
         "binary_sha256": "53d80ae2435b7e56225fcbe458ffee1a6d02a05eac642159f39ee0f05537dd38",
-        "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\detached-section-interference-67cb9e15-desktop-test-1.log"
+        "log": "<local-root>\\limo-cad-maintenance\\backlog-autonomous-20261010\\detached-section-interference-67cb9e15-desktop-test-1.log"
       },
       {
         "kind": "native-engine_artifact_compile",
         "exit_code": 0,
         "elapsed_seconds": 41.1132415,
-        "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\detached-section-interference-67cb9e15-native-engine-compile.jsonl",
-        "stderr": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\detached-section-interference-67cb9e15-native-engine-compile.stderr.log"
+        "log": "<local-root>\\limo-cad-maintenance\\backlog-autonomous-20261010\\detached-section-interference-67cb9e15-native-engine-compile.jsonl",
+        "stderr": "<local-root>\\limo-cad-maintenance\\backlog-autonomous-20261010\\detached-section-interference-67cb9e15-native-engine-compile.stderr.log"
       },
       {
         "kind": "native-engine_regression",
@@ -108,7 +108,7 @@
         "exact_one_pass": true,
         "elapsed_seconds": 0.1575875,
         "binary_sha256": "ef61bbe84901072b874c3d6d78db7df107a369dee68f0ebe1c28abbcd6353483",
-        "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\detached-section-interference-67cb9e15-native-engine-test-0.log"
+        "log": "<local-root>\\limo-cad-maintenance\\backlog-autonomous-20261010\\detached-section-interference-67cb9e15-native-engine-test-0.log"
       },
       {
         "kind": "native-engine_regression",
@@ -117,7 +117,7 @@
         "exact_one_pass": true,
         "elapsed_seconds": 0.1294275,
         "binary_sha256": "ef61bbe84901072b874c3d6d78db7df107a369dee68f0ebe1c28abbcd6353483",
-        "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\detached-section-interference-67cb9e15-native-engine-test-1.log"
+        "log": "<local-root>\\limo-cad-maintenance\\backlog-autonomous-20261010\\detached-section-interference-67cb9e15-native-engine-test-1.log"
       }
     ],
     "scope": "Strict changed-package Windows desktop and native-engine/OCCT checks on combined reviewed section/static-interference source with incoming ec010757 preserved. One artifact per package; exactly three NEW static interference regressions plus the FAILED native section regression after correcting its BoundaryContact-versus-NoIntersection fixture contract. The two section desktop passes at3013d119 are retained without repetition. Genuine native repeated-definition overlap/clearance, all-selected zero-pair native-source identity, independently solved pose proof, live guard reentry, original worker/admission/completion and delivery-only retry. No suites, recipe replay, live UI/MCP inputs, runtime restart, deployed performance or parent epic closure."
@@ -126,7 +126,7 @@
     "source_revision": "3013d119bfe7b9af7e03859bfbe3ffc1d24441e2",
     "artifact": {
       "kind": "desktop",
-      "path": "D:\\noBS-CAD-builds\\finish-bevy-rc2\\release-target\\x86_64-pc-windows-msvc\\release\\deps\\limo_cad-9b90afe074be23da.exe",
+      "path": "<local-root>\\noBS-CAD-builds\\finish-bevy-rc2\\release-target\\x86_64-pc-windows-msvc\\release\\deps\\limo_cad-9b90afe074be23da.exe",
       "sha256": "2ba1ad3cf94cda2e93756b404883efdfdd76037e15a57d0d873155445fa47ad1"
     },
     "results": [
@@ -137,7 +137,7 @@
         "exact_one_pass": true,
         "elapsed_seconds": 2.5993246,
         "binary_sha256": "2ba1ad3cf94cda2e93756b404883efdfdd76037e15a57d0d873155445fa47ad1",
-        "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\detached-section-3013d119-desktop-test-0.log"
+        "log": "<local-root>\\limo-cad-maintenance\\backlog-autonomous-20261010\\detached-section-3013d119-desktop-test-0.log"
       },
       {
         "kind": "desktop_regression",
@@ -146,7 +146,7 @@
         "exact_one_pass": true,
         "elapsed_seconds": 0.446887,
         "binary_sha256": "2ba1ad3cf94cda2e93756b404883efdfdd76037e15a57d0d873155445fa47ad1",
-        "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\detached-section-3013d119-desktop-test-1.log"
+        "log": "<local-root>\\limo-cad-maintenance\\backlog-autonomous-20261010\\detached-section-3013d119-desktop-test-1.log"
       }
     ],
     "scope": "Two actual ordered-section-worker/admitted-section-ticket passes at 3013d119 retained without repetition; historical artifact provenance, not a live pair."
@@ -160,12 +160,12 @@
       "exact_one_pass": false,
       "elapsed_seconds": 0.059688599999999994,
       "binary_sha256": "be0f5b1e1f1e88e9604c688446b11c955f3ec4f2fce56f686055a1cecf71ac18",
-      "log": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\detached-section-3013d119-native-engine-test-0.log"
+      "log": "<local-root>\\limo-cad-maintenance\\backlog-autonomous-20261010\\detached-section-3013d119-native-engine-test-0.log"
     },
     "detail": "New fixture incorrectly required BoundaryContact contours to be empty. Existing contract retains boundary outline/bounds but omits material probe/cutaway.",
     "correction_commit": "ad75eeb4f43a987acb1137b5a6bdbe4272817fc3",
     "correction": "Boundary outline bounds and independent perimeter60 checked; outside NoIntersection remains strict empty; material area216/probe18/cutaway bounds and all model/source assertions retained.",
-    "evidence": "D:\\limo-cad-maintenance\\backlog-autonomous-20261010\\detached-section-3013d119-results.json"
+    "evidence": "<local-root>\\limo-cad-maintenance\\backlog-autonomous-20261010\\detached-section-3013d119-results.json"
   },
   "verified_behavior": [
     "Selected genuine B-reps isolate section/probe/cutaway computation while original live host is held.",

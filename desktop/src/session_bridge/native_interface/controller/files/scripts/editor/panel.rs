@@ -27,13 +27,14 @@ pub(crate) fn paint_source(
             .as_array()
             .is_some_and(|notes| !notes.is_empty());
     let dirty = state.dirty();
-    let has_preview = state.example.is_some_and(|example| example.preview);
-    let can_preview = has_preview
-        && state
-            .example
-            .is_some_and(|example| state.source == example.source)
-        && rejected.is_none()
-        && pending.is_none();
+    let has_preview = preview::offered(state);
+    let can_preview = preview::can_open(state) && rejected.is_none() && pending.is_none();
+    let preview_label = if loaded.artifact.is_project() {
+        crate::native_viewport::localization::translate(world, "projectReplay.previewOpen")
+            .to_owned()
+    } else {
+        "Preview lesson".to_owned()
+    };
     let can_discard = dirty || rejected.is_some();
     let mut status = rejected
         .clone()
@@ -79,14 +80,14 @@ pub(crate) fn paint_source(
         61,
     );
     if has_preview {
-        let mut preview = InterfaceControl::button("document/scripts", "Preview lesson");
+        let mut preview = InterfaceControl::button("document/scripts", &preview_label);
         preview.disabled = busy || !can_preview;
         widgets.button(
             world,
             camera,
             "scripts-preview-open",
             preview,
-            Some("Preview lesson"),
+            Some(&preview_label),
             NativeCommand::File(FileCommand::ScriptPreview(preview::Action::Open)),
             rect(x + w - 144., y + 8., 132., 24.),
             None,

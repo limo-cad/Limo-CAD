@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "label": "startup",
-  "executable": "D:\\limo-startup-candidate-floating-runtime\\nbcad.exe",
+  "executable": "<local-root>\\limo-startup-candidate-floating-runtime\\nbcad.exe",
   "executableSha256": "f48b231c425644dfa901fc9f832aeaea40be3c7a93c48b4a3feca7fc7c11f0a7",
   "profile": "dev-app1-debug2-deps3-debug0",
   "cacheCondition": "first",
@@ -36,14 +36,14 @@
   },
   "hostUptimeSeconds": 339073.937,
   "startedAt": "2026-10-12T00:12:55.286Z",
-  "userDataDirectory": "D:\\limo-startup-floating-ui\\empty-verification\\webview2-user-data",
+  "userDataDirectory": "<local-root>\\limo-startup-floating-ui\\empty-verification\\webview2-user-data",
   "warmups": [],
   "runs": [
     {
       "index": 1,
       "pid": 23064,
       "launchUnixMs": 1791763975296,
-      "userDataDirectory": "D:\\limo-startup-floating-ui\\empty-verification\\webview2-user-data\\run-01",
+      "userDataDirectory": "<local-root>\\limo-startup-floating-ui\\empty-verification\\webview2-user-data\\run-01",
       "events": [
         {
           "detail": null,
@@ -298,7 +298,7 @@
       "index": 2,
       "pid": 50856,
       "launchUnixMs": 1791763978798,
-      "userDataDirectory": "D:\\limo-startup-floating-ui\\empty-verification\\webview2-user-data\\run-02",
+      "userDataDirectory": "<local-root>\\limo-startup-floating-ui\\empty-verification\\webview2-user-data\\run-02",
       "events": [
         {
           "detail": null,

@@ -8,9 +8,11 @@ pub(super) fn draw(
     annotation: &DrawingAnnotationDto,
     units: limo_cad_core::UnitSystem,
     budget: &mut PaperGraphicsBudget,
-) -> Result<Vec<Primitive>, String> {
+) -> Result<Paper, String> {
     let mut graphics = graphics::Graphics::new(budget);
     let size = sheet_size(sheet);
+    let mut dimensions = Vec::new();
+    let mut primitive_count = 0;
     match annotation {
         DrawingAnnotationDto::ChainDimension {
             view_id,
@@ -65,12 +67,43 @@ pub(super) fn draw(
                     .ok_or("Series dimension is collapsed or exceeds finite paper coordinates")?;
                 let value =
                     dimension_text(span.value, *precision, prefix, suffix, presentation, units);
+                let semantic = dxf_dimensions::Dimension::resolve(
+                    &span,
+                    if *mode == DrawingLinearDimensionMode::Aligned {
+                        dxf_dimensions::LinearMode::Aligned
+                    } else {
+                        dxf_dimensions::LinearMode::Rotated
+                    },
+                    presentation,
+                    *precision,
+                    units,
+                    (prefix, suffix),
+                    &sheet.style,
+                );
                 let mut paper = Paper {
+                    dimensions: Vec::new(),
                     size,
                     items: Vec::new(),
                 };
                 straight::draw_linear(&mut paper, sheet, span, value, presentation)?;
+                let end = primitive_count + paper.items.len();
                 admit(&mut graphics, paper, annotation.id())?;
+                if let Some(mut dimension) = semantic {
+                    // Include the minimum four-slot capacity in both vectors,
+                    // even for a series with only one measured span.
+                    graphics.budget.retained(
+                        dimension
+                            .retained_bytes()?
+                            .checked_mul(8)
+                            .ok_or("Dimension metadata storage overflow")?,
+                    )?;
+                    dimensions
+                        .try_reserve(1)
+                        .map_err(|_| "Cannot allocate dimension metadata")?;
+                    dimension.range = primitive_count..end;
+                    dimensions.push(dimension);
+                }
+                primitive_count = end;
             }
         }
         DrawingAnnotationDto::OrdinateDimension {
@@ -92,6 +125,7 @@ pub(super) fn draw(
             )?;
             graphics.budget.scratch(64 * 1024)?;
             let mut paper = Paper {
+                dimensions: Vec::new(),
                 size,
                 items: Vec::new(),
             };
@@ -148,7 +182,11 @@ pub(super) fn draw(
         }
         _ => return Err("Expected a series or ordinate dimension".into()),
     }
-    Ok(graphics.finish())
+    Ok(Paper {
+        size,
+        items: graphics.finish(),
+        dimensions,
+    })
 }
 
 fn admit(graphics: &mut graphics::Graphics<'_>, paper: Paper, id: u64) -> Result<(), String> {

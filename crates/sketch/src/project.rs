@@ -28,9 +28,9 @@ pub const PROJECT_FORMAT: &str = "limo-cad-project";
 pub const LEGACY_PROJECT_FORMAT: &str = "tfcad-project";
 pub const PREVIOUS_PROJECT_FORMAT: &str = "nbcad-project";
 
-/// Schema 15 preserves independently selected nested regions. Readers reject
-/// newer schemas so replay cannot silently reinterpret profile selections.
-pub const PROJECT_SCHEMA_VERSION: u32 = 15;
+/// Schema 16 adds authored drafting graphs linked to technical sheet IDs.
+/// Older readers reject the schema instead of editing sheets without those links.
+pub const PROJECT_SCHEMA_VERSION: u32 = 16;
 
 mod profile_selection;
 
@@ -166,13 +166,22 @@ pub(crate) fn decode_project(json: &str) -> Result<ProjectModelV9, String> {
             migrate_v2_to_v3(&mut header);
         }
         2 => migrate_v2_to_v3(&mut header),
-        3..=14 => {}
+        3..=15 => {}
         version if version == u64::from(PROJECT_SCHEMA_VERSION) => {}
         _ => {
             return Err(format!(
                 "project schema {schema_version} is not supported by this build (latest: {PROJECT_SCHEMA_VERSION})"
             ));
         }
+    }
+
+    if schema_version < 16
+        && header
+            .get("drawings")
+            .and_then(|d| d.get("drafting"))
+            .is_some()
+    {
+        return Err("Older project schema cannot contain authored drafting data".into());
     }
 
     if schema_version < 12 {

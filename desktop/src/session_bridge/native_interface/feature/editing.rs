@@ -8,7 +8,7 @@ use std::sync::{
 
 pub(crate) struct Stage {
     pub(super) engine: AppState,
-    source: String,
+    source: limo_cad_project_file::ProjectSnapshot,
     input_index: usize,
     restore_index: usize,
     usable: AtomicBool,
@@ -27,10 +27,7 @@ impl Stage {
                 .map(|index| (index, features.rollback_index))
                 .ok_or("The feature no longer exists")
         })?;
-        let source = crate::session_bridge::engine_text(
-            parse_engine_envelope(engine.engine_call("project_export_model", ""))?,
-            "Engine omitted the edit snapshot",
-        )?;
+        let source = engine.project_snapshot()?;
         let stage = Self {
             engine: AppState::new(),
             source,
@@ -51,10 +48,7 @@ impl Stage {
     }
     fn new_split(engine: &AppState, receipt: DocumentReceipt) -> Result<Self, String> {
         let live_errors = engine.solid_scene_snapshot().errors.clone();
-        let source = crate::session_bridge::engine_text(
-            parse_engine_envelope(engine.engine_call("project_export_model", ""))?,
-            "Engine omitted the Split Body snapshot",
-        )?;
+        let source = engine.project_snapshot()?;
         let stage = Self {
             engine: AppState::new(),
             source,
@@ -91,7 +85,7 @@ impl Stage {
     }
     fn reset(&self) -> Result<(), String> {
         self.usable.store(false, Ordering::Release);
-        parse_engine_envelope(self.engine.project_load(&json!(self.source).to_string()))?;
+        parse_engine_envelope(self.engine.project_load_snapshot(&self.source))?;
         if !self.create_split {
             parse_engine_envelope(
                 self.engine
@@ -522,4 +516,49 @@ pub(super) fn begin(
         }
         install(world, state, prepare(engine, current, kind, id)?)
     })
+}
+
+#[cfg(test)]
+mod composite_tests {
+    use super::*;
+
+    #[test]
+    fn split_stage_reset_and_cancel_preserve_live_domain_snapshot() {
+        let _lock = crate::session_bridge::tests::TEST_LOCK.lock().unwrap();
+        let fixture = crate::session_bridge::native_interface::tests::Fixture::new();
+        let owner = fixture.owner();
+        let revision = fixture
+            .bridge
+            .engine_revision_for_window("main")
+            .unwrap()
+            .unwrap();
+        let original = fixture.engine.project_snapshot().unwrap();
+        let snapshot = limo_cad_project_file::ProjectSnapshot::new(
+            original.model_json().to_owned(),
+            vec![limo_cad_project_file::SnapshotIntent {
+                name: "intent/future-domain.cbor".into(),
+                payload: vec![0, 255, 7],
+            }],
+        )
+        .unwrap();
+        let loaded = fixture
+            .bridge
+            .apply_native_snapshot_at(&fixture.engine, &owner, revision, &snapshot, || Ok(()))
+            .unwrap();
+        let receipt = DocumentReceipt {
+            owner: loaded.context,
+            revision: loaded.engine_revision,
+        };
+        let before = fixture.engine.project_snapshot().unwrap();
+        let stage = Stage::new_split(&fixture.engine, receipt).unwrap();
+        for _ in 0..2 {
+            stage.reset().unwrap();
+            assert_eq!(
+                stage.engine.project_snapshot().unwrap().intents(),
+                before.intents()
+            );
+        }
+        drop(stage);
+        assert_eq!(fixture.engine.project_snapshot().unwrap(), before);
+    }
 }

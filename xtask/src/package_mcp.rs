@@ -313,7 +313,11 @@ fn verify(options: &Options) -> Result<Value> {
 /// A private registry and the owned child's PID must agree before any live
 /// request is sent. Never select an arbitrary existing window by its label.
 fn owned_window(sessions: &SessionDirectory, pid: u32) -> Result<Option<Value>> {
-    let directory = sessions.0.join("_ui/processes");
+    owned_window_at(&sessions.0, pid)
+}
+
+pub(super) fn owned_window_at(sessions: &Path, pid: u32) -> Result<Option<Value>> {
+    let directory = sessions.join("_ui/processes");
     let entries = match fs::read_dir(directory) {
         Ok(entries) => entries,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
@@ -323,7 +327,12 @@ fn owned_window(sessions: &SessionDirectory, pid: u32) -> Result<Option<Value>> 
     for entry in entries {
         let entry = entry?;
 
-        if !entry.file_type().is_ok_and(|kind| kind.is_file()) {
+        if entry
+            .path()
+            .extension()
+            .is_none_or(|extension| extension != "json")
+            || !entry.file_type().is_ok_and(|kind| kind.is_file())
+        {
             continue;
         }
         let Ok(body) = fs::read(entry.path()) else {
@@ -365,7 +374,9 @@ fn owned_window(sessions: &SessionDirectory, pid: u32) -> Result<Option<Value>> 
             window["window_id"].as_str(),
             window["active_session_id"].as_str(),
         ) {
-            windows.insert(window_id.to_owned(), window.clone());
+            let mut window = window.clone();
+            window["process_instance_id"] = lease["process_instance_id"].clone();
+            windows.insert(window_id.to_owned(), window);
         }
     }
     ensure!(
@@ -373,6 +384,59 @@ fn owned_window(sessions: &SessionDirectory, pid: u32) -> Result<Option<Value>> 
         "Owned desktop published multiple active windows"
     );
     Ok(windows.into_values().next())
+}
+
+/// A bootstrap lease/model is deliberately published before the real document.
+/// Do not freeze that temporary identity or attach during a composite commit.
+pub(super) fn owned_window_ready(sessions: &Path, window: &Value) -> bool {
+    let Some(session) = window["active_session_id"]
+        .as_str()
+        .filter(|id| !id.is_empty())
+    else {
+        return false;
+    };
+    let Some(document) = window["active_document_id"]
+        .as_str()
+        .filter(|id| !id.is_empty() && *id != "__bootstrap__")
+    else {
+        return false;
+    };
+    let directory = sessions.join(session);
+    if !directory.join("model.json").is_file() || directory.join("closed.json").exists() {
+        return false;
+    }
+    let Ok(body) = fs::read(directory.join("heartbeat.json")) else {
+        return false;
+    };
+    let Ok(heartbeat) = serde_json::from_slice::<Value>(&body) else {
+        return false;
+    };
+    if heartbeat["interface_version"] != 1
+        || heartbeat["session_id"] != session
+        || heartbeat["document_id"] != document
+        || window["window_id"].as_str().is_none_or(str::is_empty)
+        || window["process_instance_id"]
+            .as_str()
+            .is_none_or(str::is_empty)
+        || heartbeat["window_id"] != window["window_id"]
+        || heartbeat["process_instance_id"] != window["process_instance_id"]
+    {
+        return false;
+    }
+    let marker = directory.join("publication-commit.cbor");
+    if heartbeat.get("publication_version").is_none() {
+        return !marker.exists();
+    }
+    let receipt = &heartbeat["publication_receipt"];
+    heartbeat["publication_version"] == 1
+        && marker.is_file()
+        && receipt["session_id"] == session
+        && receipt["document_id"] == document
+        && receipt["process_instance_id"] == heartbeat["process_instance_id"]
+        && receipt["window_id"] == heartbeat["window_id"]
+        && heartbeat["model_generation"]
+            .as_u64()
+            .is_some_and(|generation| receipt["engine_revision"].as_u64() == Some(generation))
 }
 
 fn grouped_call(
@@ -780,8 +844,7 @@ fn wait_for_owned_window(
     loop {
         ensure!(desktop.is_running()?, "Desktop exited before UI readiness");
         if let Some(window) = owned_window(sessions, pid)? {
-            let session = window["active_session_id"].as_str().unwrap();
-            if sessions.0.join(session).join("model.json").is_file() {
+            if owned_window_ready(&sessions.0, &window) {
                 return Ok(window);
             }
         }
@@ -1297,7 +1360,7 @@ mod tests {
         assert_eq!(
             owned_window(&sessions, 12).unwrap().unwrap()["active_session_id"],
             "own",
-            "Atomic temp and final copies are one process/window"
+            "An atomic staging file must not be observed before rename"
         );
         fs::write(
             &publishing,
@@ -1306,8 +1369,13 @@ mod tests {
         .unwrap();
         assert_eq!(
             owned_window(&sessions, 12).unwrap().unwrap()["active_session_id"],
-            "new",
-            "Newest publication of the same instance wins"
+            "own",
+            "Newer atomic staging is still unpublished"
+        );
+        fs::rename(&publishing, &owned).unwrap();
+        assert_eq!(
+            owned_window(&sessions, 12).unwrap().unwrap()["active_session_id"],
+            "new"
         );
         fs::write(
             &publishing,
@@ -1320,11 +1388,17 @@ mod tests {
             .to_string(),
         )
         .unwrap();
+        assert_eq!(
+            owned_window(&sessions, 12).unwrap().unwrap()["active_session_id"],
+            "new"
+        );
+        let another = registry.join("another-instance.json");
+        fs::rename(&publishing, &another).unwrap();
         assert!(
             owned_window(&sessions, 12).is_err(),
-            "A distinct process instance must remain ambiguous even with the same PID"
+            "Distinct committed process instances must remain ambiguous even with the same PID"
         );
-        fs::remove_file(publishing).unwrap();
+        fs::remove_file(another).unwrap();
         fs::write(
             &owned,
             lease(
@@ -1341,6 +1415,71 @@ mod tests {
         fs::remove_file(foreign).unwrap();
         fs::remove_dir(registry).unwrap();
         fs::remove_dir(sessions.0.join("_ui")).unwrap();
+    }
+
+    #[test]
+    fn owned_readiness_requires_real_owner_and_acknowledged_composite_receipt() {
+        let sessions = SessionDirectory::create().unwrap();
+        let window = json!({"window_id":"main","process_instance_id":"owner",
+            "active_session_id":"session","active_document_id":"document"});
+        let directory = sessions.0.join("session");
+        fs::create_dir(&directory).unwrap();
+        fs::write(directory.join("model.json"), "{}").unwrap();
+        let mut heartbeat = json!({"interface_version":1,"session_id":"session","document_id":"document",
+            "window_id":"main","process_instance_id":"owner","model_generation":7});
+        let publish = |heartbeat: &Value| {
+            fs::write(directory.join("heartbeat.json"), heartbeat.to_string()).unwrap()
+        };
+        assert!(!owned_window_ready(&sessions.0, &window));
+        publish(&heartbeat);
+        assert!(
+            owned_window_ready(&sessions.0, &window),
+            "Legacy matching owner is ready"
+        );
+        let mut bootstrap = window.clone();
+        bootstrap["active_document_id"] = json!("__bootstrap__");
+        let mut bootstrap_heartbeat = heartbeat.clone();
+        bootstrap_heartbeat["document_id"] = json!("__bootstrap__");
+        publish(&bootstrap_heartbeat);
+        assert!(!owned_window_ready(&sessions.0, &bootstrap));
+        publish(&heartbeat);
+        fs::write(
+            directory.join("publication-commit.cbor"),
+            b"committed marker fixture",
+        )
+        .unwrap();
+        assert!(
+            !owned_window_ready(&sessions.0, &window),
+            "Commit before heartbeat acknowledgement is not ready"
+        );
+        heartbeat["publication_version"] = json!(1);
+        heartbeat["publication_receipt"] = json!({"session_id":"session","document_id":"document",
+            "process_instance_id":"owner","window_id":"main","engine_revision":7});
+        publish(&heartbeat);
+        assert!(owned_window_ready(&sessions.0, &window));
+        for field in [
+            "session_id",
+            "document_id",
+            "process_instance_id",
+            "window_id",
+            "engine_revision",
+        ] {
+            let mut stale = heartbeat.clone();
+            stale["publication_receipt"][field] = json!("stale");
+            publish(&stale);
+            assert!(
+                !owned_window_ready(&sessions.0, &window),
+                "Stale composite route was accepted"
+            );
+        }
+        publish(&heartbeat);
+        fs::write(directory.join("closed.json"), "{}").unwrap();
+        assert!(!owned_window_ready(&sessions.0, &window));
+        fs::remove_file(directory.join("closed.json")).unwrap();
+        fs::remove_file(directory.join("publication-commit.cbor")).unwrap();
+        fs::remove_file(directory.join("heartbeat.json")).unwrap();
+        fs::remove_file(directory.join("model.json")).unwrap();
+        fs::remove_dir(directory).unwrap();
     }
 
     #[test]

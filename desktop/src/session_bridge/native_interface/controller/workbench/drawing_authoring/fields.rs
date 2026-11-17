@@ -585,8 +585,14 @@ fn precision(fields: &[Field], id: Id) -> Result<u8, String> {
         .trim()
         .parse::<u8>()
         .ok()
-        .filter(|n| *n <= 6)
-        .ok_or_else(|| format!("{} must be an integer from 0 to 6", f.label))
+        .filter(|n| *n <= limo_cad_sketch::MAX_DRAWING_DIMENSION_PRECISION)
+        .ok_or_else(|| {
+            format!(
+                "{} must be an integer from 0 to {}",
+                f.label,
+                limo_cad_sketch::MAX_DRAWING_DIMENSION_PRECISION
+            )
+        })
 }
 fn boolean(fields: &[Field], id: Id) -> Result<bool, String> {
     let f = get(fields, id)?;

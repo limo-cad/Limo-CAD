@@ -488,3 +488,62 @@ fn installed_slicer_roundtrips_preserve_native_named_layout() {
         );
     }
 }
+
+#[test]
+fn guarded_geometry_exports_accept_complete_snapshots_and_keep_stale_fences() {
+    use limo_cad_project_file::{ProjectSnapshot, SnapshotIntent};
+    let (host, _) = fixture();
+    let initial = host.project_snapshot().unwrap();
+    let snapshot = ProjectSnapshot::new(
+        initial.model_json().to_owned(),
+        vec![
+            SnapshotIntent {
+                name: limo_cad_fem::THERMAL_STUDY_ENTRY.into(),
+                payload: limo_cad_fem::ThermalStudyDocument::default()
+                    .encode_cbor()
+                    .unwrap(),
+            },
+            SnapshotIntent {
+                name: "intent/future-export-domain.cbor".into(),
+                payload: vec![0, 255, 42],
+            },
+        ],
+    )
+    .unwrap();
+    value(host.project_load_snapshot(&snapshot));
+    let request =
+        serde_json::json!({"scope":"definition","expected_model_json":snapshot.model_json()});
+    assert!(!host.export_stl(&request.to_string()).unwrap().is_empty());
+    assert!(!host.export_3mf(&request.to_string()).unwrap().is_empty());
+    let step = serde_json::json!({"expected_model_json":snapshot.model_json()});
+    assert!(!host.export_step(&step.to_string()).unwrap().is_empty());
+    let mesh = host
+        .prepare_portable_mesh_export(
+            serde_json::from_value(request.clone()).unwrap(),
+            PortableMeshFormat::ThreeMf,
+        )
+        .unwrap()
+        .build()
+        .unwrap();
+    host.validate_portable_mesh_export(&mesh).unwrap();
+    let exact = host
+        .prepare_step_export(serde_json::from_value(step.clone()).unwrap())
+        .unwrap()
+        .build()
+        .unwrap();
+    host.validate_step_export(&exact).unwrap();
+    assert_eq!(host.project_snapshot().unwrap(), snapshot);
+    let lossy: serde_json::Value =
+        serde_json::from_str(&host.engine_call("project_export_model", "")).unwrap();
+    assert_eq!(lossy["ok"], false);
+    value(host.engine_call("document_set_name", "\"Changed after capture\""));
+    assert!(host.validate_portable_mesh_export(&mesh).is_err());
+    assert!(host.validate_step_export(&exact).is_err());
+    assert!(host.export_stl(&request.to_string()).is_err());
+    assert!(host.export_3mf(&request.to_string()).is_err());
+    assert!(host.export_step(&step.to_string()).is_err());
+    assert_eq!(
+        host.project_snapshot().unwrap().intents(),
+        snapshot.intents()
+    );
+}

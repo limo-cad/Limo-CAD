@@ -1,0 +1,21 @@
+﻿; Portable replay package, CBOR v1. Only definite-length maps/text/bytes.
+; Reject duplicate/unknown keys, wrong types, indefinite items and trailing bytes.
+; Total encoded limit: 285278208 bytes (272 MiB plus 64 KiB framing budget).
+; Framing validation is not script, domain, archive or ownership validation.
+; Host must parse script v2 and preflight retained ProjectArchive before mutation.
+replay-package = {
+  "format": "limo-cad-replay",
+  "version": 1,
+  "script": tstr .size (1..16777216),
+  "project": bstr .size (1..268435456)
+}
+; project is the exact .limo archive, including ancillary entries.
+; Existing archive expansion and snapshot/domain limits continue to apply.
+
+; Compact integrity descriptor for an admitted request. Not an authorization token.
+; SHA-256 covers the exact original package wire bytes, before decoding.
+; The serde descriptor represents the digest as exactly 32 unsigned octets.
+replay-package-identity = {
+  "byte_length": 1..285278208,
+  "sha256": [32*32 uint .le 255]
+}

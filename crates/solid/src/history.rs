@@ -1924,6 +1924,34 @@ impl SolidDocument {
         active_features: &BTreeSet<FeatureId>,
     ) -> Result<RecomputePlanDto, SolidError> {
         self.ensure_idle()?;
+        // Finishing selections currently persist positional OCCT edge labels.
+        // Removing an earlier finish can reuse a valid label for another edge,
+        // even when the two operations have geometrically independent supports.
+        // Refuse before preparing a transaction (and before the UI removes the
+        // timeline entry), rather than silently replaying a different selection.
+        // Include inactive finishes: their saved selections must remain safe
+        // when the user later unsuppresses them or advances the rollback marker.
+        let finishes: Vec<_> = self
+            .fillets
+            .iter()
+            .map(|d| (d.feature_id, d.body_id, d.name.as_str()))
+            .chain(
+                self.chamfers
+                    .iter()
+                    .map(|d| (d.feature_id, d.body_id, d.name.as_str())),
+            )
+            .collect();
+        if let Some((_, body_id, _)) = finishes.iter().find(|(id, _, _)| *id == feature_id) {
+            if let Some((_, _, name)) = finishes.iter().find(|(id, body, _)| {
+                body == body_id
+                    && feature_order_key(&self.feature_order, *id)
+                        > feature_order_key(&self.feature_order, feature_id)
+            }) {
+                return Err(SolidError::InvalidHistory(format!(
+                    "cannot delete this edge finish while downstream edge finish '{name}' uses the same body; remove downstream finishes first to preserve their intended edge supports"
+                )));
+            }
+        }
         let mut extrudes = self.extrudes.clone();
         let mut revolves = self.revolves.clone();
         let mut sweeps = self.sweeps.clone();
@@ -4931,6 +4959,50 @@ pub fn plane_bases_coplanar(first: PlaneBasis, second: PlaneBasis) -> bool {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn deleting_edge_finishes_checks_body_and_timeline_order_even_when_inactive() {
+        let restore = || {
+            SolidDocument::restore_feature_definitions(crate::SolidFeatureDefinitions {
+                fillets: vec![serde_json::from_value(serde_json::json!({
+                    "feature_id":3,"name":"Lip","body_id":1,
+                    "edge_ids":[1],"edge_keys":["edge:0"],"radius":1.
+                }))
+                .unwrap()],
+                chamfers: vec![serde_json::from_value(serde_json::json!({
+                    "feature_id":4,"name":"Rim","body_id":1,
+                    "edge_ids":[2],"edge_keys":["edge:7"],"distance":0.5
+                }))
+                .unwrap()],
+                ..Default::default()
+            })
+            .unwrap()
+        };
+        let mut doc = restore();
+        assert!(doc
+            .prepare_delete_feature(FeatureId(3), &[], &active(&[]))
+            .is_err());
+        assert!(doc.pending.is_none());
+        assert_eq!(doc.fillet_definitions().len(), 1);
+        // Deleting the last finish remains allowed.
+        assert!(doc
+            .prepare_delete_feature(FeatureId(4), &[], &active(&[]))
+            .is_ok());
+        let mut doc = restore();
+        doc.chamfers[0].body_id = BodyId(2);
+        assert!(doc
+            .prepare_delete_feature(FeatureId(3), &[], &active(&[]))
+            .is_ok());
+        let mut doc = restore();
+        doc.set_feature_order(&[FeatureId(4), FeatureId(3)])
+            .unwrap();
+        assert!(doc
+            .prepare_delete_feature(FeatureId(4), &[], &active(&[]))
+            .is_err());
+        assert!(doc
+            .prepare_delete_feature(FeatureId(3), &[], &active(&[]))
+            .is_ok());
+    }
+
     #[test]
     fn chamfer_angles_survive_planning_edit_and_saved_definition_replay() {
         let mut doc = SolidDocument::new();

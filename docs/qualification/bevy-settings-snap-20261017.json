@@ -28,11 +28,11 @@
     "features": [
       "experimental-ui-widgets"
     ],
-    "application": "/Users/jack/Code/noBS-CAD/artifacts/pr420-visual-parity-20261016/v12/widgets/Limo CAD PR420 Widgets V12.app",
+    "application": "/Users/<user>/Code/noBS-CAD/artifacts/pr420-visual-parity-20261016/v12/widgets/Limo CAD PR420 Widgets V12.app",
     "engine_sha256": "890cece594e782a1e1b8361f63b76be06ebc603f000c2af37b447ce1d25ff2f3",
     "signature": "ad-hoc; deep strict verification passed",
     "bundled_occt_loaded": true,
-    "source_worktree": "/Users/jack/.codex/worktrees/pr420-visual-parity/noBS-CAD",
+    "source_worktree": "/Users/<user>/.codex/worktrees/pr420-visual-parity/noBS-CAD",
     "baseline": "ac7e293bf0c59e64dc4f57b3805cd51f3b4fc05e",
     "pr433": "5cde5c0d7444c1a65ab912ae9de861d4d2c95150",
     "pr434": "fcbde1b7fefe5ad47f3db7c551d4036e10b2f0d2"
@@ -164,7 +164,7 @@
     ]
   },
   "settings_blocker": {
-    "reason_stopped": ".cursor/rules/surface-qualification.mdc limits one initial repair investigation to two repair/rebuild cycles or 30 minutes. The cap was reached; no heavy workaround was added.",
+    "reason_stopped": "docs/contributing/surface-qualification.md limits one initial repair investigation to two repair/rebuild cycles or 30 minutes. The cap was reached; no heavy workaround was added.",
     "next_hypothesis": "Bevy picking documents a hover map based on the final pointer position of a frame. Batched native press/move delivery may therefore target a different surface. This is a source-informed hypothesis, not a proven native event trace. A future bounded investigation should compare event delivery with hit selection.",
     "standard_update_trial": "Bevy reactive 60 Hz updates while a floating dialog was open did not fix the long drag; removed completely from final source.",
     "retained_source_fix": "An unrelated sibling changing availability no longer clears the dialog-owned Bevy press state.",
@@ -181,7 +181,7 @@
   "capture_receipts": "docs/qualification/bevy-settings-snap-20261017/capture-receipts.json",
   "capture_assertions": "All retained inspection pairs match clean builds. Every capture is presented/applied and its submitted/layout revisions agree.",
   "gif_format": "Labeled native step captures, not real-time recordings; review crops/resizes only.",
-  "artifact_root": "/Users/jack/Code/noBS-CAD/artifacts/pr420-visual-parity-20261016",
+  "artifact_root": "/Users/<user>/Code/noBS-CAD/artifacts/pr420-visual-parity-20261016",
   "limits": [
     "Large Settings dragging is still a functional blocker, not an accepted cosmetic difference.",
     "Prior small dialog move/resize passes are retained at their original revisions; no new blanket drag/resize acceptance is claimed.",

@@ -1,0 +1,30 @@
+# Release advisory exceptions for grype. `cargo xtask advisory-exceptions`
+# runs before every scan that loads this file and fails unless each rule
+# equals one unexpired entry in reviews.yaml (advisory, package name, version,
+# type and location) and has a row in docs/security/dependencies.md. No other
+# grype option or rule field is accepted here.
+ignore:
+  - vulnerability: CVE-2026-85091
+    reason: >-
+      The 0.3.0 Windows packages contain zlib 1.3.2#3 with upstream fix
+      df84af25dc1942490e1d1c899a07619152a46148. The reviewed package hashes,
+      source regression and DLL import inspection establish the backport;
+      Grype still matches the unchanged 1.3.2 identity. Each build retains
+      the DLL consumer guard. See docs/security/dependencies.md.
+    package:
+      name: zlib
+      version: 1.3.2
+      type: binary
+      location: "**/Limo-CAD-0.3.0-windows-x64/z.dll"
+  - vulnerability: CVE-2026-85091
+    reason: >-
+      The 0.3.0 Windows packages contain zlib 1.3.2#3 with upstream fix
+      df84af25dc1942490e1d1c899a07619152a46148. The reviewed package hashes,
+      source regression and DLL import inspection establish the backport;
+      Grype still matches the unchanged 1.3.2 identity. Each build retains
+      the DLL consumer guard. See docs/security/dependencies.md.
+    package:
+      name: zlib
+      version: 1.3.2
+      type: binary
+      location: "**/Limo-CAD-0.3.0-windows-arm64/z.dll"

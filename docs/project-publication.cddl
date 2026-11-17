@@ -1,0 +1,24 @@
+; Combine with project-snapshot.cddl. Native publication transport, CBOR v1.
+project-publication = {
+  format: "limo-cad-project-publication",
+  version: 1,
+  receipt: publication-receipt,
+  snapshot: bstr .cbor project-snapshot
+}
+publication-receipt = {
+  process_instance_id: publication-identity,
+  session_id: publication-identity,
+  window_id: publication-identity,
+  document_id: publication-identity,
+  epoch: 1..18446744073709551615,
+  engine_revision: 1..18446744073709551615,
+  export_sequence: 1..18446744073709551615
+}
+publication-identity = tstr .size (1..256)
+; Identities additionally exclude Unicode control characters; compare exactly.
+; No unknown/duplicate map fields or trailing bytes. Recursion <=16.
+; Encoded publication <=256 MiB + 4096; nested snapshot retains its own bound.
+; Receipt comes from the transport commit, not from this payload itself.
+; Every field must match; this does not authenticate the publisher.
+; Consumer validates known CAD/domain semantics before adopting live state.
+; Filesystem commit/retention and old-client negotiation are transport duties.

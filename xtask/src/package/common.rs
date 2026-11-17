@@ -9,7 +9,7 @@ use std::{
 
 /// Apple bundle fields contain only the numeric release version; the executable
 /// and archive retain the full SemVer prerelease and source identity.
-pub(super) fn numeric_version(version: &str) -> Result<String> {
+pub(crate) fn numeric_version(version: &str) -> Result<String> {
     let version: semver::Version = version.parse().context("package version must be SemVer")?;
     Ok(format!(
         "{}.{}.{}",
@@ -19,7 +19,7 @@ pub(super) fn numeric_version(version: &str) -> Result<String> {
 
 /// Debian's tilde sorts a prerelease before the final release. A SemVer hyphen
 /// would instead introduce a Debian revision that sorts after the final build.
-pub(super) fn debian_version(version: &str) -> Result<String> {
+pub(crate) fn debian_version(version: &str) -> Result<String> {
     let parsed: semver::Version = version.parse().context("package version must be SemVer")?;
     if parsed.pre.is_empty() {
         Ok(version.to_owned())

@@ -29,6 +29,14 @@ runtime.
 
 ## Open and run scripts in CAD
 
+Hover over **Extrude** in the Model ribbon and choose **Show me** for a short,
+isolated demonstration. The preview highlights profile selection, the Extrude
+command, distance and Apply while rendering the real example script. Replay,
+Previous/Next and **Open help** remain inside the card. Close returns to your
+previous Scripts view, including an unfinished draft. The example never changes
+the current design. It is also available as **Extrude a closed profile** in the
+example library and through MCP as `extrude-basics`.
+
 The **Scripts** button opens one workspace beside the current design. Choose
 **Browse examples** for bundled lessons, complete designs and manufacturing
 coupons, or **Open script...** for a `.limo.jsonc` file. **Path / Load script**

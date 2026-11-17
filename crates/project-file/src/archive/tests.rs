@@ -151,6 +151,96 @@ fn previous_brand_archives_migrate_without_losing_extension_data() {
 }
 
 #[test]
+fn legacy_archive_snapshots_resave_all_intents_and_ancillary_entries() {
+    let mut thermal = Vec::new();
+    ciborium::into_writer(
+        &json!({"format":"limo-cad-thermal-studies","version":1,"studies":[]}),
+        &mut thermal,
+    )
+    .unwrap();
+    let vendor = [0, 255, 7, 42];
+    for format in [LEGACY_FORMAT, PREVIOUS_FORMAT] {
+        let current = ProjectArchive::new(model(2), metadata()).unwrap();
+        let mut manifest = current.manifest().clone();
+        manifest["format"] = json!(format);
+        manifest["future_vendor"] = json!({"keep":[1,true,"opaque"]});
+        let mut legacy: Value = serde_json::from_str(&model(2)).unwrap();
+        legacy["format"] = json!(format);
+        let text = serde_json::to_string_pretty(&legacy).unwrap() + "\n";
+        let bytes = fixture(
+            &manifest,
+            text.as_bytes(),
+            &[
+                ("intent/thermal-studies.cbor", &thermal),
+                ("intent/vendor.cbor", &vendor),
+                ("preview.png", b"synthetic preview"),
+            ],
+        );
+        let opened = ProjectArchive::decode(bytes.clone()).unwrap();
+        let snapshot = opened.snapshot().unwrap();
+        assert_eq!(opened.model_json(), text);
+        assert_eq!(opened.original.as_deref(), Some(bytes.as_slice()));
+        legacy["format"] = json!(PROJECT_FORMAT);
+        assert_eq!(
+            serde_json::from_str::<Value>(snapshot.model_json()).unwrap(),
+            legacy
+        );
+        assert_eq!(
+            snapshot.intents(),
+            &[
+                crate::SnapshotIntent {
+                    name: "intent/thermal-studies.cbor".into(),
+                    payload: thermal.clone(),
+                },
+                crate::SnapshotIntent {
+                    name: "intent/vendor.cbor".into(),
+                    payload: vendor.to_vec(),
+                },
+            ]
+        );
+        let migrated = crate::ProjectSnapshot::new(model(15), snapshot.intents().to_vec()).unwrap();
+        let candidate = opened.with_snapshot(&migrated, metadata()).unwrap();
+        assert_eq!(opened.model_json(), text);
+        let saved = candidate.encode().unwrap();
+        let reopened = ProjectArchive::decode(saved.clone()).unwrap();
+        assert_eq!(reopened.snapshot().unwrap(), migrated);
+        assert_eq!(reopened.manifest()["format"], PROJECT_FORMAT);
+        assert_eq!(
+            reopened.manifest()["future_vendor"],
+            manifest["future_vendor"]
+        );
+        let mut zip = ZipArchive::new(Cursor::new(saved)).unwrap();
+        let mut preview = Vec::new();
+        zip.by_name("preview.png")
+            .unwrap()
+            .read_to_end(&mut preview)
+            .unwrap();
+        assert_eq!(preview, b"synthetic preview");
+        assert_eq!(zip.comment(), b"project annotations");
+    }
+}
+
+#[test]
+fn repository_legacy_archive_supports_snapshot_open_and_resave() {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples/testPiece.nbcad");
+    let bytes = crate::read_binary_file(&path).unwrap();
+    let opened = ProjectArchive::decode(bytes.clone()).unwrap();
+    let original: Value = serde_json::from_str(opened.model_json()).unwrap();
+    assert_eq!(original["format"], PREVIOUS_FORMAT);
+    let snapshot = opened.snapshot().unwrap();
+    let mut expected = original;
+    expected["format"] = json!(PROJECT_FORMAT);
+    assert_eq!(
+        serde_json::from_str::<Value>(snapshot.model_json()).unwrap(),
+        expected
+    );
+    let candidate = opened.with_snapshot(&snapshot, metadata()).unwrap();
+    let reopened = ProjectArchive::decode(candidate.encode().unwrap()).unwrap();
+    assert_eq!(reopened.snapshot().unwrap(), snapshot);
+    assert_eq!(opened.original.as_deref(), Some(bytes.as_slice()));
+}
+
+#[test]
 fn invalid_envelopes_cannot_replace_a_good_model_or_sneak_past_container_validation() {
     let mut archive = ProjectArchive::new(model(7), metadata()).unwrap();
     let previous_manifest = archive.manifest().clone();
@@ -238,7 +328,10 @@ fn unsupported_opaque_zip_metadata_is_rejected_instead_of_silently_discarded() {
             .unwrap()
             .to_string()
             .contains("cannot preserve opaque ZIP metadata"));
-        assert_eq!(decoded.original.as_ref().unwrap(), &bytes);
+        assert_eq!(
+            decoded.original.as_ref().unwrap().as_ref(),
+            bytes.as_slice()
+        );
     }
 }
 
@@ -348,4 +441,226 @@ fn non_utf8_entry_names_leave_the_original_archive_intact() {
         "{failure}"
     );
     assert_eq!(archive.original.as_deref(), Some(bytes.as_slice()));
+}
+
+#[test]
+fn intent_overlay_preserves_unrelated_entries_and_replaces_without_duplicates() {
+    let base = ProjectArchive::new(model(14), metadata()).unwrap();
+    let bytes = fixture(
+        base.manifest(),
+        base.model_json().as_bytes(),
+        &[
+            ("preview.png", b"thumbnail"),
+            ("intent/vendor.cbor", b"opaque"),
+        ],
+    );
+    let mut archive = ProjectArchive::decode(bytes).unwrap();
+    assert_eq!(
+        archive.read_intent("intent/thermal.cbor", 100).unwrap(),
+        None
+    );
+    for payload in [b"first".as_slice(), b"second".as_slice()] {
+        archive
+            .set_intent("intent/thermal.cbor", Some(payload.to_vec()))
+            .unwrap();
+        assert_eq!(
+            archive
+                .read_intent("intent/thermal.cbor", 100)
+                .unwrap()
+                .unwrap(),
+            payload
+        );
+        let encoded = archive.encode().unwrap();
+        let mut zip = ZipArchive::new(Cursor::new(&encoded)).unwrap();
+        assert_eq!(zip.comment(), b"project annotations");
+        let mut preview = Vec::new();
+        zip.by_name("preview.png")
+            .unwrap()
+            .read_to_end(&mut preview)
+            .unwrap();
+        assert_eq!(preview, b"thumbnail");
+        assert_eq!(
+            zip.file_names()
+                .filter(|name| name
+                    .as_ref()
+                    .is_ok_and(|name| name.as_ref() == "intent/thermal.cbor"))
+                .count(),
+            1
+        );
+        archive = ProjectArchive::decode(encoded).unwrap();
+        assert_eq!(
+            archive
+                .read_intent("intent/vendor.cbor", 100)
+                .unwrap()
+                .unwrap(),
+            b"opaque"
+        );
+        assert_eq!(
+            archive
+                .read_intent("intent/thermal.cbor", 100)
+                .unwrap()
+                .unwrap(),
+            payload
+        );
+    }
+    archive.set_intent("intent/thermal.cbor", None).unwrap();
+    assert_eq!(
+        archive.read_intent("intent/thermal.cbor", 100).unwrap(),
+        None
+    );
+    let reopened = ProjectArchive::decode(archive.encode().unwrap()).unwrap();
+    assert_eq!(
+        reopened.read_intent("intent/thermal.cbor", 100).unwrap(),
+        None
+    );
+    assert_eq!(
+        reopened
+            .read_intent("intent/vendor.cbor", 100)
+            .unwrap()
+            .unwrap(),
+        b"opaque"
+    );
+}
+#[test]
+fn intent_names_and_caller_limits_reject_without_modifying_candidate() {
+    let mut archive = ProjectArchive::new(model(14), metadata()).unwrap();
+    archive
+        .set_intent("intent/thermal.cbor", Some(b"keep".to_vec()))
+        .unwrap();
+    for name in [
+        "model.json",
+        "manifest.json",
+        "/intent/x",
+        "intent/../x",
+        "intent/./x",
+        "intent//x",
+        "intent/x/",
+        "intent\\x",
+        "intent/C:x",
+    ] {
+        assert!(archive.set_intent(name, Some(vec![1])).is_err(), "{name}");
+        assert!(archive.read_intent(name, 100).is_err());
+    }
+    assert!(archive.read_intent("intent/thermal.cbor", 3).is_err());
+    assert_eq!(
+        archive
+            .read_intent("intent/thermal.cbor", 4)
+            .unwrap()
+            .unwrap(),
+        b"keep"
+    );
+    let reopened = ProjectArchive::decode(archive.encode().unwrap()).unwrap();
+    assert!(reopened.read_intent("intent/thermal.cbor", 3).is_err());
+    assert_eq!(
+        reopened
+            .read_intent("intent/thermal.cbor", 4)
+            .unwrap()
+            .unwrap(),
+        b"keep"
+    );
+}
+#[test]
+fn staged_intents_obey_count_and_expanded_archive_limits() {
+    let mut archive = ProjectArchive::new(model(14), metadata()).unwrap();
+    for n in 0..64 {
+        archive
+            .set_intent(&format!("intent/{n}"), Some(vec![0; 16]))
+            .unwrap();
+    }
+    assert!(archive.set_intent("intent/extra", None).is_err());
+    archive.set_intent("intent/0", Some(vec![1; 17])).unwrap();
+    assert!(archive.encode_bounded(MAX_FILE_BYTES, 1000).is_err());
+    assert!(archive.encode().is_ok());
+}
+
+#[test]
+fn caller_decode_limits_reject_stored_and_expanded_content() {
+    let archive = ProjectArchive::new(model(14), metadata()).unwrap();
+    let bytes = archive.encode().unwrap();
+    let size = bytes.len() as u64;
+    assert!(
+        ProjectArchive::decode_with_limits(bytes.clone(), size - 1, MAX_EXPANDED_BYTES).is_err()
+    );
+    let error = ProjectArchive::decode_with_limits(bytes.clone(), size, 1)
+        .err()
+        .unwrap()
+        .to_string();
+    assert!(error.contains("expanded project"), "{error}");
+    let retained =
+        ProjectArchive::decode_with_limits(bytes.clone(), size, MAX_EXPANDED_BYTES).unwrap();
+    assert_eq!(retained.encode().unwrap(), bytes);
+    assert!(ProjectArchive::decode_with_limits(bytes, u64::MAX, u64::MAX).is_ok());
+}
+
+#[test]
+fn caller_entry_limits_report_the_exact_bound_without_large_payloads() {
+    let archive = ProjectArchive::new(model(14), metadata()).unwrap();
+    let bytes = archive.encode().unwrap();
+    let mut zip = ZipArchive::new(Cursor::new(&bytes)).unwrap();
+    let limit = archive.model_json().len() as u64 - 1;
+    let failure = read_entry(&mut zip, "model.json", limit)
+        .unwrap_err()
+        .to_string();
+    assert_eq!(
+        failure,
+        format!("expanded project exceeds the {limit} byte safety limit")
+    );
+    let size = archive.model_json().len() as u64;
+    assert_eq!(
+        read_entry(&mut zip, "model.json", size).unwrap(),
+        archive.model_json()
+    );
+}
+
+#[test]
+fn caller_expanded_encode_limits_cover_model_retained_and_staged_payloads() {
+    let base = ProjectArchive::new(model(14), metadata()).unwrap();
+    let base_size = serde_json::to_vec_pretty(base.manifest()).unwrap().len() as u64
+        + 1
+        + base.model_json().len() as u64;
+    let retained_bytes = fixture(
+        base.manifest(),
+        base.model_json().as_bytes(),
+        &[("preview.png", b"retained")],
+    );
+    let retained = ProjectArchive::decode(retained_bytes).unwrap();
+    let mut staged = base.clone();
+    staged
+        .set_intent("intent/small.cbor", Some(vec![1; 8]))
+        .unwrap();
+    for (archive, limit) in [
+        (&base, base_size - 1),
+        (&retained, base_size + 7),
+        (&staged, base_size + 7),
+    ] {
+        let failure = archive
+            .encode_bounded(MAX_FILE_BYTES, limit)
+            .unwrap_err()
+            .to_string();
+        assert_eq!(
+            failure,
+            format!("expanded project exceeds the {limit} byte safety limit")
+        );
+        assert!(
+            archive.encode().is_ok(),
+            "A failed bounded save must retain the original candidate"
+        );
+    }
+    assert!(base.encode_bounded(MAX_FILE_BYTES, base_size).is_ok());
+    assert!(retained
+        .encode_bounded(MAX_FILE_BYTES, base_size + 8)
+        .is_ok());
+    assert!(staged.encode_bounded(MAX_FILE_BYTES, base_size + 8).is_ok());
+}
+
+#[test]
+fn caller_archive_write_limit_reports_the_actual_bound_and_does_not_append() {
+    let mut output = BoundedOutput {
+        cursor: Cursor::new(Vec::new()),
+        limit: 7,
+    };
+    output.write_all(b"1234567").unwrap();
+    let failure = output.write_all(b"8").unwrap_err().to_string();
+    assert_eq!(failure, "project archive exceeds the 7 byte safety limit");
+    assert_eq!(output.cursor.into_inner(), b"1234567");
 }

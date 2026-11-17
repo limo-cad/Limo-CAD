@@ -1,0 +1,2883 @@
+{
+  "$schema": "./limo-cad-script.schema.json",
+  "version": 1,
+  "name": "Bracket sketch guides: lines, points and curved profiles",
+  "starting_state": "empty",
+  "steps": [
+    {
+      "id": "empty_scene",
+      "call": {
+        "group": "solid/check",
+        "operation": "solid_scene",
+        "arguments": {}
+      }
+    },
+    {
+      "chapter": "sketch_line",
+      "note": "Independent bracket layout study on the XZ plane; all coordinates are sketch millimeters. The six-edge 32 x 44 mm L with 8 mm walls is shared context. Extra curves are layout examples, not a fabrication-ready profile.",
+      "duration_ms": 0
+    },
+    {
+      "id": "sketch_line_begin",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_begin",
+        "arguments": {
+          "name": "Bracket / line",
+          "plane": {
+            "type": "origin_plane",
+            "plane": "xz"
+          }
+        }
+      }
+    },
+    {
+      "id": "sketch_line_snap",
+      "call": {
+        "group": "sketch/selection",
+        "operation": "sketch_set_grid_snap",
+        "arguments": {
+          "enabled": false
+        }
+      }
+    },
+    {
+      "id": "sketch_line_context_0",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 0,
+            "y": 0
+          },
+          "to_raw": {
+            "x": 32,
+            "y": 0
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "sketch_line_context_1",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 32,
+            "y": 0
+          },
+          "to_raw": {
+            "x": 32,
+            "y": 8
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "sketch_line_context_2",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 32,
+            "y": 8
+          },
+          "to_raw": {
+            "x": 8,
+            "y": 8
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "sketch_line_context_3",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 8,
+            "y": 8
+          },
+          "to_raw": {
+            "x": 8,
+            "y": 44
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "sketch_line_context_4",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 8,
+            "y": 44
+          },
+          "to_raw": {
+            "x": 0,
+            "y": 44
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "sketch_line_context_fixed",
+      "call": {
+        "group": "sketch/constrain",
+        "operation": "sketch_toggle_fix",
+        "arguments": {
+          "entity_ids": {
+            "$select": {
+              "from": {
+                "$ref": "sketch_line_context_4",
+                "pointer": "/sketch"
+              },
+              "path": "/entities",
+              "where": {
+                "/kind": "point"
+              },
+              "take": "all",
+              "pointer": "/id"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "line_close",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 0,
+            "y": 44
+          },
+          "to_raw": {
+            "x": 0,
+            "y": 0
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "sketch_line_finish",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_finish",
+        "arguments": {}
+      }
+    },
+    {
+      "chapter": "sketch_midpoint_line",
+      "note": "Independent bracket layout study on the XZ plane; all coordinates are sketch millimeters. The six-edge 32 x 44 mm L with 8 mm walls is shared context. Extra curves are layout examples, not a fabrication-ready profile.",
+      "duration_ms": 0
+    },
+    {
+      "id": "sketch_midpoint_line_begin",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_begin",
+        "arguments": {
+          "name": "Bracket / midpoint_line",
+          "plane": {
+            "type": "origin_plane",
+            "plane": "xz"
+          }
+        }
+      }
+    },
+    {
+      "id": "sketch_midpoint_line_snap",
+      "call": {
+        "group": "sketch/selection",
+        "operation": "sketch_set_grid_snap",
+        "arguments": {
+          "enabled": false
+        }
+      }
+    },
+    {
+      "id": "sketch_midpoint_line_context_0",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 0,
+            "y": 0
+          },
+          "to_raw": {
+            "x": 32,
+            "y": 0
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "sketch_midpoint_line_context_1",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 32,
+            "y": 0
+          },
+          "to_raw": {
+            "x": 32,
+            "y": 8
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "sketch_midpoint_line_context_2",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 32,
+            "y": 8
+          },
+          "to_raw": {
+            "x": 8,
+            "y": 8
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "sketch_midpoint_line_context_3",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 8,
+            "y": 8
+          },
+          "to_raw": {
+            "x": 8,
+            "y": 44
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "sketch_midpoint_line_context_4",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 8,
+            "y": 44
+          },
+          "to_raw": {
+            "x": 0,
+            "y": 44
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "sketch_midpoint_line_context_5",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 0,
+            "y": 44
+          },
+          "to_raw": {
+            "x": 0,
+            "y": 0
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "sketch_midpoint_line_context_fixed",
+      "call": {
+        "group": "sketch/constrain",
+        "operation": "sketch_toggle_fix",
+        "arguments": {
+          "entity_ids": {
+            "$select": {
+              "from": {
+                "$ref": "sketch_midpoint_line_context_5",
+                "pointer": "/sketch"
+              },
+              "path": "/entities",
+              "where": {
+                "/kind": "point"
+              },
+              "take": "all",
+              "pointer": "/id"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "midline_result",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_midpoint_line",
+        "arguments": {
+          "mid_raw": {
+            "x": 20,
+            "y": 20
+          },
+          "end_raw": {
+            "x": 26,
+            "y": 20
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "sketch_midpoint_line_finish",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_finish",
+        "arguments": {}
+      }
+    },
+    {
+      "chapter": "sketch_point",
+      "note": "Independent bracket layout study on the XZ plane; all coordinates are sketch millimeters. The six-edge 32 x 44 mm L with 8 mm walls is shared context. Extra curves are layout examples, not a fabrication-ready profile.",
+      "duration_ms": 0
+    },
+    {
+      "id": "sketch_point_begin",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_begin",
+        "arguments": {
+          "name": "Bracket / point",
+          "plane": {
+            "type": "origin_plane",
+            "plane": "xz"
+          }
+        }
+      }
+    },
+    {
+      "id": "sketch_point_snap",
+      "call": {
+        "group": "sketch/selection",
+        "operation": "sketch_set_grid_snap",
+        "arguments": {
+          "enabled": false
+        }
+      }
+    },
+    {
+      "id": "sketch_point_context_0",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 0,
+            "y": 0
+          },
+          "to_raw": {
+            "x": 32,
+            "y": 0
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "sketch_point_context_1",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 32,
+            "y": 0
+          },
+          "to_raw": {
+            "x": 32,
+            "y": 8
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "sketch_point_context_2",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 32,
+            "y": 8
+          },
+          "to_raw": {
+            "x": 8,
+            "y": 8
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "sketch_point_context_3",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 8,
+            "y": 8
+          },
+          "to_raw": {
+            "x": 8,
+            "y": 44
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "sketch_point_context_4",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 8,
+            "y": 44
+          },
+          "to_raw": {
+            "x": 0,
+            "y": 44
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "sketch_point_context_5",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 0,
+            "y": 44
+          },
+          "to_raw": {
+            "x": 0,
+            "y": 0
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "sketch_point_context_fixed",
+      "call": {
+        "group": "sketch/constrain",
+        "operation": "sketch_toggle_fix",
+        "arguments": {
+          "entity_ids": {
+            "$select": {
+              "from": {
+                "$ref": "sketch_point_context_5",
+                "pointer": "/sketch"
+              },
+              "path": "/entities",
+              "where": {
+                "/kind": "point"
+              },
+              "take": "all",
+              "pointer": "/id"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "point_result",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_point",
+        "arguments": {
+          "position": {
+            "x": 4,
+            "y": 20
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "sketch_point_finish",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_finish",
+        "arguments": {}
+      }
+    },
+    {
+      "chapter": "sketch_rectangle",
+      "note": "Independent bracket layout study on the XZ plane; all coordinates are sketch millimeters. The six-edge 32 x 44 mm L with 8 mm walls is shared context. Extra curves are layout examples, not a fabrication-ready profile.",
+      "duration_ms": 0
+    },
+    {
+      "id": "sketch_rectangle_begin",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_begin",
+        "arguments": {
+          "name": "Bracket / rectangle",
+          "plane": {
+            "type": "origin_plane",
+            "plane": "xz"
+          }
+        }
+      }
+    },
+    {
+      "id": "sketch_rectangle_snap",
+      "call": {
+        "group": "sketch/selection",
+        "operation": "sketch_set_grid_snap",
+        "arguments": {
+          "enabled": false
+        }
+      }
+    },
+    {
+      "id": "sketch_rectangle_context_0",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 0,
+            "y": 0
+          },
+          "to_raw": {
+            "x": 32,
+            "y": 0
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "sketch_rectangle_context_1",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 32,
+            "y": 0
+          },
+          "to_raw": {
+            "x": 32,
+            "y": 8
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "sketch_rectangle_context_2",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 32,
+            "y": 8
+          },
+          "to_raw": {
+            "x": 8,
+            "y": 8
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "sketch_rectangle_context_3",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 8,
+            "y": 8
+          },
+          "to_raw": {
+            "x": 8,
+            "y": 44
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "sketch_rectangle_context_4",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 8,
+            "y": 44
+          },
+          "to_raw": {
+            "x": 0,
+            "y": 44
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "sketch_rectangle_context_5",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 0,
+            "y": 44
+          },
+          "to_raw": {
+            "x": 0,
+            "y": 0
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "sketch_rectangle_context_fixed",
+      "call": {
+        "group": "sketch/constrain",
+        "operation": "sketch_toggle_fix",
+        "arguments": {
+          "entity_ids": {
+            "$select": {
+              "from": {
+                "$ref": "sketch_rectangle_context_5",
+                "pointer": "/sketch"
+              },
+              "path": "/entities",
+              "where": {
+                "/kind": "point"
+              },
+              "take": "all",
+              "pointer": "/id"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "rectangle_corner",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_rectangle_locked",
+        "arguments": {
+          "mode": "two_point",
+          "anchor": {
+            "x": 12,
+            "y": 12
+          },
+          "corner_hint": {
+            "x": 28,
+            "y": 20
+          },
+          "width_text": "16",
+          "height_text": "8",
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "rectangle_center",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_rectangle_locked",
+        "arguments": {
+          "mode": "center",
+          "anchor": {
+            "x": 20,
+            "y": 30
+          },
+          "corner_hint": {
+            "x": 28,
+            "y": 34
+          },
+          "width_text": "16",
+          "height_text": "8",
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "sketch_rectangle_finish",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_finish",
+        "arguments": {}
+      }
+    },
+    {
+      "chapter": "sketch_circle",
+      "note": "Independent bracket layout study on the XZ plane; all coordinates are sketch millimeters. The six-edge 32 x 44 mm L with 8 mm walls is shared context. Extra curves are layout examples, not a fabrication-ready profile.",
+      "duration_ms": 0
+    },
+    {
+      "id": "sketch_circle_begin",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_begin",
+        "arguments": {
+          "name": "Bracket / circle",
+          "plane": {
+            "type": "origin_plane",
+            "plane": "xz"
+          }
+        }
+      }
+    },
+    {
+      "id": "sketch_circle_snap",
+      "call": {
+        "group": "sketch/selection",
+        "operation": "sketch_set_grid_snap",
+        "arguments": {
+          "enabled": false
+        }
+      }
+    },
+    {
+      "id": "sketch_circle_context_0",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 0,
+            "y": 0
+          },
+          "to_raw": {
+            "x": 32,
+            "y": 0
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "sketch_circle_context_1",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 32,
+            "y": 0
+          },
+          "to_raw": {
+            "x": 32,
+            "y": 8
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "sketch_circle_context_2",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 32,
+            "y": 8
+          },
+          "to_raw": {
+            "x": 8,
+            "y": 8
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "sketch_circle_context_3",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 8,
+            "y": 8
+          },
+          "to_raw": {
+            "x": 8,
+            "y": 44
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "sketch_circle_context_4",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 8,
+            "y": 44
+          },
+          "to_raw": {
+            "x": 0,
+            "y": 44
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "sketch_circle_context_5",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 0,
+            "y": 44
+          },
+          "to_raw": {
+            "x": 0,
+            "y": 0
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "sketch_circle_context_fixed",
+      "call": {
+        "group": "sketch/constrain",
+        "operation": "sketch_toggle_fix",
+        "arguments": {
+          "entity_ids": {
+            "$select": {
+              "from": {
+                "$ref": "sketch_circle_context_5",
+                "pointer": "/sketch"
+              },
+              "path": "/entities",
+              "where": {
+                "/kind": "point"
+              },
+              "take": "all",
+              "pointer": "/id"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "circle_center",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_circle_locked",
+        "arguments": {
+          "mode": "center_diameter",
+          "anchor": {
+            "x": 4,
+            "y": 14
+          },
+          "edge_hint": {
+            "x": 6,
+            "y": 14
+          },
+          "diameter_text": "4",
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "circle_two_point",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_circle_locked",
+        "arguments": {
+          "mode": "two_point",
+          "anchor": {
+            "x": 2,
+            "y": 28
+          },
+          "edge_hint": {
+            "x": 6,
+            "y": 28
+          },
+          "diameter_text": "4",
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "sketch_circle_finish",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_finish",
+        "arguments": {}
+      }
+    },
+    {
+      "chapter": "sketch_arc",
+      "note": "Independent bracket layout study on the XZ plane; all coordinates are sketch millimeters. The six-edge 32 x 44 mm L with 8 mm walls is shared context. Extra curves are layout examples, not a fabrication-ready profile.",
+      "duration_ms": 0
+    },
+    {
+      "id": "sketch_arc_begin",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_begin",
+        "arguments": {
+          "name": "Bracket / arc",
+          "plane": {
+            "type": "origin_plane",
+            "plane": "xz"
+          }
+        }
+      }
+    },
+    {
+      "id": "sketch_arc_snap",
+      "call": {
+        "group": "sketch/selection",
+        "operation": "sketch_set_grid_snap",
+        "arguments": {
+          "enabled": false
+        }
+      }
+    },
+    {
+      "id": "sketch_arc_context_0",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 0,
+            "y": 0
+          },
+          "to_raw": {
+            "x": 32,
+            "y": 0
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "sketch_arc_context_1",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 32,
+            "y": 0
+          },
+          "to_raw": {
+            "x": 32,
+            "y": 8
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "sketch_arc_context_2",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 32,
+            "y": 8
+          },
+          "to_raw": {
+            "x": 8,
+            "y": 8
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "sketch_arc_context_3",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 8,
+            "y": 8
+          },
+          "to_raw": {
+            "x": 8,
+            "y": 44
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "sketch_arc_context_4",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 8,
+            "y": 44
+          },
+          "to_raw": {
+            "x": 0,
+            "y": 44
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "sketch_arc_context_5",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 0,
+            "y": 44
+          },
+          "to_raw": {
+            "x": 0,
+            "y": 0
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "sketch_arc_context_fixed",
+      "call": {
+        "group": "sketch/constrain",
+        "operation": "sketch_toggle_fix",
+        "arguments": {
+          "entity_ids": {
+            "$select": {
+              "from": {
+                "$ref": "sketch_arc_context_5",
+                "pointer": "/sketch"
+              },
+              "path": "/entities",
+              "where": {
+                "/kind": "point"
+              },
+              "take": "all",
+              "pointer": "/id"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "arc_center",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_arc_center",
+        "arguments": {
+          "center": {
+            "x": 20,
+            "y": 18
+          },
+          "start": {
+            "x": 26,
+            "y": 18
+          },
+          "sweep": {
+            "x": 20,
+            "y": 24
+          },
+          "radius_mm": 6,
+          "radius_text": "6",
+          "sweep_rad": 1.5707963267948966,
+          "angle_text": "90",
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "arc_three_point",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_arc_3pt",
+        "arguments": {
+          "p1": {
+            "x": 14,
+            "y": 30
+          },
+          "p2": {
+            "x": 20,
+            "y": 36
+          },
+          "p3": {
+            "x": 26,
+            "y": 30
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "sketch_arc_finish",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_finish",
+        "arguments": {}
+      }
+    },
+    {
+      "chapter": "sketch_spline",
+      "note": "Independent bracket layout study on the XZ plane; all coordinates are sketch millimeters. The six-edge 32 x 44 mm L with 8 mm walls is shared context. Extra curves are layout examples, not a fabrication-ready profile.",
+      "duration_ms": 0
+    },
+    {
+      "id": "sketch_spline_begin",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_begin",
+        "arguments": {
+          "name": "Bracket / spline",
+          "plane": {
+            "type": "origin_plane",
+            "plane": "xz"
+          }
+        }
+      }
+    },
+    {
+      "id": "sketch_spline_snap",
+      "call": {
+        "group": "sketch/selection",
+        "operation": "sketch_set_grid_snap",
+        "arguments": {
+          "enabled": false
+        }
+      }
+    },
+    {
+      "id": "sketch_spline_context_0",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 0,
+            "y": 0
+          },
+          "to_raw": {
+            "x": 32,
+            "y": 0
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "sketch_spline_context_1",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 32,
+            "y": 0
+          },
+          "to_raw": {
+            "x": 32,
+            "y": 8
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "sketch_spline_context_2",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 32,
+            "y": 8
+          },
+          "to_raw": {
+            "x": 8,
+            "y": 8
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "sketch_spline_context_3",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 8,
+            "y": 8
+          },
+          "to_raw": {
+            "x": 8,
+            "y": 44
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "sketch_spline_context_4",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 8,
+            "y": 44
+          },
+          "to_raw": {
+            "x": 0,
+            "y": 44
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "sketch_spline_context_5",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 0,
+            "y": 44
+          },
+          "to_raw": {
+            "x": 0,
+            "y": 0
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "sketch_spline_context_fixed",
+      "call": {
+        "group": "sketch/constrain",
+        "operation": "sketch_toggle_fix",
+        "arguments": {
+          "entity_ids": {
+            "$select": {
+              "from": {
+                "$ref": "sketch_spline_context_5",
+                "pointer": "/sketch"
+              },
+              "path": "/entities",
+              "where": {
+                "/kind": "point"
+              },
+              "take": "all",
+              "pointer": "/id"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "spline_result",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_spline",
+        "arguments": {
+          "points": [
+            {
+              "x": 12,
+              "y": 12
+            },
+            {
+              "x": 16,
+              "y": 24
+            },
+            {
+              "x": 24,
+              "y": 28
+            },
+            {
+              "x": 28,
+              "y": 36
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "sketch_spline_finish",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_finish",
+        "arguments": {}
+      }
+    },
+    {
+      "chapter": "sketch_polygon",
+      "note": "Independent bracket layout study on the XZ plane; all coordinates are sketch millimeters. The six-edge 32 x 44 mm L with 8 mm walls is shared context. Extra curves are layout examples, not a fabrication-ready profile.",
+      "duration_ms": 0
+    },
+    {
+      "id": "sketch_polygon_begin",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_begin",
+        "arguments": {
+          "name": "Bracket / polygon",
+          "plane": {
+            "type": "origin_plane",
+            "plane": "xz"
+          }
+        }
+      }
+    },
+    {
+      "id": "sketch_polygon_snap",
+      "call": {
+        "group": "sketch/selection",
+        "operation": "sketch_set_grid_snap",
+        "arguments": {
+          "enabled": false
+        }
+      }
+    },
+    {
+      "id": "sketch_polygon_context_0",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 0,
+            "y": 0
+          },
+          "to_raw": {
+            "x": 32,
+            "y": 0
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "sketch_polygon_context_1",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 32,
+            "y": 0
+          },
+          "to_raw": {
+            "x": 32,
+            "y": 8
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "sketch_polygon_context_2",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 32,
+            "y": 8
+          },
+          "to_raw": {
+            "x": 8,
+            "y": 8
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "sketch_polygon_context_3",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 8,
+            "y": 8
+          },
+          "to_raw": {
+            "x": 8,
+            "y": 44
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "sketch_polygon_context_4",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 8,
+            "y": 44
+          },
+          "to_raw": {
+            "x": 0,
+            "y": 44
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "sketch_polygon_context_5",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 0,
+            "y": 44
+          },
+          "to_raw": {
+            "x": 0,
+            "y": 0
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "sketch_polygon_context_fixed",
+      "call": {
+        "group": "sketch/constrain",
+        "operation": "sketch_toggle_fix",
+        "arguments": {
+          "entity_ids": {
+            "$select": {
+              "from": {
+                "$ref": "sketch_polygon_context_5",
+                "pointer": "/sketch"
+              },
+              "path": "/entities",
+              "where": {
+                "/kind": "point"
+              },
+              "take": "all",
+              "pointer": "/id"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "polygon_inscribed",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_polygon",
+        "arguments": {
+          "center": {
+            "x": 20,
+            "y": 16
+          },
+          "edge_count": 6,
+          "radius_text": "5",
+          "rotation_deg": 0,
+          "mode": "inscribed"
+        }
+      }
+    },
+    {
+      "id": "polygon_circumscribed",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_polygon",
+        "arguments": {
+          "center": {
+            "x": 20,
+            "y": 30
+          },
+          "edge_count": 6,
+          "radius_text": "5",
+          "rotation_deg": 0,
+          "mode": "circumscribed"
+        }
+      }
+    },
+    {
+      "id": "sketch_polygon_finish",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_finish",
+        "arguments": {}
+      }
+    },
+    {
+      "chapter": "sketch_slot",
+      "note": "Independent bracket layout study on the XZ plane; all coordinates are sketch millimeters. The six-edge 32 x 44 mm L with 8 mm walls is shared context. Extra curves are layout examples, not a fabrication-ready profile.",
+      "duration_ms": 0
+    },
+    {
+      "id": "sketch_slot_begin",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_begin",
+        "arguments": {
+          "name": "Bracket / slot",
+          "plane": {
+            "type": "origin_plane",
+            "plane": "xz"
+          }
+        }
+      }
+    },
+    {
+      "id": "sketch_slot_snap",
+      "call": {
+        "group": "sketch/selection",
+        "operation": "sketch_set_grid_snap",
+        "arguments": {
+          "enabled": false
+        }
+      }
+    },
+    {
+      "id": "sketch_slot_context_0",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 0,
+            "y": 0
+          },
+          "to_raw": {
+            "x": 32,
+            "y": 0
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "sketch_slot_context_1",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 32,
+            "y": 0
+          },
+          "to_raw": {
+            "x": 32,
+            "y": 8
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "sketch_slot_context_2",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 32,
+            "y": 8
+          },
+          "to_raw": {
+            "x": 8,
+            "y": 8
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "sketch_slot_context_3",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 8,
+            "y": 8
+          },
+          "to_raw": {
+            "x": 8,
+            "y": 44
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "sketch_slot_context_4",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 8,
+            "y": 44
+          },
+          "to_raw": {
+            "x": 0,
+            "y": 44
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "sketch_slot_context_5",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_line",
+        "arguments": {
+          "from": {
+            "x": 0,
+            "y": 44
+          },
+          "to_raw": {
+            "x": 0,
+            "y": 0
+          },
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "sketch_slot_context_fixed",
+      "call": {
+        "group": "sketch/constrain",
+        "operation": "sketch_toggle_fix",
+        "arguments": {
+          "entity_ids": {
+            "$select": {
+              "from": {
+                "$ref": "sketch_slot_context_5",
+                "pointer": "/sketch"
+              },
+              "path": "/entities",
+              "where": {
+                "/kind": "point"
+              },
+              "take": "all",
+              "pointer": "/id"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "slot_center_to_center",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_slot",
+        "arguments": {
+          "mode": "center_to_center",
+          "p1": {
+            "x": 16,
+            "y": 14
+          },
+          "p2": {
+            "x": 24,
+            "y": 14
+          },
+          "cursor": {
+            "x": 20,
+            "y": 16
+          },
+          "width_mm": 4,
+          "width_text": "4",
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "slot_overall",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_slot",
+        "arguments": {
+          "mode": "overall",
+          "p1": {
+            "x": 14,
+            "y": 24
+          },
+          "p2": {
+            "x": 26,
+            "y": 24
+          },
+          "cursor": {
+            "x": 20,
+            "y": 26
+          },
+          "width_mm": 4,
+          "width_text": "4",
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "slot_center_point",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_add_slot",
+        "arguments": {
+          "mode": "center_point",
+          "p1": {
+            "x": 20,
+            "y": 34
+          },
+          "p2": {
+            "x": 24,
+            "y": 34
+          },
+          "cursor": {
+            "x": 20,
+            "y": 36
+          },
+          "width_mm": 4,
+          "width_text": "4",
+          "ctrl_held": true
+        }
+      }
+    },
+    {
+      "id": "sketch_slot_finish",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_finish",
+        "arguments": {}
+      }
+    }
+  ],
+  "checks": [
+    {
+      "assert": {
+        "$count": {
+          "$select": {
+            "from": {
+              "$ref": "line_close",
+              "pointer": "/sketch"
+            },
+            "path": "/entities",
+            "where": {
+              "/kind": "line"
+            },
+            "take": "all"
+          }
+        }
+      },
+      "equals": 6
+    },
+    {
+      "assert": {
+        "$select": {
+          "from": {
+            "$ref": "line_close",
+            "pointer": "/sketch"
+          },
+          "path": "/entities",
+          "where": {
+            "/kind": "line"
+          },
+          "take": "last",
+          "pointer": "/start"
+        }
+      },
+      "equals": {
+        "x": 0,
+        "y": 44
+      }
+    },
+    {
+      "assert": {
+        "$select": {
+          "from": {
+            "$ref": "line_close",
+            "pointer": "/sketch"
+          },
+          "path": "/entities",
+          "where": {
+            "/kind": "line"
+          },
+          "take": "last",
+          "pointer": "/end"
+        }
+      },
+      "equals": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "assert": {
+        "$count": {
+          "$select": {
+            "from": {
+              "$ref": "midline_result",
+              "pointer": "/sketch"
+            },
+            "path": "/entities",
+            "where": {
+              "/kind": "line"
+            },
+            "take": "all"
+          }
+        }
+      },
+      "equals": 7
+    },
+    {
+      "assert": {
+        "$count": {
+          "$select": {
+            "from": {
+              "$ref": "midline_result",
+              "pointer": "/sketch"
+            },
+            "path": "/constraints",
+            "where": {
+              "/type": "midpoint"
+            },
+            "take": "all"
+          }
+        }
+      },
+      "equals": 1
+    },
+    {
+      "assert": {
+        "$select": {
+          "from": {
+            "$ref": "midline_result",
+            "pointer": "/sketch"
+          },
+          "path": "/entities",
+          "where": {
+            "/kind": "line"
+          },
+          "take": "last",
+          "pointer": "/start"
+        }
+      },
+      "equals": {
+        "x": 14,
+        "y": 20
+      }
+    },
+    {
+      "assert": {
+        "$select": {
+          "from": {
+            "$ref": "midline_result",
+            "pointer": "/sketch"
+          },
+          "path": "/entities",
+          "where": {
+            "/kind": "line"
+          },
+          "take": "last",
+          "pointer": "/end"
+        }
+      },
+      "equals": {
+        "x": 26,
+        "y": 20
+      }
+    },
+    {
+      "assert": {
+        "$select": {
+          "from": {
+            "$ref": "point_result",
+            "pointer": "/sketch"
+          },
+          "path": "/entities",
+          "where": {
+            "/id": {
+              "$ref": "point_result",
+              "pointer": "/entities/0"
+            }
+          },
+          "take": "one",
+          "pointer": "/position"
+        }
+      },
+      "equals": {
+        "x": 4,
+        "y": 20
+      }
+    },
+    {
+      "assert": {
+        "$count": {
+          "$select": {
+            "from": {
+              "$ref": "rectangle_center",
+              "pointer": "/sketch"
+            },
+            "path": "/entities",
+            "where": {
+              "/kind": "line"
+            },
+            "take": "all"
+          }
+        }
+      },
+      "equals": 14
+    },
+    {
+      "assert": {
+        "$count": {
+          "$select": {
+            "from": {
+              "$ref": "rectangle_center",
+              "pointer": "/sketch"
+            },
+            "path": "/dimensions",
+            "where": {
+              "/value": 16
+            },
+            "take": "all"
+          }
+        }
+      },
+      "equals": 2
+    },
+    {
+      "assert": {
+        "$count": {
+          "$select": {
+            "from": {
+              "$ref": "rectangle_center",
+              "pointer": "/sketch"
+            },
+            "path": "/dimensions",
+            "where": {
+              "/value": 8
+            },
+            "take": "all"
+          }
+        }
+      },
+      "equals": 2
+    },
+    {
+      "assert": {
+        "$count": {
+          "$select": {
+            "from": {
+              "$ref": "circle_two_point",
+              "pointer": "/sketch"
+            },
+            "path": "/entities",
+            "where": {
+              "/kind": "circle"
+            },
+            "take": "all"
+          }
+        }
+      },
+      "equals": 2
+    },
+    {
+      "assert": {
+        "$select": {
+          "from": {
+            "$ref": "circle_two_point",
+            "pointer": "/sketch"
+          },
+          "path": "/entities",
+          "where": {
+            "/kind": "circle"
+          },
+          "take": "last",
+          "pointer": "/center"
+        }
+      },
+      "equals": {
+        "x": 4,
+        "y": 28
+      }
+    },
+    {
+      "assert": {
+        "$select": {
+          "from": {
+            "$ref": "circle_two_point",
+            "pointer": "/sketch"
+          },
+          "path": "/entities",
+          "where": {
+            "/kind": "circle"
+          },
+          "take": "last",
+          "pointer": "/radius"
+        }
+      },
+      "equals": 2
+    },
+    {
+      "assert": {
+        "$count": {
+          "$select": {
+            "from": {
+              "$ref": "arc_three_point",
+              "pointer": "/sketch"
+            },
+            "path": "/entities",
+            "where": {
+              "/kind": "arc"
+            },
+            "take": "all"
+          }
+        }
+      },
+      "equals": 2
+    },
+    {
+      "assert": {
+        "$select": {
+          "from": {
+            "$ref": "arc_three_point",
+            "pointer": "/sketch"
+          },
+          "path": "/entities",
+          "where": {
+            "/kind": "arc"
+          },
+          "take": "last",
+          "pointer": "/radius"
+        }
+      },
+      "equals": 6
+    },
+    {
+      "assert": {
+        "$count": {
+          "$select": {
+            "from": {
+              "$ref": "spline_result",
+              "pointer": "/sketch"
+            },
+            "path": "/entities",
+            "where": {
+              "/kind": "spline"
+            },
+            "take": "all"
+          }
+        }
+      },
+      "equals": 1
+    },
+    {
+      "assert": {
+        "$count": {
+          "$select": {
+            "from": {
+              "$ref": "spline_result",
+              "pointer": "/sketch"
+            },
+            "path": "/entities",
+            "where": {
+              "/kind": "spline"
+            },
+            "take": "last",
+            "pointer": "/points"
+          }
+        }
+      },
+      "equals": 4
+    },
+    {
+      "assert": {
+        "$count": {
+          "$select": {
+            "from": {
+              "$ref": "polygon_inscribed",
+              "pointer": "/sketch"
+            },
+            "path": "/entities",
+            "where": {
+              "/kind": "line"
+            },
+            "take": "all"
+          }
+        }
+      },
+      "equals": 12
+    },
+    {
+      "assert": {
+        "$count": {
+          "$select": {
+            "from": {
+              "$ref": "polygon_circumscribed",
+              "pointer": "/sketch"
+            },
+            "path": "/entities",
+            "where": {
+              "/kind": "line"
+            },
+            "take": "all"
+          }
+        }
+      },
+      "equals": 18
+    },
+    {
+      "assert": {
+        "$count": {
+          "$select": {
+            "from": {
+              "$ref": "slot_center_point",
+              "pointer": "/sketch"
+            },
+            "path": "/entities",
+            "where": {
+              "/kind": "arc"
+            },
+            "take": "all"
+          }
+        }
+      },
+      "equals": 6
+    },
+    {
+      "assert": {
+        "$count": {
+          "$select": {
+            "from": {
+              "$ref": "slot_center_point",
+              "pointer": "/sketch"
+            },
+            "path": "/entities",
+            "where": {
+              "/kind": "line"
+            },
+            "take": "all"
+          }
+        }
+      },
+      "equals": 12
+    },
+    {
+      "assert": {
+        "$count": {
+          "$select": {
+            "from": {
+              "$ref": "slot_center_point",
+              "pointer": "/sketch"
+            },
+            "path": "/dimensions",
+            "where": {
+              "/value": 4
+            },
+            "take": "all"
+          }
+        }
+      },
+      "equals": 3
+    },
+    {
+      "id": "final_scene",
+      "call": {
+        "group": "solid/check",
+        "operation": "solid_scene",
+        "arguments": {}
+      },
+      "expect": {
+        "/errors": [],
+        "/bodies": []
+      }
+    },
+    {
+      "id": "finished_sketches",
+      "call": {
+        "group": "sketch/draw",
+        "operation": "sketch_finished",
+        "arguments": {}
+      }
+    },
+    {
+      "assert": {
+        "$count": {
+          "$ref": "finished_sketches"
+        }
+      },
+      "equals": 9
+    }
+  ],
+  "exports": {
+    "lessons": {
+      "sketch_line": [
+        {
+          "caption": "sketch_line.selection",
+          "scene": {
+            "$ref": "empty_scene"
+          },
+          "profile": {
+            "$ref": "sketch_line_context_fixed",
+            "pointer": "/sketch"
+          },
+          "cue": "profile",
+          "duration_ms": 1800
+        },
+        {
+          "caption": "sketch_line.prepare",
+          "scene": {
+            "$ref": "empty_scene"
+          },
+          "profile": {
+            "$ref": "sketch_line_context_fixed",
+            "pointer": "/sketch"
+          },
+          "cue": "profile",
+          "duration_ms": 1800
+        },
+        {
+          "caption": "sketch_line.parameters",
+          "scene": {
+            "$ref": "empty_scene"
+          },
+          "profile": {
+            "$ref": "sketch_line_context_fixed",
+            "pointer": "/sketch"
+          },
+          "cue": "profile",
+          "duration_ms": 1800
+        },
+        {
+          "caption": "sketch_line.result",
+          "scene": {
+            "$ref": "empty_scene"
+          },
+          "profile": {
+            "$ref": "line_close",
+            "pointer": "/sketch"
+          },
+          "cue": "apply",
+          "duration_ms": 1800
+        }
+      ],
+      "sketch_midpoint_line": [
+        {
+          "caption": "sketch_midpoint_line.selection",
+          "scene": {
+            "$ref": "empty_scene"
+          },
+          "profile": {
+            "$ref": "sketch_midpoint_line_context_fixed",
+            "pointer": "/sketch"
+          },
+          "cue": "profile",
+          "duration_ms": 1800
+        },
+        {
+          "caption": "sketch_midpoint_line.prepare",
+          "scene": {
+            "$ref": "empty_scene"
+          },
+          "profile": {
+            "$ref": "sketch_midpoint_line_context_fixed",
+            "pointer": "/sketch"
+          },
+          "cue": "profile",
+          "duration_ms": 1800
+        },
+        {
+          "caption": "sketch_midpoint_line.parameters",
+          "scene": {
+            "$ref": "empty_scene"
+          },
+          "profile": {
+            "$ref": "sketch_midpoint_line_context_fixed",
+            "pointer": "/sketch"
+          },
+          "cue": "dimension",
+          "duration_ms": 1800
+        },
+        {
+          "caption": "sketch_midpoint_line.result",
+          "scene": {
+            "$ref": "empty_scene"
+          },
+          "profile": {
+            "$ref": "midline_result",
+            "pointer": "/sketch"
+          },
+          "cue": "apply",
+          "duration_ms": 1800
+        }
+      ],
+      "sketch_point": [
+        {
+          "caption": "sketch_point.selection",
+          "scene": {
+            "$ref": "empty_scene"
+          },
+          "profile": {
+            "$ref": "sketch_point_context_fixed",
+            "pointer": "/sketch"
+          },
+          "cue": "profile",
+          "duration_ms": 1800
+        },
+        {
+          "caption": "sketch_point.prepare",
+          "scene": {
+            "$ref": "empty_scene"
+          },
+          "profile": {
+            "$ref": "sketch_point_context_fixed",
+            "pointer": "/sketch"
+          },
+          "cue": "profile",
+          "duration_ms": 1800
+        },
+        {
+          "caption": "sketch_point.parameters",
+          "scene": {
+            "$ref": "empty_scene"
+          },
+          "profile": {
+            "$ref": "sketch_point_context_fixed",
+            "pointer": "/sketch"
+          },
+          "cue": "profile",
+          "duration_ms": 1800
+        },
+        {
+          "caption": "sketch_point.result",
+          "scene": {
+            "$ref": "empty_scene"
+          },
+          "profile": {
+            "$ref": "point_result",
+            "pointer": "/sketch"
+          },
+          "cue": "apply",
+          "duration_ms": 1800
+        }
+      ],
+      "sketch_rectangle": [
+        {
+          "caption": "sketch_rectangle.selection",
+          "scene": {
+            "$ref": "empty_scene"
+          },
+          "profile": {
+            "$ref": "sketch_rectangle_context_fixed",
+            "pointer": "/sketch"
+          },
+          "cue": "profile",
+          "duration_ms": 1800
+        },
+        {
+          "caption": "sketch_rectangle.prepare",
+          "scene": {
+            "$ref": "empty_scene"
+          },
+          "profile": {
+            "$ref": "sketch_rectangle_context_fixed",
+            "pointer": "/sketch"
+          },
+          "cue": "profile",
+          "duration_ms": 1800
+        },
+        {
+          "caption": "sketch_rectangle.parameters",
+          "scene": {
+            "$ref": "empty_scene"
+          },
+          "profile": {
+            "$ref": "rectangle_corner",
+            "pointer": "/sketch"
+          },
+          "cue": "dimension",
+          "duration_ms": 1800
+        },
+        {
+          "caption": "sketch_rectangle.result",
+          "scene": {
+            "$ref": "empty_scene"
+          },
+          "profile": {
+            "$ref": "rectangle_center",
+            "pointer": "/sketch"
+          },
+          "cue": "apply",
+          "duration_ms": 1800
+        }
+      ],
+      "sketch_circle": [
+        {
+          "caption": "sketch_circle.selection",
+          "scene": {
+            "$ref": "empty_scene"
+          },
+          "profile": {
+            "$ref": "sketch_circle_context_fixed",
+            "pointer": "/sketch"
+          },
+          "cue": "profile",
+          "duration_ms": 1800
+        },
+        {
+          "caption": "sketch_circle.prepare",
+          "scene": {
+            "$ref": "empty_scene"
+          },
+          "profile": {
+            "$ref": "sketch_circle_context_fixed",
+            "pointer": "/sketch"
+          },
+          "cue": "profile",
+          "duration_ms": 1800
+        },
+        {
+          "caption": "sketch_circle.parameters",
+          "scene": {
+            "$ref": "empty_scene"
+          },
+          "profile": {
+            "$ref": "circle_center",
+            "pointer": "/sketch"
+          },
+          "cue": "dimension",
+          "duration_ms": 1800
+        },
+        {
+          "caption": "sketch_circle.result",
+          "scene": {
+            "$ref": "empty_scene"
+          },
+          "profile": {
+            "$ref": "circle_two_point",
+            "pointer": "/sketch"
+          },
+          "cue": "apply",
+          "duration_ms": 1800
+        }
+      ],
+      "sketch_arc": [
+        {
+          "caption": "sketch_arc.selection",
+          "scene": {
+            "$ref": "empty_scene"
+          },
+          "profile": {
+            "$ref": "sketch_arc_context_fixed",
+            "pointer": "/sketch"
+          },
+          "cue": "profile",
+          "duration_ms": 1800
+        },
+        {
+          "caption": "sketch_arc.prepare",
+          "scene": {
+            "$ref": "empty_scene"
+          },
+          "profile": {
+            "$ref": "sketch_arc_context_fixed",
+            "pointer": "/sketch"
+          },
+          "cue": "profile",
+          "duration_ms": 1800
+        },
+        {
+          "caption": "sketch_arc.parameters",
+          "scene": {
+            "$ref": "empty_scene"
+          },
+          "profile": {
+            "$ref": "arc_center",
+            "pointer": "/sketch"
+          },
+          "cue": "radius",
+          "duration_ms": 1800
+        },
+        {
+          "caption": "sketch_arc.result",
+          "scene": {
+            "$ref": "empty_scene"
+          },
+          "profile": {
+            "$ref": "arc_three_point",
+            "pointer": "/sketch"
+          },
+          "cue": "apply",
+          "duration_ms": 1800
+        }
+      ],
+      "sketch_spline": [
+        {
+          "caption": "sketch_spline.selection",
+          "scene": {
+            "$ref": "empty_scene"
+          },
+          "profile": {
+            "$ref": "sketch_spline_context_fixed",
+            "pointer": "/sketch"
+          },
+          "cue": "profile",
+          "duration_ms": 1800
+        },
+        {
+          "caption": "sketch_spline.prepare",
+          "scene": {
+            "$ref": "empty_scene"
+          },
+          "profile": {
+            "$ref": "sketch_spline_context_fixed",
+            "pointer": "/sketch"
+          },
+          "cue": "profile",
+          "duration_ms": 1800
+        },
+        {
+          "caption": "sketch_spline.parameters",
+          "scene": {
+            "$ref": "empty_scene"
+          },
+          "profile": {
+            "$ref": "sketch_spline_context_fixed",
+            "pointer": "/sketch"
+          },
+          "cue": "profile",
+          "duration_ms": 1800
+        },
+        {
+          "caption": "sketch_spline.result",
+          "scene": {
+            "$ref": "empty_scene"
+          },
+          "profile": {
+            "$ref": "spline_result",
+            "pointer": "/sketch"
+          },
+          "cue": "apply",
+          "duration_ms": 1800
+        }
+      ],
+      "sketch_polygon": [
+        {
+          "caption": "sketch_polygon.selection",
+          "scene": {
+            "$ref": "empty_scene"
+          },
+          "profile": {
+            "$ref": "sketch_polygon_context_fixed",
+            "pointer": "/sketch"
+          },
+          "cue": "profile",
+          "duration_ms": 1800
+        },
+        {
+          "caption": "sketch_polygon.prepare",
+          "scene": {
+            "$ref": "empty_scene"
+          },
+          "profile": {
+            "$ref": "sketch_polygon_context_fixed",
+            "pointer": "/sketch"
+          },
+          "cue": "profile",
+          "duration_ms": 1800
+        },
+        {
+          "caption": "sketch_polygon.parameters",
+          "scene": {
+            "$ref": "empty_scene"
+          },
+          "profile": {
+            "$ref": "polygon_inscribed",
+            "pointer": "/sketch"
+          },
+          "cue": "dimension",
+          "duration_ms": 1800
+        },
+        {
+          "caption": "sketch_polygon.result",
+          "scene": {
+            "$ref": "empty_scene"
+          },
+          "profile": {
+            "$ref": "polygon_circumscribed",
+            "pointer": "/sketch"
+          },
+          "cue": "apply",
+          "duration_ms": 1800
+        }
+      ],
+      "sketch_slot": [
+        {
+          "caption": "sketch_slot.selection",
+          "scene": {
+            "$ref": "empty_scene"
+          },
+          "profile": {
+            "$ref": "sketch_slot_context_fixed",
+            "pointer": "/sketch"
+          },
+          "cue": "profile",
+          "duration_ms": 1800
+        },
+        {
+          "caption": "sketch_slot.prepare",
+          "scene": {
+            "$ref": "empty_scene"
+          },
+          "profile": {
+            "$ref": "slot_center_to_center",
+            "pointer": "/sketch"
+          },
+          "cue": "profile",
+          "duration_ms": 1800
+        },
+        {
+          "caption": "sketch_slot.parameters",
+          "scene": {
+            "$ref": "empty_scene"
+          },
+          "profile": {
+            "$ref": "slot_overall",
+            "pointer": "/sketch"
+          },
+          "cue": "dimension",
+          "duration_ms": 1800
+        },
+        {
+          "caption": "sketch_slot.result",
+          "scene": {
+            "$ref": "empty_scene"
+          },
+          "profile": {
+            "$ref": "slot_center_point",
+            "pointer": "/sketch"
+          },
+          "cue": "apply",
+          "duration_ms": 1800
+        }
+      ]
+    },
+    "verification": {
+      "sketch_line": {
+        "before": {
+          "$ref": "sketch_line_context_fixed",
+          "pointer": "/sketch"
+        },
+        "after": {
+          "$ref": "line_close",
+          "pointer": "/sketch"
+        }
+      },
+      "sketch_midpoint_line": {
+        "before": {
+          "$ref": "sketch_midpoint_line_context_fixed",
+          "pointer": "/sketch"
+        },
+        "after": {
+          "$ref": "midline_result",
+          "pointer": "/sketch"
+        }
+      },
+      "sketch_point": {
+        "before": {
+          "$ref": "sketch_point_context_fixed",
+          "pointer": "/sketch"
+        },
+        "after": {
+          "$ref": "point_result",
+          "pointer": "/sketch"
+        }
+      },
+      "sketch_rectangle": {
+        "before": {
+          "$ref": "sketch_rectangle_context_fixed",
+          "pointer": "/sketch"
+        },
+        "after": {
+          "$ref": "rectangle_center",
+          "pointer": "/sketch"
+        }
+      },
+      "sketch_circle": {
+        "before": {
+          "$ref": "sketch_circle_context_fixed",
+          "pointer": "/sketch"
+        },
+        "after": {
+          "$ref": "circle_two_point",
+          "pointer": "/sketch"
+        }
+      },
+      "sketch_arc": {
+        "before": {
+          "$ref": "sketch_arc_context_fixed",
+          "pointer": "/sketch"
+        },
+        "after": {
+          "$ref": "arc_three_point",
+          "pointer": "/sketch"
+        }
+      },
+      "sketch_spline": {
+        "before": {
+          "$ref": "sketch_spline_context_fixed",
+          "pointer": "/sketch"
+        },
+        "after": {
+          "$ref": "spline_result",
+          "pointer": "/sketch"
+        }
+      },
+      "sketch_polygon": {
+        "before": {
+          "$ref": "sketch_polygon_context_fixed",
+          "pointer": "/sketch"
+        },
+        "after": {
+          "$ref": "polygon_circumscribed",
+          "pointer": "/sketch"
+        }
+      },
+      "sketch_slot": {
+        "before": {
+          "$ref": "slot_center_to_center",
+          "pointer": "/sketch"
+        },
+        "after": {
+          "$ref": "slot_center_point",
+          "pointer": "/sketch"
+        }
+      }
+    },
+    "finished_sketches": {
+      "$ref": "finished_sketches"
+    },
+    "preview_frames": [
+      {
+        "caption": "sketch_line.selection",
+        "scene": {
+          "$ref": "empty_scene"
+        },
+        "profile": {
+          "$ref": "sketch_line_context_fixed",
+          "pointer": "/sketch"
+        },
+        "cue": "profile",
+        "duration_ms": 1800
+      },
+      {
+        "caption": "sketch_line.prepare",
+        "scene": {
+          "$ref": "empty_scene"
+        },
+        "profile": {
+          "$ref": "sketch_line_context_fixed",
+          "pointer": "/sketch"
+        },
+        "cue": "profile",
+        "duration_ms": 1800
+      },
+      {
+        "caption": "sketch_line.parameters",
+        "scene": {
+          "$ref": "empty_scene"
+        },
+        "profile": {
+          "$ref": "sketch_line_context_fixed",
+          "pointer": "/sketch"
+        },
+        "cue": "profile",
+        "duration_ms": 1800
+      },
+      {
+        "caption": "sketch_line.result",
+        "scene": {
+          "$ref": "empty_scene"
+        },
+        "profile": {
+          "$ref": "line_close",
+          "pointer": "/sketch"
+        },
+        "cue": "apply",
+        "duration_ms": 1800
+      }
+    ]
+  }
+}

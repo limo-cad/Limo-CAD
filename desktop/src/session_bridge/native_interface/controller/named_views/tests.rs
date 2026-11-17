@@ -1,6 +1,1446 @@
 use super::*;
 use crate::session_bridge::native_interface::tests::Fixture;
 
+/// Production controls and reducers with explicit headless layout output.
+/// Native captures separately verify font shaping and the visible result.
+struct ViewControls {
+    app: App,
+    services: NativeServices,
+    handle: NativeInterfaceHandle,
+    owner: DocumentContext,
+    camera: Entity,
+}
+
+impl ViewControls {
+    fn new(fixture: &Fixture) -> Self {
+        let services = NativeServices {
+            engine: fixture.engine.clone(),
+            bridge: fixture.bridge.clone(),
+        };
+        let handle = NativeInterfaceHandle::new(|| {});
+        let mut app = native_viewport::interface_scene_fixture();
+        app.add_schedule(Schedule::new(Startup))
+            .add_schedule(Schedule::new(Update))
+            .add_schedule(Schedule::new(Last))
+            .add_plugins(bevy::text::TextPlugin)
+            .init_resource::<Assets<Image>>()
+            .init_resource::<ViewportUiAssets>()
+            .init_resource::<Time<bevy::time::Real>>()
+            .init_resource::<UiScale>()
+            .init_resource::<bevy::input_focus::InputFocus>()
+            .insert_resource(handle.clone());
+        interface_shell::fields::install(&mut app);
+        let camera = app.world_mut().spawn(InterfaceCamera).id();
+        let bodies = refresh_native_model(&fixture.engine, app.world_mut(), true).unwrap();
+        let receipt = fixture
+            .bridge
+            .native_document_receipt(&fixture.engine, &fixture.owner())
+            .unwrap();
+        app.insert_resource(NativeRenderedDocument {
+            owner: receipt.owner.clone(),
+            revision: receipt.revision,
+            bodies,
+        });
+        worker::install(app.world_mut(), services.clone(), handle.clone()).unwrap();
+        let mut result = Self {
+            app,
+            services,
+            handle,
+            owner: receipt.owner,
+            camera,
+        };
+        result.paint(1360., 860.);
+        if !read_views(&fixture.engine).unwrap().views.is_empty() {
+            result
+                .invoke("Expand Named Views", ControlInput::Click)
+                .unwrap();
+            result.paint(1360., 860.);
+        }
+        result
+    }
+
+    fn paint(&mut self, width: f32, height: f32) {
+        use bevy::ui::{ComputedStackIndex, ComputedUiRenderTargetInfo, UiGlobalTransform};
+        let world = self.app.world_mut();
+        let revision = self
+            .services
+            .bridge
+            .native_document_receipt(&self.services.engine, &self.owner)
+            .unwrap()
+            .revision;
+        browser::synchronize(
+            world,
+            &self.services,
+            &self.owner,
+            revision,
+            InterfaceRect {
+                x: 0.,
+                y: 120.,
+                width: 232.,
+                height: f64::from(height) - 160.,
+            },
+            &mut 0.,
+        )
+        .unwrap();
+        synchronize(
+            world,
+            self.camera,
+            &self.services,
+            &self.owner,
+            width,
+            height,
+        )
+        .unwrap();
+        let client = InterfaceRect {
+            x: 0.,
+            y: 0.,
+            width: width.into(),
+            height: height.into(),
+        };
+        self.handle
+            .present(InterfaceFrame {
+                context: self.owner.clone(),
+                client,
+                surface: client,
+                canvases: vec![],
+                surfaces: ["solid/selection", "document/views"]
+                    .map(|name| limo_cad_interface::Surface {
+                        name: name.into(),
+                        text: None,
+                    })
+                    .into(),
+                modal_stack: vec![],
+                document_visible: true,
+            })
+            .unwrap();
+        let px = |value| match value {
+            Val::Px(value) => value,
+            _ => panic!("absolute control bounds required"),
+        };
+        let layout: Vec<_> = world
+            .query_filtered::<(Entity, &Node, &ZIndex), With<InterfaceControl>>()
+            .iter(world)
+            .map(|(entity, node, z)| {
+                let size = Vec2::new(px(node.width), px(node.height));
+                (
+                    entity,
+                    size,
+                    Vec2::new(px(node.left), px(node.top)) + size / 2.,
+                    z.0,
+                )
+            })
+            .collect();
+        for (entity, size, center, z) in layout {
+            world.entity_mut(entity).insert((
+                ComputedNode {
+                    size,
+                    inverse_scale_factor: 1.,
+                    ..default()
+                },
+                UiGlobalTransform::from_translation(center),
+                ComputedStackIndex(z as u32),
+                ComputedUiRenderTargetInfo::default(),
+                InheritedVisibility::VISIBLE,
+            ));
+        }
+        self.app.update();
+        self.app
+            .world_mut()
+            .run_system_cached(bevy::ui::widget::update_editable_text_styles)
+            .unwrap();
+        self.app
+            .world_mut()
+            .run_system_cached(bevy::ui::widget::update_editable_text_layout)
+            .unwrap();
+        interface_shell::tests::publish_layout_once(self.app.world_mut(), self.handle.clone());
+    }
+
+    fn entity(&mut self, label: &str) -> Entity {
+        self.app
+            .world_mut()
+            .query::<(Entity, &InterfaceControl)>()
+            .iter(self.app.world())
+            .find(|(_, control)| control.label == label)
+            .unwrap_or_else(|| panic!("Missing {label}"))
+            .0
+    }
+
+    fn action(&mut self, label: &str, input: ControlInput) -> NativeInterfaceAction {
+        let entity = self.entity(label);
+        self.handle
+            .resolve_input(
+                limo_cad_interface::ControlKey(entity.to_bits()),
+                input,
+                &self.owner,
+            )
+            .unwrap()
+    }
+
+    fn type_in_buffer(&mut self, label: &str, value: &str) {
+        use bevy::text::{EditableText, TextEdit};
+        self.invoke(label, ControlInput::Click).unwrap();
+        let entity = self.entity(label);
+        let mut editor = self
+            .app
+            .world_mut()
+            .get_mut::<EditableText>(entity)
+            .unwrap();
+        editor.queue_edit(TextEdit::SelectAll);
+        editor.queue_edit(TextEdit::Insert(value.into()));
+        self.app
+            .world_mut()
+            .run_system_cached(bevy::text::apply_text_edits)
+            .unwrap();
+    }
+
+    fn invoke(&mut self, label: &str, input: ControlInput) -> Result<Value, String> {
+        let action = self.action(label, input);
+        super::super::reduce_control_input(
+            &self.services.engine,
+            &self.services.bridge,
+            self.app.world_mut(),
+            &self.handle,
+            &action,
+        )
+    }
+
+    fn outcome(&mut self) -> Result<Value, String> {
+        let deadline = std::time::Instant::now() + Duration::from_secs(15);
+        loop {
+            if let Some(outcome) = worker::poll(self.app.world_mut(), &self.services) {
+                return outcome.value;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "Saved-view worker timed out"
+            );
+            std::thread::sleep(Duration::from_millis(2));
+        }
+    }
+
+    fn drain(&mut self) {
+        let value = self.outcome().unwrap();
+        assert!(value["render_error"].is_null(), "{value}");
+    }
+}
+
+#[test]
+fn browser_names_activate_saved_views_by_pointer_and_keyboard_without_opening_the_editor() {
+    crate::session_bridge::tests::with_isolated_session_test(|| {
+        let fixture = Fixture::new();
+        let saved = solid_and_view(&fixture);
+        let mut ui = ViewControls::new(&fixture);
+        let geometry = fixture.engine.viewport_frame();
+        for input in [
+            ControlInput::Click,
+            ControlInput::DoubleClick,
+            ControlInput::Key(limo_cad_interface::KeyChord::plain("Enter")),
+            ControlInput::Key(limo_cad_interface::KeyChord::plain("Space")),
+        ] {
+            native_viewport::apply_interface_view(
+                ui.app.world_mut(),
+                &ui.owner.document_id,
+                Some(native_viewport::ViewportCamera::default()),
+                None,
+            )
+            .unwrap();
+            ui.paint(1360., 860.);
+            assert_eq!(
+                ui.invoke(&saved.name, input).unwrap()["mutation_pending"],
+                true
+            );
+            ui.drain();
+            let camera = native_viewport::interface_view(ui.app.world()).1;
+            assert_eq!(camera.position, saved.camera.position.map(|v| v as f32));
+            assert_eq!(camera.target, saved.camera.target.map(|v| v as f32));
+            assert_eq!(camera.up, saved.camera.up.map(|v| v as f32));
+            assert_eq!(
+                read_views(&fixture.engine).unwrap().active.as_deref(),
+                Some(saved.name.as_str())
+            );
+            assert!(
+                !active(ui.app.world()),
+                "Activating a browser row must not open the editor"
+            );
+            assert!(Arc::ptr_eq(
+                &geometry.document,
+                &fixture.engine.viewport_frame().document
+            ));
+        }
+        ui.paint(1360., 860.);
+        let camera = native_viewport::interface_view(ui.app.world()).1;
+        ui.invoke(
+            &format!("Edit saved view {}", saved.name),
+            ControlInput::Click,
+        )
+        .unwrap();
+        assert!(active(ui.app.world()));
+        assert_eq!(native_viewport::interface_view(ui.app.world()).1, camera);
+    });
+}
+
+#[test]
+fn an_in_flight_double_click_recalls_once_without_a_second_pending_operation() {
+    crate::session_bridge::tests::with_isolated_session_test(|| {
+        let fixture = Fixture::new();
+        let saved = solid_and_view(&fixture);
+        let mut ui = ViewControls::new(&fixture);
+        let before = fixture
+            .bridge
+            .native_document_receipt(&fixture.engine, &ui.owner)
+            .unwrap();
+        let first = ui.invoke(&saved.name, ControlInput::Click).unwrap();
+        assert_eq!(first["mutation_pending"], true);
+        let continuation = ui.action(&saved.name, ControlInput::DoubleClick);
+        assert!(coalesces_native_double_click(ui.app.world(), &continuation));
+        let second = ui.invoke(&saved.name, ControlInput::DoubleClick).unwrap();
+        assert_eq!(second["mutation_id"], first["mutation_id"]);
+        ui.drain();
+        assert!(!worker::busy(ui.app.world()));
+        assert!(!ui.app.world().contains_resource::<PendingRecall>());
+        ui.paint(1360., 860.);
+        assert_eq!(
+            ui.invoke(&saved.name, ControlInput::DoubleClick).unwrap()["already_active"],
+            true
+        );
+        assert!(!worker::busy(ui.app.world()));
+        assert_eq!(
+            fixture
+                .bridge
+                .native_document_receipt(&fixture.engine, &ui.owner)
+                .unwrap()
+                .revision,
+            before.revision + 1
+        );
+        assert_eq!(
+            read_views(&fixture.engine).unwrap().active.as_deref(),
+            Some(saved.name.as_str())
+        );
+    });
+}
+
+#[test]
+fn completed_recalls_restore_native_visibility_and_placement_changes() {
+    crate::session_bridge::tests::with_isolated_session_test(|| {
+        let fixture = Fixture::new();
+        let saved = solid_and_view(&fixture);
+        let mut ui = ViewControls::new(&fixture);
+        open(
+            ui.app.world_mut(),
+            &fixture.engine,
+            &ui.owner,
+            Some(&saved.name),
+        )
+        .unwrap();
+        ui.invoke(&saved.name, ControlInput::Click).unwrap();
+        ui.drain();
+        let (_, camera, expected, _) = native_viewport::interface_view_snapshot(ui.app.world());
+        for change in 0..3 {
+            let revision = fixture
+                .bridge
+                .native_document_receipt(&fixture.engine, &ui.owner)
+                .unwrap()
+                .revision;
+            let mut changed = expected.clone();
+            match change {
+                // CAM's stock view hides target bodies in the native
+                // presentation while retaining the engine revision and camera.
+                0 => changed.hidden_body_ids.push(saved.visible_body_ids[0]),
+                1 => Arc::make_mut(&mut changed.body_poses)[0].translation[0] += 40.,
+                2 => {
+                    let occurrence = &mut Arc::make_mut(&mut changed.instance_body_poses)[0];
+                    occurrence.translation[0] += 40.;
+                    occurrence.visible = false;
+                }
+                _ => unreachable!(),
+            }
+            native_viewport::apply_interface_view(
+                ui.app.world_mut(),
+                &ui.owner.document_id,
+                None,
+                Some(changed),
+            )
+            .unwrap();
+            ui.paint(1360., 860.);
+            assert_eq!(native_viewport::interface_view(ui.app.world()).1, camera);
+            assert_eq!(
+                fixture
+                    .bridge
+                    .native_document_receipt(&fixture.engine, &ui.owner)
+                    .unwrap()
+                    .revision,
+                revision
+            );
+            assert_eq!(
+                ui.invoke(&saved.name, ControlInput::Click).unwrap()["mutation_pending"],
+                true,
+                "Presentation changes must invalidate the completed recall"
+            );
+            ui.drain();
+            let (_, actual_camera, actual, _) = native_viewport::interface_view(ui.app.world());
+            assert_eq!(actual_camera, camera);
+            assert_eq!(actual.hidden_body_ids, expected.hidden_body_ids);
+            assert_eq!(actual.body_poses, expected.body_poses);
+            assert_eq!(actual.instance_body_poses, expected.instance_body_poses);
+            assert!(active(ui.app.world()));
+            assert!(!has_unsaved_changes(ui.app.world().resource::<State>()));
+        }
+    });
+}
+
+#[test]
+fn reopening_and_creating_clean_unsaved_views_recaptures_the_current_camera() {
+    crate::session_bridge::tests::with_isolated_session_test(|| {
+        let fixture = Fixture::new();
+        let mut ui = ViewControls::new(&fixture);
+        open(ui.app.world_mut(), &fixture.engine, &ui.owner, None).unwrap();
+        ui.paint(1360., 860.);
+        ui.invoke("Close named views", ControlInput::Click).unwrap();
+        for name in [None, Some("")] {
+            let mut camera = native_viewport::interface_view(ui.app.world()).1;
+            camera.position[0] += 80.;
+            native_viewport::apply_interface_view(
+                ui.app.world_mut(),
+                &ui.owner.document_id,
+                Some(camera),
+                None,
+            )
+            .unwrap();
+            open(ui.app.world_mut(), &fixture.engine, &ui.owner, name).unwrap();
+            let state = ui.app.world().resource::<State>();
+            assert_eq!(
+                state.draft.as_ref().unwrap().camera.position,
+                camera.position.map(f64::from)
+            );
+            assert!(!has_unsaved_changes(state));
+            assert!(state.selected.is_none());
+        }
+        edit(
+            ui.app.world_mut(),
+            &fixture.engine,
+            Field::Name,
+            "Keep unfinished work",
+            UnitSystem::Mm,
+        )
+        .unwrap();
+        let draft = ui.app.world().resource::<State>().draft.clone();
+        ui.paint(1360., 860.);
+        ui.invoke("Close named views", ControlInput::Click).unwrap();
+        open(ui.app.world_mut(), &fixture.engine, &ui.owner, None).unwrap();
+        assert_eq!(ui.app.world().resource::<State>().draft, draft);
+        assert!(open(ui.app.world_mut(), &fixture.engine, &ui.owner, Some("")).is_err());
+        assert_eq!(ui.app.world().resource::<State>().draft, draft);
+    });
+}
+
+#[test]
+fn reopening_a_clean_editor_uses_the_active_engine_view() {
+    crate::session_bridge::tests::with_isolated_session_test(|| {
+        let fixture = Fixture::new();
+        let saved = solid_and_view(&fixture);
+        let mut second = saved.clone();
+        second.id = None;
+        second.name = "Externally activated view".into();
+        second.camera.position[0] += 30.;
+        fixture
+            .bridge
+            .apply_native_mutation(
+                &fixture.engine,
+                &fixture.owner(),
+                "upsert_named_view",
+                &serde_json::to_value(&second).unwrap(),
+                || Ok(()),
+            )
+            .unwrap();
+        let mut ui = ViewControls::new(&fixture);
+        open(
+            ui.app.world_mut(),
+            &fixture.engine,
+            &ui.owner,
+            Some(&saved.name),
+        )
+        .unwrap();
+        ui.paint(1360., 860.);
+        ui.invoke("Close named views", ControlInput::Click).unwrap();
+        fixture
+            .bridge
+            .apply_native_mutation(
+                &fixture.engine,
+                &ui.owner,
+                "recall_named_view",
+                &json!({"name":second.name}),
+                || Ok(()),
+            )
+            .unwrap();
+        open(ui.app.world_mut(), &fixture.engine, &ui.owner, None).unwrap();
+        let state = ui.app.world().resource::<State>();
+        assert_eq!(state.selected.as_deref(), Some(second.name.as_str()));
+        assert_eq!(
+            state.draft.as_ref(),
+            Some(&stored_view(&fixture, &second.name))
+        );
+        assert!(!has_unsaved_changes(state));
+    });
+}
+
+#[test]
+fn recall_completion_preserves_edits_made_after_enqueue_and_the_next_paint() {
+    crate::session_bridge::tests::with_isolated_session_test(|| {
+        let fixture = Fixture::new();
+        let saved = solid_and_view(&fixture);
+        let mut second = saved.clone();
+        second.id = None;
+        second.name = "Recall target".into();
+        fixture
+            .bridge
+            .apply_native_mutation(
+                &fixture.engine,
+                &fixture.owner(),
+                "upsert_named_view",
+                &serde_json::to_value(&second).unwrap(),
+                || Ok(()),
+            )
+            .unwrap();
+        let mut ui = ViewControls::new(&fixture);
+        open(
+            ui.app.world_mut(),
+            &fixture.engine,
+            &ui.owner,
+            Some(&saved.name),
+        )
+        .unwrap();
+        activate(
+            ui.app.world_mut(),
+            &fixture.engine,
+            &fixture.bridge,
+            &ui.owner,
+            &second.name,
+        )
+        .unwrap();
+        // A direct SetValue can reach the reducer while the worker is pending.
+        edit(
+            ui.app.world_mut(),
+            &fixture.engine,
+            Field::Name,
+            "New draft edit",
+            UnitSystem::Mm,
+        )
+        .unwrap();
+        let draft = ui.app.world().resource::<State>().draft.clone();
+        ui.drain();
+        ui.paint(1360., 860.);
+        let state = ui.app.world().resource::<State>();
+        assert_eq!(state.draft, draft);
+        assert_eq!(state.selected.as_deref(), Some(saved.name.as_str()));
+        assert!(has_unsaved_changes(state));
+        assert_eq!(
+            read_views(&fixture.engine).unwrap().active.as_deref(),
+            Some(second.name.as_str())
+        );
+    });
+}
+
+#[test]
+fn recall_completion_refreshes_a_hidden_editors_stale_view_list() {
+    crate::session_bridge::tests::with_isolated_session_test(|| {
+        let fixture = Fixture::new();
+        let saved = solid_and_view(&fixture);
+        let mut ui = ViewControls::new(&fixture);
+        open(
+            ui.app.world_mut(),
+            &fixture.engine,
+            &ui.owner,
+            Some(&saved.name),
+        )
+        .unwrap();
+        ui.paint(1360., 860.);
+        ui.invoke("Close named views", ControlInput::Click).unwrap();
+        let mut added = saved.clone();
+        added.id = None;
+        added.name = "Newly saved view".into();
+        added.camera.target[0] += 15.;
+        fixture
+            .bridge
+            .apply_native_mutation(
+                &fixture.engine,
+                &ui.owner,
+                "upsert_named_view",
+                &serde_json::to_value(&added).unwrap(),
+                || Ok(()),
+            )
+            .unwrap();
+        assert!(!ui
+            .app
+            .world()
+            .resource::<State>()
+            .views
+            .iter()
+            .any(|v| v.name == added.name));
+        activate(
+            ui.app.world_mut(),
+            &fixture.engine,
+            &fixture.bridge,
+            &ui.owner,
+            &added.name,
+        )
+        .unwrap();
+        ui.drain();
+        let state = ui.app.world().resource::<State>();
+        assert!(!state.visible);
+        assert_eq!(state.selected.as_deref(), Some(added.name.as_str()));
+        assert_eq!(
+            state.draft.as_ref(),
+            Some(&stored_view(&fixture, &added.name))
+        );
+        assert_eq!(state.views, read_views(&fixture.engine).unwrap().views);
+    });
+}
+
+#[test]
+fn clean_drafts_reconcile_external_changes_after_discard_or_manually_reverting_edits() {
+    crate::session_bridge::tests::with_isolated_session_test(|| {
+        for operation in ["upsert_named_view", "delete_named_view"] {
+            for discard in [true, false] {
+                let fixture = Fixture::new();
+                let saved = solid_and_view(&fixture);
+                let mut ui = ViewControls::new(&fixture);
+                open(
+                    ui.app.world_mut(),
+                    &fixture.engine,
+                    &ui.owner,
+                    Some(&saved.name),
+                )
+                .unwrap();
+                ui.paint(1360., 860.);
+                edit(
+                    ui.app.world_mut(),
+                    &fixture.engine,
+                    Field::Name,
+                    "Keep my edit",
+                    UnitSystem::Mm,
+                )
+                .unwrap();
+                let draft = ui.app.world().resource::<State>().draft.clone();
+                let mut updated = saved.clone();
+                updated.camera.position[0] += 25.;
+                let arguments = if operation == "upsert_named_view" {
+                    serde_json::to_value(&updated).unwrap()
+                } else {
+                    json!({"name":saved.name})
+                };
+                fixture
+                    .bridge
+                    .apply_native_mutation(
+                        &fixture.engine,
+                        &ui.owner,
+                        operation,
+                        &arguments,
+                        || Ok(()),
+                    )
+                    .unwrap();
+                ui.paint(1360., 860.);
+                assert_eq!(ui.app.world().resource::<State>().draft, draft);
+                if discard {
+                    ui.invoke("Discard edits", ControlInput::Click).unwrap();
+                } else {
+                    edit(
+                        ui.app.world_mut(),
+                        &fixture.engine,
+                        Field::Name,
+                        &saved.name,
+                        UnitSystem::Mm,
+                    )
+                    .unwrap();
+                }
+                ui.paint(1360., 860.);
+                let state = ui.app.world().resource::<State>();
+                assert!(state.visible);
+                assert!(!has_unsaved_changes(state));
+                if operation == "upsert_named_view" {
+                    assert_eq!(state.selected.as_deref(), Some(updated.name.as_str()));
+                    assert_eq!(state.draft.as_ref(), Some(&updated));
+                    assert_eq!(state.original.as_ref(), Some(&updated));
+                } else {
+                    assert!(state.selected.is_none());
+                    assert!(state.draft.is_none());
+                    assert!(state.draft_baseline.is_none());
+                    assert!(saved_action_error(state, &Command::Recall).is_some());
+                }
+            }
+        }
+    });
+}
+
+#[test]
+fn successful_save_acknowledges_only_the_submitted_draft() {
+    crate::session_bridge::tests::with_isolated_session_test(|| {
+        let fixture = Fixture::new();
+        solid_and_view(&fixture);
+        fixture
+            .bridge
+            .apply_native_mutation(
+                &fixture.engine,
+                &fixture.owner(),
+                "solid_extrude",
+                &json!({"sketch_name":"Sketch1","profile_indices":[0],"operation":"new_body","extent":{"type":"distance","distance":4.}}),
+                || Ok(()),
+            )
+            .unwrap();
+        let mut ui = ViewControls::new(&fixture);
+        open(ui.app.world_mut(), &fixture.engine, &ui.owner, None).unwrap();
+        edit(
+            ui.app.world_mut(),
+            &fixture.engine,
+            Field::Name,
+            "Saved draft",
+            UnitSystem::Mm,
+        )
+        .unwrap();
+        let bodies = ui
+            .app
+            .world()
+            .resource::<State>()
+            .draft
+            .as_ref()
+            .unwrap()
+            .visible_body_ids
+            .clone();
+        assert_eq!(bodies.len(), 2);
+        edit(
+            ui.app.world_mut(),
+            &fixture.engine,
+            Field::Target,
+            &format!("body:{}", bodies[0]),
+            UnitSystem::Mm,
+        )
+        .unwrap();
+        for value in ["false", "true"] {
+            edit(
+                ui.app.world_mut(),
+                &fixture.engine,
+                Field::VisibleBody,
+                value,
+                UnitSystem::Mm,
+            )
+            .unwrap();
+        }
+        assert_eq!(
+            ui.app
+                .world()
+                .resource::<State>()
+                .draft
+                .as_ref()
+                .unwrap()
+                .visible_body_ids,
+            vec![bodies[1], bodies[0]]
+        );
+        ui.app.world_mut().resource_mut::<State>().scroll = usize::MAX;
+        ui.paint(1360., 860.);
+        ui.invoke("Save view", ControlInput::Click).unwrap();
+        edit(
+            ui.app.world_mut(),
+            &fixture.engine,
+            Field::PrintLayout,
+            "true",
+            UnitSystem::Mm,
+        )
+        .unwrap();
+        ui.drain();
+        ui.paint(1360., 860.);
+        let expected = stored_view(&fixture, "Saved draft");
+        assert_eq!(
+            ui.app
+                .world()
+                .resource::<State>()
+                .draft
+                .as_ref()
+                .unwrap()
+                .id,
+            expected.id
+        );
+        assert!(has_unsaved_changes(ui.app.world().resource::<State>()));
+        edit(
+            ui.app.world_mut(),
+            &fixture.engine,
+            Field::PrintLayout,
+            "false",
+            UnitSystem::Mm,
+        )
+        .unwrap();
+        ui.paint(1360., 860.);
+        assert!(!has_unsaved_changes(ui.app.world().resource::<State>()));
+        edit(
+            ui.app.world_mut(),
+            &fixture.engine,
+            Field::PrintLayout,
+            "true",
+            UnitSystem::Mm,
+        )
+        .unwrap();
+        ui.app.world_mut().resource_mut::<State>().scroll = usize::MAX;
+        ui.paint(1360., 860.);
+        ui.invoke("Save view", ControlInput::Click).unwrap();
+        edit(
+            ui.app.world_mut(),
+            &fixture.engine,
+            Field::PrintLayout,
+            "false",
+            UnitSystem::Mm,
+        )
+        .unwrap();
+        ui.drain();
+        ui.paint(1360., 860.);
+        let state = ui.app.world().resource::<State>();
+        assert!(has_unsaved_changes(state));
+        assert!(!state.draft.as_ref().unwrap().print_layout);
+        assert!(state.draft_baseline.as_ref().unwrap().print_layout);
+        assert!(stored_view(&fixture, "Saved draft").print_layout);
+    });
+}
+
+#[test]
+fn discarding_a_preview_restores_the_camera_and_keeps_the_editor_open() {
+    crate::session_bridge::tests::with_isolated_session_test(|| {
+        let fixture = Fixture::new();
+        let saved = solid_and_view(&fixture);
+        let mut ui = ViewControls::new(&fixture);
+        open(
+            ui.app.world_mut(),
+            &fixture.engine,
+            &ui.owner,
+            Some(&saved.name),
+        )
+        .unwrap();
+        ui.paint(1360., 860.);
+        let (_, camera, presentation, _) = native_viewport::interface_view_snapshot(ui.app.world());
+        let receipt = fixture
+            .bridge
+            .native_document_receipt(&fixture.engine, &ui.owner)
+            .unwrap();
+        let mut preview_camera = camera;
+        preview_camera.position[0] += 90.;
+        native_viewport::apply_interface_view(
+            ui.app.world_mut(),
+            &ui.owner.document_id,
+            Some(preview_camera),
+            None,
+        )
+        .unwrap();
+        {
+            let mut state = ui.app.world_mut().resource_mut::<State>();
+            state.previewing = true;
+            state.preview_origin = Some(PreviewOrigin {
+                receipt,
+                camera,
+                presentation,
+            });
+        }
+        ui.paint(1360., 860.);
+        ui.invoke("Discard edits", ControlInput::Click).unwrap();
+        let state = ui.app.world().resource::<State>();
+        assert!(state.visible);
+        assert!(!has_unsaved_changes(state));
+        assert!(state.preview_origin.is_none());
+        assert_eq!(state.draft.as_ref(), Some(&saved));
+        assert_eq!(native_viewport::interface_view(ui.app.world()).1, camera);
+    });
+}
+
+#[test]
+fn activation_and_discard_accessible_names_match_the_localized_captions() {
+    crate::session_bridge::tests::with_isolated_session_test(|| {
+        let fixture = Fixture::new();
+        let saved = solid_and_view(&fixture);
+        let mut ui = ViewControls::new(&fixture);
+        for locale in crate::app_preferences::locale::SUPPORTED {
+            native_viewport::localization::set_locale(ui.app.world_mut(), locale);
+            open(
+                ui.app.world_mut(),
+                &fixture.engine,
+                &ui.owner,
+                Some(&saved.name),
+            )
+            .unwrap();
+            edit(
+                ui.app.world_mut(),
+                &fixture.engine,
+                Field::Name,
+                "Unsaved edit",
+                UnitSystem::Mm,
+            )
+            .unwrap();
+            ui.paint(1360., 860.);
+            for key in ["namedViews.activate", "namedViews.discard"] {
+                let label =
+                    native_viewport::localization::translate(ui.app.world(), key).to_owned();
+                let entity = ui.entity(&label);
+                assert_eq!(
+                    ui.app
+                        .world()
+                        .get::<interface_shell::InterfaceCaption>(entity)
+                        .unwrap()
+                        .0,
+                    label
+                );
+            }
+            let discard =
+                native_viewport::localization::translate(ui.app.world(), "namedViews.discard")
+                    .to_owned();
+            ui.invoke(&discard, ControlInput::Click).unwrap();
+            let state = ui.app.world().resource::<State>();
+            assert!(state.visible, "Discard must keep the editor open");
+            assert!(!has_unsaved_changes(state));
+            assert_eq!(state.draft.as_ref(), Some(&saved));
+        }
+    });
+}
+
+#[test]
+fn browser_activation_and_editor_selection_preserve_unfinished_view_edits() {
+    crate::session_bridge::tests::with_isolated_session_test(|| {
+        let fixture = Fixture::new();
+        let saved = solid_and_view(&fixture);
+        let mut second = saved.clone();
+        second.id = None;
+        second.name = "Second view".into();
+        fixture
+            .bridge
+            .apply_native_mutation(
+                &fixture.engine,
+                &fixture.owner(),
+                "upsert_named_view",
+                &serde_json::to_value(&second).unwrap(),
+                || Ok(()),
+            )
+            .unwrap();
+        let mut ui = ViewControls::new(&fixture);
+        ui.invoke(
+            &format!("Edit saved view {}", saved.name),
+            ControlInput::Click,
+        )
+        .unwrap();
+        ui.paint(1360., 860.);
+        ui.type_in_buffer("View name", "Unfinished edits");
+        let before = read_views(&fixture.engine).unwrap();
+        // The browser click must flush the real text buffer before deciding
+        // whether switching would discard an edit.
+        assert!(ui
+            .invoke(&second.name, ControlInput::Click)
+            .unwrap_err()
+            .contains("Save or discard"));
+        let draft = ui.app.world().resource::<State>().draft.clone();
+        assert_eq!(draft.as_ref().unwrap().name, "Unfinished edits");
+        ui.paint(1360., 860.);
+        let rejection = ui.app.world().resource::<State>().error.clone().unwrap();
+        assert!(displays_error(ui.app.world(), &rejection));
+        print_intent::open(
+            ui.app.world_mut(),
+            &fixture.engine,
+            &ui.owner,
+            Some(saved.visible_body_ids[0]),
+        )
+        .unwrap();
+        assert!(ui
+            .invoke(&second.name, ControlInput::Click)
+            .unwrap_err()
+            .contains("Save or discard"));
+        ui.paint(1360., 860.);
+        assert!(!displays_error(ui.app.world(), &rejection));
+        assert_eq!(
+            ui.app.world().resource::<State>().error.as_deref(),
+            Some(rejection.as_str()),
+            "Print Settings hides the editor, so its warning must remain available globally"
+        );
+        print_intent::cancel(
+            ui.app.world_mut(),
+            &fixture.engine,
+            &fixture.bridge,
+            &ui.owner,
+        )
+        .unwrap();
+        ui.paint(1360., 860.);
+        assert!(displays_error(ui.app.world(), &rejection));
+        for label in [&second.name, &format!("Edit saved view {}", second.name)] {
+            assert!(ui
+                .invoke(label, ControlInput::Click)
+                .unwrap_err()
+                .contains("Save or discard"));
+            assert_eq!(ui.app.world().resource::<State>().draft, draft);
+            assert_eq!(read_views(&fixture.engine).unwrap(), before);
+        }
+        assert!(edit(
+            ui.app.world_mut(),
+            &fixture.engine,
+            Field::Saved,
+            &second.name,
+            UnitSystem::Mm
+        )
+        .is_err());
+        assert_eq!(ui.app.world().resource::<State>().draft, draft);
+        ui.invoke("Discard edits", ControlInput::Click).unwrap();
+        ui.paint(1360., 860.);
+        ui.invoke(&second.name, ControlInput::Click).unwrap();
+        ui.drain();
+        assert_eq!(
+            read_views(&fixture.engine).unwrap().active.as_deref(),
+            Some(second.name.as_str())
+        );
+        assert_eq!(
+            ui.app.world().resource::<State>().selected.as_deref(),
+            Some(second.name.as_str())
+        );
+
+        open(ui.app.world_mut(), &fixture.engine, &ui.owner, Some("")).unwrap();
+        edit(
+            ui.app.world_mut(),
+            &fixture.engine,
+            Field::Name,
+            "New unsaved view",
+            UnitSystem::Mm,
+        )
+        .unwrap();
+        assert!(activate(
+            ui.app.world_mut(),
+            &fixture.engine,
+            &fixture.bridge,
+            &ui.owner,
+            &saved.name
+        )
+        .is_err());
+        assert_eq!(
+            ui.app
+                .world()
+                .resource::<State>()
+                .draft
+                .as_ref()
+                .unwrap()
+                .name,
+            "New unsaved view"
+        );
+    });
+}
+
+#[test]
+fn activate_view_stays_visible_on_every_editor_page_at_compact_sizes() {
+    crate::session_bridge::tests::with_isolated_session_test(|| {
+        let fixture = Fixture::new();
+        let saved = solid_and_view(&fixture);
+        let mut ui = ViewControls::new(&fixture);
+        open(
+            ui.app.world_mut(),
+            &fixture.engine,
+            &ui.owner,
+            Some(&saved.name),
+        )
+        .unwrap();
+        for (width, height) in [(1360., 860.), (900., 500.)] {
+            let mut pinned = None;
+            for scroll in [0, 5, usize::MAX] {
+                ui.app.world_mut().resource_mut::<State>().scroll = scroll;
+                ui.paint(width, height);
+                let world = ui.app.world_mut();
+                let buttons: Vec<_> = world
+                    .query::<(&InterfaceControl, &Node)>()
+                    .iter(world)
+                    .filter(|(control, _)| control.label == "Activate view")
+                    .map(|(control, node)| (control.disabled, node.clone()))
+                    .collect();
+                assert_eq!(
+                    buttons.len(),
+                    1,
+                    "Exactly one activation entry in the editor"
+                );
+                assert!(!buttons[0].0);
+                if let Some(pinned) = &pinned {
+                    assert_eq!(&buttons[0].1, pinned);
+                }
+                pinned = Some(buttons[0].1.clone());
+            }
+        }
+    });
+}
+
+#[test]
+fn a_saved_view_click_cannot_follow_document_replacement() {
+    crate::session_bridge::tests::with_isolated_session_test(|| {
+        let fixture = Fixture::new();
+        let saved = solid_and_view(&fixture);
+        let mut ui = ViewControls::new(&fixture);
+        open(
+            ui.app.world_mut(),
+            &fixture.engine,
+            &ui.owner,
+            Some(&saved.name),
+        )
+        .unwrap();
+        edit(
+            ui.app.world_mut(),
+            &fixture.engine,
+            Field::Name,
+            "Previous document draft",
+            UnitSystem::Mm,
+        )
+        .unwrap();
+        assert!(has_unsaved_changes(ui.app.world().resource::<State>()));
+        let stale = ui.action(&saved.name, ControlInput::Click);
+        fixture
+            .bridge
+            .apply_native_mutation(
+                &fixture.engine,
+                &ui.owner,
+                "cad_new_project",
+                &json!({}),
+                || Ok(()),
+            )
+            .unwrap();
+        assert!(super::super::reduce_control_input(
+            &fixture.engine,
+            &fixture.bridge,
+            ui.app.world_mut(),
+            &ui.handle,
+            &stale
+        )
+        .is_err());
+        assert!(!worker::busy(ui.app.world()));
+        assert!(read_views(&fixture.engine).unwrap().views.is_empty());
+        ui.owner = fixture.owner();
+        ui.paint(1360., 860.);
+        assert!(!has_unsaved_changes(ui.app.world().resource::<State>()));
+        open(ui.app.world_mut(), &fixture.engine, &ui.owner, None).unwrap();
+        assert!(
+            !has_unsaved_changes(ui.app.world().resource::<State>()),
+            "An untouched new draft can be replaced without losing an edit"
+        );
+    });
+}
+
+#[test]
+fn deleting_a_view_clears_its_draft_baseline_before_another_activation() {
+    crate::session_bridge::tests::with_isolated_session_test(|| {
+        let fixture = Fixture::new();
+        let saved = solid_and_view(&fixture);
+        let mut second = saved.clone();
+        second.id = None;
+        second.name = "Remaining view".into();
+        fixture
+            .bridge
+            .apply_native_mutation(
+                &fixture.engine,
+                &fixture.owner(),
+                "upsert_named_view",
+                &serde_json::to_value(&second).unwrap(),
+                || Ok(()),
+            )
+            .unwrap();
+        let mut ui = ViewControls::new(&fixture);
+        open(
+            ui.app.world_mut(),
+            &fixture.engine,
+            &ui.owner,
+            Some(&saved.name),
+        )
+        .unwrap();
+        let occurrence = format!("occurrence:{}", saved.occurrence_offsets[0].occurrence_id.0);
+        edit(
+            ui.app.world_mut(),
+            &fixture.engine,
+            Field::Target,
+            &occurrence,
+            UnitSystem::Mm,
+        )
+        .unwrap();
+        edit(
+            ui.app.world_mut(),
+            &fixture.engine,
+            Field::Translation(0),
+            "unfinished+",
+            UnitSystem::Mm,
+        )
+        .unwrap();
+        ui.app.world_mut().resource_mut::<State>().scroll = usize::MAX;
+        ui.paint(1360., 860.);
+        ui.invoke("Delete saved view", ControlInput::Click).unwrap();
+        ui.drain();
+        assert!(!has_unsaved_changes(ui.app.world().resource::<State>()));
+        assert!(ui.app.world().resource::<State>().draft_baseline.is_none());
+        ui.paint(1360., 860.);
+        ui.invoke(&second.name, ControlInput::Click).unwrap();
+        ui.drain();
+        assert_eq!(
+            read_views(&fixture.engine).unwrap().active.as_deref(),
+            Some(second.name.as_str())
+        );
+        assert!(!read_views(&fixture.engine)
+            .unwrap()
+            .views
+            .iter()
+            .any(|view| view.name == saved.name));
+    });
+}
+
+#[test]
+fn failed_async_recall_preserves_the_camera_and_editor() {
+    crate::session_bridge::tests::with_isolated_session_test(|| {
+        let fixture = Fixture::new();
+        let saved = solid_and_view(&fixture);
+        let mut ui = ViewControls::new(&fixture);
+        open(
+            ui.app.world_mut(),
+            &fixture.engine,
+            &ui.owner,
+            Some(&saved.name),
+        )
+        .unwrap();
+        let camera = native_viewport::interface_view(ui.app.world()).1;
+        let before = read_views(&fixture.engine).unwrap();
+        let draft = ui.app.world().resource::<State>().draft.clone();
+        activate(
+            ui.app.world_mut(),
+            &fixture.engine,
+            &fixture.bridge,
+            &ui.owner,
+            "Missing view",
+        )
+        .unwrap();
+        assert!(ui.outcome().is_err());
+        assert_eq!(native_viewport::interface_view(ui.app.world()).1, camera);
+        assert_eq!(read_views(&fixture.engine).unwrap(), before);
+        assert_eq!(
+            ui.app.world().resource::<State>().draft.as_ref(),
+            draft.as_ref()
+        );
+    });
+}
+
+#[test]
+fn print_metadata_cannot_conceal_saved_view_changes_while_the_editor_is_hidden() {
+    crate::session_bridge::tests::with_isolated_session_test(|| {
+        for path in ["direct", "undo", "redo"] {
+            for operation in ["upsert_named_view", "delete_named_view"] {
+                for recovery in ["clean", "discard", "revert"] {
+                    let fixture = Fixture::new();
+                    let saved = solid_and_view(&fixture);
+                    let mut ui = ViewControls::new(&fixture);
+                    open(
+                        ui.app.world_mut(),
+                        &fixture.engine,
+                        &ui.owner,
+                        Some(&saved.name),
+                    )
+                    .unwrap();
+                    ui.paint(1360., 860.);
+                    if recovery != "clean" {
+                        edit(
+                            ui.app.world_mut(),
+                            &fixture.engine,
+                            Field::Name,
+                            "Keep my edit",
+                            UnitSystem::Mm,
+                        )
+                        .unwrap();
+                    }
+                    let draft = ui.app.world().resource::<State>().draft.clone();
+                    let revision = ui.app.world().resource::<State>().revision;
+                    print_intent::open(
+                        ui.app.world_mut(),
+                        &fixture.engine,
+                        &ui.owner,
+                        Some(saved.visible_body_ids[0]),
+                    )
+                    .unwrap();
+                    let mut updated = saved.clone();
+                    updated.camera.position[0] += 25.;
+                    let arguments = if operation == "upsert_named_view" {
+                        serde_json::to_value(&updated).unwrap()
+                    } else {
+                        json!({"name":saved.name})
+                    };
+                    if path == "direct" {
+                        fixture
+                            .bridge
+                            .apply_native_mutation(
+                                &fixture.engine,
+                                &ui.owner,
+                                operation,
+                                &arguments,
+                                || Ok(()),
+                            )
+                            .unwrap();
+                    } else {
+                        apply_print_inbox_mutation(&mut ui, operation, arguments, 1);
+                    }
+                    ui.paint(1360., 860.);
+                    assert_eq!(ui.app.world().resource::<State>().revision, revision);
+                    let model = parse_engine_envelope(
+                        fixture.engine.engine_call("project_export_model", ""),
+                    )
+                    .unwrap();
+                    let print_arguments = json!({"body_id":saved.visible_body_ids[0],
+                    "settings":{"wall_count":6},"expected_model_json":model});
+                    if path == "direct" {
+                        let result = fixture
+                            .bridge
+                            .apply_native_mutation(
+                                &fixture.engine,
+                                &ui.owner,
+                                "print_intent_set_part",
+                                &print_arguments,
+                                || Ok(()),
+                            )
+                            .unwrap();
+                        let result = finish_mutation(
+                            &fixture.engine,
+                            &fixture.bridge,
+                            ui.app.world_mut(),
+                            "print_intent_set_part",
+                            result,
+                        );
+                        assert!(result["render_error"].is_null(), "{result}");
+                    } else {
+                        apply_print_inbox_mutation(
+                            &mut ui,
+                            "print_intent_set_part",
+                            print_arguments,
+                            2,
+                        );
+                        for history in
+                            ["undo", "redo"]
+                                .into_iter()
+                                .take(if path == "undo" { 1 } else { 2 })
+                        {
+                            let receipt = fixture
+                                .bridge
+                                .native_document_receipt(&fixture.engine, &ui.owner)
+                                .unwrap();
+                            let result = fixture
+                                .bridge
+                                .apply_native_history_at(
+                                    &fixture.engine,
+                                    &receipt.owner,
+                                    receipt.revision,
+                                    history == "redo",
+                                    || Ok(()),
+                                )
+                                .unwrap();
+                            assert_eq!(result.value["print_metadata_history"], true);
+                            ui.owner = result.context.clone();
+                            let result = finish_mutation(
+                                &fixture.engine,
+                                &fixture.bridge,
+                                ui.app.world_mut(),
+                                history,
+                                result,
+                            );
+                            assert!(result["render_error"].is_null(), "{result}");
+                            ui.paint(1360., 860.);
+                            assert_eq!(
+                                ui.app.world().resource::<State>().owner.as_ref(),
+                                Some(&ui.owner)
+                            );
+                            assert_eq!(ui.app.world().resource::<State>().draft, draft);
+                        }
+                    }
+                    assert_eq!(ui.app.world().resource::<State>().draft, draft);
+                    print_intent::cancel(
+                        ui.app.world_mut(),
+                        &fixture.engine,
+                        &fixture.bridge,
+                        &ui.owner,
+                    )
+                    .unwrap();
+                    ui.paint(1360., 860.);
+                    if recovery != "clean" {
+                        assert_eq!(ui.app.world().resource::<State>().draft, draft);
+                        assert!(has_unsaved_changes(ui.app.world().resource::<State>()));
+                        if recovery == "discard" {
+                            ui.invoke("Discard edits", ControlInput::Click).unwrap();
+                        } else {
+                            edit(
+                                ui.app.world_mut(),
+                                &fixture.engine,
+                                Field::Name,
+                                &saved.name,
+                                UnitSystem::Mm,
+                            )
+                            .unwrap();
+                        }
+                        ui.paint(1360., 860.);
+                    }
+                    let state = ui.app.world().resource::<State>();
+                    assert!(!has_unsaved_changes(state));
+                    assert!(!state.refresh_pending);
+                    if operation == "upsert_named_view" {
+                        assert_eq!(state.draft.as_ref(), Some(&updated));
+                        assert_eq!(state.draft_baseline.as_ref(), Some(&updated));
+                        assert_eq!(state.original.as_ref(), Some(&updated));
+                    } else {
+                        assert!(state.selected.is_none());
+                        assert!(state.draft.is_none());
+                        assert!(state.draft_baseline.is_none());
+                    }
+                }
+            }
+        }
+    });
+}
+
+fn apply_print_inbox_mutation(
+    ui: &mut ViewControls,
+    operation: &str,
+    arguments: Value,
+    sequence: u8,
+) {
+    ui.services
+        .bridge
+        .publish_native_document(&ui.services.engine, &ui.owner, "solid")
+        .unwrap();
+    let session = ui
+        .services
+        .bridge
+        .session_id_for_window("main")
+        .unwrap()
+        .unwrap();
+    let receipt = ui
+        .services
+        .bridge
+        .native_document_receipt(&ui.services.engine, &ui.owner)
+        .unwrap();
+    let inbox = crate::session_bridge::session_root()
+        .join(&session)
+        .join("inbox");
+    std::fs::create_dir_all(&inbox).unwrap();
+    std::fs::write(
+        inbox.join(format!("{sequence}.json")),
+        json!({"name":operation,"arguments":arguments,"base_generation":receipt.revision,
+            "session_id":session,"window_id":"main","document_id":ui.owner.document_id})
+        .to_string(),
+    )
+    .unwrap();
+    let applied = crate::session_bridge::apply_or_reject_one_inbox_op_with_presentation_guard(
+        &ui.services.bridge,
+        "main",
+        &ui.services.engine,
+        None,
+        Some((&ui.owner.document_id, &session)),
+        false,
+    )
+    .unwrap();
+    assert_eq!(applied["applied"], true, "{applied}");
+    assert_eq!(applied["model_changed"], true, "{applied}");
+    let result = finish_mutation(
+        &ui.services.engine,
+        &ui.services.bridge,
+        ui.app.world_mut(),
+        "inbox",
+        NativeMutationResult {
+            context: ui.owner.clone(),
+            engine_revision: applied["engine_revision"].as_u64().unwrap(),
+            value: applied,
+        },
+    );
+    assert!(result["render_error"].is_null(), "{result}");
+}
+
 #[test]
 fn print_metadata_receipts_preserve_unapplied_layout_preview_and_its_export_guard() {
     let mut world = World::new();
@@ -106,6 +1546,15 @@ fn view() -> NamedViewConfigurationDto {
     }
 }
 
+fn stored_view(fixture: &Fixture, name: &str) -> NamedViewConfigurationDto {
+    read_views(&fixture.engine)
+        .unwrap()
+        .views
+        .into_iter()
+        .find(|view| view.name == name)
+        .unwrap()
+}
+
 fn solid_and_view(fixture: &Fixture) -> NamedViewConfigurationDto {
     for (operation, arguments) in [
         (
@@ -154,7 +1603,7 @@ fn solid_and_view(fixture: &Fixture) -> NamedViewConfigurationDto {
             || Ok(()),
         )
         .unwrap();
-    saved
+    stored_view(fixture, &saved.name)
 }
 
 #[test]
@@ -569,6 +2018,15 @@ fn named_views_cannot_take_over_picking_from_an_open_source_hole_form() {
     );
     assert_eq!(feature::panel(app.world()).unwrap().form_id, original);
     assert!(!active(app.world()));
+    assert!(activate(
+        app.world_mut(),
+        &fixture.engine,
+        &fixture.bridge,
+        &fixture.owner(),
+        "Fixture view"
+    )
+    .is_err());
+    assert_eq!(feature::panel(app.world()).unwrap().form_id, original);
     assert_eq!(
         parse_engine_envelope(fixture.engine.engine_call("project_export_model", "")).unwrap(),
         before

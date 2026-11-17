@@ -148,6 +148,50 @@ mod tests {
     use super::*;
 
     #[test]
+    fn catalog_material_drives_explicit_constitutive_models_without_copying_properties() {
+        use limo_cad_core::MaterialPropertyFilter;
+        let material = find_preset("material.aluminum-6061-t6")
+            .unwrap()
+            .material
+            .as_ref()
+            .unwrap();
+        let before = serde_json::to_string(material).unwrap();
+        let selection = MaterialPropertyFilter {
+            context: Some("Engineering reference: Aluminum 6061-T6"),
+            source_id: None,
+        };
+        let elastic = material.isotropic_elasticity(selection, selection).unwrap();
+        let stress = elastic
+            .stress_pa([0.001, -0.00033, -0.00033, 0., 0., 0.])
+            .unwrap();
+        assert!((stress[0] - 68_900_000.).abs() < 1e-6);
+        assert!(stress[1..].iter().all(|v| v.abs() < 1e-6));
+        let thermal = material.isotropic_conduction(selection).unwrap();
+        assert_eq!(thermal.conductivity_w_m_k(), 167.);
+        assert_eq!(
+            thermal.heat_flux_w_m2([-100., 0., 0.]).unwrap(),
+            [16_700., 0., 0.]
+        );
+        for property in [
+            elastic.youngs_property(),
+            elastic.poisson_property(),
+            thermal.conductivity_property(),
+        ] {
+            assert!(material
+                .properties
+                .iter()
+                .any(|p| std::ptr::eq(p, property)));
+            assert!(material
+                .sources
+                .iter()
+                .any(|source| source.id == property.source_id));
+        }
+        assert_eq!(serde_json::to_string(material).unwrap(), before);
+        // This verifies numerical consumption of an explicit law. It does not
+        // certify alloy data or qualify isotropy for a manufactured component.
+    }
+
+    #[test]
     fn catalog_has_bambu_and_prusa() {
         assert!(brands().contains(&"Bambu Lab"));
         assert!(brands().contains(&"Prusa"));
@@ -184,6 +228,9 @@ mod tests {
             assert!(ids.insert(&preset.id));
             let material = preset.material.as_ref().unwrap();
             material.validate().unwrap();
+            let reopened: limo_cad_core::MaterialDetails =
+                serde_json::from_str(&serde_json::to_string(material).unwrap()).unwrap();
+            assert_eq!(material, &reopened);
             assert_eq!(material.catalog_id, preset.id);
         }
         let metal = find_preset("material.aluminum-6061-t6")
@@ -196,6 +243,17 @@ mod tests {
         assert!(metal.properties.iter().any(|p| p.name == "YoungsModulus"
             && p.unit == "Pa"
             && p.value == limo_cad_core::MaterialValue::Number(68_900_000_000.)));
+        let modulus = metal
+            .properties
+            .iter()
+            .find(|p| p.name == "YoungsModulus")
+            .unwrap();
+        assert_eq!(
+            modulus
+                .value_si(limo_cad_core::PhysicalDimension::Pressure)
+                .unwrap(),
+            68_900_000_000.0
+        );
         let plastic = find_preset("generic.pla.gray")
             .unwrap()
             .material
@@ -233,6 +291,42 @@ mod tests {
                 .any(|p| p.context.starts_with("Engineering reference:")),
             "Generic plastic strength must not be assigned to a branded formulation"
         );
+    }
+
+    #[test]
+    fn engineering_density_requires_explicit_context_for_mixed_catalog_records() {
+        for (id, engineering_context, engineering_density) in [
+            ("generic.abs.black", "Engineering reference: ABS", 1060.0),
+            (
+                "generic.pa.natural",
+                "Engineering reference: Polyamide 6",
+                1150.0,
+            ),
+            (
+                "generic.pc.clear",
+                "Engineering reference: PC-Molded",
+                1200.0,
+            ),
+        ] {
+            let material = find_preset(id).unwrap().material.as_ref().unwrap();
+            assert!(
+                material.select_property("Density", None, None).is_err(),
+                "{id}"
+            );
+            let selected = material
+                .select_property("Density", Some(engineering_context), None)
+                .unwrap();
+            assert_eq!(
+                selected
+                    .value_si(limo_cad_core::PhysicalDimension::Density)
+                    .unwrap(),
+                engineering_density
+            );
+            assert!(material
+                .sources
+                .iter()
+                .any(|source| source.id == selected.source_id));
+        }
     }
 
     #[test]

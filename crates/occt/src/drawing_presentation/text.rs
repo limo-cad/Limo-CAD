@@ -59,7 +59,13 @@ pub fn trim(value: f64, precision: usize) -> String {
         text
     }
 }
-fn finish(mut text: String, presentation: &DrawingDimensionPresentationDto) -> String {
+pub(crate) fn with_fit(mut text: String, presentation: &DrawingDimensionPresentationDto) -> String {
+    if !presentation.fit_class.trim().is_empty() {
+        text.push_str(&format!(" {}", presentation.fit_class.trim()));
+    }
+    text
+}
+pub(crate) fn finish(mut text: String, presentation: &DrawingDimensionPresentationDto) -> String {
     if presentation.basic {
         text = format!("[{text}]");
     }
@@ -105,9 +111,7 @@ pub fn dimension(
             )
         }
     }
-    if !p.fit_class.trim().is_empty() {
-        text.push_str(&format!(" {}", p.fit_class.trim()));
-    }
+    text = with_fit(text, p);
     if let Some(dual) = &p.dual_units {
         let units = match dual.unit {
             DrawingSecondaryUnit::Millimetre => UnitSystem::Mm,
@@ -151,10 +155,7 @@ pub fn angular(
             )
         }
     }
-    if !p.fit_class.trim().is_empty() {
-        text.push_str(&format!(" {}", p.fit_class.trim()));
-    }
-    format!("{prefix}{}{suffix}", finish(text, p))
+    format!("{prefix}{}{suffix}", finish(with_fit(text, p), p))
 }
 fn length(value: f64, units: UnitSystem, standard: DrawingStandard) -> String {
     let text = trim(

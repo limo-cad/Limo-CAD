@@ -1,12 +1,12 @@
 {
   "schema": 1,
   "label": "candidate-diagnostic",
-  "executable": "D:\\limo-startup-candidate-optimized-runtime\\nbcad.exe",
+  "executable": "<local-root>\\limo-startup-candidate-optimized-runtime\\nbcad.exe",
   "executableSha256": "6bdbc53f89f273e8c7d924cf09f0b633b5218411a3c62a4a591290ecbd865bf3",
   "profile": "dev-app1-debug2-deps3-debug0",
   "cacheCondition": "first",
   "locale": "en",
-  "document": "C:\\Users\\jeffg\\.t3\\worktrees\\noBS-CAD\\t3code-028ff4c7\\examples\\testPiece.nbcad",
+  "document": "<local-root>\\Users\\<user>\\.t3\\worktrees\\noBS-CAD\\t3code-028ff4c7\\examples\\testPiece.nbcad",
   "documentSha256": "d7e65fb222a0bb59f0ac82c3f3143a3437a487f3bbacf3a1f314b989b96de609",
   "hardware": {
     "platform": "win32",
@@ -16,7 +16,7 @@
     "memoryBytes": 34266349568
   },
   "startedAt": "2026-10-11T18:36:43.149Z",
-  "userDataDirectory": "D:\\limo-startup-runs\\candidate-optimized-document-diagnostic\\webview2-user-data",
+  "userDataDirectory": "<local-root>\\limo-startup-runs\\candidate-optimized-document-diagnostic\\webview2-user-data",
   "warmups": [],
   "runs": [
     {

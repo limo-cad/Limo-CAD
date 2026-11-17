@@ -1,10 +1,22 @@
 use super::*;
 
+fn snapshot(label: &str) -> ProjectSnapshot {
+    ProjectSnapshot::new(
+        serde_json::json!({"format":"limo-cad-project","schema_version":15,"label":label})
+            .to_string(),
+        vec![limo_cad_project_file::SnapshotIntent {
+            name: "intent/history-probe.cbor".into(),
+            payload: label.as_bytes().to_vec(),
+        }],
+    )
+    .unwrap()
+}
+
 #[test]
 fn visibility_revisions_preserve_edit_models_and_redo_but_expire_prepared_tickets() {
     let mut history = SolidHistory::default();
     history
-        .record_edit(&state(1, 1), "before edit".into(), state(1, 2))
+        .record_edit(&state(1, 1), snapshot("before edit"), state(1, 2))
         .unwrap();
     let stale = history.peek_edit_undo(&state(1, 2)).unwrap();
     let original = history.edits[0].clone();
@@ -14,11 +26,11 @@ fn visibility_revisions_preserve_edit_models_and_redo_but_expire_prepared_ticket
     assert!(Arc::ptr_eq(&original, &history.edits[0]));
     assert!(history.preserves_visibility());
     assert!(history
-        .commit_edit_undo(stale, "after edit".into(), state(2, 1))
+        .commit_edit_undo(stale, snapshot("after edit"), state(2, 1))
         .is_err());
     let current = history.peek_edit_undo(&state(1, 3)).unwrap();
     history
-        .commit_edit_undo(current, "after edit".into(), state(2, 1))
+        .commit_edit_undo(current, snapshot("after edit"), state(2, 1))
         .unwrap();
     let stale = history.peek_redo(&state(2, 1)).unwrap();
     let original = history.redo[0].model.clone();
@@ -44,7 +56,7 @@ fn edit_snapshots_are_bounded_and_failed_or_stale_loads_do_not_pop_them() {
         history
             .record_edit(
                 &state(1, revision),
-                format!("model-{revision}"),
+                snapshot(&format!("model-{revision}")),
                 state(1, revision + 1),
             )
             .unwrap();
@@ -52,23 +64,23 @@ fn edit_snapshots_are_bounded_and_failed_or_stale_loads_do_not_pop_them() {
     assert_eq!(history.edits.len(), SOLID_REDO_LIMIT);
     let ticket = history.peek_edit_undo(&state(1, 41)).unwrap();
     assert!(history
-        .commit_edit_undo(ticket.clone(), String::new(), state(2, 1))
+        .commit_edit_undo(ticket.clone(), snapshot("current"), state(1, 42))
         .is_err());
     assert_eq!(
-        history.peek_edit_undo(&state(1, 41)).unwrap().model_json(),
-        "model-40"
+        history.peek_edit_undo(&state(1, 41)).unwrap().snapshot(),
+        &snapshot("model-40")
     );
     history
-        .commit_edit_undo(ticket.clone(), "current".into(), state(2, 1))
+        .commit_edit_undo(ticket.clone(), snapshot("current"), state(2, 1))
         .unwrap();
     assert!(history
-        .commit_edit_undo(ticket, "current".into(), state(3, 1))
+        .commit_edit_undo(ticket, snapshot("current"), state(3, 1))
         .is_err());
     let redo = history.peek_redo(&state(2, 1)).unwrap();
     history.commit_redo(redo, state(3, 1)).unwrap();
     assert_eq!(
-        history.peek_edit_undo(&state(3, 1)).unwrap().model_json(),
-        "model-40"
+        history.peek_edit_undo(&state(3, 1)).unwrap().snapshot(),
+        &snapshot("model-40")
     );
     history.observe(&state(3, 2)).unwrap();
     assert!(history.peek_edit_undo(&state(3, 2)).is_none());
@@ -86,7 +98,7 @@ fn state(epoch: u64, engine_revision: u64) -> HistoryState {
 }
 
 fn undo(history: &mut SolidHistory, before: &HistoryState, after: HistoryState, model: &str) {
-    let ticket = history.prepare_undo(before, model.into()).unwrap();
+    let ticket = history.prepare_undo(before, snapshot(model)).unwrap();
     history.commit_undo(ticket, after).unwrap();
 }
 
@@ -124,12 +136,12 @@ fn consecutive_redos_restore_their_models_and_survive_deliberate_owner_retiremen
     let Some(RedoStep::Restore(first)) = history.redo_step(&state(1, 3), 0, 0).unwrap() else {
         panic!("expected restore");
     };
-    assert_eq!(first.model_json(), "full model with one feature");
+    assert_eq!(first.snapshot(), &snapshot("full model with one feature"));
     let mut replacement_history = history.clone();
     replacement_history.commit_redo(first, state(2, 1)).unwrap();
     assert!(!replacement_history.can_redo(&state(1, 3)));
     let second = replacement_history.peek_redo(&state(2, 1)).unwrap();
-    assert_eq!(second.model_json(), "full model with two features");
+    assert_eq!(second.snapshot(), &snapshot("full model with two features"));
     replacement_history
         .commit_redo(second, state(3, 1))
         .unwrap();
@@ -168,15 +180,15 @@ fn cancelled_failed_or_stale_operations_do_not_pop_or_corrupt_history() {
     let mut history = SolidHistory::default();
     undo(&mut history, &state(1, 1), state(1, 2), "original");
     let cancelled = history
-        .prepare_undo(&state(1, 2), "pending model".into())
+        .prepare_undo(&state(1, 2), snapshot("pending model"))
         .unwrap();
     drop(cancelled);
     assert_eq!(history.redo.len(), 1);
     let redo = history.peek_redo(&state(1, 2)).unwrap();
     drop(redo);
     assert_eq!(
-        history.peek_redo(&state(1, 2)).unwrap().model_json(),
-        "original"
+        history.peek_redo(&state(1, 2)).unwrap().snapshot(),
+        &snapshot("original")
     );
     let invalid = history.peek_redo(&state(1, 2)).unwrap();
     assert!(
@@ -189,7 +201,7 @@ fn cancelled_failed_or_stale_operations_do_not_pop_or_corrupt_history() {
     assert!(history.commit_redo(stale, state(3, 1)).is_err());
     assert!(history.redo.is_empty());
     let alien = history
-        .prepare_undo(&state(2, 1), "same-looking owner".into())
+        .prepare_undo(&state(2, 1), snapshot("same-looking owner"))
         .unwrap();
     assert!(SolidHistory::default()
         .commit_undo(alien, state(2, 2))
@@ -201,18 +213,18 @@ fn failed_undo_keeps_previous_branch_and_successful_undo_prunes_stale_branch() {
     let mut history = SolidHistory::default();
     undo(&mut history, &state(1, 1), state(1, 2), "original");
     let invalid = history
-        .prepare_undo(&state(1, 2), "failed operation".into())
+        .prepare_undo(&state(1, 2), snapshot("failed operation"))
         .unwrap();
     assert!(history.commit_undo(invalid, state(2, 1)).is_err());
     assert_eq!(
-        history.peek_redo(&state(1, 2)).unwrap().model_json(),
-        "original"
+        history.peek_redo(&state(1, 2)).unwrap().snapshot(),
+        &snapshot("original")
     );
     undo(&mut history, &state(1, 3), state(1, 4), "branch model");
     assert_eq!(history.redo.len(), 1);
     assert_eq!(
-        history.peek_redo(&state(1, 4)).unwrap().model_json(),
-        "branch model"
+        history.peek_redo(&state(1, 4)).unwrap().snapshot(),
+        &snapshot("branch model")
     );
 }
 
@@ -236,9 +248,35 @@ fn snapshot_bound_and_shared_storage_survive_repeated_undo_redo() {
     let mut current = state(1, 36);
     for index in (3..35).rev() {
         let redo = history.peek_redo(&current).unwrap();
-        assert_eq!(redo.model_json(), format!("model {index}"));
+        assert_eq!(redo.snapshot(), &snapshot(&format!("model {index}")));
         current = state(current.context.epoch + 1, 1);
         history.commit_redo(redo, current.clone()).unwrap();
     }
     assert!(!history.can_redo(&current));
+}
+
+#[test]
+fn domain_only_edits_keep_both_payloads_across_undo_and_redo() {
+    let mut history = SolidHistory::default();
+    let before = snapshot("before");
+    let after = ProjectSnapshot::new(
+        before.model_json().to_owned(),
+        snapshot("after").intents().to_vec(),
+    )
+    .unwrap();
+    history
+        .record_edit(&state(1, 1), before.clone(), state(1, 2))
+        .unwrap();
+    let undo = history.peek_edit_undo(&state(1, 2)).unwrap();
+    assert_eq!(undo.snapshot(), &before);
+    history
+        .commit_edit_undo(undo, after.clone(), state(2, 1))
+        .unwrap();
+    let redo = history.peek_redo(&state(2, 1)).unwrap();
+    assert_eq!(redo.snapshot(), &after);
+    history.commit_redo(redo, state(3, 1)).unwrap();
+    assert_eq!(
+        history.peek_edit_undo(&state(3, 1)).unwrap().snapshot(),
+        &before
+    );
 }

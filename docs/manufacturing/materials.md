@@ -28,3 +28,30 @@ Each source preserves repository, full commit, file path, SHA-256, author, licen
 MCP `set_body_appearance` accepts `body_id + preset_id` to resolve a current catalog material, or a full appearance including `material` to preserve saved properties even if its preset was removed. Appearance mutations use the existing document ownership, undo/redo, and project persistence path. Existing filament field names remain for API and 3MF compatibility; metals use the same material selection and property model. Diameter is a legacy filament compatibility field and does not describe a metal stock dimension.
 
 3MF continues to use appearance labels and display colors. Engineering values do not constitute a sliced print or configure a slicer automatically. STEP does not invent colors from this store. Filament vendor IDs remain best-effort and never block export when stale.
+
+## Physical material contract
+
+The saved `MaterialDetails.kind` accepts `plastic`, `metal`, `ceramic`, `glass`,
+`wood`, `concrete`, `masonry`, `composite`, `liquid`, `gas`, and `other`. These
+categories share the existing property, provenance, assignment and persistence
+model. A category does not certify a solver model, invent engineering properties,
+or create a catalog preset. Existing plastic and metal records keep their wire
+format. Older application versions may reject newly supported categories; they
+must not be silently mapped to plastic or metal.
+
+Numerical consumers can call `MaterialProperty::value_si(PhysicalDimension)` on
+an explicitly selected property. The shared core conversion checks dimensions,
+case-sensitive units, finite values and representability. Supported scalar
+dimensions cover density, pressure/modulus, dynamic viscosity, thermal
+conductivity, specific heat capacity, thermal expansion, electrical conductivity
+and dimensionless values. Catalog import uses the same conversion for its
+existing normalization policy.
+
+Unknown unit strings and textual properties remain preserved in saved records.
+They fail numerical conversion rather than being treated as SI or parsed by
+guessing. Consumers must select the intended property, source and context, and
+validate constitutive assumptions, physical bounds and temperature/process
+applicability themselves. This scalar conversion boundary is not a general unit
+expression parser, temperature-offset converter, or a FEM/BIM solver.
+
+Engineering consumers select properties through `MaterialDetails::select_property(name, context, source_id)`, then call `value_si` with the required physical dimension. Selection validates provenance and rejects missing or ambiguous matches; optional context/source filters match exactly. Reordering records cannot change the selected result. Equal numbers with different provenance still need an explicit selection. The legacy print-density preference remains print metadata, not a solver selection policy.

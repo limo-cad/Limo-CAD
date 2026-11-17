@@ -1,7 +1,7 @@
 //! Native interaction state over the shared CAD engine. Unfinished gestures
 //! are scoped to one document incarnation, engine revision and active sketch.
 
-mod annotations;
+pub(crate) mod annotations;
 mod arc_travel;
 mod measurement;
 pub(crate) mod mechanism;
@@ -14,6 +14,7 @@ mod modify_preview;
 mod palette;
 pub(crate) use palette::PaletteCommand;
 mod constraints;
+pub(crate) use constraints::Relation;
 mod forms;
 pub(crate) mod mcp;
 pub(crate) mod selection;

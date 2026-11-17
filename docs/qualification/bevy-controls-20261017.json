@@ -414,11 +414,11 @@
     "features": [
       "experimental-ui-widgets"
     ],
-    "application": "/Users/jack/Code/noBS-CAD/artifacts/pr420-visual-parity-20261016/v9/widgets/Limo CAD PR420 Widgets V9.app",
+    "application": "/Users/<user>/Code/noBS-CAD/artifacts/pr420-visual-parity-20261016/v9/widgets/Limo CAD PR420 Widgets V9.app",
     "engine_sha256": "9504f0b57e7d49d3339056a455a1ae6932d407109da63a3c0862b64fe597f776",
     "signature": "ad-hoc; deep strict verification passed",
     "bundled_occt_loaded": true,
-    "source_worktree": "/Users/jack/.codex/worktrees/pr420-visual-parity/noBS-CAD",
+    "source_worktree": "/Users/<user>/.codex/worktrees/pr420-visual-parity/noBS-CAD",
     "baseline": "b4e93a7af1e228bc3209e466bcfac50fe4e4cef9",
     "pr433": "5cde5c0d7444c1a65ab912ae9de861d4d2c95150",
     "pr434": "fcbde1b7fefe5ad47f3db7c551d4036e10b2f0d2"
@@ -437,7 +437,7 @@
   "operational_evidence": "GIFs are labeled native step-capture sequences, not real-time screen recordings. Native pixels are cropped/resized for legibility; captions sit outside the captured region.",
   "status": "complete_scoped_migration_with_native_document_tabs",
   "retained_passes": "Final source removes document-tab grouping and document-only observers; Assembly creates the same TabList as before. Other V9 live cases and unchanged source-suite passes remain valid and were not repeated. Document-tab trial results are historical, not final implementation passes.",
-  "artifact_root": "/Users/jack/Code/noBS-CAD/artifacts/pr420-visual-parity-20261016",
+  "artifact_root": "/Users/<user>/Code/noBS-CAD/artifacts/pr420-visual-parity-20261016",
   "fixtures": [
     {
       "path": "v8/fixtures/widgets-profile.limo",
@@ -507,11 +507,11 @@
     "features": [
       "experimental-ui-widgets"
     ],
-    "application": "/Users/jack/Code/noBS-CAD/artifacts/pr420-visual-parity-20261016/v10/widgets/Limo CAD PR420 Widgets V10.app",
+    "application": "/Users/<user>/Code/noBS-CAD/artifacts/pr420-visual-parity-20261016/v10/widgets/Limo CAD PR420 Widgets V10.app",
     "engine_sha256": "7e63d660b496270ccbf33a7b83de4ac2a18f514fd8f8747f47a3dc6ffe870316",
     "signature": "ad-hoc; deep strict verification passed",
     "bundled_occt_loaded": true,
-    "source_worktree": "/Users/jack/.codex/worktrees/pr420-visual-parity/noBS-CAD",
+    "source_worktree": "/Users/<user>/.codex/worktrees/pr420-visual-parity/noBS-CAD",
     "baseline": "54c6a64432c0439c9bfcf1afab2597e213df4535",
     "pr433": "5cde5c0d7444c1a65ab912ae9de861d4d2c95150",
     "pr434": "fcbde1b7fefe5ad47f3db7c551d4036e10b2f0d2"

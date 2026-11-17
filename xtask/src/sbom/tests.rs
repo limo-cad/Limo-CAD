@@ -1,6 +1,56 @@
 use super::*;
 
 #[test]
+fn workflow_paths_remove_windows_verbatim_globs_for_every_release_subject() {
+    for (directory, expected) in [
+        (r"\\?\C:\a\Limo-CAD\portable", "C:/a/Limo-CAD/portable"),
+        (r"\\?\D:\a\Limo-CAD\portable", "D:/a/Limo-CAD/portable"),
+        (r"\\?\UNC\server\share\portable", "//server/share/portable"),
+        (r"C:\a\Limo CAD\portable", "C:/a/Limo CAD/portable"),
+        (r"\\server\share\portable", "//server/share/portable"),
+        ("/runner/Limo CAD/portable", "/runner/Limo CAD/portable"),
+    ] {
+        for suffix in [
+            "",
+            ".sbom.cdx.json",
+            ".sbom.spdx.json",
+            ".sbom.metadata.json",
+            ".sbom.SHA256SUMS.txt",
+        ] {
+            let file = format!("Limo-CAD-0.3.0-rc.2-windows-x64.zip{suffix}");
+            let separator = if directory.starts_with('/') {
+                '/'
+            } else {
+                '\\'
+            };
+            let source = format!("{directory}{separator}{file}");
+            assert_eq!(
+                github_output_path(Path::new(&source)).unwrap(),
+                format!("{expected}/{file}")
+            );
+        }
+    }
+    for invalid in [
+        "/archive\nextra=value",
+        "/archive\rvalue",
+        r"\\?\Volume{test}\archive",
+    ] {
+        assert!(github_output_path(Path::new(invalid)).is_err());
+    }
+}
+
+#[test]
+fn workflow_path_still_opens_the_canonical_release_file() {
+    let temporary = tempfile::tempdir().unwrap();
+    let artifact = temporary.path().join("Limo-CAD-test.zip");
+    fs::write(&artifact, b"finished archive").unwrap();
+    let canonical = artifact.canonicalize().unwrap();
+    let exported = github_output_path(&canonical).unwrap();
+    assert!(!exported.starts_with("//?/"));
+    assert_eq!(fs::read(exported).unwrap(), b"finished archive");
+}
+
+#[test]
 fn source_inventory_and_release_identity_cover_all_owned_lockfiles() {
     let root = crate::release_tooling::root();
     let owned = output(Command::new("git").current_dir(root).args([

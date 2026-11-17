@@ -247,7 +247,7 @@ fn straight_draft_preserves_full_references_presentation_and_cumulative_drag() {
         fields::edit(
             &mut inputs,
             Id::Precision,
-            &ControlInput::SetValue("7".into()),
+            &ControlInput::SetValue((MAX_DRAWING_DIMENSION_PRECISION + 1).to_string()),
         )
         .unwrap();
         assert!(fields::apply(&mut d, &inputs).is_err());

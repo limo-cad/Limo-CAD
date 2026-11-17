@@ -35,6 +35,7 @@ pub(crate) enum Command {
     Rename,
     Delete,
     Recall,
+    Discard,
     Reset,
     Preview,
     Check,
@@ -49,12 +50,14 @@ pub(crate) enum Command {
 struct State {
     owner: Option<DocumentContext>,
     revision: Option<u64>,
+    refresh_pending: bool,
     generation: u64,
     visible: bool,
     views: Vec<NamedViewConfigurationDto>,
     selected: Option<String>,
     original: Option<NamedViewConfigurationDto>,
     draft: Option<NamedViewConfigurationDto>,
+    draft_baseline: Option<NamedViewConfigurationDto>,
     target: String,
     placement: Option<assembly::TransformDraft>,
     placement_dirty: bool,
@@ -72,8 +75,48 @@ struct PreviewOrigin {
     presentation: native_viewport::ViewportPresentation,
 }
 
+#[derive(Resource)]
+struct PendingRecall {
+    owner: DocumentContext,
+    name: String,
+    control: Option<(limo_cad_interface::ControlKey, u64)>,
+    response: Value,
+}
+
+#[derive(Resource)]
+struct AppliedRecall {
+    owner: DocumentContext,
+    name: String,
+    revision: u64,
+    camera: native_viewport::ViewportCamera,
+    hidden_body_ids: Vec<u64>,
+    body_poses: Arc<Vec<limo_cad_sketch::BodyPoseDto>>,
+    instance_body_poses: Arc<Vec<limo_cad_sketch::InstanceBodyPoseDto>>,
+}
+
+/// The native pointer continuation can arrive before the worker finishes.
+/// Check only retained control identity here; busy input must not query CAD.
+pub(super) fn coalesces_native_double_click(world: &World, action: &NativeInterfaceAction) -> bool {
+    matches!(action.control.input, ControlInput::DoubleClick)
+        && worker::busy(world)
+        && world
+            .get_resource::<PendingRecall>()
+            .is_some_and(|pending| {
+                pending.owner == action.context
+                    && pending.control == Some((action.control.key, action.control.binding()))
+            })
+}
+
 pub(crate) fn active(world: &World) -> bool {
     world.get_resource::<State>().is_some_and(|s| s.visible)
+}
+
+pub(crate) fn displays_error(world: &World, message: &str) -> bool {
+    !message.is_empty()
+        && !print_intent::active(world)
+        && world
+            .get_resource::<State>()
+            .is_some_and(|s| s.visible && s.error.as_deref() == Some(message))
 }
 
 pub(crate) fn cancel(
@@ -87,33 +130,40 @@ pub(crate) fn cancel(
             owner: owner.clone(),
             revision,
         };
-        let mut state = world
-            .get_resource_mut::<State>()
-            .ok_or("Open Named Views")?;
-        if state.owner.as_ref() != Some(owner) {
-            return Err("The named view belongs to a different document".into());
-        }
-        let origin = state
-            .preview_origin
-            .take()
-            .filter(|origin| origin.receipt == receipt);
+        let restored = restore_preview(world, &receipt)?;
+        let mut state = world.resource_mut::<State>();
         state.visible = false;
-        state.previewing = false;
         state.draft = state.original.clone();
+        state.draft_baseline = state.original.clone();
         state.placement_dirty = false;
         state.placement = None;
         state.error = None;
-        let restored = origin.is_some();
-        if let Some(origin) = origin {
-            native_viewport::apply_interface_view(
-                world,
-                &owner.document_id,
-                Some(origin.camera),
-                Some(origin.presentation),
-            )?;
-        }
         Ok(json!({"cancelled":true,"preview_restored":restored}))
     })
+}
+
+fn restore_preview(world: &mut World, receipt: &DocumentReceipt) -> Result<bool, String> {
+    let mut state = world
+        .get_resource_mut::<State>()
+        .ok_or("Open Named Views")?;
+    if state.owner.as_ref() != Some(&receipt.owner) {
+        return Err("The named view belongs to a different document".into());
+    }
+    let origin = state
+        .preview_origin
+        .take()
+        .filter(|origin| origin.receipt == *receipt);
+    state.previewing = false;
+    let restored = origin.is_some();
+    if let Some(origin) = origin {
+        native_viewport::apply_interface_view(
+            world,
+            &receipt.owner.document_id,
+            Some(origin.camera),
+            Some(origin.presentation),
+        )?;
+    }
+    Ok(restored)
 }
 
 pub(crate) fn presentation_locked(world: &World) -> bool {
@@ -184,6 +234,14 @@ pub(crate) fn advance_metadata(world: &mut World, owner: &DocumentContext, revis
         .filter(|s| s.owner.as_ref() == Some(owner))
     {
         let previous_revision = state.revision;
+        if previous_revision.and_then(|revision| revision.checked_add(1)) != Some(revision) {
+            // A print edit cannot acknowledge changes this editor has not read.
+            // Reconcile the saved views after the overlay closes, retaining any
+            // unfinished draft until it becomes clean.
+            state.refresh_pending = true;
+            state.preview_origin = None;
+            return;
+        }
         if let Some(origin) = state.preview_origin.as_mut().filter(|origin| {
             origin.receipt.owner == *owner && Some(origin.receipt.revision) == previous_revision
         }) {
@@ -204,6 +262,9 @@ pub(crate) fn after_metadata_history(world: &mut World, owner: &DocumentContext,
         state.preview_origin = None;
         state.owner = Some(owner.clone());
         state.revision = Some(revision);
+        // Metadata history preserves saved views, including external edits the
+        // covered editor may not have read before this owner was replaced.
+        state.refresh_pending = true;
         state.generation = state.generation.saturating_add(1);
     }
 }
@@ -345,14 +406,184 @@ pub(super) fn inspect(
 fn select(state: &mut State, view: NamedViewConfigurationDto, saved: bool) {
     state.selected = saved.then(|| view.name.clone());
     state.original = saved.then(|| view.clone());
+    state.draft_baseline = Some(view.clone());
     state.draft = Some(view);
     state.placement = None;
     state.target.clear();
     state.placement_dirty = false;
     state.report = None;
     state.error = None;
+    state.refresh_pending = false;
     state.scroll = 0;
     state.generation = state.generation.saturating_add(1);
+}
+
+fn has_unsaved_changes(state: &State) -> bool {
+    state.previewing || state.placement_dirty || state.draft != state.draft_baseline
+}
+
+fn ensure_switchable(world: &mut World, owner: &DocumentContext) -> Result<(), String> {
+    if world
+        .get_resource::<State>()
+        .is_some_and(|state| state.owner.as_ref() == Some(owner) && has_unsaved_changes(state))
+    {
+        let message =
+            native_viewport::localization::translate(world, "namedViews.finishEdits").to_owned();
+        let mut state = world.resource_mut::<State>();
+        state.visible = true;
+        state.error = Some(message.clone());
+        return Err(message);
+    }
+    Ok(())
+}
+
+/// Browser rows and the editor share one ordered, owner-fenced recall operation.
+/// There is no per-frame engine query or alternate camera/visibility path.
+pub(crate) fn activate(
+    world: &mut World,
+    engine: &AppState,
+    bridge: &SessionBridgeState,
+    owner: &DocumentContext,
+    name: &str,
+) -> Result<Value, String> {
+    let receipt = bridge.native_document_receipt(engine, owner)?;
+    if worker::busy(world) {
+        if let Some(pending) = world
+            .get_resource::<PendingRecall>()
+            .filter(|pending| &pending.owner == owner && pending.name == name)
+        {
+            return Ok(pending.response.clone());
+        }
+    }
+    if presentation_locked(world) || crate::native_editor::active(engine)?.is_some() {
+        return Err(
+            native_viewport::localization::translate(world, "namedViews.finishOperation").into(),
+        );
+    }
+    ensure_switchable(world, owner)?;
+    let (document, camera, presentation, _) = native_viewport::interface_view(world);
+    let applied_revision = world
+        .get_resource::<AppliedRecall>()
+        .filter(|applied| {
+            &applied.owner == owner
+                && applied.name == name
+                && document == owner.document_id
+                && applied.camera == camera
+                // CAM and presentation tools can change these without an
+                // engine revision or camera change.
+                && applied.hidden_body_ids == presentation.hidden_body_ids
+                && applied.body_poses == presentation.body_poses
+                && applied.instance_body_poses == presentation.instance_body_poses
+        })
+        .map(|applied| applied.revision);
+    if let Some(applied_revision) = applied_revision {
+        let unchanged = bridge.with_native_document_receipt(engine, owner, |revision| {
+            if revision != applied_revision {
+                return Ok(false);
+            }
+            refresh_recalled_editor(world, engine, owner, revision, name)?;
+            Ok(true)
+        })?;
+        if unchanged {
+            return Ok(json!({"already_active":true}));
+        }
+    }
+    let name = name.to_owned();
+    let editor = world
+        .get_resource::<State>()
+        .filter(|state| state.owner.as_ref() == Some(owner))
+        .map(|state| (state.generation, state.draft.clone()));
+    let pending_owner = owner.clone();
+    let pending_name = name.clone();
+    let control = world
+        .get_resource::<worker::ActiveControl>()
+        .map(|action| (action.0.control.key, action.0.control.binding()));
+    let response = worker::enqueue_operation(
+        world,
+        receipt.owner,
+        receipt.revision,
+        "recall_named_view".into(),
+        json!({"name":name}),
+        move |world, services, result| {
+            world.remove_resource::<PendingRecall>();
+            let result = result?;
+            let owner = result.context.clone();
+            let recalled_revision = result.engine_revision;
+            let value = finish_mutation(
+                &services.engine,
+                &services.bridge,
+                world,
+                "recall_named_view",
+                result,
+            );
+            if value["render_error"].is_null()
+                && world.get_resource::<State>().is_some_and(|state| {
+                    state.owner.as_ref() == Some(&owner)
+                        && editor.as_ref().is_some_and(|(generation, draft)| {
+                            state.generation == *generation && state.draft == *draft
+                        })
+                        && !has_unsaved_changes(state)
+                })
+            {
+                services.bridge.with_native_document_receipt(
+                    &services.engine,
+                    &owner,
+                    |revision| {
+                        if revision != recalled_revision {
+                            return Ok(());
+                        }
+                        refresh_recalled_editor(world, &services.engine, &owner, revision, &name)
+                    },
+                )?;
+            }
+            if value["render_error"].is_null() && value["publication_error"].is_null() {
+                let (_, camera, presentation, _) = native_viewport::interface_view(world);
+                let applied = AppliedRecall {
+                    owner,
+                    name,
+                    revision: recalled_revision,
+                    camera,
+                    hidden_body_ids: presentation.hidden_body_ids.clone(),
+                    body_poses: presentation.body_poses.clone(),
+                    instance_body_poses: presentation.instance_body_poses.clone(),
+                };
+                world.insert_resource(applied);
+            }
+            Ok(value)
+        },
+    )?;
+    world.insert_resource(PendingRecall {
+        owner: pending_owner,
+        name: pending_name,
+        control,
+        response: response.clone(),
+    });
+    Ok(response)
+}
+
+/// Caller holds the matching document receipt. Hidden editors need the fresh
+/// list too, but no editor is opened and no dirty draft is replaced.
+fn refresh_recalled_editor(
+    world: &mut World,
+    engine: &AppState,
+    owner: &DocumentContext,
+    revision: u64,
+    name: &str,
+) -> Result<(), String> {
+    if world
+        .get_resource::<State>()
+        .is_none_or(|state| state.owner.as_ref() != Some(owner) || has_unsaved_changes(state))
+    {
+        return Ok(());
+    }
+    let views = read_views(engine)?;
+    let mut state = world.resource_mut::<State>();
+    if let Some(view) = views.views.iter().find(|view| view.name == name).cloned() {
+        select(&mut state, view, true);
+    }
+    state.views = views.views;
+    state.revision = Some(revision);
+    Ok(())
 }
 
 pub(crate) fn open(
@@ -373,6 +604,16 @@ pub(crate) fn open(
         return Err("Finish the sketch before editing named views".into());
     }
     world.init_resource::<State>();
+    if let Some(mut state) = world.get_resource_mut::<State>().filter(|state| {
+        state.owner.as_ref() == Some(owner)
+            && state.draft.is_some()
+            && has_unsaved_changes(state)
+            && (name.is_none() || name == state.selected.as_deref())
+    }) {
+        state.visible = true;
+        return Ok(json!({"named_views_visible":true}));
+    }
+    ensure_switchable(world, owner)?;
     let views = read_views(engine)?;
     let selected = name
         .or(views.active.as_deref())
@@ -659,6 +900,7 @@ fn reduce_inner(
     if matches!(
         command,
         Command::Recall
+            | Command::Discard
             | Command::Preview
             | Command::Save
             | Command::Rename
@@ -740,6 +982,33 @@ fn reduce_inner(
         }
         Command::Create => {
             return open(world, engine, &action.context, Some(""));
+        }
+        Command::Discard => {
+            return bridge.with_native_document_receipt(engine, &action.context, |revision| {
+                let baseline = world
+                    .resource::<State>()
+                    .draft_baseline
+                    .clone()
+                    .ok_or("Create a named view")?;
+                let saved = world.resource::<State>().selected.is_some();
+                restore_preview(
+                    world,
+                    &DocumentReceipt {
+                        owner: action.context.clone(),
+                        revision,
+                    },
+                )?;
+                let mut state = world.resource_mut::<State>();
+                select(&mut state, baseline, saved);
+                // An external update may have been observed while the draft
+                // was protected. Reconcile it now that the draft is clean.
+                state.revision = None;
+                Ok(json!({"discarded":true}))
+            });
+        }
+        Command::Recall => {
+            let name = state.selected.clone().ok_or("Select a saved view")?;
+            return activate(world, engine, bridge, &action.context, &name);
         }
         Command::Capture => {
             let name = world
@@ -881,13 +1150,6 @@ fn reduce_inner(
                 arguments =
                     json!({"name":state.selected.as_ref().ok_or("Select a saved view to delete")?});
             }
-            Command::Recall => {
-                if state.placement_dirty || state.draft != state.original {
-                    return Err("Save or reselect the named view before recalling it".into());
-                }
-                operation = "recall_named_view";
-                arguments = json!({"name":state.selected.as_ref().ok_or("Save this view before recalling it")?});
-            }
             Command::Reset => {
                 operation = "clear_named_view";
                 arguments = json!({});
@@ -900,6 +1162,7 @@ fn reduce_inner(
         "rename_named_view" => arguments["new_name"].as_str().map(str::to_string),
         _ => None,
     };
+    let submitted_draft = world.resource::<State>().draft.clone();
     worker::enqueue_operation(
         world,
         receipt.owner,
@@ -907,15 +1170,52 @@ fn reduce_inner(
         operation.into(),
         arguments,
         move |world, services, result| {
-            if result.is_ok() {
-                if let Some(mut state) = world.get_resource_mut::<State>() {
+            if let Ok(result) = &result {
+                let stored = saved_name.as_ref().and_then(|name| {
+                    serde_json::from_value::<NamedViewsDto>(result.value.clone())
+                        .ok()?
+                        .views
+                        .into_iter()
+                        .find(|view| &view.name == name)
+                });
+                if let Some(mut state) = world.get_resource_mut::<State>().filter(|state| {
+                    state.owner.as_ref() == Some(&result.context) && state.generation == generation
+                }) {
                     if let Some(name) = saved_name {
-                        state.selected = Some(name);
+                        if let (Some(draft), Some(stored)) = (submitted_draft, stored) {
+                            if state.draft.as_ref() == Some(&draft) && !state.placement_dirty {
+                                select(&mut state, stored, true);
+                            } else {
+                                // A successful save acknowledges the submitted
+                                // baseline, not edits made while it was pending.
+                                if let Some(current) = state.draft.as_mut() {
+                                    if current.id == draft.id {
+                                        current.id = stored.id.clone();
+                                    }
+                                    // Match the engine's canonical ordering
+                                    // without replacing edits made during Save.
+                                    current.visible_body_ids.sort_unstable();
+                                    current.visible_body_ids.dedup();
+                                    current.part_offsets.sort_by_key(|offset| offset.body_id);
+                                    current
+                                        .occurrence_offsets
+                                        .sort_by_key(|offset| offset.occurrence_id.0);
+                                }
+                                state.selected = Some(name);
+                                state.original = Some(stored.clone());
+                                state.draft_baseline = Some(stored);
+                            }
+                        }
                     }
                     if operation == "delete_named_view" {
                         state.selected = None;
                         state.original = None;
                         state.draft = None;
+                        state.draft_baseline = None;
+                        state.placement = None;
+                        state.placement_dirty = false;
+                        state.target.clear();
+                        state.report = None;
                     }
                 }
             }
@@ -937,6 +1237,14 @@ fn edit(
     value: &str,
     units: UnitSystem,
 ) -> Result<(), String> {
+    if field == Field::Saved {
+        let state = world.resource::<State>();
+        if state.selected.as_deref() == Some(value) {
+            return Ok(());
+        }
+        let owner = state.owner.clone().ok_or("Open Named Views")?;
+        ensure_switchable(world, &owner)?;
+    }
     let mut state = world.resource_mut::<State>();
     state.error = None;
     match field {
@@ -1034,11 +1342,18 @@ pub(super) fn synchronize(
     let result = (|| {
         if state.owner.as_ref() != Some(owner) {
             state.visible = false;
+            state.selected = None;
+            state.original = None;
             state.draft = None;
+            state.draft_baseline = None;
+            state.placement = None;
+            state.placement_dirty = false;
+            state.target.clear();
             state.previewing = false;
             state.preview_origin = None;
             state.owner = Some(owner.clone());
             state.revision = None;
+            state.refresh_pending = false;
         }
         if !state.visible || print_intent::active(world) {
             return Ok(());
@@ -1046,9 +1361,16 @@ pub(super) fn synchronize(
         let receipt = services
             .bridge
             .native_document_receipt(&services.engine, owner)?;
-        if state.revision != Some(receipt.revision) {
+        if state.revision != Some(receipt.revision)
+            || (state.refresh_pending && !has_unsaved_changes(&state))
+        {
             let views = read_views(&services.engine)?;
-            if let Some(name) = state.selected.clone() {
+            state.refresh_pending = state.selected.is_some() && has_unsaved_changes(&state);
+            if let Some(name) = state
+                .selected
+                .clone()
+                .filter(|_| !has_unsaved_changes(&state))
+            {
                 if let Some(view) = views.views.iter().find(|v| v.name == name).cloned() {
                     if state.original.as_ref() != Some(&view) {
                         select(&mut state, view, true);
@@ -1056,6 +1378,12 @@ pub(super) fn synchronize(
                 } else {
                     state.selected = None;
                     state.original = None;
+                    state.draft = None;
+                    state.draft_baseline = None;
+                    state.placement = None;
+                    state.placement_dirty = false;
+                    state.target.clear();
+                    state.generation = state.generation.saturating_add(1);
                 }
             }
             state.views = views.views;

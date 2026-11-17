@@ -285,7 +285,7 @@ pub(crate) fn reduce(
                 &services.engine,
                 &receipt.owner,
                 Some(receipt.revision),
-                "set_body_appearance",
+                NativeMutation::Command("set_body_appearance"),
                 || Ok(arguments),
                 || guard.validate(),
             )

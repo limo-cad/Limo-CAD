@@ -2,10 +2,13 @@
 //! waits for inbox receipts, so it must never occupy the modeling worker.
 use super::*;
 
+pub(super) mod replay;
+
 pub(super) struct Running {
     owner: DocumentContext,
     source_generation: u64,
     result: Mutex<mpsc::Receiver<Result<Value, String>>>,
+    replay: Option<Mutex<replay::launch::Launch>>,
 }
 
 pub(super) fn start_source_with_options(
@@ -16,6 +19,51 @@ pub(super) fn start_source_with_options(
     source: String,
     (mode, speed): (&'static str, f64),
 ) -> Result<(), String> {
+    let (receipt, session) = prepare_start(world, services, owner)?;
+    let (send, receive) = mpsc::channel();
+    let services = services.clone();
+    let wake = handle.clone();
+    std::thread::Builder::new()
+        .name("cad-native-script".into())
+        .spawn(move || {
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                if services
+                    .bridge
+                    .native_document_receipt(&services.engine, &receipt.owner)?
+                    != receipt
+                {
+                    return Err("The document changed before the script started".into());
+                }
+                limo_cad_mcp::run_script(&source, None, Some(&session), mode, speed)
+            }))
+            .unwrap_or_else(|_| {
+                Err(
+                    "The script worker stopped unexpectedly; any completed work is preserved"
+                        .into(),
+                )
+            });
+            let _ = send.send(result);
+            wake.request_redraw();
+        })
+        .map_err(|error| format!("Cannot start script: {error}"))?;
+    let mut files = world.resource_mut::<Files>();
+    let source_generation = files.script.generation;
+    files.lesson = Some(Running {
+        owner: owner.clone(),
+        source_generation,
+        result: Mutex::new(receive),
+        replay: None,
+    });
+    files.script.status = Some(format!("Running {name}"));
+    files.scripts = false;
+    Ok(())
+}
+
+fn prepare_start(
+    world: &World,
+    services: &NativeServices,
+    owner: &DocumentContext,
+) -> Result<(DocumentReceipt, String), String> {
     if world.resource::<Files>().script.preview.building() {
         return Err("Wait for the isolated lesson preview to finish preparing".into());
     }
@@ -49,45 +97,47 @@ pub(super) fn start_source_with_options(
         &owner.document_id,
         &session,
     )?;
-    let (send, receive) = mpsc::channel();
-    let services = services.clone();
-    let wake = handle.clone();
-    std::thread::Builder::new()
-        .name("cad-native-script".into())
-        .spawn(move || {
-            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                if services
-                    .bridge
-                    .native_document_receipt(&services.engine, &receipt.owner)?
-                    != receipt
-                {
-                    return Err("The document changed before the script started".into());
-                }
-                limo_cad_mcp::run_script(&source, None, Some(&session), mode, speed)
-            }))
-            .unwrap_or_else(|_| {
-                Err(
-                    "The script worker stopped unexpectedly; any completed work is preserved"
-                        .into(),
-                )
-            });
-            let _ = send.send(result);
-            wake.request_redraw();
-        })
-        .map_err(|error| format!("Cannot start script: {error}"))?;
-    let mut files = world.resource_mut::<Files>();
-    let source_generation = files.script.generation;
-    files.lesson = Some(Running {
-        owner: owner.clone(),
-        source_generation,
-        result: Mutex::new(receive),
-    });
-    files.script.status = Some(format!("Running {name}"));
-    files.scripts = false;
+    Ok((receipt, session))
+}
+
+/// Adopt only this running lesson's committed baseline, before presentation
+/// observation and before the runner is allowed to submit the first step.
+pub(super) fn acknowledge_replay_baseline(
+    world: &mut World,
+    services: &NativeServices,
+    source_generation: u64,
+    handoff: &super::super::super::workspace::ReplayBaselineHandoff,
+) -> Result<(), String> {
+    validate_replay_lesson(world, source_generation, &handoff.previous().owner)?;
+    super::super::presentation::adopt_replay_owner(world, services, handoff, |world| {
+        // No fallible work remains after playback transfer. World is exclusively
+        // borrowed, so the validated lesson cannot disappear between these updates.
+        world.resource_mut::<Files>().lesson.as_mut().unwrap().owner =
+            handoff.successor().owner.clone();
+    })
+}
+
+fn validate_replay_lesson(
+    world: &World,
+    source_generation: u64,
+    owner: &DocumentContext,
+) -> Result<(), String> {
+    let files = world.resource::<Files>();
+    let running = files
+        .lesson
+        .as_ref()
+        .ok_or("The replay lesson is no longer running")?;
+    if files.script.generation != source_generation
+        || running.source_generation != source_generation
+        || running.owner != *owner
+    {
+        return Err("The replay source or lesson owner changed before acknowledgement".into());
+    }
     Ok(())
 }
 
 pub(super) fn poll(world: &mut World, services: &NativeServices) {
+    replay::launch::poll(world, services);
     let result = world
         .resource::<Files>()
         .lesson
@@ -168,5 +218,116 @@ mod tests {
             before,
             fixture.engine.engine_call("project_export_model", "")
         );
+    }
+    #[test]
+    fn baseline_acknowledgement_updates_only_matching_lesson_and_exact_successor() {
+        let _lock = crate::session_bridge::tests::TEST_LOCK.lock().unwrap();
+        for stale_revision in [false, true] {
+            let fixture = super::super::super::super::tests::Fixture::new();
+            let services = NativeServices {
+                engine: fixture.engine.clone(),
+                bridge: fixture.bridge.clone(),
+            };
+            let workspace = Arc::new(Mutex::new(DocumentWorkspace::default()));
+            let initial = workspace
+                .lock()
+                .unwrap()
+                .observe(&fixture.bridge, &fixture.engine, "main")
+                .unwrap();
+            let mut world = World::new();
+            initialize(&mut world, workspace.clone());
+            let generation = world.resource::<Files>().script.generation;
+            let (_send, receive) = mpsc::channel();
+            world.resource_mut::<Files>().lesson = Some(Running {
+                owner: initial.owner.clone(),
+                source_generation: generation,
+                result: Mutex::new(receive),
+                replay: None,
+            });
+            let handle = NativeInterfaceHandle::new(|| {});
+            super::super::super::presentation::request(
+                &mut world,
+                &handle,
+                &services,
+                &initial.owner,
+                &json!({"command":"configure","mode":"present"}),
+            )
+            .unwrap();
+            super::super::super::presentation::request(
+                &mut world,
+                &handle,
+                &services,
+                &initial.owner,
+                &json!({"command":"stop"}),
+            )
+            .unwrap();
+            let archive = limo_cad_project_file::ProjectArchive::new(
+                fixture
+                    .engine
+                    .project_snapshot()
+                    .unwrap()
+                    .model_json()
+                    .to_owned(),
+                SaveMetadata {
+                    application_version: "test",
+                    saved_at: "2026-10-17T00:00:00Z",
+                },
+            )
+            .unwrap();
+            let (_, handoff) = workspace
+                .lock()
+                .unwrap()
+                .load_replay_baseline_guarded(
+                    &fixture.bridge,
+                    &fixture.engine,
+                    &initial,
+                    archive,
+                    || Ok(()),
+                )
+                .unwrap();
+            assert!(acknowledge_replay_baseline(
+                &mut world,
+                &services,
+                generation.wrapping_add(1),
+                &handoff
+            )
+            .is_err());
+            assert_eq!(
+                world.resource::<Files>().lesson.as_ref().unwrap().owner,
+                initial.owner
+            );
+            if stale_revision {
+                fixture
+                    .rename(&handoff.successor().owner, "Changed after commit")
+                    .unwrap();
+                assert!(
+                    acknowledge_replay_baseline(&mut world, &services, generation, &handoff)
+                        .is_err()
+                );
+                assert_eq!(
+                    world.resource::<Files>().lesson.as_ref().unwrap().owner,
+                    initial.owner
+                );
+            } else {
+                acknowledge_replay_baseline(&mut world, &services, generation, &handoff).unwrap();
+                assert_eq!(
+                    world.resource::<Files>().lesson.as_ref().unwrap().owner,
+                    handoff.successor().owner
+                );
+                let status = super::super::super::presentation::request(
+                    &mut world,
+                    &handle,
+                    &services,
+                    &handoff.successor().owner,
+                    &json!({"command":"status"}),
+                )
+                .unwrap();
+                assert_eq!(status["presentation"]["stopped"], true);
+                assert!(
+                    acknowledge_replay_baseline(&mut world, &services, generation, &handoff)
+                        .is_err()
+                );
+            }
+        }
     }
 }

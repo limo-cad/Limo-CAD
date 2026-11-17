@@ -197,17 +197,24 @@ impl ModifyForm {
             }
             FormKind::Chamfer => {
                 let (l1, l2) = pair()?;
-                let angle = number(1, Angle)?;
-                if angle <= 0. || angle >= 90. {
-                    return Err("Chamfer angle must be greater than 0° and less than 90°".into());
-                }
+                let angle_text = if self.values[1].trim().is_empty() {
+                    None
+                } else {
+                    let angle = number(1, Angle)?;
+                    if angle <= 0. || angle >= 90. {
+                        return Err(
+                            "Chamfer angle must be greater than 0° and less than 90°".into()
+                        );
+                    }
+                    Some(expression(1, Angle)?)
+                };
                 encoded(
                     "sketch_chamfer",
                     ChamferRequest {
                         l1,
                         l2,
                         distance_text: expression(0, Length)?,
-                        angle_text: Some(expression(1, Angle)?),
+                        angle_text,
                     },
                 )
             }
@@ -349,6 +356,62 @@ mod tests {
             spec.engine_method,
             serde_json::from_str(&args).unwrap(),
         )
+    }
+
+    #[test]
+    fn chamfer_form_blank_angle_uses_equal_setbacks_and_preserves_undo() {
+        let engine = rectangle();
+        let before = drawing(&engine);
+        let lines: Vec<_> = before
+            .entities
+            .iter()
+            .filter(|entity| matches!(entity, EntityDto::Line { .. }))
+            .map(EntityDto::id)
+            .collect();
+        let mut form = ModifyForm::new(1, FormKind::Chamfer);
+        form.values[0] = "4".into();
+        form.values[1] = "  ".into();
+        let command = form.request(&before, &lines[..2], UnitSystem::Mm).unwrap();
+        assert!(command.arguments["angle_text"].is_null());
+        let preview = super::super::modify_preview::form(&engine, before.basis, &command)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            drawing(&engine),
+            before,
+            "Preparing a chamfer must not edit the sketch"
+        );
+        apply(&engine, command);
+        let after = drawing(&engine);
+        assert!(!after
+            .dimensions
+            .iter()
+            .any(|dimension| dimension.kind == "angle"));
+        assert!(after
+            .dimensions
+            .iter()
+            .any(|dimension| dimension.kind == "distance" && (dimension.value - 4.).abs() < 1e-8));
+        let constraints = serde_json::to_value(&after.constraints).unwrap();
+        assert_eq!(
+            constraints
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter(|constraint| constraint["type"] == "equal_distance")
+                .count(),
+            1
+        );
+        let segments = &preview.lines[0].segments;
+        let a = Vec2::new(f64::from(segments[0]), f64::from(segments[1]));
+        let b = Vec2::new(f64::from(segments[3]), f64::from(segments[4]));
+        assert!(after.entities.iter().any(|entity| matches!(entity,
+            EntityDto::Line { start, end, .. }
+            if (start.distance(a) < 1e-5 && end.distance(b) < 1e-5)
+                || (start.distance(b) < 1e-5 && end.distance(a) < 1e-5))));
+        call(&engine, "undo", Value::Null);
+        let mut restored = before;
+        restored.can_redo = true;
+        assert_eq!(drawing(&engine), restored);
     }
 
     #[test]

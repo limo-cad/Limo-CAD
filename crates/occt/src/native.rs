@@ -272,6 +272,12 @@ mod ffi {
         fn apply_job(self: Pin<&mut Kernel>, job: &FfiJob) -> Result<()>;
         fn body_ids(self: &Kernel) -> Vec<u64>;
         fn drawing_snapshot(self: &Kernel, body_ids: &Vec<u64>) -> Result<UniquePtr<Kernel>>;
+        fn delete_finish_branch(
+            self: Pin<&mut Kernel>,
+            removed: &FfiJob,
+            consumer: &FfiJob,
+            remapped: &mut Vec<u32>,
+        ) -> Result<UniquePtr<Kernel>>;
         fn body_generations(self: &Kernel) -> Result<Vec<FfiBodyGeneration>>;
         fn planar_face_keys(self: &Kernel) -> Result<Vec<u64>>;
         fn mesh(self: &Kernel, body_id: u64) -> Result<FfiMesh>;
@@ -632,6 +638,70 @@ impl OcctKernel {
 
     /// Proofs belong only to this returned scene/transaction. Failed replay
     /// produces none; cached answers survive only an identical job prefix.
+    pub fn completed_jobs_match(&self, plan: &RecomputePlanDto) -> bool {
+        plan.errors.is_empty() && self.successful_jobs.as_ref() == Some(&plan.jobs)
+    }
+
+    /// Bounded deletion proof: resolve the final finish at its original input,
+    /// then carry unchanged prefix edges through an explicit deep copy.
+    /// The returned kernel owns only the new branch; this kernel is untouched.
+    pub fn delete_penultimate_finish(
+        &self,
+        feature: limo_cad_core::FeatureId,
+    ) -> Result<(Self, limo_cad_core::FeatureId, Vec<String>), OcctError> {
+        let jobs = self
+            .successful_jobs
+            .as_ref()
+            .ok_or_else(|| OcctError("Delete remap needs a healthy completed history".into()))?;
+        let at = jobs
+            .iter()
+            .position(|j| j.feature_id() == feature)
+            .ok_or_else(|| OcctError("Delete remap feature is inactive or missing".into()))?;
+        if at + 2 != jobs.len() {
+            return Err(OcctError(
+                "Delete remap currently requires the final two solid jobs".into(),
+            ));
+        }
+        let mut branch = Self::new()?;
+        for job in &jobs[..at] {
+            branch
+                .inner
+                .pin_mut()
+                .apply_job(&to_ffi_job(job)?)
+                .map_err(|e| OcctError(e.to_string()))?;
+        }
+        let mut indices = Vec::new();
+        let inner = branch
+            .inner
+            .pin_mut()
+            .delete_finish_branch(
+                &to_ffi_job(&jobs[at])?,
+                &to_ffi_job(&jobs[at + 1])?,
+                &mut indices,
+            )
+            .map_err(|e| OcctError(format!("Feature {}: {e}", jobs[at + 1].feature_id().0)))?;
+        branch.inner = inner;
+        let keys = indices
+            .iter()
+            .map(|i| format!("edge:{i}"))
+            .collect::<Vec<_>>();
+        let mut next = jobs[..at].to_vec();
+        let mut consumer = jobs[at + 1].clone();
+        match &mut consumer {
+            KernelJobDto::Fillet(j) => j.edge_keys = keys.clone(),
+            KernelJobDto::Chamfer(j) => j.edge_keys = keys.clone(),
+            _ => {
+                return Err(OcctError(
+                    "Delete remap requires an edge finish consumer".into(),
+                ))
+            }
+        }
+        let consumer_id = consumer.feature_id();
+        next.push(consumer);
+        branch.successful_jobs = Some(next);
+        Ok((branch, consumer_id, keys))
+    }
+
     pub fn recompute_with_supports(
         &mut self,
         plan: &RecomputePlanDto,
@@ -1404,16 +1474,8 @@ fn to_ffi_job(job: &KernelJobDto) -> Result<ffi::FfiJob, OcctError> {
             set_profiles(&mut job, profile_buffers(&source.profiles));
             if let Some(face) = &source.source_face {
                 job.source_body_id = face.body_id.0;
-                job.source_face_index = face
-                    .face_key
-                    .strip_prefix("face:")
-                    .and_then(|value| value.parse::<u32>().ok())
-                    .ok_or_else(|| {
-                        OcctError(format!(
-                            "invalid planar-face topology key '{}'",
-                            face.face_key
-                        ))
-                    })?;
+                job.source_face_index =
+                    topology_indices(std::slice::from_ref(&face.face_key), "face")?[0];
                 job.source_face_signature = vec![
                     face.signature.centroid.x,
                     face.signature.centroid.y,
@@ -1510,7 +1572,7 @@ fn to_ffi_job(job: &KernelJobDto) -> Result<ffi::FfiJob, OcctError> {
             source.feature_id.0,
             5,
             source.target_body_id.0,
-            edge_indices(&source.edge_keys),
+            topology_indices(&source.edge_keys, "edge")?,
             source.radius,
         ),
         KernelJobDto::Chamfer(source) => {
@@ -1518,7 +1580,7 @@ fn to_ffi_job(job: &KernelJobDto) -> Result<ffi::FfiJob, OcctError> {
                 source.feature_id.0,
                 6,
                 source.target_body_id.0,
-                edge_indices(&source.edge_keys),
+                topology_indices(&source.edge_keys, "edge")?,
                 source.distance,
             );
             job.chamfer_angle_deg = source.angle_deg.unwrap_or(0.0);
@@ -1602,7 +1664,7 @@ fn to_ffi_job(job: &KernelJobDto) -> Result<ffi::FfiJob, OcctError> {
         KernelJobDto::ExternalThread(source) => {
             let mut job = empty_ffi_job(source.feature_id.0, 13);
             job.operation = 2;
-            job.face_indices = face_indices(std::slice::from_ref(&source.face_key));
+            job.face_indices = topology_indices(std::slice::from_ref(&source.face_key), "face")?;
             job.axis_origin_x = source.cylinder.origin.x;
             job.axis_origin_y = source.cylinder.origin.y;
             job.axis_origin_z = source.cylinder.origin.z;
@@ -1651,7 +1713,7 @@ fn to_ffi_job(job: &KernelJobDto) -> Result<ffi::FfiJob, OcctError> {
             let mut job = empty_ffi_job(source.feature_id.0, 8);
             job.target_body_ids = vec![source.target_body_id.0];
             job.result_body_ids = vec![source.target_body_id.0];
-            job.face_indices = face_indices(&source.face_keys);
+            job.face_indices = topology_indices(&source.face_keys, "face")?;
             job.radius = source.thickness;
             job.inward = source.inward;
             job
@@ -1796,15 +1858,21 @@ fn decode_base64(value: &str) -> Result<Vec<u8>, OcctError> {
     Ok(output)
 }
 
-fn edge_indices(keys: &[String]) -> Vec<u32> {
+// Resolve the entire selector set before entering C++. Dropping one malformed
+// key could otherwise refine a subset of the requested selection.
+fn topology_indices(keys: &[String], kind: &str) -> Result<Vec<u32>, OcctError> {
+    let prefix = format!("{kind}:");
     keys.iter()
-        .filter_map(|key| key.strip_prefix("edge:")?.parse::<u32>().ok())
-        .collect()
-}
-
-fn face_indices(keys: &[String]) -> Vec<u32> {
-    keys.iter()
-        .filter_map(|key| key.strip_prefix("face:")?.parse::<u32>().ok())
+        .map(|key| {
+            key.strip_prefix(&prefix)
+                .filter(|value| !value.is_empty() && value.bytes().all(|b| b.is_ascii_digit()))
+                .and_then(|value| value.parse::<u32>().ok())
+                .ok_or_else(|| {
+                    OcctError(format!(
+                        "Invalid {kind} topology reference '{key}'; reselect the {kind} on the feature input body"
+                    ))
+                })
+        })
         .collect()
 }
 
@@ -2056,6 +2124,60 @@ mod tests {
         KernelSweepJobDto, LoftContinuity, Point3Dto, RecomputePlanDto, StepThreadMetadataDto,
         SweepOrientation, SweepTransition,
     };
+
+    #[test]
+    fn malformed_topology_selection_rejects_whole_native_operation() {
+        let mut kernel = OcctKernel::new().unwrap();
+        let mut plan = RecomputePlanDto {
+            transaction_id: 1,
+            errors: Vec::new(),
+            jobs: vec![box_job(2, 1)],
+        };
+        let base = kernel.recompute(&plan).unwrap();
+        assert!(base.errors.is_empty());
+        let edge = base.bodies[0].edges[0].key.clone();
+        let face = base.bodies[0].faces[0].key.clone();
+        for job in [
+            KernelJobDto::Fillet(KernelFilletJobDto {
+                feature_id: FeatureId(3),
+                target_body_id: BodyId(1),
+                edge_keys: vec![edge.clone(), "edge:broken".into()],
+                radius: 0.5,
+                tangent_chain: false,
+            }),
+            KernelJobDto::Chamfer(KernelChamferJobDto {
+                feature_id: FeatureId(3),
+                target_body_id: BodyId(1),
+                edge_keys: vec![edge, "face:0".into()],
+                distance: 0.5,
+                angle_deg: None,
+                tangent_chain: false,
+            }),
+            KernelJobDto::Shell(limo_cad_solid::KernelShellJobDto {
+                feature_id: FeatureId(3),
+                target_body_id: BodyId(1),
+                face_keys: vec![face, "face:4294967296".into()],
+                thickness: 0.5,
+                inward: true,
+            }),
+        ] {
+            plan.jobs.truncate(1);
+            plan.jobs.push(job);
+            let rejected = kernel.recompute(&plan).unwrap();
+            assert_eq!(rejected.errors.len(), 1);
+            assert_eq!(rejected.errors[0].feature_id, FeatureId(3));
+            assert!(rejected.errors[0].message.contains("reselect"));
+            assert_eq!(
+                rejected.bodies, base.bodies,
+                "invalid selector changed the input body"
+            );
+            // A subsequent valid replay must still work after the rejected batch.
+            plan.jobs.truncate(1);
+            let recovered = kernel.recompute(&plan).unwrap();
+            assert!(recovered.errors.is_empty());
+            assert_eq!(recovered.bodies, base.bodies);
+        }
+    }
 
     fn square(z: f64, half: f64) -> KernelProfileDto {
         KernelProfileDto {
@@ -5696,6 +5818,160 @@ mod tests {
                 result_body_ids: vec![BodyId(1)],
             })],
         }
+    }
+
+    #[test]
+    fn hollow_flange_deleting_inner_fillet_does_not_retarget_outer_chamfer() {
+        let mut kernel = OcctKernel::new().unwrap();
+        let mut plan = annular_chamfer_plan(false);
+        if let KernelJobDto::Revolve(job) = &mut plan.jobs[0] {
+            job.profiles[0].points = [
+                (10., 0.),
+                (10., 30.),
+                (15., 30.),
+                (15., 3.),
+                (22., 3.),
+                (22., 0.),
+            ]
+            .into_iter()
+            .map(|(x, y)| Point3Dto { x, y, z: 0. })
+            .collect();
+        }
+        let base = kernel.recompute(&plan).unwrap();
+        assert!(base.errors.is_empty(), "{:?}", base.errors);
+        let rim = |scene: &KernelSceneDto, radius: f64, y: f64| {
+            scene.bodies[0]
+                .edges
+                .iter()
+                .find(|edge| {
+                    edge.circle.is_some_and(|c| {
+                        (c.radius - radius).abs() < 1e-6 && (c.center.y - y).abs() < 1e-6
+                    })
+                })
+                .unwrap()
+                .key
+                .clone()
+        };
+        let inner = rim(&base, 10., 30.);
+        plan.jobs.push(KernelJobDto::Fillet(KernelFilletJobDto {
+            feature_id: FeatureId(3),
+            target_body_id: BodyId(1),
+            edge_keys: vec![inner.clone()],
+            radius: 1.,
+            tangent_chain: false,
+        }));
+        let rounded = kernel.recompute(&plan).unwrap();
+        assert!(rounded.errors.is_empty(), "{:?}", rounded.errors);
+        let outer = rim(&rounded, 22., 3.);
+        let support = rounded.bodies[0]
+            .edges
+            .iter()
+            .find(|e| e.key == outer)
+            .unwrap()
+            .circle;
+        plan.jobs.push(KernelJobDto::Chamfer(KernelChamferJobDto {
+            feature_id: FeatureId(4),
+            target_body_id: BodyId(1),
+            edge_keys: vec![outer.clone()],
+            distance: 0.5,
+            angle_deg: None,
+            tangent_chain: false,
+        }));
+        let finished = kernel.recompute(&plan).unwrap();
+        assert!(finished.errors.is_empty(), "{:?}", finished.errors);
+        assert!(
+            finished.bodies[0].edges.iter().any(|e| e
+                .circle
+                .is_some_and(|c| (c.radius - 21.5).abs() < 1e-6 && (c.center.y - 3.).abs() < 1e-6)),
+            "outer rim chamfer exists"
+        );
+        let reused = base.bodies[0]
+            .edges
+            .iter()
+            .find(|e| e.key == outer)
+            .and_then(|e| e.circle);
+        eprintln!("536 intended {outer}: {support:?}; same index without fillet: {reused:?}");
+        assert_ne!(reused, support, "fixture must expose positional aliasing");
+        let mut unsafe_replay = plan.clone();
+        unsafe_replay.jobs.remove(1);
+        let retargeted = kernel.recompute(&unsafe_replay).unwrap();
+        assert!(retargeted.errors.is_empty());
+        let _unchamfered_original_support = rim(&retargeted, 22., 3.);
+        assert!(
+            retargeted.bodies[0].edges.iter().any(|e| e
+                .circle
+                .is_some_and(|c| (c.radius - 21.5).abs() < 1e-6 && c.center.y.abs() < 1e-6)),
+            "raw replay chamfers the wrong bottom rim"
+        );
+        // Exercise the same document deletion planner used by the UI. The
+        // persisted selections come from the actual kernel shapes above.
+        let mut doc = limo_cad_solid::SolidDocument::restore_feature_definitions(
+            limo_cad_solid::SolidFeatureDefinitions {
+                revolves: vec![serde_json::from_value(serde_json::json!({
+                    "feature_id":2,"name":"Flanged tube","sketch_name":"Port",
+                    "profile_indices":[0],"axis_origin":{"x":0.,"y":0.},
+                    "axis_direction":{"x":0.,"y":1.},"angle_deg":360.,"flip":false,
+                    "new_body_ids":[1]
+                }))
+                .unwrap()],
+                fillets: vec![serde_json::from_value(serde_json::json!({
+                    "feature_id":3,"name":"Inside lip","body_id":1,
+                    "edge_ids":[1],"edge_keys":[inner],"radius":1.
+                }))
+                .unwrap()],
+                chamfers: vec![serde_json::from_value(serde_json::json!({
+                    "feature_id":4,"name":"Outside flange","body_id":1,
+                    "edge_ids":[2],"edge_keys":[outer],"distance":0.5
+                }))
+                .unwrap()],
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let KernelJobDto::Revolve(revolve) = &plan.jobs[0] else {
+            unreachable!()
+        };
+        let basis = limo_cad_core::PlaneRef::OriginPlane {
+            plane: limo_cad_core::OriginPlane::Xy,
+        }
+        .origin_basis()
+        .unwrap();
+        let catalog = serde_json::from_value::<Vec<limo_cad_solid::ProfileCatalogItemDto>>(
+            serde_json::json!([{
+                "sketch_name":"Port","feature_id":1,"basis":basis,
+                "profiles":[{"index":0,"area":171.,"points":revolve.profiles[0].points
+                    .iter().map(|p| serde_json::json!({"x":p.x,"y":p.y})).collect::<Vec<_>>()}]
+            }]),
+        )
+        .unwrap();
+        let active = [FeatureId(1), FeatureId(2), FeatureId(3), FeatureId(4)]
+            .into_iter()
+            .collect();
+        let restored = doc.prepare_recompute(&catalog, &active).unwrap();
+        let restored_scene = kernel.recompute(&restored).unwrap();
+        assert!(
+            restored_scene.errors.is_empty(),
+            "{:?}",
+            restored_scene.errors
+        );
+        doc.commit(restored.transaction_id, restored_scene).unwrap();
+        let previous_scene = doc.scene().clone();
+        let before = (
+            doc.fillet_definitions().to_vec(),
+            doc.chamfer_definitions().to_vec(),
+        );
+        let error = doc
+            .prepare_delete_feature(FeatureId(3), &catalog, &active)
+            .unwrap_err();
+        assert!(error.to_string().contains("downstream"));
+        assert_eq!(doc.scene(), &previous_scene);
+        assert_eq!(
+            (
+                doc.fillet_definitions().to_vec(),
+                doc.chamfer_definitions().to_vec()
+            ),
+            before
+        );
     }
 
     fn annular_top_inner_edge(scene: &KernelSceneDto, reference_is_plane: bool) -> String {

@@ -262,10 +262,11 @@ fn loaded_series_keep_all_anchors_and_full_presentation_through_conditional_fiel
                 placement: DrawingDualUnitPlacement::Stacked,
             });
             assert_eq!(after, expected);
+            let invalid_precision = (MAX_DRAWING_DIMENSION_PRECISION + 1).to_string();
             for (id, value) in [
-                (Id::Precision, "7"),
+                (Id::Precision, invalid_precision.as_str()),
                 (Id::Offset, "NaN"),
-                (Id::DualPrecision, "7"),
+                (Id::DualPrecision, invalid_precision.as_str()),
             ] {
                 let mut d = draft(&before);
                 let mut f = fields::from_annotation(after.sheets[0].annotations.last().unwrap());
