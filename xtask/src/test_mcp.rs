@@ -88,6 +88,9 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
     if suite == "native-saved-views" {
         return crate::native_saved_views_test::run(args);
     }
+    if suite == "native-projection" {
+        return crate::native_projection_test::run(args);
+    }
     if suite == "native-planes" {
         return crate::native_planes_test::run(args);
     }

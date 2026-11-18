@@ -24,6 +24,7 @@ fn session() -> SketchSession {
 }
 fn edge(y: f64) -> ProjectedEdgeDto {
     ProjectedEdgeDto {
+        origin: Default::default(),
         id: (1 << 40) + 1,
         edge_id: EdgeId(1),
         points: vec![v(0., y), v(20., y)],
@@ -88,6 +89,7 @@ fn circular_support_uses_analytic_radius_and_ctrl_creates_no_external_constraint
     for ctrl in [false, true] {
         let mut s = session();
         s.set_projected_edges(vec![ProjectedEdgeDto {
+            origin: Default::default(),
             id: (1 << 40) + 1,
             edge_id: EdgeId(1),
             points: (0..=16)

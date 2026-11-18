@@ -77,6 +77,7 @@ fn spacing_leaders_slide_along_parallel_sketch_and_support_edges() {
         assert_position(preview_position(&dim, &sketch, cursor), Point::new(14., 5.));
     }
     sketch.projected_edges.push(ProjectedEdgeDto {
+        origin: Default::default(),
         id: 1 << 40,
         edge_id: EdgeId(77),
         points: vec![Point::new(0., 10.), Point::new(20., 10.)],

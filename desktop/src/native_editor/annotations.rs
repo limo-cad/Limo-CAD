@@ -51,7 +51,8 @@ struct AnnotationState {
 }
 
 pub(super) fn geometry_tool_active(editor: &Editor) -> bool {
-    editor.draft.tool.is_some()
+    editor.projection.is_some()
+        || editor.draft.tool.is_some()
         || editor.interaction.dimension.is_some()
         || editor.interaction.reposition_dimension.is_some()
         || editor.interaction.relation.is_some()

@@ -38,6 +38,7 @@ mod params;
 mod plane;
 mod profile_identity;
 mod project;
+pub mod projection;
 pub use project::PROJECT_SCHEMA_VERSION;
 mod session;
 mod sketch;
@@ -78,12 +79,13 @@ pub use dto::{
     LockedSegmentRequest, MidpointLineRequest, MirrorRequest, MoveCopyRequest,
     MoveDimensionRequest, MovePointRequest, MovePointResult, NamedViewConfigurationDto,
     NamedViewsDto, OffsetPreviewDto, OffsetRequest, PointRequest, PolygonRequest, PreviewCurve,
-    PreviewDto, ProjectVisibilityDto, ProjectedCircleDto, ProjectedEdgeDto, RecallNamedViewDto,
-    RectangleMode, RectangleRequest, RectangularPatternRequest, ReferenceMidpointDto, ScaleRequest,
-    SegmentRequest, SetDimensionModeRequest, SetDimensionStyleRequest, SetGridSnapRequest,
-    SetGridStepRequest, SketchDto, SlotMode, SlotRequest, SnapTarget, SplineRequest,
-    ToggleFixBatchRequest, ToolResult, TrackingAxis, TrackingGuideDto, TrimPreviewDto, TrimRequest,
-    UndoResult, ViewCameraDto, ViewPartOffsetDto, ViewportSnapContext,
+    PreviewDto, ProjectVisibilityDto, ProjectedCircleDto, ProjectedEdgeDto, ProjectedEdgeOrigin,
+    RecallNamedViewDto, RectangleMode, RectangleRequest, RectangularPatternRequest,
+    ReferenceMidpointDto, ScaleRequest, SegmentRequest, SetDimensionModeRequest,
+    SetDimensionStyleRequest, SetGridSnapRequest, SetGridStepRequest, SketchDto, SlotMode,
+    SlotRequest, SnapTarget, SplineRequest, ToggleFixBatchRequest, ToolResult, TrackingAxis,
+    TrackingGuideDto, TrimPreviewDto, TrimRequest, UndoResult, ViewCameraDto, ViewPartOffsetDto,
+    ViewportSnapContext,
 };
 pub use dto::{DimensionPreviewRequest, DimensionTargetRequest};
 pub use edge_selection::{

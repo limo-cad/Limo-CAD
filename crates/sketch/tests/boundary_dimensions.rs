@@ -9,6 +9,7 @@ fn v(x: f64, y: f64) -> Vec2 {
 }
 fn edge(id: u64, a: Vec2, b: Vec2) -> ProjectedEdgeDto {
     ProjectedEdgeDto {
+        origin: Default::default(),
         id: (1 << 40) + id,
         edge_id: EdgeId(id),
         points: vec![a, b],

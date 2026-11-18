@@ -270,7 +270,7 @@ fn schema_15_migrates_without_drafting_and_disguised_drafting_rejects() {
         serde_json::from_str(&SketchManager::new().export_project_model().unwrap()).unwrap();
     old["schema_version"] = 15.into();
     let decoded = crate::project::decode_project(&old.to_string()).unwrap();
-    assert_eq!(decoded.schema_version, 16);
+    assert_eq!(decoded.schema_version, crate::PROJECT_SCHEMA_VERSION);
     assert!(decoded.drawings.drafting.is_none());
     let mut disguised: serde_json::Value =
         serde_json::from_str(&manager().export_project_model().unwrap()).unwrap();
@@ -278,7 +278,7 @@ fn schema_15_migrates_without_drafting_and_disguised_drafting_rejects() {
     assert!(crate::project::decode_project(&disguised.to_string())
         .unwrap_err()
         .contains("Older project schema"));
-    disguised["schema_version"] = 17.into();
+    disguised["schema_version"] = (crate::PROJECT_SCHEMA_VERSION + 1).into();
     assert!(crate::project::decode_project(&disguised.to_string())
         .unwrap_err()
         .contains("not supported"));
