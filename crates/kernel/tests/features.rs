@@ -379,6 +379,73 @@ fn a_bar_swept_along_a_line_and_a_bend() {
     assert!(refused.contains("facing one way"), "{refused}");
 }
 
+#[test]
+fn a_sweep_steered_by_a_rail() {
+    let rail_job = |profile: KernelProfileDto, path: Vec<KernelCurveDto>, rail| {
+        let mut job = sweep(profile, path);
+        if let KernelJobDto::Sweep(job) = &mut job {
+            job.guide_rail = rail;
+        }
+        job
+    };
+    let up = |height: f64| {
+        vec![KernelCurveDto::Line {
+            entity_id: 21,
+            start: at(0.0, 0.0, 0.0),
+            end: at(0.0, 0.0, height),
+        }]
+    };
+    // A rail that leans away from the path makes the rod widen: a cone.
+    let cone = built(vec![rail_job(
+        circle(2.0, 0.0),
+        up(20.0),
+        vec![KernelCurveDto::Line {
+            entity_id: 31,
+            start: at(2.0, 0.0, 0.0),
+            end: at(4.0, 0.0, 20.0),
+        }],
+    )]);
+    let exact = PI * 20.0 / 3.0 * (4.0 + 8.0 + 16.0);
+    let weighed = limo_cad_kernel::props::mass(&cone).volume;
+    assert!((weighed - exact).abs() < 1e-8 * exact, "{weighed} {exact}");
+    // A rail that winds a quarter turn round the path turns a bar with
+    // it: every slice is still the bar's own rectangle.
+    let wound = built(vec![rail_job(
+        rectangle(6.0, 3.0, 0.0),
+        up(30.0),
+        vec![KernelCurveDto::Polyline {
+            entity_id: 32,
+            points: (0..=24)
+                .map(|i| {
+                    let t = i as f64 / 24.0;
+                    let a = 0.5 * PI * t;
+                    at(5.0 * a.cos(), 5.0 * a.sin(), 30.0 * t)
+                })
+                .collect(),
+        }],
+    )]);
+    assert_eq!(count(&wound, SurfKind::Spline), 4);
+    let weighed = limo_cad_kernel::props::mass(&wound).volume;
+    // (The rail is drawn as chords of a helix, and each chord dips a
+    // little towards the path in its middle; the bar, which is kept in
+    // touch with the rail, shrinks with it there.)
+    assert!(
+        weighed < 540.0 && weighed > 540.0 * (1.0 - 1.0e-3),
+        "{weighed}"
+    );
+    // A rail that starts on the path steers nothing.
+    let refused = refusal(vec![rail_job(
+        circle(2.0, 0.0),
+        up(20.0),
+        vec![KernelCurveDto::Line {
+            entity_id: 31,
+            start: at(0.0, 0.0, 0.0),
+            end: at(4.0, 0.0, 20.0),
+        }],
+    )]);
+    assert!(refused.contains("beside the path"), "{refused}");
+}
+
 /// A sweep job with the way its profile is held and its corners are made.
 fn sweep_as(
     profile: KernelProfileDto,

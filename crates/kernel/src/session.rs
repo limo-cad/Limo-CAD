@@ -671,7 +671,14 @@ impl Kernel {
             }
             KernelJobDto::Sweep(j) => {
                 if !j.guide_rail.is_empty() {
-                    return Err(unsupported("A sweep along a guide rail"));
+                    let tool = guided_tool(&j.profile, &j.path, &j.guide_rail, feature)?;
+                    return self.profile_job(
+                        j.operation,
+                        false,
+                        vec![tool],
+                        &j.target_body_ids,
+                        &j.result_body_ids,
+                    );
                 }
                 let tool = sweep_tool(
                     &j.profile,
@@ -1152,6 +1159,53 @@ fn sweep_tool(
         });
     }
     sweep_square(&region, &legs, transition, feature, &entity, 0)
+}
+
+/// A profile carried along a path and steered by a rail beside it: see
+/// [`crate::loft::guided`]. Holes are swept as outlines of their own and
+/// cut out.
+fn guided_tool(
+    profile: &KernelProfileDto,
+    path: &[KernelCurveDto],
+    rail: &[KernelCurveDto],
+    feature: u64,
+) -> Result<Body, String> {
+    let plain = |curves: &[KernelCurveDto], what: &str| -> Result<Vec<Seg>, String> {
+        sweep_legs(profile, curves)?
+            .iter()
+            .map(|leg| match *leg {
+                Leg::Line(a, b) => Ok(Seg::Line { a, b }),
+                Leg::Arc(a, m, b) => Ok(Seg::Arc { a, m, b }),
+                Leg::Ring(..) => Err(unsupported(&format!(
+                    "A full circle as the {what} of a guided sweep"
+                ))),
+            })
+            .collect()
+    };
+    let (path, rail) = (plain(path, "path")?, plain(rail, "guide rail")?);
+    let mut whole: Option<Body> = None;
+    let outlines = std::iter::once(profile).chain(profile.holes.iter());
+    for (lp, outline) in outlines.enumerate() {
+        let names = entities(outline);
+        let mut tool = crate::loft::guided(&segs_of(outline), &path, &rail)?;
+        tool.retag(|tag| match Role::of(tag) {
+            Role::Side { lp: piece, seg } => {
+                let from = names.get(seg as usize).copied().unwrap_or(u64::from(seg));
+                mix(
+                    mix(feature, SIDE),
+                    mix(mix(lp as u64, u64::from(piece)), from),
+                )
+            }
+            Role::Start => mix(mix(feature, START), lp as u64),
+            Role::End => mix(mix(feature, END), lp as u64),
+            Role::Other => mix(feature, tag),
+        });
+        whole = Some(match whole {
+            None => tool,
+            Some(outer) => boolean(&outer, &tool, Op::Cut).map_err(|e| format!("Sweep: {e}"))?,
+        });
+    }
+    whole.ok_or_else(|| "Sweep needs a profile".to_string())
 }
 
 /// The sweep of a region kept square to its path. `entity` names the

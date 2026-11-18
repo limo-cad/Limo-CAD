@@ -807,3 +807,109 @@ pub fn carried(profile: &[Seg], path: &[Seg]) -> Result<Body, String> {
     body.check()?;
     Ok(body)
 }
+
+/// A path or a rail: parts in a row, and how long each is.
+struct Trail {
+    parts: Vec<Part>,
+    lengths: Vec<f64>,
+    total: f64,
+}
+
+impl Trail {
+    fn of(path: &[Seg]) -> Result<Trail, String> {
+        let parts = path_parts(path)?;
+        let lengths: Vec<f64> = parts
+            .iter()
+            .map(|part| match part.shape {
+                Shape::Line => part.a.dist(part.b),
+                Shape::Arc { c, .. } => part.sweep * (part.a - c).len(),
+            })
+            .collect();
+        let total: f64 = lengths.iter().sum();
+        if parts.is_empty() || total <= 1.0e-9 {
+            return Err("a sweep path has no length".into());
+        }
+        Ok(Trail {
+            parts,
+            lengths,
+            total,
+        })
+    }
+
+    /// The point a fraction `f` of the way along, by length, and the way
+    /// the trail is heading there.
+    fn at(&self, f: f64) -> (V3, V3) {
+        let mut left = f.clamp(0.0, 1.0) * self.total;
+        for (part, &length) in self.parts.iter().zip(&self.lengths) {
+            if left <= length {
+                let g = if length > 0.0 { left / length } else { 0.0 };
+                return (part.at(g), part.heading_at(g));
+            }
+            left -= length;
+        }
+        let last = &self.parts[self.parts.len() - 1];
+        (last.b, last.heading_at(1.0))
+    }
+}
+
+/// A profile carried along a path while a rail beside the path steers it:
+/// the profile turns about the path so that it keeps facing the rail, and
+/// grows or shrinks about the path so that what touched the rail at the
+/// start still does.
+///
+/// The path and the rail are walked together, each by the same share of
+/// its own length. The solid is the smooth skin through copies of the
+/// profile set down along the way, close enough together that the skin
+/// between two of them stays near where a copy would be; unlike every
+/// other maker here it is not exact between its stations.
+pub fn guided(profile: &[Seg], path: &[Seg], rail: &[Seg]) -> Result<Body, String> {
+    let (path, rail) = (Trail::of(path)?, Trail::of(rail)?);
+    let stations = (8 * (path.parts.len() + rail.parts.len()) + 1).clamp(9, 49);
+    let (start, heading) = path.at(0.0);
+    // The rail as seen from the path, square to the way the path heads.
+    let across = |at: V3, heading: V3, to: V3| {
+        let d = to - at;
+        d - heading * d.dot(heading)
+    };
+    let reach = across(start, heading, rail.at(0.0).0);
+    if reach.len() < 1.0e-6 {
+        return Err("the guide rail of a sweep has to start beside the path, not on it".into());
+    }
+    let (e0, r0) = (reach.unit(), reach.len());
+    let n0 = heading.cross(e0);
+    let mut sections: Vec<Vec<Seg>> = Vec::with_capacity(stations);
+    for k in 0..stations {
+        let f = k as f64 / (stations - 1) as f64;
+        let (at, way) = path.at(f);
+        let reach = across(at, way, rail.at(f).0);
+        if reach.len() < 1.0e-6 {
+            return Err("the guide rail of a sweep crosses its path".into());
+        }
+        let (e, scale) = (reach.unit(), reach.len() / r0);
+        let n = way.cross(e);
+        let turned = |v: V3| way * v.dot(heading) + e * v.dot(e0) + n * v.dot(n0);
+        let placed = |p: V3| at + turned(p - start) * scale;
+        sections.push(
+            profile
+                .iter()
+                .map(|seg| match *seg {
+                    Seg::Line { a, b } => Seg::Line {
+                        a: placed(a),
+                        b: placed(b),
+                    },
+                    Seg::Arc { a, m, b } => Seg::Arc {
+                        a: placed(a),
+                        m: placed(m),
+                        b: placed(b),
+                    },
+                    Seg::Circle { c, p, n } => Seg::Circle {
+                        c: placed(c),
+                        p: placed(p),
+                        n: turned(n),
+                    },
+                })
+                .collect(),
+        );
+    }
+    skin(&sections, false)
+}
