@@ -327,8 +327,9 @@ unsafe impl Send for ffi::Kernel {}
 
 pub struct OcctKernel {
     inner: UniquePtr<ffi::Kernel>,
-    /// Limo CAD's own kernel, selected with `LIMO_CAD_KERNEL=limo`. It then
-    /// evaluates every recompute; `inner` stays empty.
+    /// Limo CAD's own kernel, when it is the one selected: see
+    /// [`limo_kernel_selected`]. It then evaluates every recompute; `inner`
+    /// stays empty.
     limo: Option<Box<limo_cad_kernel::Kernel>>,
     geometry_owner: u64,
     /// Only a fully successful replay may seed the next append. The jobs
@@ -485,10 +486,32 @@ impl std::fmt::Debug for OcctKernel {
     }
 }
 
-/// The modelling kernel is chosen per process: `LIMO_CAD_KERNEL=limo` selects
-/// Limo CAD's own analytic kernel, anything else Open CASCADE.
+/// What the application chose for itself: see [`choose_limo_kernel`].
+static LIMO_KERNEL_CHOSEN: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+/// The modelling kernel is chosen per process. `LIMO_CAD_KERNEL` decides
+/// when it names one: `limo` selects Limo CAD's own analytic kernel, anything
+/// else Open CASCADE. When it names none the application's own choice
+/// stands, and that is Open CASCADE unless [`choose_limo_kernel`] said
+/// otherwise.
 pub fn limo_kernel_selected() -> bool {
-    std::env::var("LIMO_CAD_KERNEL").is_ok_and(|value| value.eq_ignore_ascii_case("limo"))
+    kernel_named_in_environment().unwrap_or_else(|| LIMO_KERNEL_CHOSEN.load(Ordering::Relaxed))
+}
+
+/// What `LIMO_CAD_KERNEL` says, if it says anything: true for the Limo
+/// kernel. A variable that is set but empty says nothing.
+pub fn kernel_named_in_environment() -> Option<bool> {
+    let named = std::env::var_os("LIMO_CAD_KERNEL").filter(|value| !value.is_empty())?;
+    Some(named.eq_ignore_ascii_case("limo"))
+}
+
+/// The application's own choice of kernel, for a process whose environment
+/// names none. It is made once, before the first kernel: a document keeps
+/// the kernel it was opened on, and the kernels a document makes on the side
+/// to try a change out have to be of the same kind as its own.
+pub fn choose_limo_kernel(limo: bool) {
+    LIMO_KERNEL_CHOSEN.store(limo, Ordering::Relaxed);
 }
 
 /// Opt-in kernel benchmarking: `LIMO_CAD_KERNEL_TIMING=<file>` appends one

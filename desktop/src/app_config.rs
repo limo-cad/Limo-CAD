@@ -86,6 +86,17 @@ pub(crate) fn native_directory() -> Result<PathBuf, String> {
     directory(IDENTIFIER)
 }
 
+/// Where the native configuration is, without moving an older profile into
+/// its place: for the one preference that is read before the application
+/// has started, with or without a window.
+pub(crate) fn native_directory_as_found() -> Result<PathBuf, String> {
+    resolve(
+        IDENTIFIER,
+        std::env::var_os("LIMO_CAD_CONFIG_DIR").map(PathBuf::from),
+        dirs::config_dir(),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

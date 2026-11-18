@@ -35,6 +35,7 @@ fn defaults_do_not_create_files_and_explicit_choices_persist() {
             six_dof_speed: 1.5,
             ui_scale: 1.,
             gpu_stock_removal: true,
+            kernel: KernelPreference::Occt,
         }
     );
     assert!(!fixture.0.path.parent().unwrap().exists());
@@ -333,4 +334,86 @@ fn interface_size_snaps_read_and_written_preferences_to_visible_steps() {
     assert_eq!(patched.ui_scale, Some(1.1));
     assert_eq!(patched.theme, Some(ThemePreference::Dark));
     assert_eq!(fixture.0.read().unwrap().ui_scale, Some(1.1));
+}
+
+#[test]
+fn the_kernel_is_a_saved_choice_like_the_others_and_open_cascade_until_it_is_made() {
+    let fixture = Fixture::new();
+    // Nothing saved: Open CASCADE, and asking creates no files.
+    assert_eq!(fixture.0.kernel(), KernelPreference::Occt);
+    assert!(!fixture.0.path.parent().unwrap().exists());
+
+    fixture.write(br#"{"schema_version":1,"theme":"dark","future":{"keep":true}}"#);
+    let saved = fixture
+        .0
+        .patch(Preferences {
+            kernel: Some(KernelPreference::Limo),
+            ..Default::default()
+        })
+        .unwrap();
+    assert_eq!(saved.theme, Some(ThemePreference::Dark));
+    assert_eq!(saved.effective(Locale::En).kernel, KernelPreference::Limo);
+    assert_eq!(fixture.0.kernel(), KernelPreference::Limo);
+    let raw: serde_json::Value =
+        serde_json::from_slice(&fs::read(fixture.0.path()).unwrap()).unwrap();
+    assert_eq!(raw["kernel"], "limo");
+    assert_eq!(raw["future"]["keep"], true);
+
+    // Another choice leaves it alone, and going back is a choice too.
+    fixture
+        .0
+        .patch(Preferences {
+            locale: Some(Locale::De),
+            ..Default::default()
+        })
+        .unwrap();
+    assert_eq!(fixture.0.kernel(), KernelPreference::Limo);
+    fixture
+        .0
+        .patch(Preferences {
+            kernel: Some(KernelPreference::Occt),
+            ..Default::default()
+        })
+        .unwrap();
+    let raw: serde_json::Value =
+        serde_json::from_slice(&fs::read(fixture.0.path()).unwrap()).unwrap();
+    assert_eq!(raw["kernel"], "occt");
+    assert_eq!(fixture.0.kernel(), KernelPreference::Occt);
+
+    // A kernel this build does not know, and preferences it cannot read at
+    // all, are not taken for the experimental kernel, and are not replaced.
+    for text in [r#"{"schema_version":1,"kernel":"another"}"#, "not json"] {
+        fixture.write(text);
+        assert!(fixture.0.read().is_err());
+        assert_eq!(fixture.0.kernel(), KernelPreference::Occt);
+        assert!(fixture
+            .0
+            .patch(Preferences {
+                kernel: Some(KernelPreference::Limo),
+                ..Default::default()
+            })
+            .is_err());
+        assert_eq!(fs::read(fixture.0.path()).unwrap(), text.as_bytes());
+    }
+}
+
+#[test]
+fn a_start_with_no_readable_preferences_stays_on_open_cascade() {
+    // The saved choice of the experimental kernel is taken up by a start of
+    // the application itself; a test must not make it for the whole process.
+    assert_eq!(
+        choose_saved_kernel(Err("no configuration folder".into())),
+        KernelPreference::Occt
+    );
+    let fixture = Fixture::new();
+    assert_eq!(
+        choose_saved_kernel(Ok(fixture.0.clone())),
+        KernelPreference::Occt
+    );
+    assert!(!fixture.0.path.parent().unwrap().exists());
+    fixture.write("not json");
+    assert_eq!(
+        choose_saved_kernel(Ok(fixture.0.clone())),
+        KernelPreference::Occt
+    );
 }

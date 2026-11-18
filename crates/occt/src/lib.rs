@@ -685,8 +685,9 @@ impl OcctKernel {
 mod native;
 #[cfg(feature = "native-occt")]
 pub use native::{
-    limo_kernel_selected, DetachedDrawingKernel, DetachedInterferenceKernel,
-    DetachedMeasurementKernel, DetachedMeshKernel, DetachedSectionKernel, OcctKernel,
+    choose_limo_kernel, kernel_named_in_environment, limo_kernel_selected, DetachedDrawingKernel,
+    DetachedInterferenceKernel, DetachedMeasurementKernel, DetachedMeshKernel,
+    DetachedSectionKernel, OcctKernel,
 };
 
 #[cfg(test)]

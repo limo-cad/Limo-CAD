@@ -7,7 +7,8 @@
 //! edge, and a kernel that meets a key in the other's language finds the
 //! edge by its mark and from then on calls it by a name of its own.
 //!
-//! The kernel is chosen per process by an environment variable, read each
+//! The kernel is chosen per process, by an environment variable or, when
+//! that names none, by the application itself, and the choice is read each
 //! time a host is made. This file is one test so that nothing else in the
 //! process is making hosts while it changes.
 #![cfg(feature = "native-occt")]
@@ -319,5 +320,31 @@ fn a_project_finished_on_one_kernel_opens_on_the_other() {
         );
     }
 
+    // Who chooses. With no kernel named in the environment the choice is
+    // the application's own, which is what its Settings save for the next
+    // start, and that is Open CASCADE until it says otherwise.
+    std::env::remove_var("LIMO_CAD_KERNEL");
+    assert_eq!(limo_cad_occt::kernel_named_in_environment(), None);
+    assert!(!limo_cad_occt::limo_kernel_selected());
+    limo_cad_occt::choose_limo_kernel(true);
+    let chosen = NativeEngineHost::new();
+    turned(&chosen);
+    assert!(keys(&chosen).0.iter().all(|k| !counted(k)));
+
+    // The environment still decides when it names a kernel, either one.
+    std::env::set_var("LIMO_CAD_KERNEL", "occt");
+    assert_eq!(limo_cad_occt::kernel_named_in_environment(), Some(false));
+    let named = NativeEngineHost::new();
+    turned(&named);
+    assert!(keys(&named).0.iter().all(|k| counted(k)));
+    limo_cad_occt::choose_limo_kernel(false);
+    std::env::set_var("LIMO_CAD_KERNEL", "LIMO");
+    assert_eq!(limo_cad_occt::kernel_named_in_environment(), Some(true));
+    assert!(limo_cad_occt::limo_kernel_selected());
+
+    // Set but empty, it names none.
+    std::env::set_var("LIMO_CAD_KERNEL", "");
+    assert_eq!(limo_cad_occt::kernel_named_in_environment(), None);
+    assert!(!limo_cad_occt::limo_kernel_selected());
     std::env::remove_var("LIMO_CAD_KERNEL");
 }

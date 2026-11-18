@@ -32,6 +32,10 @@ fn main() -> std::process::ExitCode {
         std::env::set_var("LIMO_CAD_LOCAL_RUNTIME", &executable);
     }
 
+    // Before anything makes a document: a document keeps the kernel it was
+    // opened on.
+    limo_cad::choose_saved_kernel();
+
     if startup == Startup::Headless {
         return match limo_cad_mcp::run_stdio() {
             Ok(()) => std::process::ExitCode::SUCCESS,

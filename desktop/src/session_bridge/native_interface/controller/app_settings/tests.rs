@@ -718,3 +718,358 @@ fn retry_is_reachable_by_the_shell_pointer_above_the_retained_error_footer() {
         before
     );
 }
+
+#[test]
+fn the_kernel_choice_fits_its_place_in_every_language() {
+    use bevy::camera::{ComputedCameraValues, RenderTargetInfo, Viewport};
+    use bevy::text::TextLayoutInfo;
+
+    let _lock = crate::session_bridge::tests::TEST_LOCK.lock().unwrap();
+    let fixture = Fixture::new();
+    let services = NativeServices {
+        engine: fixture.engine.clone(),
+        bridge: fixture.bridge.clone(),
+    };
+    let mut app = App::new();
+    app.add_plugins((
+        MinimalPlugins,
+        bevy::asset::AssetPlugin::default(),
+        bevy::text::TextPlugin,
+        bevy::ui::UiPlugin,
+    ))
+    .init_resource::<Assets<Image>>()
+    .init_resource::<Assets<bevy::image::TextureAtlasLayout>>()
+    .init_resource::<ViewportUiAssets>()
+    .init_resource::<bevy::input_focus::InputFocus>();
+    let camera = app
+        .world_mut()
+        .spawn((
+            Camera2d,
+            Camera {
+                computed: ComputedCameraValues {
+                    target_info: Some(RenderTargetInfo {
+                        physical_size: UVec2::new(1600, 1200),
+                        scale_factor: 1.,
+                    }),
+                    ..default()
+                },
+                viewport: Some(Viewport {
+                    physical_size: UVec2::new(1600, 1200),
+                    ..default()
+                }),
+                ..default()
+            },
+        ))
+        .id();
+    let store = Store::at(
+        std::path::PathBuf::from(std::env::var_os("LIMO_CAD_SESSION_DIR").unwrap())
+            .join("settings-kernel-layout"),
+    )
+    .unwrap();
+    let mut settings = Settings::new(Ok(store), Locale::En);
+    for locale in preferences::locale::SUPPORTED {
+        settings.detected = locale;
+        // The most the line has to say: the experimental kernel, and that
+        // the environment rather than the saved choice put it there.
+        let status = panel::kernel_status(locale, KernelPreference::Limo, true);
+        assert!(
+            status.contains("LIMO_CAD_KERNEL") && !status.contains("{kernel}"),
+            "{status}"
+        );
+        for _ in 0..2 {
+            panel::paint(
+                app.world_mut(),
+                camera,
+                &services,
+                &mut settings,
+                800.,
+                860.,
+            )
+            .unwrap();
+            let running = settings.widgets.entity("settings-kernel-running").unwrap();
+            app.world_mut()
+                .entity_mut(running)
+                .insert(Text::new(status.clone()));
+            app.world_mut().run_schedule(PostUpdate);
+        }
+        let world = app.world();
+        let bounds = |key: &str| {
+            let entity = settings.widgets.entity(key).unwrap();
+            let node = world.get::<ComputedNode>(entity).unwrap();
+            let center = world.get::<UiGlobalTransform>(entity).unwrap().translation;
+            (center.y - node.size.y / 2., center.y + node.size.y / 2.)
+        };
+        // One under the other, between the setting before and the one after.
+        let column = [
+            "settings-gpu-stock-hint",
+            "settings-kernel",
+            "settings-kernel-occt",
+            "settings-kernel-hint",
+            "settings-kernel-running",
+            "settings-units",
+        ];
+        for pair in column.windows(2) {
+            assert!(
+                bounds(pair[0]).1 <= bounds(pair[1]).0,
+                "{} runs into {} in {locale:?}: {:?} then {:?}",
+                pair[0],
+                pair[1],
+                bounds(pair[0]),
+                bounds(pair[1])
+            );
+        }
+        assert_eq!(
+            bounds("settings-kernel-occt"),
+            bounds("settings-kernel-limo"),
+            "the two kernels stand side by side"
+        );
+        // The words are inside the room they were given.
+        for key in ["settings-kernel-hint", "settings-kernel-running"] {
+            let entity = settings.widgets.entity(key).unwrap();
+            let node = world.get::<ComputedNode>(entity).unwrap();
+            let text = world.get::<TextLayoutInfo>(entity).unwrap();
+            assert!(!text.glyphs.is_empty(), "{key} must be shaped text");
+            assert!(
+                text.size.y <= node.size.y + 1.,
+                "{key} in {locale:?}: text {:?} in a node of {:?}",
+                text.size,
+                node.size
+            );
+        }
+        // Each kernel is a choice of one, and the experimental one says so.
+        for (key, kernel) in [
+            ("settings-kernel-occt", KernelPreference::Occt),
+            ("settings-kernel-limo", KernelPreference::Limo),
+        ] {
+            let control = world
+                .get::<InterfaceControl>(settings.widgets.entity(key).unwrap())
+                .unwrap();
+            assert_eq!(control.role, "radio");
+            assert_eq!(control.selected, Some(kernel == KernelPreference::Occt));
+        }
+        let experimental = world
+            .get::<InterfaceControl>(settings.widgets.entity("settings-kernel-limo").unwrap())
+            .unwrap()
+            .label
+            .clone();
+        assert!(
+            experimental.starts_with("Limo") && experimental.chars().count() > "Limo (".len(),
+            "{experimental}"
+        );
+    }
+}
+
+#[test]
+fn choosing_the_limo_kernel_saves_it_for_the_next_start_and_leaves_this_window_alone() {
+    use crate::native_viewport::interface_shell::{PointerButton, PointerPhase};
+    use bevy::camera::{ComputedCameraValues, RenderTargetInfo};
+    use bevy::ui::UiGlobalTransform;
+    use limo_cad_interface::ControlKey;
+
+    fn publish(world: &mut World, handle: &NativeInterfaceHandle) {
+        world.run_schedule(PostUpdate);
+        for mut visibility in world
+            .query_filtered::<&mut InheritedVisibility, With<Node>>()
+            .iter_mut(world)
+        {
+            *visibility = InheritedVisibility::VISIBLE;
+        }
+        interface_shell::tests::publish_layout_once(world, handle.clone());
+    }
+
+    let _lock = crate::session_bridge::tests::TEST_LOCK.lock().unwrap();
+    let fixture = Fixture::new();
+    let owner = fixture.owner();
+    let model =
+        || parse_engine_envelope(fixture.engine.engine_call("project_export_model", "")).unwrap();
+    let before = model();
+    let history = fixture
+        .bridge
+        .native_history_available(&fixture.engine, &owner)
+        .unwrap();
+    let running = KernelPreference::running();
+    let store = Store::at(
+        std::path::PathBuf::from(std::env::var_os("LIMO_CAD_SESSION_DIR").unwrap())
+            .join("settings-kernel-choice"),
+    )
+    .unwrap();
+    store
+        .patch(Preferences {
+            locale: Some(Locale::En),
+            ..default()
+        })
+        .unwrap();
+    let mut settings = Settings::new(Ok(store.clone()), Locale::En);
+    settings.poll(true);
+    assert_eq!(settings.effective().kernel, KernelPreference::Occt);
+    let services = NativeServices {
+        engine: fixture.engine.clone(),
+        bridge: fixture.bridge.clone(),
+    };
+    let handle = NativeInterfaceHandle::new(|| {});
+    let mut app = native_viewport::interface_scene_fixture();
+    app.add_plugins((
+        bevy::time::TimePlugin,
+        bevy::text::TextPlugin,
+        bevy::ui::UiPlugin,
+    ))
+    .init_resource::<Assets<Image>>()
+    .init_resource::<Assets<bevy::image::TextureAtlasLayout>>()
+    .init_resource::<bevy::input_focus::InputFocus>()
+    .init_resource::<ViewportUiAssets>()
+    .insert_resource(services.clone())
+    .insert_resource(settings);
+    files::initialize(
+        app.world_mut(),
+        Arc::new(Mutex::new(workspace::DocumentWorkspace::default())),
+    );
+    let camera = app
+        .world_mut()
+        .spawn((
+            InterfaceCamera,
+            Camera2d,
+            Camera {
+                computed: ComputedCameraValues {
+                    target_info: Some(RenderTargetInfo {
+                        physical_size: UVec2::new(1360, 860),
+                        scale_factor: 1.,
+                    }),
+                    ..default()
+                },
+                ..default()
+            },
+        ))
+        .id();
+    let mut opener_widgets = Widgets::default();
+    let opener = opener_widgets
+        .button(
+            app.world_mut(),
+            camera,
+            "settings-opener",
+            InterfaceControl::button("document/session", "Settings"),
+            None,
+            NativeCommand::File(files::FileCommand::ShowSettings),
+            rect(0., 0., 80., 28.),
+            None,
+            30,
+        )
+        .unwrap();
+    let bounds = InterfaceRect {
+        x: 0.,
+        y: 0.,
+        width: 1360.,
+        height: 860.,
+    };
+    let mut frame = InterfaceFrame {
+        context: owner.clone(),
+        client: bounds,
+        surface: bounds,
+        canvases: vec![],
+        surfaces: vec![Surface {
+            name: "document/appearance".into(),
+            text: None,
+        }],
+        modal_stack: vec![],
+        document_visible: true,
+    };
+    handle.present(frame.clone()).unwrap();
+    publish(app.world_mut(), &handle);
+    let action = handle
+        .resolve_retained(ControlKey(opener.to_bits()))
+        .unwrap();
+    files::reduce(
+        app.world_mut(),
+        &handle,
+        &fixture.engine,
+        &fixture.bridge,
+        &action,
+        &files::FileCommand::ShowSettings,
+    )
+    .unwrap();
+    frame.modal_stack = vec!["app-settings".into()];
+    frame.surfaces.push(Surface {
+        name: "app-settings".into(),
+        text: None,
+    });
+    handle.present(frame).unwrap();
+
+    // The kernel stands near the end of the list: scroll down to it, the way
+    // the wheel does, and let the layout settle there.
+    for round in 0..5 {
+        if round == 2 {
+            app.world_mut().resource_mut::<Settings>().scroll = f32::MAX;
+        }
+        synchronize(app.world_mut(), camera, &services, 1360., 860.).unwrap();
+        publish(app.world_mut(), &handle);
+    }
+    let entity =
+        |world: &World, key: &str| world.resource::<Settings>().widgets.entity(key).unwrap();
+    let limo = entity(app.world(), "settings-kernel-limo");
+    let center = app
+        .world()
+        .get::<UiGlobalTransform>(limo)
+        .unwrap()
+        .translation;
+    let body = app.world().resource::<Settings>().content.unwrap();
+    assert!(
+        (center.y as f64) > body.y && (center.y as f64) < body.y + body.height,
+        "the choice must be scrolled into view: {center:?} in {body:?}"
+    );
+    for phase in [PointerPhase::Down, PointerPhase::Up] {
+        assert!(handle
+            .pointer(
+                phase,
+                [center.x as f64, center.y as f64],
+                PointerButton::Primary
+            )
+            .unwrap());
+    }
+    let actions = handle.take_actions().unwrap();
+    assert_eq!(actions.len(), 1, "one click, one choice");
+    assert_eq!(actions[0].control.key, ControlKey(limo.to_bits()));
+    let outcome = super::super::reduce_control_input(
+        &fixture.engine,
+        &fixture.bridge,
+        app.world_mut(),
+        &handle,
+        &actions[0],
+    )
+    .unwrap();
+    assert_eq!(outcome["persisted"], true);
+    assert_eq!(outcome["preferences"]["kernel"], "limo");
+    assert_eq!(store.read().unwrap().kernel, Some(KernelPreference::Limo));
+    assert_eq!(store.kernel(), KernelPreference::Limo);
+
+    // Saved, and shown as the choice; but this window goes on building on
+    // the kernel it started with, and says so.
+    synchronize(app.world_mut(), camera, &services, 1360., 860.).unwrap();
+    let world = app.world();
+    let selected = |key: &str| {
+        world
+            .get::<InterfaceControl>(entity(world, key))
+            .unwrap()
+            .selected
+    };
+    assert_eq!(selected("settings-kernel-limo"), Some(true));
+    assert_eq!(selected("settings-kernel-occt"), Some(false));
+    assert_eq!(KernelPreference::running(), running);
+    assert_eq!(
+        world
+            .get::<Text>(entity(world, "settings-kernel-running"))
+            .unwrap()
+            .0,
+        panel::kernel_status(
+            Locale::En,
+            running,
+            limo_cad_occt::kernel_named_in_environment().is_some()
+        )
+    );
+    assert_eq!(model(), before);
+    assert_eq!(
+        fixture
+            .bridge
+            .native_history_available(&fixture.engine, &owner)
+            .unwrap(),
+        history
+    );
+}

@@ -32,10 +32,14 @@ LIMO_CAD_KERNEL=limo limo-cad          # desktop
 LIMO_CAD_KERNEL=limo limo-cad-mcp      # headless MCP server
 ```
 
+The desktop also offers it under File > Settings > Modeling kernel, marked
+experimental; a choice made there is saved and taken up at the next start,
+and the variable decides whenever it names a kernel.
+
 Both hosts go through `OcctKernel` in `crates/occt`, which hands every
-recompute and every geometry service to this crate when the variable is
-set. Sketching, history, the viewport and scripts are unchanged: they only
-see what the kernel returns.
+recompute and every geometry service to this crate when it is the kernel
+chosen. Sketching, history, the viewport and scripts are unchanged: they
+only see what the kernel returns.
 
 ## How it is built
 

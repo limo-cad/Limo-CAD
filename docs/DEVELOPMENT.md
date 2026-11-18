@@ -378,6 +378,18 @@ interference, STEP export and import, and deleting or editing a feature in
 the middle of the history. What it does not cover fails with a message that
 says so.
 
+In the desktop the same choice is under File > Settings > Modeling kernel,
+where the Limo kernel is marked experimental. The choice is saved with the
+other application preferences (`"kernel": "limo"` in
+`app-preferences.json`) and taken up when the application next starts, with
+or without a window (`limo_cad::choose_saved_kernel` in `desktop/src/main.rs`):
+a document keeps the kernel it was opened on, and the kernels a document
+makes on the side to try a change out have to be of the same kind as its
+own. Settings shows which kernel is running beside the one that is saved.
+`LIMO_CAD_KERNEL` decides whenever it names a kernel, so
+`LIMO_CAD_KERNEL=occt` starts on OCCT whatever is saved; the standalone MCP
+server reads only the variable.
+
 ```sh
 cargo test -p limo-cad-kernel
 cargo xtask kernel-demo
