@@ -1555,6 +1555,11 @@ impl NativeEngineHost {
             &verified,
         ) {
             Ok(update) => {
+                // Where the edges of every fillet and chamfer are now, and
+                // what this kernel calls them: a project finished on the
+                // other kernel has just been found by its marks.
+                let found = inner.kernel.finish_edges();
+                inner.manager.note_finish_edges(&found);
                 inner.sketch_history_view = None;
                 inner.geometry_revision = inner.geometry_revision.wrapping_add(1);
                 inner.record_geometry_commit(&session_id);

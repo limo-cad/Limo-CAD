@@ -1306,6 +1306,7 @@ impl SolidDocument {
             request.edge_ids = crate::tangent_chain_edges(body, &request.edge_ids);
         }
         let edge_keys = edge_keys_for(&self.scene, request.body_id, &request.edge_ids)?;
+        let edge_marks = edge_marks_for(&self.scene, request.body_id, &request.edge_ids);
         let mut fillets = self.fillets.clone();
         fillets.push(SolidFilletDefinitionDto {
             feature_id,
@@ -1313,6 +1314,7 @@ impl SolidDocument {
             body_id: request.body_id,
             edge_ids: request.edge_ids,
             edge_keys,
+            edge_marks,
             radius: request.radius,
             tangent_chain: request.tangent_chain,
         });
@@ -1356,9 +1358,9 @@ impl SolidDocument {
                     && definition.edge_ids == request.edge_ids
                     && edge_keys_for(&self.scene, request.body_id, &request.edge_ids).is_err()
             })
-            .map(|definition| definition.edge_keys.clone());
-        let edge_keys = match kept {
-            Some(keys) => keys,
+            .map(|definition| (definition.edge_keys.clone(), definition.edge_marks.clone()));
+        let (edge_keys, edge_marks) = match kept {
+            Some(kept) => kept,
             None => {
                 if request.tangent_chain {
                     edge_keys_for(&self.scene, request.body_id, &request.edge_ids)?;
@@ -1370,7 +1372,10 @@ impl SolidDocument {
                         .ok_or(SolidError::MissingTarget(request.body_id))?;
                     request.edge_ids = crate::tangent_chain_edges(body, &request.edge_ids);
                 }
-                edge_keys_for(&self.scene, request.body_id, &request.edge_ids)?
+                (
+                    edge_keys_for(&self.scene, request.body_id, &request.edge_ids)?,
+                    edge_marks_for(&self.scene, request.body_id, &request.edge_ids),
+                )
             }
         };
         let mut fillets = self.fillets.clone();
@@ -1381,6 +1386,7 @@ impl SolidDocument {
         definition.body_id = request.body_id;
         definition.edge_ids = request.edge_ids;
         definition.edge_keys = edge_keys;
+        definition.edge_marks = edge_marks;
         definition.radius = request.radius;
         definition.tangent_chain = request.tangent_chain;
         self.prepare(
@@ -1422,6 +1428,7 @@ impl SolidDocument {
             request.edge_ids = crate::tangent_chain_edges(body, &request.edge_ids);
         }
         let edge_keys = edge_keys_for(&self.scene, request.body_id, &request.edge_ids)?;
+        let edge_marks = edge_marks_for(&self.scene, request.body_id, &request.edge_ids);
         let mut chamfers = self.chamfers.clone();
         chamfers.push(SolidChamferDefinitionDto {
             feature_id,
@@ -1429,6 +1436,7 @@ impl SolidDocument {
             body_id: request.body_id,
             edge_ids: request.edge_ids,
             edge_keys,
+            edge_marks,
             distance: request.distance,
             angle_deg: request.angle_deg,
             tangent_chain: request.tangent_chain,
@@ -1474,9 +1482,9 @@ impl SolidDocument {
                     && definition.edge_ids == request.edge_ids
                     && edge_keys_for(&self.scene, request.body_id, &request.edge_ids).is_err()
             })
-            .map(|definition| definition.edge_keys.clone());
-        let edge_keys = match kept {
-            Some(keys) => keys,
+            .map(|definition| (definition.edge_keys.clone(), definition.edge_marks.clone()));
+        let (edge_keys, edge_marks) = match kept {
+            Some(kept) => kept,
             None => {
                 if request.tangent_chain {
                     edge_keys_for(&self.scene, request.body_id, &request.edge_ids)?;
@@ -1488,7 +1496,10 @@ impl SolidDocument {
                         .ok_or(SolidError::MissingTarget(request.body_id))?;
                     request.edge_ids = crate::tangent_chain_edges(body, &request.edge_ids);
                 }
-                edge_keys_for(&self.scene, request.body_id, &request.edge_ids)?
+                (
+                    edge_keys_for(&self.scene, request.body_id, &request.edge_ids)?,
+                    edge_marks_for(&self.scene, request.body_id, &request.edge_ids),
+                )
             }
         };
         let mut chamfers = self.chamfers.clone();
@@ -1499,6 +1510,7 @@ impl SolidDocument {
         definition.body_id = request.body_id;
         definition.edge_ids = request.edge_ids;
         definition.edge_keys = edge_keys;
+        definition.edge_marks = edge_marks;
         definition.distance = request.distance;
         definition.angle_deg = request.angle_deg;
         definition.tangent_chain = request.tangent_chain;
@@ -2060,6 +2072,61 @@ impl SolidDocument {
             .is_some_and(|pending| pending.transaction_id == transaction_id)
         {
             self.pending = None;
+        }
+    }
+
+    /// Take down what a kernel made of the edges of each fillet and
+    /// chamfer it has just replayed.
+    ///
+    /// The marks are written afresh, so that they say where the edges are
+    /// now and not where they were when first chosen. And a feature whose
+    /// keys the kernel could not follow, because the other kernel wrote
+    /// them, gets the keys this kernel found the same edges under: from
+    /// here on it is followed by name like any feature made here, and it
+    /// keeps its marks for the way back.
+    pub fn note_finish_edges(&mut self, found: &[FinishEdgesDto]) {
+        for report in found {
+            if report.edge_keys.is_empty() || report.edge_keys.len() != report.edge_marks.len() {
+                continue;
+            }
+            let rewrite = |body_id: BodyId,
+                           ids: &mut Vec<EdgeId>,
+                           keys: &mut Vec<String>,
+                           marks: &mut Vec<EdgeMarkDto>| {
+                if *keys != report.edge_keys {
+                    *ids = report
+                        .edge_keys
+                        .iter()
+                        .map(|key| stable::edge_id(body_id, key))
+                        .collect();
+                    *keys = report.edge_keys.clone();
+                }
+                *marks = report.edge_marks.clone();
+            };
+            if let Some(d) = self
+                .fillets
+                .iter_mut()
+                .find(|d| d.feature_id == report.feature_id)
+            {
+                rewrite(
+                    d.body_id,
+                    &mut d.edge_ids,
+                    &mut d.edge_keys,
+                    &mut d.edge_marks,
+                );
+            }
+            if let Some(d) = self
+                .chamfers
+                .iter_mut()
+                .find(|d| d.feature_id == report.feature_id)
+            {
+                rewrite(
+                    d.body_id,
+                    &mut d.edge_ids,
+                    &mut d.edge_keys,
+                    &mut d.edge_marks,
+                );
+            }
         }
     }
 
@@ -3179,6 +3246,7 @@ fn make_jobs(
                     feature_id: definition.feature_id,
                     target_body_id: definition.body_id,
                     edge_keys: definition.edge_keys.clone(),
+                    edge_marks: definition.edge_marks.clone(),
                     radius: definition.radius,
                     tangent_chain: definition.tangent_chain,
                 }));
@@ -3194,6 +3262,7 @@ fn make_jobs(
                     feature_id: definition.feature_id,
                     target_body_id: definition.body_id,
                     edge_keys: definition.edge_keys.clone(),
+                    edge_marks: definition.edge_marks.clone(),
                     distance: definition.distance,
                     angle_deg: definition.angle_deg,
                     tangent_chain: definition.tangent_chain,
@@ -4463,6 +4532,26 @@ fn edge_keys_for(
         .collect()
 }
 
+/// A mark for each of the edges: see [`EdgeMarkDto`]. Empty unless every
+/// one of them is in the scene to be marked, so that marks and keys always
+/// go one for one.
+fn edge_marks_for(scene: &SolidSceneDto, body_id: BodyId, edge_ids: &[EdgeId]) -> Vec<EdgeMarkDto> {
+    let Some(body) = scene.bodies.iter().find(|body| body.id == body_id) else {
+        return Vec::new();
+    };
+    edge_ids
+        .iter()
+        .map(|edge_id| {
+            body.edges
+                .iter()
+                .find(|edge| edge.id == *edge_id)
+                .map(|edge| EdgeMarkDto::from_polyline(&edge.points))
+                .filter(|mark| !mark.points.is_empty())
+        })
+        .collect::<Option<Vec<_>>>()
+        .unwrap_or_default()
+}
+
 fn face_keys_for(
     scene: &SolidSceneDto,
     body_id: BodyId,
@@ -4902,11 +4991,13 @@ fn refresh_refinement_references(
     for definition in fillets {
         if let Ok(keys) = edge_keys_for(scene, definition.body_id, &definition.edge_ids) {
             definition.edge_keys = keys;
+            definition.edge_marks = edge_marks_for(scene, definition.body_id, &definition.edge_ids);
         }
     }
     for definition in chamfers {
         if let Ok(keys) = edge_keys_for(scene, definition.body_id, &definition.edge_ids) {
             definition.edge_keys = keys;
+            definition.edge_marks = edge_marks_for(scene, definition.body_id, &definition.edge_ids);
         }
     }
 }

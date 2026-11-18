@@ -3354,6 +3354,71 @@ rust::Vec<FfiBodyGeneration> Kernel::body_generations() const {
   return result;
 }
 
+rust::Vec<double> Kernel::edge_marks(std::uint64_t body_id,
+                                     const rust::Vec<std::uint32_t>& indices) const {
+  auto found = impl_->bodies.find(body_id);
+  if (found == impl_->bodies.end()) {
+    throw std::runtime_error("edge refinement target body is missing");
+  }
+  TopTools_IndexedMapOfShape edge_map;
+  TopExp::MapShapes(found->second, TopAbs_EDGE, edge_map);
+  rust::Vec<double> result;
+  result.reserve(indices.size() * 15);
+  for (const std::uint32_t index : indices) {
+    if (index >= static_cast<std::uint32_t>(edge_map.Extent())) {
+      throw std::runtime_error("referenced edge no longer exists");
+    }
+    const BRepAdaptor_Curve curve(
+        TopoDS::Edge(edge_map.FindKey(static_cast<int>(index) + 1)));
+    const double first = curve.FirstParameter();
+    const double last = curve.LastParameter();
+    for (int step = 0; step < 5; ++step) {
+      const gp_Pnt point = curve.Value(first + (last - first) * (2 * step + 1) / 10.0);
+      result.push_back(point.X());
+      result.push_back(point.Y());
+      result.push_back(point.Z());
+    }
+  }
+  return result;
+}
+
+rust::Vec<std::uint32_t> Kernel::edges_through(std::uint64_t body_id,
+                                               const rust::Vec<double>& points,
+                                               double reach) const {
+  auto found = impl_->bodies.find(body_id);
+  if (found == impl_->bodies.end()) {
+    throw std::runtime_error("edge refinement target body is missing");
+  }
+  TopTools_IndexedMapOfShape edge_map;
+  TopExp::MapShapes(found->second, TopAbs_EDGE, edge_map);
+  // Most edges are nowhere near a point: their boxes say so cheaply.
+  std::vector<Bnd_Box> boxes(static_cast<std::size_t>(edge_map.Extent()));
+  for (int index = 1; index <= edge_map.Extent(); ++index) {
+    BRepBndLib::Add(edge_map(index), boxes[static_cast<std::size_t>(index - 1)]);
+    boxes[static_cast<std::size_t>(index - 1)].Enlarge(reach);
+  }
+  rust::Vec<std::uint32_t> result;
+  for (std::size_t at = 0; at + 2 < points.size(); at += 3) {
+    const gp_Pnt point(points[at], points[at + 1], points[at + 2]);
+    const TopoDS_Vertex vertex = BRepBuilderAPI_MakeVertex(point);
+    std::vector<std::uint32_t> through;
+    for (int index = 1; index <= edge_map.Extent(); ++index) {
+      const TopoDS_Edge edge = TopoDS::Edge(edge_map(index));
+      if (BRep_Tool::Degenerated(edge) ||
+          boxes[static_cast<std::size_t>(index - 1)].IsOut(point)) {
+        continue;
+      }
+      BRepExtrema_DistShapeShape distance(vertex, edge);
+      if (distance.IsDone() && distance.Value() < reach) {
+        through.push_back(static_cast<std::uint32_t>(index - 1));
+      }
+    }
+    result.push_back(static_cast<std::uint32_t>(through.size()));
+    for (const std::uint32_t index : through) result.push_back(index);
+  }
+  return result;
+}
+
 rust::Vec<std::uint64_t> Kernel::planar_face_keys() const {
   rust::Vec<std::uint64_t> result;
   for (const auto& entry : impl_->bodies) {

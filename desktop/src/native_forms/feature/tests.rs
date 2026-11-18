@@ -50,6 +50,7 @@ fn chamfer_forms_default_to_45_validate_exclusive_bounds_and_restore_saved_angle
             body_id: BodyId(1),
             edge_ids: vec![EdgeId(21)],
             edge_keys: vec!["edge:0".into()],
+            edge_marks: Vec::new(),
             distance: 2.,
             angle_deg: saved_angle,
             tangent_chain: false,

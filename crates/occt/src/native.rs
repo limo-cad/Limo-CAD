@@ -280,6 +280,13 @@ mod ffi {
         ) -> Result<UniquePtr<Kernel>>;
         fn body_generations(self: &Kernel) -> Result<Vec<FfiBodyGeneration>>;
         fn planar_face_keys(self: &Kernel) -> Result<Vec<u64>>;
+        fn edge_marks(self: &Kernel, body_id: u64, indices: &Vec<u32>) -> Result<Vec<f64>>;
+        fn edges_through(
+            self: &Kernel,
+            body_id: u64,
+            points: &Vec<f64>,
+            reach: f64,
+        ) -> Result<Vec<u32>>;
         fn mesh(self: &Kernel, body_id: u64) -> Result<FfiMesh>;
         fn section_geometry(
             self: &Kernel,
@@ -327,6 +334,9 @@ pub struct OcctKernel {
     /// Only a fully successful replay may seed the next append. The jobs
     /// include all resolved geometry inputs, not just feature IDs/revisions.
     successful_jobs: Option<Vec<KernelJobDto>>,
+    /// What each applied job made of the edges it was given, for the jobs
+    /// that are given edges: see [`OcctKernel::finish_edges`].
+    finish_reports: Vec<Option<limo_cad_solid::FinishEdgesDto>>,
     support_cache: BTreeMap<(usize, limo_cad_core::FaceId), bool>,
     /// Exact projection is independent of paper styling and export format.
     /// Full requests include authoritative occurrence poses and section intent.
@@ -578,6 +588,7 @@ impl OcctKernel {
             limo: limo_kernel_selected().then(|| Box::new(limo_cad_kernel::Kernel::new())),
             geometry_owner,
             successful_jobs: None,
+            finish_reports: Vec::new(),
             support_cache: BTreeMap::new(),
             projection_cache: Mutex::new(VecDeque::new()),
             #[cfg(test)]
@@ -710,10 +721,25 @@ impl OcctKernel {
             .collect())
     }
 
+    /// What the last replay made of the edges of each fillet and chamfer:
+    /// every edge it rounded or cut, by the key this kernel knows it by and
+    /// by its mark. A project finished on the other kernel is found by its
+    /// marks, and this says what its edges are called here.
+    pub fn finish_edges(&self) -> Vec<limo_cad_solid::FinishEdgesDto> {
+        match &self.limo {
+            Some(limo) => limo.finish_edges(),
+            None => self.finish_reports.iter().flatten().cloned().collect(),
+        }
+    }
+
     /// Proofs belong only to this returned scene/transaction. Failed replay
     /// produces none; cached answers survive only an identical job prefix.
     pub fn completed_jobs_match(&self, plan: &RecomputePlanDto) -> bool {
-        plan.errors.is_empty() && self.successful_jobs.as_ref() == Some(&plan.jobs)
+        plan.errors.is_empty()
+            && self
+                .successful_jobs
+                .as_ref()
+                .is_some_and(|jobs| jobs.len() == plan.jobs.len() && same_prefix(jobs, &plan.jobs))
     }
 
     /// Bounded deletion proof: resolve the final finish at its original input,
@@ -903,12 +929,19 @@ impl OcctKernel {
             })
             .collect::<Vec<_>>();
         let previous = self.successful_jobs.take();
-        if !plan.errors.is_empty() || previous.as_ref() != Some(&plan.jobs) {
+        let unchanged = previous
+            .as_ref()
+            .is_some_and(|jobs| jobs.len() == plan.jobs.len() && same_prefix(jobs, &plan.jobs));
+        if !plan.errors.is_empty() || !unchanged {
             self.projection_cache.get_mut().unwrap().clear();
         }
         let mut reused = previous
             .as_ref()
-            .filter(|jobs| plan.errors.is_empty() && plan.jobs.starts_with(jobs))
+            .filter(|jobs| {
+                plan.errors.is_empty()
+                    && jobs.len() <= plan.jobs.len()
+                    && same_prefix(jobs, &plan.jobs)
+            })
             .map_or(0, Vec::len);
         if queries.iter().any(|(index, query)| {
             *index < reused && !self.support_cache.contains_key(&(*index, query.face_id))
@@ -932,7 +965,22 @@ impl OcctKernel {
             self.last_applied_jobs = 0;
         }
         let mut errors = plan.errors.clone();
+        self.finish_reports.truncate(reused);
         for (index, job) in plan.jobs.iter().enumerate().skip(reused) {
+            // A fillet or chamfer whose edges the Limo kernel named is
+            // found by the marks of those edges, and goes on under the
+            // counts this kernel knows them by.
+            let (job, report) = match finish_by_count(&pinned, job) {
+                Ok(found) => found,
+                Err(error) => {
+                    errors.push(KernelFeatureErrorDto {
+                        feature_id: job.feature_id(),
+                        message: error.to_string(),
+                    });
+                    break;
+                }
+            };
+            let job = job.as_ref();
             let ffi_job = match to_ffi_job(job) {
                 Ok(job) => job,
                 Err(error) => {
@@ -954,6 +1002,7 @@ impl OcctKernel {
                 });
                 break;
             }
+            self.finish_reports.push(report);
             if queries.iter().any(|(at, _)| *at == index) {
                 let keys = pinned
                     .as_ref()
@@ -2621,6 +2670,119 @@ fn decode_base64(value: &str) -> Result<Vec<u8>, OcctError> {
 
 // Resolve the entire selector set before entering C++. Dropping one malformed
 // key could otherwise refine a subset of the requested selection.
+/// How near a point of a mark has to be to an edge to be a point of it.
+const MARK_REACH: f64 = 1.0e-4;
+
+/// Whether `done` is what `asked` starts with, as work for the reference
+/// kernel: see [`KernelJobDto::same_work`]. It follows any key with a colon
+/// in it by itself, and reads the mark of any other.
+fn same_prefix(done: &[KernelJobDto], asked: &[KernelJobDto]) -> bool {
+    done.iter()
+        .zip(asked)
+        .all(|(a, b)| a.same_work(b, |key| key.contains(':')))
+}
+
+/// A fillet or chamfer as this kernel can follow it, and what to tell the
+/// host of its edges.
+///
+/// This kernel knows an edge by its place in the list of its body's edges.
+/// A key the Limo kernel wrote is a name instead, which says nothing here:
+/// the edge is then whatever passes through the points of its mark, and
+/// the job goes on under the counts of what was found. That may be more
+/// than one edge, where this kernel cuts in two what the other keeps
+/// whole.
+fn finish_by_count<'j>(
+    kernel: &ffi::Kernel,
+    job: &'j KernelJobDto,
+) -> Result<
+    (
+        std::borrow::Cow<'j, KernelJobDto>,
+        Option<limo_cad_solid::FinishEdgesDto>,
+    ),
+    OcctError,
+> {
+    use limo_cad_solid::{is_counted_edge_key, EdgeMarkDto, FinishEdgesDto, Point3Dto};
+    use std::borrow::Cow;
+    let (body, keys, marks) = match job {
+        KernelJobDto::Fillet(j) => (j.target_body_id, &j.edge_keys, &j.edge_marks),
+        KernelJobDto::Chamfer(j) => (j.target_body_id, &j.edge_keys, &j.edge_marks),
+        _ => return Ok((Cow::Borrowed(job), None)),
+    };
+    let mut counted: Vec<String> = Vec::with_capacity(keys.len());
+    let mut foreign = false;
+    for (at, key) in keys.iter().enumerate() {
+        // Anything with a colon in it is this kernel's own to judge, a
+        // malformed key of its own included.
+        if is_counted_edge_key(key) || key.contains(':') {
+            counted.push(key.clone());
+            continue;
+        }
+        foreign = true;
+        let mark = marks
+            .get(at)
+            .filter(|mark| marks.len() == keys.len() && !mark.points.is_empty())
+            .ok_or_else(|| {
+                OcctError(format!(
+                    "Edge reference '{key}' was written by the other kernel and carries no mark to find it by; reselect the edge on the feature input body"
+                ))
+            })?;
+        let points: Vec<f64> = mark.points.iter().flat_map(|p| [p.x, p.y, p.z]).collect();
+        let through = kernel
+            .edges_through(body.0, &points, MARK_REACH)
+            .map_err(|error| OcctError(error.to_string()))?;
+        let mut rest = through.as_slice();
+        while let Some((&many, tail)) = rest.split_first() {
+            let many = many as usize;
+            if many == 0 || tail.len() < many {
+                return Err(OcctError(
+                    "referenced edge no longer exists where it was marked; reselect the edge on the feature input body"
+                        .into(),
+                ));
+            }
+            for index in &tail[..many] {
+                let key = format!("edge:{index}");
+                if !counted.contains(&key) {
+                    counted.push(key);
+                }
+            }
+            rest = &tail[many..];
+        }
+    }
+    // Where each of them is now, for the way back. An edge that is not
+    // there any more is for the job itself to say.
+    let report = topology_indices(&counted, "edge")
+        .ok()
+        .and_then(|indices| kernel.edge_marks(body.0, &indices).ok())
+        .filter(|flat| flat.len() == 15 * counted.len())
+        .map(|flat| FinishEdgesDto {
+            feature_id: job.feature_id(),
+            edge_keys: counted.clone(),
+            edge_marks: flat
+                .chunks(15)
+                .map(|edge| EdgeMarkDto {
+                    points: edge
+                        .chunks(3)
+                        .map(|p| Point3Dto {
+                            x: p[0],
+                            y: p[1],
+                            z: p[2],
+                        })
+                        .collect(),
+                })
+                .collect(),
+        });
+    if !foreign {
+        return Ok((Cow::Borrowed(job), report));
+    }
+    let mut found = job.clone();
+    match &mut found {
+        KernelJobDto::Fillet(j) => j.edge_keys = counted,
+        KernelJobDto::Chamfer(j) => j.edge_keys = counted,
+        _ => unreachable!(),
+    }
+    Ok((Cow::Owned(found), report))
+}
+
 fn topology_indices(keys: &[String], kind: &str) -> Result<Vec<u32>, OcctError> {
     let prefix = format!("{kind}:");
     keys.iter()
@@ -2903,6 +3065,7 @@ mod tests {
                 feature_id: FeatureId(3),
                 target_body_id: BodyId(1),
                 edge_keys: vec![edge.clone(), "edge:broken".into()],
+                edge_marks: Vec::new(),
                 radius: 0.5,
                 tangent_chain: false,
             }),
@@ -2910,6 +3073,7 @@ mod tests {
                 feature_id: FeatureId(3),
                 target_body_id: BodyId(1),
                 edge_keys: vec![edge, "face:0".into()],
+                edge_marks: Vec::new(),
                 distance: 0.5,
                 angle_deg: None,
                 tangent_chain: false,
@@ -4572,6 +4736,7 @@ mod tests {
             feature_id: FeatureId(2),
             target_body_id: BodyId(1),
             edge_keys: upper,
+            edge_marks: Vec::new(),
             distance: 0.5,
             angle_deg: None,
             tangent_chain: false,
@@ -4621,6 +4786,7 @@ mod tests {
             feature_id: FeatureId(4),
             target_body_id: BodyId(1),
             edge_keys: vec![rim],
+            edge_marks: Vec::new(),
             distance: 0.5,
             angle_deg: None,
             tangent_chain: false,
@@ -6285,6 +6451,7 @@ mod tests {
                 feature_id: FeatureId(3),
                 target_body_id: BodyId(1),
                 edge_keys: vec!["edge:0".to_string(), "edge:1".to_string()],
+                edge_marks: Vec::new(),
                 radius: 1.0,
                 tangent_chain: false,
             }),
@@ -6292,6 +6459,7 @@ mod tests {
                 feature_id: FeatureId(3),
                 target_body_id: BodyId(1),
                 edge_keys: vec!["edge:0".to_string(), "edge:1".to_string()],
+                edge_marks: Vec::new(),
                 distance: 1.0,
                 angle_deg: None,
                 tangent_chain: false,
@@ -6618,6 +6786,7 @@ mod tests {
             feature_id: FeatureId(3),
             target_body_id: BodyId(1),
             edge_keys: vec![inner.clone()],
+            edge_marks: Vec::new(),
             radius: 1.,
             tangent_chain: false,
         }));
@@ -6634,6 +6803,7 @@ mod tests {
             feature_id: FeatureId(4),
             target_body_id: BodyId(1),
             edge_keys: vec![outer.clone()],
+            edge_marks: Vec::new(),
             distance: 0.5,
             angle_deg: None,
             tangent_chain: false,
@@ -6767,6 +6937,7 @@ mod tests {
             feature_id: FeatureId(3),
             target_body_id: BodyId(1),
             edge_keys: vec![key.to_owned()],
+            edge_marks: Vec::new(),
             distance,
             angle_deg,
             tangent_chain: false,
@@ -6887,6 +7058,7 @@ mod tests {
                     feature_id: FeatureId(3),
                     target_body_id: BodyId(1),
                     edge_keys: vec![key.clone()],
+                    edge_marks: Vec::new(),
                     distance,
                     angle_deg: Some(angle),
                     tangent_chain: false,
@@ -6909,6 +7081,7 @@ mod tests {
                     feature_id: FeatureId(3),
                     target_body_id: BodyId(1),
                     edge_keys: vec![key.clone()],
+                    edge_marks: Vec::new(),
                     distance,
                     angle_deg: Some(angle),
                     tangent_chain: false,
@@ -6925,6 +7098,7 @@ mod tests {
                 feature_id: FeatureId(3),
                 target_body_id: BodyId(1),
                 edge_keys: vec![key.clone()],
+                edge_marks: Vec::new(),
                 distance: 1.,
                 angle_deg: Some(angle),
                 tangent_chain: false,
@@ -6964,6 +7138,7 @@ mod tests {
                 feature_id: FeatureId(3),
                 target_body_id: BodyId(1),
                 edge_keys: vec![edge.to_string()],
+                edge_marks: Vec::new(),
                 radius,
                 tangent_chain: false,
             })
@@ -6973,6 +7148,7 @@ mod tests {
                 feature_id: FeatureId(3),
                 target_body_id: BodyId(1),
                 edge_keys: vec![edge.to_string()],
+                edge_marks: Vec::new(),
                 distance,
                 angle_deg: None,
                 tangent_chain: false,

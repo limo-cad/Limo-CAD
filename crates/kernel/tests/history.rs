@@ -115,6 +115,7 @@ fn fillet(feature: u64, edge: &str, radius: f64) -> KernelJobDto {
         feature_id: FeatureId(feature),
         target_body_id: BodyId(1),
         edge_keys: vec![edge.to_string()],
+        edge_marks: Vec::new(),
         radius,
         tangent_chain: false,
     })
@@ -125,6 +126,7 @@ fn chamfer(feature: u64, edge: &str, distance: f64) -> KernelJobDto {
         feature_id: FeatureId(feature),
         target_body_id: BodyId(1),
         edge_keys: vec![edge.to_string()],
+        edge_marks: Vec::new(),
         distance,
         angle_deg: None,
         tangent_chain: false,

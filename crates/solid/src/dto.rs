@@ -832,6 +832,84 @@ pub struct RibDefinitionDto {
     pub to_face_basis: Option<PlaneBasis>,
 }
 
+/// Where an edge is, for a kernel that cannot read the key another kernel
+/// gave it: a few points of the edge, none of them an end of it.
+///
+/// A key is how one kernel names an edge of a feature's input body, and
+/// the two kernels do not name alike: one counts edges, the other says
+/// which faces an edge lies between. A project finished on one therefore
+/// carries keys the other cannot follow. The mark is what both can: the
+/// edge, or the edges, that pass through these points.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct EdgeMarkDto {
+    pub points: Vec<Point3Dto>,
+}
+
+impl EdgeMarkDto {
+    /// Points to know an edge by, chosen from the points it is drawn with.
+    /// Those lie on the edge itself; a place between two of them lies on a
+    /// chord, which is only the edge when the edge is straight.
+    pub fn from_polyline(points: &[Point3Dto]) -> EdgeMarkDto {
+        const WANTED: usize = 5;
+        let n = points.len();
+        let closed = n > 2
+            && (points[0].x - points[n - 1].x).abs() < 1.0e-9
+            && (points[0].y - points[n - 1].y).abs() < 1.0e-9
+            && (points[0].z - points[n - 1].z).abs() < 1.0e-9;
+        match n {
+            0 | 1 => EdgeMarkDto::default(),
+            // Straight: anywhere along it is on it.
+            2 => EdgeMarkDto {
+                points: (0..WANTED)
+                    .map(|k| {
+                        let t = (2 * k + 1) as f64 / (2 * WANTED) as f64;
+                        Point3Dto {
+                            x: points[0].x + (points[1].x - points[0].x) * t,
+                            y: points[0].y + (points[1].y - points[0].y) * t,
+                            z: points[0].z + (points[1].z - points[0].z) * t,
+                        }
+                    })
+                    .collect(),
+            },
+            _ => {
+                // The points strictly between its ends, thinned evenly. A
+                // closed edge has no ends, and its first point is as good
+                // as any other.
+                let inner: Vec<Point3Dto> = if closed {
+                    points[..n - 1].to_vec()
+                } else {
+                    points[1..n - 1].to_vec()
+                };
+                let take = inner.len().min(WANTED);
+                EdgeMarkDto {
+                    points: (0..take)
+                        .map(|k| inner[(2 * k + 1) * inner.len() / (2 * take)])
+                        .collect(),
+                }
+            }
+        }
+    }
+}
+
+/// What a kernel made of the edges of one fillet or chamfer: each edge it
+/// rounded or cut, by its own key for it and by its mark. A feature whose
+/// keys came from the other kernel is rewritten from this, so that from
+/// then on it is followed by name like any other.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct FinishEdgesDto {
+    pub feature_id: FeatureId,
+    pub edge_keys: Vec<String>,
+    pub edge_marks: Vec<EdgeMarkDto>,
+}
+
+/// Whether a key is in the form the reference kernel writes: `edge:` and
+/// a count. The Limo kernel writes names that begin with `e` and have no
+/// colon in them.
+pub fn is_counted_edge_key(key: &str) -> bool {
+    key.strip_prefix("edge:")
+        .is_some_and(|rest| !rest.is_empty() && rest.bytes().all(|b| b.is_ascii_digit()))
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SolidFilletDefinitionDto {
     pub feature_id: FeatureId,
@@ -841,6 +919,11 @@ pub struct SolidFilletDefinitionDto {
     /// Kernel topology labels cached for first replay after opening a project.
     #[serde(default)]
     pub edge_keys: Vec<String>,
+    /// Where each of those edges is, for the kernel that did not write the
+    /// keys. One for each key, or none at all in a project from before
+    /// there were marks.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub edge_marks: Vec<EdgeMarkDto>,
     pub radius: f64,
     #[serde(default)]
     pub tangent_chain: bool,
@@ -854,6 +937,8 @@ pub struct SolidChamferDefinitionDto {
     pub edge_ids: Vec<EdgeId>,
     #[serde(default)]
     pub edge_keys: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub edge_marks: Vec<EdgeMarkDto>,
     pub distance: f64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub angle_deg: Option<f64>,
@@ -1403,6 +1488,9 @@ pub struct KernelFilletJobDto {
     pub feature_id: FeatureId,
     pub target_body_id: BodyId,
     pub edge_keys: Vec<String>,
+    /// See [`EdgeMarkDto`]. Read only for a key the kernel cannot follow.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub edge_marks: Vec<EdgeMarkDto>,
     pub radius: f64,
     pub tangent_chain: bool,
 }
@@ -1412,6 +1500,8 @@ pub struct KernelChamferJobDto {
     pub feature_id: FeatureId,
     pub target_body_id: BodyId,
     pub edge_keys: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub edge_marks: Vec<EdgeMarkDto>,
     pub distance: f64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub angle_deg: Option<f64>,
@@ -1471,6 +1561,32 @@ pub enum KernelJobDto {
 }
 
 impl KernelJobDto {
+    /// Whether two jobs ask a kernel for the same work, so that it may
+    /// keep what it made of the first. `follows` says whether that kernel
+    /// follows a key by itself.
+    ///
+    /// The marks beside the keys of a fillet or chamfer say where its
+    /// edges were when last looked at, and are written afresh after every
+    /// replay. A kernel that follows every key of the job never reads
+    /// them, and to it two jobs that differ only in their marks are one
+    /// job. A kernel that has to find an edge by its mark is another
+    /// matter: there the mark is what is asked.
+    pub fn same_work(&self, other: &Self, follows: impl Fn(&str) -> bool) -> bool {
+        match (self, other) {
+            (Self::Fillet(a), Self::Fillet(b)) if a.edge_keys.iter().all(|k| follows(k)) => {
+                let mut b = b.clone();
+                b.edge_marks.clone_from(&a.edge_marks);
+                *a == b
+            }
+            (Self::Chamfer(a), Self::Chamfer(b)) if a.edge_keys.iter().all(|k| follows(k)) => {
+                let mut b = b.clone();
+                b.edge_marks.clone_from(&a.edge_marks);
+                *a == b
+            }
+            _ => self == other,
+        }
+    }
+
     pub fn feature_id(&self) -> FeatureId {
         match self {
             Self::Extrude(job) => job.feature_id,
@@ -1717,4 +1833,84 @@ impl SolidSceneDto {
 pub struct SolidUpdateDto {
     pub document: DocumentDto,
     pub scene: SolidSceneDto,
+}
+
+#[cfg(test)]
+mod edge_mark_tests {
+    use super::*;
+
+    fn at(x: f64, y: f64, z: f64) -> Point3Dto {
+        Point3Dto { x, y, z }
+    }
+
+    #[test]
+    fn a_mark_is_made_of_points_of_the_edge_and_none_of_its_ends() {
+        // Straight: five places along it.
+        let line = EdgeMarkDto::from_polyline(&[at(0.0, 0.0, 0.0), at(10.0, 0.0, 0.0)]);
+        let along: Vec<f64> = line.points.iter().map(|p| p.x).collect();
+        assert_eq!(along, vec![1.0, 3.0, 5.0, 7.0, 9.0]);
+        // Bent: only points it is drawn with, the ends left out.
+        let drawn: Vec<Point3Dto> = (0..=8)
+            .map(|k| {
+                let a = std::f64::consts::FRAC_PI_2 * k as f64 / 8.0;
+                at(a.cos(), a.sin(), 0.0)
+            })
+            .collect();
+        let arc = EdgeMarkDto::from_polyline(&drawn);
+        assert_eq!(arc.points.len(), 5);
+        for p in &arc.points {
+            assert!(drawn[1..8].contains(p));
+            assert!((p.x * p.x + p.y * p.y - 1.0).abs() < 1e-12);
+        }
+        // Closed: it has no ends, and no point is given twice.
+        let ring: Vec<Point3Dto> = (0..=12)
+            .map(|k| {
+                let a = std::f64::consts::TAU * (k % 12) as f64 / 12.0;
+                at(a.cos(), a.sin(), 0.0)
+            })
+            .collect();
+        let round = EdgeMarkDto::from_polyline(&ring);
+        assert_eq!(round.points.len(), 5);
+        for (i, p) in round.points.iter().enumerate() {
+            assert!(!round.points[..i].contains(p));
+        }
+        assert!(EdgeMarkDto::from_polyline(&[]).points.is_empty());
+    }
+
+    #[test]
+    fn a_project_from_before_marks_still_reads_and_marks_do_not_make_a_job_new() {
+        let old = r#"{"feature_id":3,"name":"Fillet1","body_id":1,"edge_ids":[7],
+            "edge_keys":["edge:4"],"radius":1.0}"#;
+        let definition: SolidFilletDefinitionDto = serde_json::from_str(old).unwrap();
+        assert!(definition.edge_marks.is_empty());
+        // Unmarked, it is written as it was read.
+        assert!(!serde_json::to_string(&definition)
+            .unwrap()
+            .contains("edge_marks"));
+        let job = |marks: Vec<EdgeMarkDto>| KernelFilletJobDto {
+            feature_id: FeatureId(3),
+            target_body_id: BodyId(1),
+            edge_keys: vec!["edge:4".into()],
+            edge_marks: marks,
+            radius: 1.0,
+            tangent_chain: false,
+        };
+        let marked = job(vec![EdgeMarkDto {
+            points: vec![at(1.0, 2.0, 3.0)],
+        }]);
+        // To a kernel that follows the key itself the mark is not part of
+        // the work; to one that has to find the edge by it, it is.
+        let (plain, marked_job) = (
+            KernelJobDto::Fillet(job(Vec::new())),
+            KernelJobDto::Fillet(marked.clone()),
+        );
+        assert!(plain.same_work(&marked_job, is_counted_edge_key));
+        assert!(!plain.same_work(&marked_job, |key| !is_counted_edge_key(key)));
+        assert_ne!(plain, marked_job);
+        let back: KernelFilletJobDto =
+            serde_json::from_str(&serde_json::to_string(&marked).unwrap()).unwrap();
+        assert_eq!(back.edge_marks, marked.edge_marks);
+        assert!(is_counted_edge_key("edge:12") && !is_counted_edge_key("edge:"));
+        assert!(!is_counted_edge_key("e1f-2a") && !is_counted_edge_key("edge:broken"));
+    }
 }

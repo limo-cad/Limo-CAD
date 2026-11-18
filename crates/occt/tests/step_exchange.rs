@@ -441,6 +441,7 @@ fn rounded_by_the_reference(name: &str, body: &Body, radius: f64) -> f64 {
                         feature_id: FeatureId(2),
                         target_body_id: BodyId(1),
                         edge_keys: vec![key],
+                        edge_marks: Vec::new(),
                         radius,
                         tangent_chain: false,
                     }),

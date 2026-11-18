@@ -71,12 +71,21 @@ A Boolean ([`boolean`](src/boolean.rs)) intersects surfaces in closed form
 where there is one and traces the curve where there is not
 ([`meet`](src/meet.rs)), clips the curves to both faces, merges everything
 into one arrangement of vertices and edges, splits each face along it,
-decides by ray casting which pieces are inside the other body, and sews the
-chosen pieces. Coincident faces are handled by imprinting one boundary on
-the other. The tracer searches a grid on one of the two surfaces, and looks
-between its lines as well: for a curve that turns back within one cell, and
-for a closed one too small to cross any, as round the tip of a cone that
-only just pokes through.
+decides which pieces are inside the other body, and sews the chosen pieces.
+A piece next to where the other body cuts through is inside or outside by
+the lie of the two surfaces at that edge, however thin it is; a piece with
+no such edge is decided by casting rays. Coincident faces are handled by
+imprinting one boundary on the other.
+
+The tracer searches a grid on one of the two surfaces, and looks between
+its lines as well: for a curve that turns back within one cell, and for a
+closed one too small to cross any, as round the tip of a cone that only
+just pokes through. Where the two surfaces touch and each lies on both
+sides of the other, the curve crosses itself. A body against its own
+mirror image does that, and a rod through a ball that it touches from the
+inside. The crossing is found for what it is, a place on both surfaces
+where the distance between them stops changing either way, and each of its
+four arms is walked out from it; four curves then end there, at a vertex.
 
 Fillets and chamfers ([`blend`](src/blend.rs)) are modelled as the solid
 they remove or add: a prism along a straight edge, a solid of revolution
@@ -98,7 +107,10 @@ arc both are exactly, and the skin over the same segment of every section
 is the spline surface through those curves. The first and last sections
 keep their true lines and arcs. A profile kept facing one way along a path
 sweeps surfaces whose control points are the sums of the profile's and the
-path's, and whose edges are again all lines and arcs.
+path's, and whose edges are again all lines and arcs. A loft that follows a
+centerline, or that a rail steers, takes its sections up in a frame that
+travels along the centerline and sets outlines down along the way; the skin
+goes through those as well.
 
 Volume, area, centre of mass and the inertia tensor ([`props`](src/props.rs))
 are integrals along the exact edges of every face: Green's theorem turns
@@ -128,7 +140,28 @@ merges it; an edge is named after the two faces it lies between. So:
   later feature cuts the rim somewhere else, so a dimension tied to it
   still finds it.
 
-Documents written with index keys (`face:3`, `edge:7`) still resolve.
+## One project, two kernels
+
+Open CASCADE knows an edge by its place in the list of a body's edges
+(`edge:7`); this kernel knows it by name. Neither can read the other's
+keys, so a fillet or chamfer also keeps a *mark* for each of its edges: a
+few points of the edge, none of them an end.
+
+- A kernel that meets a key in the other's language finds the edge, or
+  the edges, that pass through the points of its mark. It then tells the
+  host what it calls them, and the project carries on under those keys:
+  on this kernel that means by name, like any feature made here.
+- After every replay each kernel says where the edges of every fillet and
+  chamfer are now, so the marks follow the model as it is edited.
+- A key in a kernel's own language is followed exactly as before. The mark
+  is not read, and a change of mark alone is not a change of the job.
+- A mark that points at nothing finds nothing: the feature asks for its
+  edge to be chosen again. No other edge is taken in its place.
+
+A project with a round and a chamfer on rims that go right round is made
+on either kernel, opened on the other, edited there and opened on the
+first again (`crates/native-engine/tests/cross_kernel.rs`). A project from
+before there were marks opens as it always did on the kernel that made it.
 
 ## What it models
 
@@ -140,7 +173,8 @@ Documents written with index keys (`face:3`, `edge:7`) still resolve.
 | Sweep with the profile kept facing one way, along any lines and arcs | yes, exact |
 | Sweep steered by a guide rail | yes; exact at its stations, close between |
 | Loft through sections of lines, arcs and circles, turned against each other or not: ruled, or one smooth skin through any number | yes; a square can become a circle |
-| Boolean union, cut, intersect, split body, combine | yes, for any pair of surfaces |
+| Loft along a centerline, and loft steered by a guide rail | yes; through every section exactly, close between |
+| Boolean union, cut, intersect, split body, combine | yes, for any pair of surfaces, where their curve crosses itself as well |
 | Holes: simple, counterbore, countersink, drill point | yes |
 | Threads, on a face or in a hole, to a depth or all the way, either hand: ISO metric (6g, 6H), Unified inch on its basic profile, and the rounded 30° form | yes, modelled exactly |
 | Fillet and chamfer on straight edges between flat faces and cylinders | yes, with mitres, sphere corners and inside corners |
@@ -148,28 +182,71 @@ Documents written with index keys (`face:3`, `edge:7`) still resolve.
 | Fillet on an edge of any shape that closes on itself, between planes, cylinders, cones, spheres and tori | yes, as the rolling ball's own surface |
 | Shell, and moving faces in or out | yes, while the faces keep their neighbours |
 | Rib, move, copy, mirror, linear and circular patterns | yes |
-| Section analysis, hidden-line drawings | yes |
+| Section analysis, hidden-line drawings | yes, with the outlines of free-form skins, thread flanks and rounds |
 | Measurement, mass properties with moments of inertia, exact bounds | yes |
 | Clearance and interference between bodies | yes |
 | STEP export (AP242) and import: planes, cylinders, cones, spheres, tori and splines, rational or not | yes |
 
-Not yet:
+Not yet (each is refused by name, not approximated):
 
 - rounds on edges that are neither straight nor circular and do not close
   on themselves, rounds between free-form faces, and rounds whose radius
   varies;
-- lofts along a centerline or with guide rails, and lofts between outlines
-  with different numbers of segments (a circle against an outline is fine);
+- lofts between outlines with different numbers of segments (a circle
+  against an outline is fine);
 - free-form faces with an edge collapsed to a point, or closed both ways
   round; STEP surfaces of revolution, extrusion and offset;
-- two free-form skins that cross at a very shallow angle all along (the
-  Boolean refuses rather than guess);
+- two skins that touch all along a curve without crossing, and crossings
+  of a curve with itself that lie within a hundredth of a millimetre of the
+  edges of two patches at once;
 - tapers that would need a slanted cone, offsets that change which faces
   are neighbours, shells of free-form faces;
-- in a drawing, the outline of a thread's flanks and of free-form faces
-  (their edges are drawn);
 - the text snapshot of a body with a rolling-ball round can be written but
   not read back.
+
+## Next
+
+What a kernel of the first rank does that this one does not yet, in the
+order it is meant to be taken on. This is the list to work down.
+
+1. **Tolerant modelling.** Every edge and vertex here is exact to one
+   fixed tolerance. Files from other systems are not: they come with gaps,
+   slivers and faces turned the wrong way. Next is an edge and a vertex
+   that carry their own tolerance, sewing of loose faces into a solid, and
+   healing on import; and with that the rest of STEP's surfaces (of
+   revolution, of extrusion, offset) and its trimmed curves.
+2. **Blending without exceptions.** The rolling ball on open edges of any
+   shape, between free-form faces, with a radius that varies along the
+   edge; blends where three or more of them meet at a vertex that is not a
+   box corner; a blend that runs off the end of its face or over a
+   neighbouring edge.
+3. **Offsets of anything.** Shells and thickened skins of free-form faces,
+   offsets that change which faces are neighbours (a face that vanishes, a
+   new one that appears), and taper as an operation on any face, slanted
+   cones included.
+4. **Direct edits.** Move, replace or delete a face and close the body up
+   again, with no history behind it.
+5. **Bodies that are not one solid.** Sheets and wires as bodies in their
+   own right, and results that touch themselves at a point or along an
+   edge, which a crossing of a curve with itself can now leave.
+6. **The last near misses.** Two surfaces that touch along a whole curve;
+   crossings a hair from two patch edges at once; the same free-form
+   surface met under two different descriptions; a curve that winds round
+   both the axis and the tube of a torus. All are refused today.
+7. **More free-form.** Faces with a pole or closed both ways; lofts
+   between outlines of different counts; a face filled into any number of
+   edges; sweeps and guided lofts that are exact between their stations,
+   not only at them; twist and scale along a sweep.
+8. **Size.** A grid or tree over faces and edges, so that a body of fifty
+   thousand faces costs what it should; Booleans and meshing on all cores;
+   meshes kept and patched instead of made again.
+9. **History on names alone.** Deleting anywhere already works here by
+   name. The same for rolling back and editing in the middle of a history,
+   and for sketches on faces, would let the host drop the bookkeeping it
+   keeps for a kernel that counts.
+10. **Proof.** Random pairs of free-form solids in the stress run beside
+    the analytic ones, STEP files from other systems read in bulk, and the
+    differential lab over more than the bundled recipes.
 
 ## Measured
 

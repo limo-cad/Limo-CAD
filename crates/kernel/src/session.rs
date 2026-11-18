@@ -19,6 +19,7 @@ use limo_cad_solid::{
     KernelPlanarFaceSourceDto, KernelProfileDto, KernelSceneDto, KernelTransformDto,
     PlanarFaceSignatureDto, Point3Dto, RecomputePlanDto, SweepOrientation, SweepTransition,
 };
+use limo_cad_solid::{EdgeMarkDto, FinishEdgesDto};
 
 use crate::blend;
 use crate::boolean::{boolean, Op};
@@ -52,6 +53,11 @@ pub struct Kernel {
     pub options: TessOptions,
     /// Jobs actually executed by the last recompute (the rest were reused).
     pub last_applied_jobs: usize,
+    /// What each job of `history` made of the edges it was given, for the
+    /// jobs that are given edges: see [`Kernel::finish_edges`].
+    reports: Vec<Option<FinishEdgesDto>>,
+    /// The report of the job being applied.
+    report: Option<FinishEdgesDto>,
 }
 
 impl Default for Kernel {
@@ -85,12 +91,15 @@ impl Kernel {
             display: HashMap::new(),
             options: TessOptions::default(),
             last_applied_jobs: 0,
+            reports: Vec::new(),
+            report: None,
         }
     }
 
     pub fn reset(&mut self) {
         self.state.clear();
         self.history.clear();
+        self.reports.clear();
         self.display.clear();
     }
 
@@ -135,6 +144,14 @@ impl Kernel {
         Ok(found)
     }
 
+    /// What the last recompute made of the edges of each fillet and chamfer:
+    /// every edge it rounded or cut, by its name here and by its mark. A
+    /// feature whose keys were written by the reference kernel was found by
+    /// its marks, and this says what its edges are called here.
+    pub fn finish_edges(&self) -> Vec<FinishEdgesDto> {
+        self.reports.iter().flatten().cloned().collect()
+    }
+
     /// Geometry generation of every live body. Equal generations mean
     /// identical geometry.
     pub fn generations(&self) -> BTreeMap<u64, u64> {
@@ -148,7 +165,11 @@ impl Kernel {
     pub fn completed_jobs_match(&self, plan: &RecomputePlanDto) -> bool {
         plan.errors.is_empty()
             && self.history.len() == plan.jobs.len()
-            && self.history.iter().zip(&plan.jobs).all(|(h, j)| h.0 == *j)
+            && self
+                .history
+                .iter()
+                .zip(&plan.jobs)
+                .all(|(h, j)| h.0.same_work(j, follows))
     }
 
     pub fn recompute(&mut self, plan: &RecomputePlanDto) -> KernelSceneDto {
@@ -166,9 +187,10 @@ impl Kernel {
             .history
             .iter()
             .zip(&plan.jobs)
-            .take_while(|(h, j)| h.0 == **j)
+            .take_while(|(h, j)| h.0.same_work(j, follows))
             .count();
         self.history.truncate(reused);
+        self.reports.truncate(reused);
         self.state = self
             .history
             .last()
@@ -178,8 +200,12 @@ impl Kernel {
         let mut errors = plan.errors.clone();
         for job in &plan.jobs[reused..] {
             self.last_applied_jobs += 1;
+            self.report = None;
             match self.apply(job) {
-                Ok(()) => self.history.push((job.clone(), self.state.clone())),
+                Ok(()) => {
+                    self.history.push((job.clone(), self.state.clone()));
+                    self.reports.push(self.report.take());
+                }
                 Err(message) => {
                     errors.push(KernelFeatureErrorDto {
                         feature_id: job.feature_id(),
@@ -651,7 +677,9 @@ impl Kernel {
             KernelJobDto::Fillet(j) => {
                 let target = self.get(j.target_body_id, "edge refinement target")?;
                 let names = Names::of(&target);
-                let edges = edge_indices(&names, &j.edge_keys)?;
+                let (edges, report) =
+                    finish_edges(&target, &names, &j.edge_keys, &j.edge_marks, j.feature_id)?;
+                self.report = Some(report);
                 // A round is named after the edge it replaces.
                 let tag = |e: u32| mix(feature, tag_of(&names.edges[e as usize]));
                 let result = blend::fillet_as(&target, &edges, j.radius, &tag)
@@ -662,7 +690,9 @@ impl Kernel {
             KernelJobDto::Chamfer(j) => {
                 let target = self.get(j.target_body_id, "edge refinement target")?;
                 let names = Names::of(&target);
-                let edges = edge_indices(&names, &j.edge_keys)?;
+                let (edges, report) =
+                    finish_edges(&target, &names, &j.edge_keys, &j.edge_marks, j.feature_id)?;
+                self.report = Some(report);
                 let tag = |e: u32| mix(feature, tag_of(&names.edges[e as usize]));
                 let result = blend::chamfer_as(&target, &edges, j.distance, j.angle_deg, &tag)
                     .map_err(|e| format!("Chamfer: {e}"))?;
@@ -1499,6 +1529,112 @@ fn edge_indices(names: &Names, keys: &[String]) -> Result<Vec<u32>, String> {
         edges.extend(found);
     }
     Ok(edges)
+}
+
+/// How near a point of a mark has to be to an edge to be a point of it.
+/// The points come from the other kernel's drawing of the edge, which
+/// keeps them on its own curve to far better than this.
+const MARK_REACH: f64 = 1.0e-4;
+
+/// A mark for edge `e`: five points of it, none of them an end.
+fn mark_of(body: &Body, e: u32) -> Vec<Point3Dto> {
+    let [t0, t1] = body.e_t[e as usize];
+    (0..5)
+        .map(|k| dto(body.e_point(e, t0 + (t1 - t0) * (2 * k + 1) as f64 / 10.0)))
+        .collect()
+}
+
+/// The edges of a body that a fillet or chamfer is to work on, and what to
+/// tell the host of them.
+///
+/// A key written here is a name, and is looked up as one. A key the
+/// reference kernel wrote counts edges of a body as that kernel built it,
+/// which says nothing here; the edge is then whatever passes through the
+/// points of its mark. That may be more than one edge, where this kernel
+/// cuts in two what the other keeps whole, and it may be an edge longer
+/// than the one chosen, where it is the other way about.
+///
+/// The same goes for telling a job from the one before it: see
+/// [`follows`].
+fn finish_edges(
+    body: &Body,
+    names: &Names,
+    keys: &[String],
+    marks: &[EdgeMarkDto],
+    feature: FeatureId,
+) -> Result<(Vec<u32>, FinishEdgesDto), String> {
+    let mut edges: Vec<u32> = Vec::with_capacity(keys.len());
+    let mut report = FinishEdgesDto {
+        feature_id: feature,
+        edge_keys: Vec::new(),
+        edge_marks: Vec::new(),
+    };
+    for (at, key) in keys.iter().enumerate() {
+        let mark = marks
+            .get(at)
+            .filter(|mark| marks.len() == keys.len() && !mark.points.is_empty());
+        // A count with no mark beside it is from before there were marks.
+        // It is taken as it always was, as a count of this kernel's own
+        // edges, which is what the projects that have such keys mean.
+        if follows(key) || mark.is_none() {
+            let found = names.edges_named(key);
+            if found.is_empty() {
+                return Err(format!(
+                    "Invalid edge topology reference '{key}'; reselect the edge on the feature input body"
+                ));
+            }
+            report.edge_keys.push(key.clone());
+            report.edge_marks.push(EdgeMarkDto {
+                points: found
+                    .iter()
+                    .take(4)
+                    .flat_map(|&e| mark_of(body, e))
+                    .collect(),
+            });
+            edges.extend(found);
+            continue;
+        }
+        let mark = mark.expect("a count without a mark was followed as a count");
+        let mut found: Vec<u32> = Vec::new();
+        for point in &mark.points {
+            let p = p3(point);
+            let through: Vec<u32> = (0..body.edge_count() as u32)
+                .filter(|&e| crate::trim::edge_closest(body, e, p).1 < MARK_REACH)
+                .collect();
+            if through.is_empty() {
+                return Err(
+                    "referenced edge no longer exists where it was marked; reselect the edge on the feature input body"
+                        .into(),
+                );
+            }
+            for e in through {
+                if !found.contains(&e) {
+                    found.push(e);
+                }
+            }
+        }
+        for &e in &found {
+            report.edge_keys.push(names.edges[e as usize].clone());
+            report.edge_marks.push(EdgeMarkDto {
+                points: mark_of(body, e),
+            });
+        }
+        edges.extend(found);
+    }
+    // One edge chosen twice is still one edge.
+    let mut once: Vec<u32> = Vec::with_capacity(edges.len());
+    for e in edges {
+        if !once.contains(&e) {
+            once.push(e);
+        }
+    }
+    Ok((once, report))
+}
+
+/// Whether this kernel follows a key by itself: anything but a count of the
+/// reference kernel's.
+fn follows(key: &str) -> bool {
+    !limo_cad_solid::is_counted_edge_key(key)
 }
 
 fn xform(t: &KernelTransformDto) -> Result<Xform, String> {

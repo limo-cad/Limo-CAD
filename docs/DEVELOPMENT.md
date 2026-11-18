@@ -405,6 +405,22 @@ if a feature that was sound before no longer is, and otherwise deletes,
 wherever in the history the feature stands. `kernel_names_survive_edits()`
 is the one place that asks which road to take.
 
+A project is not tied to the kernel it was made on. A fillet or chamfer
+keeps its edges by key, in the language of the kernel that wrote them
+(`edge:7` on OCCT, a name on Limo), and beside each key a mark: a few
+points of the edge (`EdgeMarkDto` in `crates/solid`). A kernel that meets
+a key it cannot follow finds the edge through the points of its mark, and
+after every replay reports what it calls the edges of each fillet and
+chamfer and where they are now (`OcctKernel::finish_edges`). The host
+writes that back into the features (`SolidDocument::note_finish_edges`), so
+a project opened on the other kernel is in that kernel's own keys from the
+first replay on, and its marks follow the model as it is edited. A key in
+a kernel's own language is followed exactly as before: the mark is not
+read, and two jobs that differ only in their marks are the same work
+(`KernelJobDto::same_work`), so nothing is replayed for a mark's sake.
+`crates/native-engine/tests/cross_kernel.rs` takes a project there and
+back, both ways round.
+
 [The kernel's README](../crates/kernel/README.md) covers its design, how
 names survive edits, what it models, the differential lab against OCCT and
 the diagnostic switches.

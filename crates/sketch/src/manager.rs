@@ -4415,6 +4415,13 @@ impl SketchManager {
         queries
     }
 
+    /// Take down what the kernel made of the edges of the fillets and
+    /// chamfers it has just replayed: see
+    /// [`limo_cad_solid::SolidDocument::note_finish_edges`].
+    pub fn note_finish_edges(&mut self, found: &[limo_cad_solid::FinishEdgesDto]) {
+        self.solids.note_finish_edges(found);
+    }
+
     /// Internal native-host commit: the set must come from the same kernel
     /// recompute as `request.scene`. It is not accepted from serialized clients.
     pub fn commit_solid_with_verified_supports(

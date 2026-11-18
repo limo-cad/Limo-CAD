@@ -50,6 +50,15 @@ class Kernel {
   std::unique_ptr<Kernel> drawing_snapshot(const rust::Vec<std::uint64_t>& body_ids) const;
   rust::Vec<FfiBodyGeneration> body_generations() const;
   rust::Vec<std::uint64_t> planar_face_keys() const;
+  // Points to know edges of a body by: five to an edge, none of them an
+  // end, for each edge by its place in the body's list of edges.
+  rust::Vec<double> edge_marks(std::uint64_t body_id,
+                               const rust::Vec<std::uint32_t>& indices) const;
+  // For each point (x, y, z in a row) the edges of a body that pass within
+  // `reach` of it: how many, then which.
+  rust::Vec<std::uint32_t> edges_through(std::uint64_t body_id,
+                                         const rust::Vec<double>& points,
+                                         double reach) const;
   FfiMesh mesh(std::uint64_t body_id) const;
   FfiSectionGeometry section_geometry(std::uint64_t body_id,
                                      const FfiSectionOptions& options) const;
