@@ -4122,6 +4122,24 @@ impl SketchManager {
         &mut self,
         request: DeleteFeatureRequest,
     ) -> Result<RecomputePlanDto, SessionError> {
+        self.prepare_delete(request, false)
+    }
+
+    /// As [`SketchManager::prepare_delete_feature`], on a kernel whose face
+    /// and edge names stay with what they name through edits of the history
+    /// before them.
+    pub fn prepare_delete_feature_with_stable_names(
+        &mut self,
+        request: DeleteFeatureRequest,
+    ) -> Result<RecomputePlanDto, SessionError> {
+        self.prepare_delete(request, true)
+    }
+
+    fn prepare_delete(
+        &mut self,
+        request: DeleteFeatureRequest,
+        names_survive: bool,
+    ) -> Result<RecomputePlanDto, SessionError> {
         self.ensure_no_active_sketch("deleting a history feature")?;
         let (index, feature) = self
             .document
@@ -4156,10 +4174,17 @@ impl SketchManager {
             .into_iter()
             .filter(|item| item.feature_id != request.feature_id)
             .collect::<Vec<_>>();
-        let plan = self
-            .solids
-            .prepare_delete_feature(request.feature_id, &catalog, &active)
-            .map_err(|error| SessionError::Solid(error.to_string()))?;
+        let plan = if names_survive {
+            self.solids.prepare_delete_feature_with_stable_names(
+                request.feature_id,
+                &catalog,
+                &active,
+            )
+        } else {
+            self.solids
+                .prepare_delete_feature(request.feature_id, &catalog, &active)
+        }
+        .map_err(|error| SessionError::Solid(error.to_string()))?;
         self.pending_joint_body_deletion = Some((
             plan.transaction_id,
             self.solids

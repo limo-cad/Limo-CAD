@@ -1963,6 +1963,31 @@ impl SolidDocument {
         catalog: &[ProfileCatalogItemDto],
         active_features: &BTreeSet<FeatureId>,
     ) -> Result<RecomputePlanDto, SolidError> {
+        self.prepare_delete(feature_id, catalog, active_features, false)
+    }
+
+    /// As [`SolidDocument::prepare_delete_feature`], for a kernel that names
+    /// every face and edge after the features that made it. Such a name
+    /// stays with what it names when history before it changes, so a later
+    /// finish on the same body keeps its edges and there is nothing to
+    /// refuse for. A finish whose edges the deleted feature itself made
+    /// fails to replay, and says so; the caller decides what to do then.
+    pub fn prepare_delete_feature_with_stable_names(
+        &mut self,
+        feature_id: FeatureId,
+        catalog: &[ProfileCatalogItemDto],
+        active_features: &BTreeSet<FeatureId>,
+    ) -> Result<RecomputePlanDto, SolidError> {
+        self.prepare_delete(feature_id, catalog, active_features, true)
+    }
+
+    fn prepare_delete(
+        &mut self,
+        feature_id: FeatureId,
+        catalog: &[ProfileCatalogItemDto],
+        active_features: &BTreeSet<FeatureId>,
+        names_survive: bool,
+    ) -> Result<RecomputePlanDto, SolidError> {
         self.ensure_idle()?;
         // Finishing selections currently persist positional OCCT edge labels.
         // Removing an earlier finish can reuse a valid label for another edge,
@@ -1981,7 +2006,10 @@ impl SolidDocument {
                     .map(|d| (d.feature_id, d.body_id, d.name.as_str())),
             )
             .collect();
-        if let Some((_, body_id, _)) = finishes.iter().find(|(id, _, _)| *id == feature_id) {
+        if let Some((_, body_id, _)) = finishes
+            .iter()
+            .find(|(id, _, _)| *id == feature_id && !names_survive)
+        {
             if let Some((_, _, name)) = finishes.iter().find(|(id, body, _)| {
                 body == body_id
                     && feature_order_key(&self.feature_order, *id)

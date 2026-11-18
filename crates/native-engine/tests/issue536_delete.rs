@@ -140,6 +140,21 @@ fn native_prefix_fixture(
     assert!(h.solid_scene_snapshot().errors.is_empty());
     h
 }
+/// On a kernel whose names survive edits a deletion that Open CASCADE has
+/// to refuse goes through: the feature is gone, what is left still builds,
+/// and the chamfer after it kept its edge.
+fn deleted_by_name(h: &NativeEngineHost, reply: &Value, features_before: usize) {
+    assert_eq!(reply["ok"], true, "{reply}");
+    assert!(model(h)["fillets"].as_array().unwrap().is_empty());
+    let document = h.document_snapshot();
+    assert_eq!(document.features.len(), features_before - 1);
+    assert!(document
+        .features
+        .iter()
+        .all(|f| matches!(f.status, limo_cad_core::FeatureStatus::Ok)));
+    assert!(h.solid_scene_snapshot().errors.is_empty());
+}
+
 fn correct(h: &NativeEngineHost) {
     assert!(h.solid_scene_snapshot().errors.is_empty());
     rim(h, 21.5, 3.); // chamfer terminates on the intended upper flange
@@ -193,9 +208,15 @@ fn unsupported_inactive_history_rejects_atomically() {
     let before = h.project_snapshot().unwrap();
     let scene = h.solid_scene_snapshot();
     let rev = h.geometry_revision();
+    let features = h.document_snapshot().features.len();
     let v: Value =
         serde_json::from_str(&h.solid_delete_feature(&json!({"feature_id":id}).to_string()))
             .unwrap();
+    if limo_cad_occt::limo_kernel_selected() {
+        // A history rolled back part of the way is no obstacle to names.
+        deleted_by_name(&h, &v, features);
+        return;
+    }
     assert_eq!(v["ok"], false, "{v}");
     assert_eq!(h.project_snapshot().unwrap(), before);
     assert!(std::sync::Arc::ptr_eq(&scene, &h.solid_scene_snapshot()));
@@ -235,9 +256,19 @@ fn opaque_domain_rejects_and_retains_snapshot() {
     ok(h.project_load_snapshot(&snapshot));
     let before = h.project_snapshot().unwrap();
     let scene = h.solid_scene_snapshot();
+    let features = h.document_snapshot().features.len();
     let reply: Value =
         serde_json::from_str(&h.solid_delete_feature(&json!({"feature_id":id}).to_string()))
             .unwrap();
+    if limo_cad_occt::limo_kernel_selected() {
+        // Whatever a domain this host cannot read refers to, it refers to by
+        // name, and the names of what is left have not moved. The intent is
+        // kept as it was.
+        deleted_by_name(&h, &reply, features);
+        assert_eq!(h.project_snapshot().unwrap().intents(), before.intents());
+        correct(&h);
+        return;
+    }
     assert_eq!(reply["ok"], false, "{reply}");
     assert_eq!(h.project_snapshot().unwrap(), before);
     assert!(std::sync::Arc::ptr_eq(&scene, &h.solid_scene_snapshot()));
@@ -406,13 +437,57 @@ fn downstream_sketch_rejects_without_changing_live_prefix() {
     let scene = h.solid_scene_snapshot();
     let revision = h.geometry_revision();
     let id = model(&h)["fillets"][0]["feature_id"].clone();
+    let features = h.document_snapshot().features.len();
     let reply: Value =
         serde_json::from_str(&h.solid_delete_feature(&json!({"feature_id":id}).to_string()))
             .unwrap();
+    if limo_cad_occt::limo_kernel_selected() {
+        // The finish need not be second to last: features after the one
+        // that follows it replay like any others.
+        deleted_by_name(&h, &reply, features);
+        correct(&h);
+        return;
+    }
     assert_eq!(reply["ok"], false, "{reply}");
     assert_eq!(h.project_snapshot().unwrap(), before);
     assert!(std::sync::Arc::ptr_eq(&scene, &h.solid_scene_snapshot()));
     assert_eq!(h.geometry_revision(), revision);
+}
+
+/// Three finishes on one body, and the first of them is deleted. Open
+/// CASCADE's proof reaches the last two features of a history and no
+/// further, so it refuses. By name the two chamfers that follow go back to
+/// their own rims.
+#[test]
+fn first_of_three_finishes_is_deleted() {
+    let h = fixture();
+    let bottom = rim(&h, 22., 0.);
+    ok(h.solid_chamfer(
+        &json!({"body_id":1,"edge_ids":[bottom],"distance":0.5,"angle_deg":null,"tangent_chain":false})
+            .to_string(),
+    ));
+    assert!(h.solid_scene_snapshot().errors.is_empty());
+    let before = h.project_snapshot().unwrap();
+    let features = h.document_snapshot().features.len();
+    let id = model(&h)["fillets"][0]["feature_id"].clone();
+    let reply: Value =
+        serde_json::from_str(&h.solid_delete_feature(&json!({"feature_id":id}).to_string()))
+            .unwrap();
+    if !limo_cad_occt::limo_kernel_selected() {
+        assert_eq!(reply["ok"], false, "{reply}");
+        assert_eq!(h.project_snapshot().unwrap(), before);
+        return;
+    }
+    deleted_by_name(&h, &reply, features);
+    let cold = NativeEngineHost::new();
+    ok(cold.project_load_snapshot(&h.project_snapshot().unwrap()));
+    for host in [&h, &cold] {
+        assert!(host.solid_scene_snapshot().errors.is_empty());
+        rim(host, 10., 30.); // the rim the fillet rounded is sharp again
+        rim(host, 21.5, 3.); // the first chamfer is on the upper flange
+        rim(host, 21.5, 0.); // and the second on the bottom rim,
+        rim(host, 22., 0.5); // both sides of it
+    }
 }
 
 #[test]
