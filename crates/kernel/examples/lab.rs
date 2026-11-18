@@ -102,7 +102,12 @@ impl Client {
             .and_then(|item| item["text"].as_str())
             .unwrap_or("");
         if result["isError"] == true {
-            return Err(text.chars().take(600).collect());
+            let most = if std::env::var_os("LAB_WHOLE_ERROR").is_some() {
+                400_000
+            } else {
+                600
+            };
+            return Err(text.chars().take(most).collect());
         }
         serde_json::from_str(text).map_err(|e| format!("unreadable reply: {e}"))
     }

@@ -1372,9 +1372,24 @@ impl SolidDocument {
                         .ok_or(SolidError::MissingTarget(request.body_id))?;
                     request.edge_ids = crate::tangent_chain_edges(body, &request.edge_ids);
                 }
+                // The same edges as before keep the marks they have: the
+                // scene may show something else under their numbers by now.
+                let marks = self
+                    .fillets
+                    .iter()
+                    .find(|definition| definition.feature_id == feature_id)
+                    .filter(|definition| {
+                        definition.body_id == request.body_id
+                            && definition.edge_ids == request.edge_ids
+                            && definition.edge_marks.len() == definition.edge_ids.len()
+                    })
+                    .map(|definition| definition.edge_marks.clone())
+                    .unwrap_or_else(|| {
+                        edge_marks_for(&self.scene, request.body_id, &request.edge_ids)
+                    });
                 (
                     edge_keys_for(&self.scene, request.body_id, &request.edge_ids)?,
-                    edge_marks_for(&self.scene, request.body_id, &request.edge_ids),
+                    marks,
                 )
             }
         };
@@ -1496,9 +1511,24 @@ impl SolidDocument {
                         .ok_or(SolidError::MissingTarget(request.body_id))?;
                     request.edge_ids = crate::tangent_chain_edges(body, &request.edge_ids);
                 }
+                // The same edges as before keep the marks they have: the
+                // scene may show something else under their numbers by now.
+                let marks = self
+                    .chamfers
+                    .iter()
+                    .find(|definition| definition.feature_id == feature_id)
+                    .filter(|definition| {
+                        definition.body_id == request.body_id
+                            && definition.edge_ids == request.edge_ids
+                            && definition.edge_marks.len() == definition.edge_ids.len()
+                    })
+                    .map(|definition| definition.edge_marks.clone())
+                    .unwrap_or_else(|| {
+                        edge_marks_for(&self.scene, request.body_id, &request.edge_ids)
+                    });
                 (
                     edge_keys_for(&self.scene, request.body_id, &request.edge_ids)?,
-                    edge_marks_for(&self.scene, request.body_id, &request.edge_ids),
+                    marks,
                 )
             }
         };
@@ -4988,16 +5018,19 @@ fn refresh_refinement_references(
     chamfers: &mut [SolidChamferDefinitionDto],
     scene: &SolidSceneDto,
 ) {
+    // Keys only. The marks beside them say where the feature's edges are
+    // on the body it was given, and the scene shows the body as every
+    // later feature left it: an edge found there under the same count is
+    // as likely another edge altogether. Marks come from the choice of the
+    // edges and from the kernel that has just followed them, nowhere else.
     for definition in fillets {
         if let Ok(keys) = edge_keys_for(scene, definition.body_id, &definition.edge_ids) {
             definition.edge_keys = keys;
-            definition.edge_marks = edge_marks_for(scene, definition.body_id, &definition.edge_ids);
         }
     }
     for definition in chamfers {
         if let Ok(keys) = edge_keys_for(scene, definition.body_id, &definition.edge_ids) {
             definition.edge_keys = keys;
-            definition.edge_marks = edge_marks_for(scene, definition.body_id, &definition.edge_ids);
         }
     }
 }

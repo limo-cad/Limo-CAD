@@ -12,7 +12,7 @@ not model yet it refuses by name rather than approximate.
 ## Try it
 
 ```sh
-# The kernel on its own: about a hundred and thirty tests, under a minute.
+# The kernel on its own: about a hundred and forty tests, under a minute.
 cargo test -p limo-cad-kernel
 
 # Time the sample parts, then model each at 2000 random sets of dimensions.
@@ -261,20 +261,21 @@ target/release/examples/lab --server mcp-server/target/release/limo-cad-mcp --al
 ```
 
 All 39 bundled recipes give the same solids on both kernels. Over them the
-time spent in the kernel falls from 35.1 s to 2.0 s, 18 times less; per
-recipe the factor runs from 7 to 49. (Apple silicon, release builds, kernel
+time spent in the kernel falls from 34.4 s to 1.86 s, 19 times less; per
+recipe the factor runs from 7 to 50. (Apple silicon, release builds, kernel
 time only.)
 
 | Recipe | Open CASCADE | Limo | Factor |
 |---|---:|---:|---:|
-| `d-screw-vise` (30 bodies, two 41-turn threads) | 18,034 ms | 886 ms | 20× |
-| `vertical-axis-turbine` (27 bodies) | 8,064 ms | 619 ms | 13× |
-| `d-screw-vise-fit` | 4,229 ms | 145 ms | 29× |
-| `garden-bench` (20 bodies) | 2,519 ms | 209 ms | 12× |
-| `show-me-external-thread` | 1,060 ms | 39 ms | 27× |
-| `extrude-basics` | 102.7 ms | 10.0 ms | 10× |
-| `show-me-shell` | 12.3 ms | 0.35 ms | 35× |
-| `show-me-rectangular-pattern` | 14.1 ms | 0.29 ms | 49× |
+| `d-screw-vise` (30 bodies, two 41-turn threads) | 17,498 ms | 814 ms | 21× |
+| `vertical-axis-turbine` (27 bodies) | 8,123 ms | 611 ms | 13× |
+| `d-screw-vise-fit` | 4,049 ms | 110 ms | 37× |
+| `garden-bench` (20 bodies) | 2,549 ms | 196 ms | 13× |
+| `show-me-external-thread` | 1,036 ms | 38 ms | 28× |
+| `extrude-basics` | 102.1 ms | 10.1 ms | 10× |
+| `fillet-basics` | 14.0 ms | 2.0 ms | 7× |
+| `show-me-shell` | 12.8 ms | 0.37 ms | 35× |
+| `show-me-rectangular-pattern` | 14.4 ms | 0.29 ms | 50× |
 
 Two recipes are reported as *match, nearly*: one flat face of one body has
 an area of 126.124778 mm² here and 126.130980 mm² on the reference kernel.
@@ -283,17 +284,15 @@ walks along its blends in steps and is a few parts in a hundred thousand
 off where one ends on a flat face; the lab remarks on such a face instead
 of failing it.
 
-The same threaded screw is 688 faces on the reference kernel and 398 here;
-the M8 pin of `show-me-external-thread` is 42 faces there and 9 here.
-
 Beyond the recipes:
 
 - The host's own test suites pass on this kernel as on the reference: the
-  84 engine tests (measurement, interference, sections, STEP in and out,
-  staged and direct history edits, feature deletion). The deletion tests
-  expect different things of the two where they should: the reference
-  deletes a finish only at the end of the history, and here the first of
-  three finishes goes and the other two keep their edges.
+  85 engine tests (measurement, interference, sections, STEP in and out,
+  staged and direct history edits, feature deletion, a project taken from
+  one kernel to the other and back). The deletion tests expect different
+  things of the two where they should: the reference deletes a finish only
+  at the end of the history, and here the first of three finishes goes and
+  the other two keep their edges.
 - STEP is checked through the reference kernel. A body is written, read by
   Open CASCADE, written by Open CASCADE and read back, and comes back with
   the same volume and area to seven digits. Free-form solids are weighed
@@ -306,6 +305,19 @@ Beyond the recipes:
   digits, over seven and a half turns as over one. (The reference reads
   the same file two parts in ten thousand low on the long thread; this is
   the check that the file is right and its sum is not.)
+- Where a curve crosses itself the answer is known in closed form for
+  one case, and held to it: the part of a ball inside a rod half as thick
+  that touches it from within is `2/3 (π − 4/3) R³`, and comes out so to
+  ten digits. A vase against its own mirror image, against itself turned
+  by a tenth and a fiftieth of a radian, and against itself moved by a
+  hundredth of a millimetre all balance their books: what is cut away and
+  what is kept make the whole to a millionth of a cubic millimetre in ten
+  thousand.
+- A loft along a centerline is held to a closed form too: a ring carried
+  round a quarter bend holds what a quarter of a ring doughnut holds, to
+  four parts in ten million. The reference kernel, given the same jobs,
+  agrees to the accuracy of its own fit (a part in ten thousand, and five
+  in a thousand where the ring grows on the way round).
 - A round rolled along an ellipse is the ball's own surface to twelve
   digits: its spine the radius from both faces, the curves it touches
   along in them. Open CASCADE, asked to round the same edge of the same
@@ -334,17 +346,29 @@ Sample parts on the same machine, modelled from nothing
 
 | Part | Model | Display mesh | Faces | Edges | Triangles |
 |---|---:|---:|---:|---:|---:|
-| `mounting-block` | 4.0 ms | 0.7 ms | 35 | 62 | 3,552 |
+| `mounting-block` | 3.7 ms | 0.8 ms | 35 | 62 | 3,552 |
 | `bracket` | 6.4 ms | 0.3 ms | 38 | 83 | 2,952 |
-| `rounded-box` | 4.4 ms | 0.3 ms | 26 | 48 | 1,532 |
-| `cross-drilled-shaft` | 0.9 ms | 1.0 ms | 7 | 9 | 1,260 |
+| `rounded-box` | 3.9 ms | 0.3 ms | 26 | 48 | 1,532 |
+| `cross-drilled-shaft` | 0.7 ms | 0.9 ms | 7 | 9 | 1,260 |
 
 Every sample part is also modelled at thousands of random dimension sets;
 each result must be a closed solid, and the tests check that its display
 mesh is a clean skin.
 
-The kernel is about 24,000 lines. The Open CASCADE libraries the desktop
-links are about 70 MB.
+## Size
+
+| | Open CASCADE, as linked | Limo |
+|---|---:|---:|
+| Source | 2,217,000 lines of C++ in the 19 toolkits the server links | 25,900 lines of Rust |
+| Code shipped | 48.6 MB in 19 dynamic libraries | 1.2 MB in a stripped native binary, with the Rust runtime |
+| In a browser | not built for it here | 844 KB of WebAssembly (287 KB compressed), sample parts and a viewer included |
+| Faces of the vise screw (two 41-turn threads) | 688 | 398 |
+| Faces of the M8 pin | 42 | 9 |
+
+The count of lines is every `.cxx`, `.hxx`, `.lxx`, `.gxx` and `.pxx` of
+the toolkits `limo-cad-mcp` links against, in the 8.0.1 sources; the 11,600
+lines of C++ and 7,500 of Rust that adapt them to the host are not in it.
+Tests (5,400 lines) and examples are not in the kernel's.
 
 ## Finding out what went wrong
 
@@ -359,7 +383,9 @@ links are about 70 MB.
 
 A captured failure becomes a regression test by copying the two `.body`
 files into `tests/fixtures`. `lab --verbose` lists, for a body that
-differs, the flat faces one kernel has and the other does not.
+differs, the flat faces one kernel has and the other does not, and with
+`LAB_WHOLE_ERROR=1` a recipe that stops on an assertion prints all of it,
+not the first six hundred characters.
 `pairs 1 N` runs pair `N` of the random pairs again on its own; its number
 is all a regression test needs.
 
