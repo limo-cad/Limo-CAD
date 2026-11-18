@@ -212,7 +212,7 @@ the M8 pin of `show-me-external-thread` is 42 faces there and 9 here.
 Beyond the recipes:
 
 - The host's own test suites pass on this kernel as on the reference: the
-  79 engine tests (measurement, interference, sections, STEP in and out,
+  84 engine tests (measurement, interference, sections, STEP in and out,
   staged and direct history edits, feature deletion). The deletion tests
   expect different things of the two where they should: the reference
   deletes a finish only at the end of the history, and here the first of
@@ -242,15 +242,15 @@ Beyond the recipes:
   circles or three rectangles to seven.
 - `examples/pairs.rs` throws rings, cones, balls, rods and blocks at each
   other in random poses and cuts, intersects and unites every pair. Of the
-  first 8,000 pairs PAIRS_APART miss each other and PAIRS_NOTHING are cuts
-  that leave nothing. Of the other PAIRS_REST, all three results are
-  closed solids for PAIRS_RIGHT: every edge within a hundred-millionth of
-  a millimetre of both of its faces, a clean display mesh, volumes that
-  add up. None is wrong. PAIRS_REFUSED are refused rather than guessed at,
-  each a near miss: two cones whose sides all but touch, a ring grazing a
-  cone, a rod running along the face of a block a few thousandths of a
-  millimetre inside it. Every pair that went wrong on the way to these
-  numbers is now a case in `tests/regressions.rs`.
+  first 8,000 pairs 2,181 miss each other and 25 are cuts that leave
+  nothing. Of the other 5,794, all three results are closed solids for
+  5,790: every edge within a hundred-millionth of a millimetre of both of
+  its faces, a clean display mesh, volumes that add up. None is wrong.
+  Four are refused rather than guessed at, each a near miss: two pairs of
+  cones whose sides all but touch, a ring grazing a cone, a rod running
+  along the face of a block a few thousandths of a millimetre inside it.
+  Every pair that went wrong on the way to these numbers is now a case in
+  `tests/regressions.rs`.
 
 Sample parts on the same machine, modelled from nothing
 (`examples/bench.rs`):

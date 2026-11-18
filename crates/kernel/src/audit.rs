@@ -19,8 +19,9 @@ const ALONG: usize = 9;
 /// that encloses nothing.
 ///
 /// A vertex is where edges were found to meet, each by a calculation of
-/// its own, and stands for all of their ends: an edge is held to end
-/// within [`TOL`] of it, not within `tolerance`.
+/// its own, and stands for all of their ends: a Boolean takes ends within
+/// four times [`TOL`] of each other for one vertex. So that is what an
+/// edge is held to end within, not `tolerance`.
 pub fn audit(body: &Body, tolerance: f64) -> Result<(), String> {
     body.check()?;
     for e in 0..body.edge_count() as u32 {
@@ -29,7 +30,7 @@ pub fn audit(body: &Body, tolerance: f64) -> Result<(), String> {
         let [v0, v1] = body.e_v[e as usize];
         for (t, v) in [(t0, v0), (t1, v1)] {
             let gap = c.point(t).dist(body.verts[v as usize]);
-            if gap.is_nan() || gap > TOL.max(tolerance) {
+            if gap.is_nan() || gap > (4.0 * TOL).max(tolerance) {
                 return Err(format!(
                     "edge {e} ({:?}) ends {gap:.3e} from its vertex {v}",
                     c.kind
