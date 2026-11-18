@@ -165,8 +165,9 @@ pub fn planar_props(body: &Body, f: u32) -> Option<PlanarProps> {
 use crate::geom::{SurfKind, Surface};
 
 /// Quantities carried through the integrals: the volume under the face,
-/// its area, and the three first moments of the volume.
-const N: usize = 5;
+/// its area, the three first moments of the volume and its six second
+/// moments (`x²`, `y²`, `z²`, `xy`, `yz`, `zx`).
+const N: usize = 11;
 type Sums = [f64; N];
 
 fn add(a: &mut Sums, b: &Sums, k: f64) {
@@ -200,7 +201,21 @@ fn density(s: &Surface, u: f64, v: f64, origin: V3) -> Sums {
     let n = su.cross(sv);
     let q = p - origin;
     let half = 0.5 * q.len2();
-    [q.dot(n) / 3.0, n.len(), half * n.x, half * n.y, half * n.z]
+    // Each second moment is the flux of a field whose divergence it is:
+    // `x³/3` along `x` for `x²`, `x²y/2` along `x` for `xy`.
+    [
+        q.dot(n) / 3.0,
+        n.len(),
+        half * n.x,
+        half * n.y,
+        half * n.z,
+        q.x * q.x * q.x / 3.0 * n.x,
+        q.y * q.y * q.y / 3.0 * n.y,
+        q.z * q.z * q.z / 3.0 * n.z,
+        0.5 * q.x * q.x * q.y * n.x,
+        0.5 * q.y * q.y * q.z * n.y,
+        0.5 * q.z * q.z * q.x * n.z,
+    ]
 }
 
 /// Gauss–Legendre over `[a, b]` in pieces no longer than `piece`.
@@ -359,12 +374,19 @@ fn face_sums(body: &Body, f: u32, origin: V3, size: f64) -> Option<Sums> {
     let scale = {
         let l = size.max(1.0);
         let small = 1.0e-13;
+        let (l3, l4, l5) = (l * l * l, l * l * l * l, l * l * l * l * l);
         [
-            small * l * l * l,
+            small * l3,
             small * l * l,
-            small * l * l * l * l,
-            small * l * l * l * l,
-            small * l * l * l * l,
+            small * l4,
+            small * l4,
+            small * l4,
+            small * l5,
+            small * l5,
+            small * l5,
+            small * l5,
+            small * l5,
+            small * l5,
         ]
     };
 
@@ -538,12 +560,17 @@ fn face_sums(body: &Body, f: u32, origin: V3, size: f64) -> Option<Sums> {
     Some(sums)
 }
 
-/// Volume, surface area and centre of mass of a solid.
+/// Volume, surface area, centre of mass and moments of inertia of a solid.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Mass {
     pub volume: f64,
     pub area: f64,
     pub centre: V3,
+    /// The inertia tensor about the centre of mass for a density of one:
+    /// `inertia[0][0]` is the integral of `y² + z²`, `inertia[0][1]` minus
+    /// that of `xy`, and so on round. Times the density, it is what the
+    /// solid resists being spun with.
+    pub inertia: [[f64; 3]; 3],
     /// Whether every face was integrated exactly. A face whose loops wind
     /// round a torus both ways is left out, and this is false.
     pub exact: bool,
@@ -567,10 +594,28 @@ pub fn mass(body: &Body) -> Mass {
     } else {
         origin
     };
+    // Second moments about the centre: those about the point measured
+    // from, less what the offset of the whole volume accounts for.
+    let c = centre - origin;
+    let [xx, yy, zz] = [
+        total[5] - volume * c.x * c.x,
+        total[6] - volume * c.y * c.y,
+        total[7] - volume * c.z * c.z,
+    ];
+    let [xy, yz, zx] = [
+        total[8] - volume * c.x * c.y,
+        total[9] - volume * c.y * c.z,
+        total[10] - volume * c.z * c.x,
+    ];
     Mass {
         volume,
         area: total[1],
         centre,
+        inertia: [
+            [yy + zz, -xy, -zx],
+            [-xy, zz + xx, -yz],
+            [-zx, -yz, xx + yy],
+        ],
         exact,
     }
 }

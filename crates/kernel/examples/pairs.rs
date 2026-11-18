@@ -5,11 +5,13 @@
 //! against another, turned and moved so they usually overlap. Each pair is
 //! cut, intersected and united. What is cut away and what is kept must add
 //! up to the whole, the union must count the shared part once, and every
-//! result must be a closed solid with a clean display mesh. A pair called
+//! result must be a closed solid whose edges lie in its faces, with a clean
+//! display mesh. A pair called
 //! apart is checked against the meshes. `pairs N FIRST` starts at pair
 //! `FIRST`, to look at one failure again.
 use std::collections::HashMap;
 
+use limo_cad_kernel::audit::{audit, CLOSE};
 use limo_cad_kernel::demo::random_pair;
 use limo_cad_kernel::math::*;
 use limo_cad_kernel::tess::{tessellate, TessOptions};
@@ -100,6 +102,8 @@ fn main() {
         for (body, op) in bodies.iter().zip(["cut", "common", "union"]) {
             if let Err(e) = body.check() {
                 fault = Some(format!("{op} is not a solid: {e}"));
+            } else if let Err(e) = audit(body, CLOSE) {
+                fault = Some(format!("{op}: {e}"));
             } else if let Some(e) = skin(body) {
                 fault = Some(format!("{op}: {e}"));
             }

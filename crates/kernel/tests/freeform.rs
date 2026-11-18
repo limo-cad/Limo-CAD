@@ -66,7 +66,7 @@ fn slot(half_length: f64, r: f64, z: f64) -> Vec<Seg> {
 /// A sound solid whose display mesh is a clean skin at three finenesses,
 /// and whose exact volume and area are what ever finer meshes tend to.
 fn sound(body: &Body) -> (f64, f64) {
-    body.check().unwrap();
+    limo_cad_kernel::audit::audit(body, limo_cad_kernel::audit::CLOSE).unwrap();
     assert_mesh_is_a_clean_skin(body);
     let at = |linear: f64, angular: f64| {
         let options = TessOptions { linear, angular };
@@ -222,7 +222,7 @@ fn combined(a: &Body, b: &Body) -> [Body; 3] {
     let done = |op: Op| boolean(a, b, op).unwrap_or_else(|e| panic!("{op:?}: {e}"));
     let out = [done(Op::Cut), done(Op::Intersect), done(Op::Union)];
     for body in &out {
-        body.check().unwrap();
+        limo_cad_kernel::audit::audit(body, limo_cad_kernel::audit::CLOSE).unwrap();
         assert_mesh_is_a_clean_skin(body);
     }
     let (va, vb) = (mass(a).volume, mass(b).volume);

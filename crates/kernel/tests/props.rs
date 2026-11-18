@@ -254,3 +254,88 @@ fn round_solids_are_as_wide_as_they_are() {
     let dome = boolean(&ball(7.5), &slab, Op::Intersect).unwrap();
     assert!(near(size(&dome), v3(15.0, 15.0, 7.5)));
 }
+
+/// The inertia tensor as three moments and three products, for comparing.
+fn spins(body: &Body) -> ([f64; 3], [f64; 3], f64) {
+    let m = mass(body);
+    assert!(m.exact);
+    let i = m.inertia;
+    for (a, b) in [(0, 1), (1, 2), (2, 0)] {
+        assert_eq!(i[a][b], i[b][a]);
+    }
+    (
+        [i[0][0], i[1][1], i[2][2]],
+        [i[0][1], i[1][2], i[2][0]],
+        m.volume,
+    )
+}
+
+#[test]
+fn moments_of_inertia_are_the_textbook_ones() {
+    let near = |a: f64, b: f64, scale: f64| (a - b).abs() <= 1.0e-10 * scale.max(1.0);
+    // A block, wherever it stands: a twelfth of its mass times the squares
+    // of the two sides across each axis.
+    let block = make::block(v3(3.0, -7.0, 2.0), v3(13.0, -1.0, 6.0)).unwrap();
+    let (moments, products, v) = spins(&block);
+    let (a, b, c) = (10.0, 6.0, 4.0);
+    let exact = [
+        v * (b * b + c * c) / 12.0,
+        v * (c * c + a * a) / 12.0,
+        v * (a * a + b * b) / 12.0,
+    ];
+    for k in 0..3 {
+        assert!(near(moments[k], exact[k], exact[k]), "{moments:?}");
+        assert!(near(products[k], 0.0, exact[0]), "{products:?}");
+    }
+    // A rod along z: half its mass times its radius squared about its
+    // axis; a quarter of that and a twelfth of its length squared across.
+    let (r, h) = (4.0, 15.0);
+    let rod = make::cylinder(v3(1.0, 2.0, 3.0), V3::Z, r, h).unwrap();
+    let (moments, products, v) = spins(&rod);
+    assert!(near(v, PI * r * r * h, v));
+    let across = v * (3.0 * r * r + h * h) / 12.0;
+    assert!(near(moments[2], 0.5 * v * r * r, across), "{moments:?}");
+    assert!(near(moments[0], across, across) && near(moments[1], across, across));
+    assert!(products.iter().all(|p| near(*p, 0.0, across)));
+    // The same rod lying askew: the same three moments about its own
+    // axes, read off the tensor along them.
+    let axis = v3(1.0, 2.0, 2.0).unit();
+    let askew = make::cylinder(v3(-5.0, 0.5, 2.0), axis, r, h).unwrap();
+    let m = mass(&askew);
+    let along = |d: V3| {
+        let i = m.inertia;
+        let row = |k: usize| i[k][0] * d.x + i[k][1] * d.y + i[k][2] * d.z;
+        d.x * row(0) + d.y * row(1) + d.z * row(2)
+    };
+    assert!(
+        near(along(axis), 0.5 * v * r * r, across),
+        "{}",
+        along(axis)
+    );
+    assert!(near(along(axis.any_perp().unit()), across, across));
+    // A ball: two fifths of its mass times its radius squared, every way.
+    let ball = ball(6.0).transformed(&Xform::translation(v3(2.0, 1.0, -3.0)));
+    let (moments, _, v) = spins(&ball);
+    for k in 0..3 {
+        assert!(near(moments[k], 0.4 * v * 36.0, v * 36.0), "{moments:?}");
+    }
+    // A ring about z: its mass times (R² + ¾ r²) about its axis, and
+    // times (R²/2 + ⅝ r²) across.
+    let (big, small) = (12.0, 3.0);
+    let ring = make::revolve(
+        &[vec![PSeg::Circle {
+            c: v2(big, 0.0),
+            r: small,
+        }]],
+        V3::ZERO,
+        V3::Z,
+        V3::X,
+        TAU,
+    )
+    .unwrap();
+    let (moments, _, v) = spins(&ring);
+    let about = v * (big * big + 0.75 * small * small);
+    assert!(near(moments[2], about, about), "{moments:?}");
+    let across = v * (0.5 * big * big + 0.625 * small * small);
+    assert!(near(moments[0], across, about) && near(moments[1], across, about));
+}
