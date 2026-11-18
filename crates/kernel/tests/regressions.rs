@@ -87,24 +87,32 @@ fn pin_hole_through_a_ring_off_its_axis() {
 /// * 4327: a cone leaves most of a narrow ellipse in the side of a block.
 ///   The point taken to stand for the inside of it lay beyond its far
 ///   side.
+/// * 218 and 6616: the rim of a cone dips into another solid through a
+///   lens a fraction of a millimetre wide. The room beside one edge of it
+///   was measured to the point of the other edge level with it, not the
+///   nearest, and the probe stepped out through the far side.
+/// * 4938: meshed finely, the cut that opens a ring's face ran alongside a
+///   hole, and the pocket between the two kept the long triangles it was
+///   first clipped into: too narrow for a lattice point, so nothing ever
+///   looked at it again.
 #[test]
 fn pairs_that_once_went_wrong() {
     let seeds = [
-        188, 361, 367, 496, 541, 562, 574, 1074, 1389, 1548, 1830, 2482, 2731, 2921, 3019, 4117,
-        4327,
+        188, 218, 361, 367, 496, 541, 562, 574, 1074, 1389, 1548, 1830, 2482, 2731, 2921, 3019,
+        4117, 4327, 4938, 6616,
     ];
     for seed in seeds {
         let [(_, a), (_, b)] = random_pair(seed);
         let done = |op: Op| boolean(&a, &b, op).unwrap_or_else(|e| panic!("pair {seed}: {e}"));
         let (rest, shared, joined) = (done(Op::Cut), done(Op::Intersect), done(Op::Union));
         let fine = TessOptions {
-            linear: 0.004,
-            angular: 0.06,
+            linear: if seed == 4938 { 0.001 } else { 0.004 },
+            angular: if seed == 4938 { 0.03 } else { 0.06 },
         };
         for body in [&rest, &shared, &joined] {
             body.check().unwrap();
             for options in [TessOptions::default(), fine] {
-                if options.linear < 0.1 && seed != 188 && seed != 2921 {
+                if options.linear < 0.1 && ![188, 2921, 4938].contains(&seed) {
                     continue;
                 }
                 tessellate(body, &options)

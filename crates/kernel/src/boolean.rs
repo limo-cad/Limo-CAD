@@ -1456,6 +1456,44 @@ pub(crate) fn point_in_solid(side: &Side, p: V3) -> Option<bool> {
     None
 }
 
+/// How far `p` is from edge `e`, wherever along it that is nearest. A curve
+/// written on a surface answers `param` with its point level with `p`, which
+/// across a narrow piece can be many times further away than its nearest.
+fn edge_distance(g: &Body, e: u32, p: V3) -> f64 {
+    let c = g.e_curve_ref(e);
+    if c.kind != CurveKind::Meet {
+        return edge_closest(g, e, p).1;
+    }
+    let [t0, t1] = g.e_t[e as usize];
+    const N: usize = 24;
+    let at = |i: usize| t0 + (t1 - t0) * i as f64 / N as f64;
+    let away = |t: f64| c.point(t).dist(p);
+    let mut best = (f64::INFINITY, 0);
+    for i in 0..=N {
+        let d = away(at(i));
+        if d < best.0 {
+            best = (d, i);
+        }
+    }
+    // Golden section between the neighbours of the nearest sample.
+    const G: f64 = 0.618_033_988_749_894_9;
+    let (mut lo, mut hi) = (at(best.1.saturating_sub(1)), at((best.1 + 1).min(N)));
+    let (mut a, mut b) = (hi - G * (hi - lo), lo + G * (hi - lo));
+    let (mut da, mut db) = (away(a), away(b));
+    for _ in 0..20 {
+        if da < db {
+            (hi, b, db) = (b, a, da);
+            a = hi - G * (hi - lo);
+            da = away(a);
+        } else {
+            (lo, a, da) = (a, b, db);
+            b = lo + G * (hi - lo);
+            db = away(b);
+        }
+    }
+    best.0.min(da).min(db)
+}
+
 /// Points just inside a piece of a face: beside the middle of each of its
 /// longest edges, a quarter of the way to the nearest other edge.
 fn beside_edges(g: &Body, this: &Side, piece: &Piece) -> Vec<V3> {
@@ -1505,7 +1543,7 @@ fn beside_edges(g: &Body, this: &Side, piece: &Piece) -> Vec<V3> {
         });
         for &k in &hes {
             if k >> 1 != e {
-                room = room.min(edge_closest(g, k >> 1, foot).1);
+                room = room.min(edge_distance(g, k >> 1, foot));
             }
         }
         // Nor further than whatever of this same edge lies ahead: round a

@@ -76,6 +76,19 @@ impl Net {
         net
     }
 
+    /// Look at every side again. Taking over a triangulation stops after a
+    /// number of swaps in proportion to its size, which one far from
+    /// Delaunay can use up; points added since have put right what is near
+    /// them, and this does the rest.
+    pub fn tidy(&mut self) {
+        for t in 0..self.tris.len() as u32 {
+            for k in 0..3 {
+                self.stack.push((t, k));
+            }
+        }
+        self.settle();
+    }
+
     /// Whether side `k` of triangle `t` is part of the outline.
     pub fn on_outline(&self, t: usize, k: usize) -> bool {
         self.across[t][k] == NOBODY

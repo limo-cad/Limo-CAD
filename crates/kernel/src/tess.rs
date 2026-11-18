@@ -2197,6 +2197,11 @@ fn fill(
             }
         }
     }
+    // Corners of the outline that no lattice point came near have not been
+    // looked at since the start, and the start may have stopped short: a
+    // long outline clipped ear by ear is a great many swaps from Delaunay.
+    // A pocket too narrow for the lattice would keep whatever that left.
+    net.tidy();
     // Halve what is still too long, unless that would crowd the outline.
     for _ in 0..8 {
         let mut long: Vec<V2> = Vec::new();
