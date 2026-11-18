@@ -1,3 +1,4 @@
 {
-  "overlay-ports": ["native/occt-overlay"]
+  "overlay-ports": ["native/occt-overlay"],
+  "overlay-triplets": ["native/occt-overlay/triplets"]
 }

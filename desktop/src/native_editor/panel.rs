@@ -195,6 +195,7 @@ pub(super) fn icon(command: &EditorCommand) -> Icon {
             _ => Icon::Select,
         },
         EditorCommand::Size { .. } => Icon::Dimension,
+        EditorCommand::Projection(_) => Icon::Layers,
         EditorCommand::Tool(tool) => match tool {
             CreateTool::Line => Icon::Line,
             CreateTool::MidpointLine => Icon::MidpointLine,
@@ -210,6 +211,7 @@ pub(super) fn icon(command: &EditorCommand) -> Icon {
 
 pub(super) fn group(command: &EditorCommand) -> &'static str {
     match command {
+        EditorCommand::Projection(_) => "sketch/edit",
         EditorCommand::Palette(_) => "sketch/selection",
         EditorCommand::Interaction(
             InteractionCommand::Relation(_)
@@ -411,6 +413,10 @@ pub(super) fn synchronize(
                         rows.push((
                             "Select".into(),
                             EditorCommand::Interaction(InteractionCommand::Select),
+                        ));
+                        rows.push((
+                            "Project".into(),
+                            EditorCommand::Projection(projection::Command::Open),
                         ));
                         rows
                     }

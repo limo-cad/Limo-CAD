@@ -454,6 +454,7 @@ fn node_segments_impl(
     tolerance: f64,
     split_crossings: bool,
     ignore_degenerate: bool,
+    projected: &BTreeSet<u64>,
 ) -> Result<Vec<Segment2>, ProfileError> {
     let tolerance = tolerance.max(1e-9);
     let tol2 = tolerance * tolerance;
@@ -584,7 +585,13 @@ fn node_segments_impl(
                 || (dist2(candidate.a, segment.b) <= tol2 && dist2(candidate.b, segment.a) <= tol2)
         });
         if let Some(existing) = duplicate {
-            existing.id = existing.id.min(segment.id);
+            // Explicit sketch projections can have larger IDs than passive
+            // support edges. Preserve active profile provenance on overlap,
+            // then retain the deterministic lowest ID within the same class.
+            existing.id = [existing.id, segment.id]
+                .into_iter()
+                .min_by_key(|id| (projected.contains(id), *id))
+                .unwrap();
         } else {
             unique.push(segment);
         }
@@ -596,14 +603,15 @@ fn node_segments_at_endpoints(
     segments: &[Segment2],
     tolerance: f64,
 ) -> Result<Vec<Segment2>, ProfileError> {
-    node_segments_impl(segments, tolerance, false, false)
+    node_segments_impl(segments, tolerance, false, false, &BTreeSet::new())
 }
 
 fn node_segments_for_faces(
     segments: &[Segment2],
     tolerance: f64,
+    projected: &BTreeSet<u64>,
 ) -> Result<Vec<Segment2>, ProfileError> {
-    node_segments_impl(segments, tolerance, true, true)
+    node_segments_impl(segments, tolerance, true, true, projected)
 }
 
 /// Remove every edge that does not belong to a cycle in the active embedded
@@ -798,7 +806,7 @@ pub fn extract_closed_loops(
 pub struct BoundedFace {
     /// CCW boundary polygon, rotated to start at its lexicographic minimum.
     pub points: Vec<Point2Dto>,
-    /// Boundary edges carried by an authored (non-projected) segment. A face
+    /// Boundary edges carried by authored geometry or an explicit projection. A face
     /// whose boundary is made only of projected support geometry is a real
     /// face of the planar subdivision, but the user never drew it: it must not
     /// become a selectable profile, and it must not turn authored geometry
@@ -813,7 +821,7 @@ pub struct BoundedFace {
 /// directed half-edge is walked with the bounded face on its left.
 ///
 /// `projected` marks the segment ids that came from projected support
-/// geometry instead of an authored sketch entity. They participate in the
+/// geometry instead of an authored entity or explicit association. They participate in the
 /// walk so a support edge can seal a region the user drew against it, and each
 /// returned face reports how much authored geometry bounds it.
 pub fn extract_bounded_faces(
@@ -826,7 +834,7 @@ pub fn extract_bounded_faces(
     }
     let tolerance = tolerance.max(1e-9);
     let tol2 = tolerance * tolerance;
-    let mut ordered = node_segments_for_faces(segments, tolerance)?;
+    let mut ordered = node_segments_for_faces(segments, tolerance, projected)?;
     ordered.sort_by(|left, right| {
         left.id
             .cmp(&right.id)
@@ -1411,6 +1419,29 @@ mod tests {
             faces[0].authored_edges > 0,
             "a coincident authored piece must keep authored provenance"
         );
+    }
+
+    #[test]
+    fn explicit_projection_overlapping_lower_id_support_keeps_profile_provenance() {
+        let support = boundary_square();
+        let passive = projected(&[900, 901, 902, 903]);
+        let explicit = support
+            .iter()
+            .map(|edge| Segment2 {
+                id: edge.id + 100,
+                ..*edge
+            })
+            .collect::<Vec<_>>();
+        for reverse in [false, true] {
+            let mut segments = support.clone();
+            segments.extend_from_slice(&explicit);
+            if reverse {
+                segments.reverse();
+            }
+            let faces = extract_bounded_faces(&segments, 1e-6, &passive).unwrap();
+            assert_eq!(faces.len(), 1);
+            assert_eq!(faces[0].authored_edges, 4);
+        }
     }
 
     #[test]

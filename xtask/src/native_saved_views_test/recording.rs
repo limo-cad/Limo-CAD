@@ -72,7 +72,7 @@ fn frames(path: &Path) -> Result<u64> {
         .context("Invalid native recording frame count")
 }
 
-pub(super) struct Recording {
+pub(crate) struct Recording {
     child: OwnedChild,
     started: Instant,
     directory: PathBuf,
@@ -80,7 +80,7 @@ pub(super) struct Recording {
 }
 
 impl Recording {
-    pub(super) fn start(directory: &Path) -> Result<Self> {
+    pub(crate) fn start(directory: &Path) -> Result<Self> {
         crate::linux_fixture::verify_private_display()?;
         let geometry = crate::linux_fixture::output(
             Command::new("xdotool").arg("getdisplaygeometry"),
@@ -176,7 +176,7 @@ impl Recording {
         Ok(())
     }
 
-    pub(super) fn hold(&mut self, name: &str) -> Result<()> {
+    pub(crate) fn hold(&mut self, name: &str) -> Result<()> {
         self.live()?;
         self.stages
             .push(json!({"state":name,"elapsed_ms":self.started.elapsed().as_millis()}));
@@ -185,7 +185,7 @@ impl Recording {
         self.live()
     }
 
-    pub(super) fn finish(mut self) -> Result<()> {
+    pub(crate) fn finish(mut self) -> Result<()> {
         self.live()?;
         self.child
             .0

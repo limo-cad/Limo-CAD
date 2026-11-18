@@ -52,6 +52,17 @@ The Rust task discovers the host's MSVC compiler and Windows SDK and supplies
 them to both CMake configuration and compilation. A fresh shell does not need a
 prior developer-shell setup, and an ambient MinGW compiler cannot qualify an
 MSVC SDK. Cross-built packages still need runtime qualification on their target.
+
+The ARM64 triplet pins MSVC **14.44.35207** in
+`native/occt-overlay/triplets/msvc-arm64-version.txt`. The hosted runner's
+14.52.37025 compiler crashes while optimizing OCCT; the same compiler regression
+is tracked in [runner-images #15328](https://github.com/actions/runner-images/issues/15328).
+The shared SDK action reads this pin, verifies the selected compiler, and exports
+its environment for qualification and application builds. vcpkg reads the same
+pin, and both cache layers include it. A missing pinned compiler fails before
+cache restore. Remove or update the pin only after the replacement compiler
+passes the complete ARM64 package and runtime checks.
+
 The manifest
 installs a dynamic Windows prefix for the selected target under:
 
@@ -83,6 +94,9 @@ of cloning it again.
 Use the matching Visual Studio Developer PowerShell, with its CMake and Ninja
 tools available, then select the Rust target and vcpkg triplet:
 
+For ARM64, install the pinned toolset above and initialize the developer
+environment with `VsDevCmd.bat -arch=arm64 -vcvars_ver=14.44.35207`.
+
 ```powershell
 # x64; substitute aarch64-pc-windows-msvc and arm64-windows for ARM64.
 $target = "x86_64-pc-windows-msvc"
@@ -105,9 +119,9 @@ installer, gathers the native runtime DLLs and license notices, and writes:
 
 ```text
 desktop/target/<rust-target>/release/bundle/portable/
-├── Limo-CAD-0.3.0-rc.3-windows-<architecture>/
-├── Limo-CAD-0.3.0-rc.3-windows-<architecture>.zip
-└── Limo-CAD-0.3.0-rc.3-windows-<architecture>.zip.sha256
+├── Limo-CAD-0.3.0-windows-<architecture>/
+├── Limo-CAD-0.3.0-windows-<architecture>.zip
+└── Limo-CAD-0.3.0-windows-<architecture>.zip.sha256
 ```
 
 The directory contains `Limo-CAD.exe`, the OCCT dependency DLLs, a runtime

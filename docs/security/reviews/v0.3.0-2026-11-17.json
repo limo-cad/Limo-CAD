@@ -1,0 +1,431 @@
+{
+  "review_date_utc": "2026-11-17",
+  "repository": "limo-cad/Limo-CAD",
+  "pull_request": 535,
+  "reviewed_head": "f501220f1451adb86717c905ac058228a69e5cb8",
+  "built_merge_commit": "98eef195f656c95386c9810f9da6be983ef72a48",
+  "built_tree_equals_reviewed_head": true,
+  "package_run": "https://github.com/limo-cad/Limo-CAD/actions/runs/43676043101",
+  "scope": "Five existing PR packages; subsequent source changes require new package builds and scans. No tag signatures or notarization are asserted.",
+  "grype": {
+    "version": "0.120.1",
+    "database_schema": "v6.1.10",
+    "database_built": "2026-11-16T06:30:54Z",
+    "database_validated": true,
+    "unfiltered_scan_ignore_rules": []
+  },
+  "artifacts": [
+    {
+      "artifact_id": 14146838517,
+      "actions_archive_digest": "sha256:915548a7fd3d8e696566a764bf3579195bd8cf3594c5b748a397a47e3ef79780",
+      "archive": "Limo.CAD_0.3.0_aarch64.dmg",
+      "archive_sha256": "c7788775609026a492879ef42c41d050672005b4b61f3efbb4cefbf3253e6e83",
+      "target": "aarch64-apple-darwin",
+      "source_revision": "98eef195f656c95386c9810f9da6be983ef72a48",
+      "source_modified": false,
+      "inventory_reports_sha256": {
+        "Limo.CAD_0.3.0_aarch64.dmg.sbom.cdx.json": "2eb8bb299911e8e75a4e9147c8a58f4dd7d8e6835ccd97132e151d6e70bf91db",
+        "Limo.CAD_0.3.0_aarch64.dmg.sbom.spdx.json": "fc9e0bb9900c5d1291e240a3976f628a1fb35d59cb3b4937c4434c64cd43cc8f"
+      },
+      "metadata_sha256": "e838b4ddc4e7b73e5e9f2efd55de69e8457e85c7116b4c6749468e85b28b5351",
+      "archive_and_inventory_verification": "passed",
+      "unfiltered_scan_sha256": "ebda77e8792e0fd6026ed6ba90a8f54cd0cb45b9a11b19cdcd082ab0aeba539a",
+      "unfiltered_findings": []
+    },
+    {
+      "artifact_id": 14147158089,
+      "actions_archive_digest": "sha256:c736cbbb7c9c260adfadb27f22511870d357a2cce2dfc6763a9a65a831e60ac3",
+      "archive": "Limo.CAD_0.3.0_amd64.deb",
+      "archive_sha256": "b03b1f17cf127b8539c8cdd7c10d7509e958200dc5dd506bc679738d331bcca8",
+      "target": "x86_64-unknown-linux-gnu",
+      "source_revision": "98eef195f656c95386c9810f9da6be983ef72a48",
+      "source_modified": false,
+      "inventory_reports_sha256": {
+        "Limo.CAD_0.3.0_amd64.deb.sbom.cdx.json": "80f4db00d10ffcb6e11f286c2887992f8323bbb65a72a60bec772d56ce60528e",
+        "Limo.CAD_0.3.0_amd64.deb.sbom.spdx.json": "2d687ce4d1242710a846801b162d6e9db0d94c3e8af93b984838d2921161da02"
+      },
+      "metadata_sha256": "8ff841096f8254013e8babe27ffe07c123be9886fc0c1a562180b2fbef6a13a2",
+      "archive_and_inventory_verification": "passed",
+      "unfiltered_scan_sha256": "7d5bb19da995cd7fc158951e77f196c7fe4a10cff2ea572eaaa07ebffb9d2071",
+      "unfiltered_findings": []
+    },
+    {
+      "artifact_id": 14148411481,
+      "actions_archive_digest": "sha256:df53be1d1ce6cc90671ef8f151b0be8af87001a35c3d8c9a96a063ce5702ddc9",
+      "archive": "Limo.CAD_0.3.0_amd64.AppImage",
+      "archive_sha256": "0f6629ba8f1101f1eee1099af98f3b4ab83498c8b769eaf566463bc1d9772a85",
+      "target": "x86_64-unknown-linux-gnu",
+      "source_revision": "98eef195f656c95386c9810f9da6be983ef72a48",
+      "source_modified": false,
+      "inventory_reports_sha256": {
+        "Limo.CAD_0.3.0_amd64.AppImage.sbom.cdx.json": "fb3934424a262abb90900afe33fd0d2ce6f00dbf0ca45eda88605cb288d43fa2",
+        "Limo.CAD_0.3.0_amd64.AppImage.sbom.spdx.json": "7b66e4a464901f1456ed479722754597ee0d6a3341e9bc8943fd816a3406bddb"
+      },
+      "metadata_sha256": "4db13f5198695c34647763c800267d269abf9637fa9f48994e1b795aa84492c0",
+      "archive_and_inventory_verification": "passed",
+      "unfiltered_scan_sha256": "d2c409d9087b4bf9eb5fb93f8e45d03acdf76d5208ac5c157a115cbdb7dccca9",
+      "unfiltered_findings": [
+        {
+          "advisory": "CVE-2026-40228",
+          "severity": "Low",
+          "package": "systemd",
+          "version": "249.11-0ubuntu3.23",
+          "type": "deb",
+          "purl": "pkg:deb/ubuntu/libudev1@249.11-0ubuntu3.23?arch=amd64&distro=ubuntu-22.04",
+          "source": "https://ubuntu.com/security/CVE-2026-40228"
+        }
+      ]
+    },
+    {
+      "artifact_id": 14150167141,
+      "actions_archive_digest": "sha256:014a1866ac74324d87ecc90339a1f6adb10be9b88ea4a82ae0d19285c02f97ed",
+      "archive": "Limo-CAD-0.3.0-windows-x64.zip",
+      "archive_sha256": "d7477b90f8cef43650390f82f15156999a6ec727de3780ad1cd333db94b27536",
+      "target": "x86_64-pc-windows-msvc",
+      "source_revision": "98eef195f656c95386c9810f9da6be983ef72a48",
+      "source_modified": false,
+      "inventory_reports_sha256": {
+        "Limo-CAD-0.3.0-windows-x64.zip.sbom.cdx.json": "a56fa3728ea3c593d9bf84e6343b5374b96e936119c6acba7ac13d886fdfae3c",
+        "Limo-CAD-0.3.0-windows-x64.zip.sbom.spdx.json": "f2ff46ae58da3a4cb81a26f4538d042796f4135261184171f66caf4f883a93af"
+      },
+      "metadata_sha256": "1c50f9802511ac5d5ff25bd5755426024cf1c5e8bdf5fafc56ba282be88bdfcf",
+      "archive_and_inventory_verification": "passed",
+      "unfiltered_scan_sha256": "c23433de281f3780b77b1d1d77097139cf3e5a494f2d6a46d0dd2efc763f5cb6",
+      "unfiltered_findings": [
+        {
+          "advisory": "CVE-2026-85091",
+          "severity": "High",
+          "package": "zlib",
+          "version": "1.3.2",
+          "type": "binary",
+          "purl": "",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-85091"
+        }
+      ],
+      "zlib": {
+        "path": "Limo-CAD-0.3.0-windows-x64/z.dll",
+        "sha256": "c93da951e897efee9f7f9181492b62be240596ef80ebfd84c724177b02d2722d",
+        "purl": "pkg:vcpkg/zlib@1.3.2?port_version=3&triplet=x64-windows",
+        "version": "1.3.2",
+        "identification": "checksum-matched DLL; vcpkg port zlib version 1.3.2#3; license from its SPDX package metadata"
+      }
+    },
+    {
+      "artifact_id": 14150965579,
+      "actions_archive_digest": "sha256:fe3902c54428c4743edc8099630327f75c945b91a9b0ba12e3fe0675ac85e381",
+      "archive": "Limo-CAD-0.3.0-windows-arm64.zip",
+      "archive_sha256": "e60575a3de13d7236cd1cb2ea2d0c930c129fb64625536b662cf9c4c92aa5854",
+      "target": "aarch64-pc-windows-msvc",
+      "source_revision": "98eef195f656c95386c9810f9da6be983ef72a48",
+      "source_modified": false,
+      "inventory_reports_sha256": {
+        "Limo-CAD-0.3.0-windows-arm64.zip.sbom.cdx.json": "acb01ae9deed5165a6e769f86e706fac00da16089f6326ba00c018e9e5357897",
+        "Limo-CAD-0.3.0-windows-arm64.zip.sbom.spdx.json": "63caceeb925085dd3cad38c54190d1f8f8531d28fce0baab3b8d02a5d1cbb4d2"
+      },
+      "metadata_sha256": "a0a4dbdc23ed7579072ac96972d5e2442653082cc1e482f546ce1abd2913950a",
+      "archive_and_inventory_verification": "passed",
+      "unfiltered_scan_sha256": "787f5c604f934ece85469fc3ee53698343b79342601e853d41eb0c53d37609db",
+      "unfiltered_findings": [
+        {
+          "advisory": "CVE-2026-85091",
+          "severity": "High",
+          "package": "zlib",
+          "version": "1.3.2",
+          "type": "binary",
+          "purl": "",
+          "source": "https://nvd.nist.gov/vuln/detail/CVE-2026-85091"
+        }
+      ],
+      "zlib": {
+        "path": "Limo-CAD-0.3.0-windows-arm64/z.dll",
+        "sha256": "bfae145dd6f25f2f3843d4fe654c44d901fb2f562102e31197f6ae8def5345a9",
+        "purl": "pkg:vcpkg/zlib@1.3.2?port_version=3&triplet=arm64-windows",
+        "version": "1.3.2",
+        "identification": "checksum-matched DLL; vcpkg port zlib version 1.3.2#3; license from its SPDX package metadata"
+      }
+    }
+  ],
+  "windows_inspection": [
+    {
+      "artifact": "14150167141",
+      "inspected_images": 58,
+      "consumers": {
+        "freetype.dll": [
+          "inflateInit2_",
+          "inflateReset",
+          "inflateEnd",
+          "inflate"
+        ],
+        "libpng16.dll": [
+          "crc32",
+          "deflateInit2_",
+          "deflateReset",
+          "deflate",
+          "deflateEnd",
+          "inflateInit2_",
+          "inflateReset2",
+          "inflate",
+          "inflateEnd",
+          "inflateReset"
+        ]
+      },
+      "embedded_unreviewed_zlib": [],
+      "mitigations": [
+        {
+          "file": "Limo-CAD.exe",
+          "ASLR": true,
+          "DEP": true,
+          "high_entropy_ASLR": true
+        },
+        {
+          "file": "z.dll",
+          "ASLR": true,
+          "DEP": true,
+          "high_entropy_ASLR": true
+        }
+      ]
+    },
+    {
+      "artifact": "14150965579",
+      "inspected_images": 58,
+      "consumers": {
+        "freetype.dll": [
+          "inflateInit2_",
+          "inflateReset",
+          "inflateEnd",
+          "inflate"
+        ],
+        "libpng16.dll": [
+          "crc32",
+          "deflateInit2_",
+          "deflateReset",
+          "deflate",
+          "deflateEnd",
+          "inflateInit2_",
+          "inflateReset2",
+          "inflate",
+          "inflateEnd",
+          "inflateReset"
+        ]
+      },
+      "embedded_unreviewed_zlib": [],
+      "mitigations": [
+        {
+          "file": "Limo-CAD.exe",
+          "ASLR": true,
+          "DEP": true,
+          "high_entropy_ASLR": true
+        },
+        {
+          "file": "z.dll",
+          "ASLR": true,
+          "DEP": true,
+          "high_entropy_ASLR": true
+        }
+      ]
+    }
+  ],
+  "zlib_upstream_files": [
+    {
+      "file": "vcpkg.json",
+      "identical_to_upstream": true,
+      "sha256": "d83da5d720318608890a4b63187d962c7a4ec11f9dab7d04757e61407bfcbfcf"
+    },
+    {
+      "file": "portfile.cmake",
+      "identical_to_upstream": true,
+      "sha256": "5513d58e37c58503a31707c3212dff4e897cbcdfc6ed1c9f0caabf474e587892"
+    },
+    {
+      "file": "0001-no-version-script-on-ohos.patch",
+      "identical_to_upstream": true,
+      "sha256": "f8c54d2dfd0a37d2f6e7473b1dba86b9e5ac423f522de9021b62c6c8c226ff76"
+    },
+    {
+      "file": "CVE-2026-76844.patch",
+      "identical_to_upstream": true,
+      "sha256": "110ff14375733173d8aa54574473424fbd7dfe4b81f1ca34a759c6fe14b15b14"
+    },
+    {
+      "file": "vcpkg-cmake-wrapper.cmake",
+      "identical_to_upstream": true,
+      "sha256": "2b3c71f1615f0fa0e86d8a87713a12a794df218a90b6c3b6d625fa2f25f73716"
+    },
+    {
+      "file": "usage",
+      "identical_to_upstream": true,
+      "sha256": "2fdbc95707f61d7f468ece88e460b1bcc22713af34978c7a1b80b689fc39cb67"
+    }
+  ],
+  "zlib_regression": {
+    "source_archive_checksum_verified": true,
+    "patched_compressed_and_direct_writes": "passed",
+    "upstream_example": "passed",
+    "unpatched_negative_controls": "AddressSanitizer invalid-write failure in both modes",
+    "source_fix": "https://github.com/madler/zlib/commit/df84af25dc1942490e1d1c899a07619152a46148"
+  },
+  "rustsec": {
+    "version": "0.22.2",
+    "database_commit": "02e2517f457a359fc6d3440ea4560c8ea188fee8",
+    "checked_yanked": true,
+    "after_rustix_update": [
+      {
+        "workspace": "engine",
+        "lock_sha256": "9199bc6e18623abb4d34e2d6aaeb47bb5449492883fec5f7a2e086e3eb513a97",
+        "vulnerabilities": 0,
+        "warnings": {
+          "unmaintained": [
+            {
+              "package": "ttf-parser",
+              "version": "0.25.1",
+              "advisory": "RUSTSEC-2026-0192"
+            },
+            {
+              "package": "unsafe-libyaml",
+              "version": "0.2.11",
+              "advisory": "RUSTSEC-2024-0449"
+            }
+          ]
+        }
+      },
+      {
+        "workspace": "desktop",
+        "lock_sha256": "2d8a7ee6ca70430cf449c39a2d6f17e98174a040118a9b5f372ec45af2e870b9",
+        "vulnerabilities": 0,
+        "warnings": {
+          "unmaintained": [
+            {
+              "package": "ttf-parser",
+              "version": "0.25.1",
+              "advisory": "RUSTSEC-2026-0192"
+            },
+            {
+              "package": "zbus_names",
+              "version": "4.3.4",
+              "advisory": "RUSTSEC-2026-0371"
+            },
+            {
+              "package": "zvariant",
+              "version": "5.15.0",
+              "advisory": "RUSTSEC-2026-0370"
+            },
+            {
+              "package": "zvariant_derive",
+              "version": "5.15.0",
+              "advisory": "RUSTSEC-2026-0372"
+            }
+          ]
+        }
+      },
+      {
+        "workspace": "mcp-server",
+        "lock_sha256": "5d7612706e1c8d4f65b3f4f4f4245805ff0d94ff7ab99f68184c74881caeca5d",
+        "vulnerabilities": 0,
+        "warnings": {
+          "unmaintained": [
+            {
+              "package": "ttf-parser",
+              "version": "0.25.1",
+              "advisory": "RUSTSEC-2026-0192"
+            }
+          ]
+        }
+      },
+      {
+        "workspace": "rust-simulation",
+        "lock_sha256": "c5da1d7e268265858eef6a4d6e0f177810ea011514d1eeb79f479ec30711042a",
+        "vulnerabilities": 0,
+        "warnings": {
+          "unmaintained": [
+            {
+              "package": "atomic-polyfill",
+              "version": "1.0.3",
+              "advisory": "RUSTSEC-2023-0089"
+            },
+            {
+              "package": "fxhash",
+              "version": "0.2.1",
+              "advisory": "RUSTSEC-2025-0057"
+            },
+            {
+              "package": "paste",
+              "version": "1.0.15",
+              "advisory": "RUSTSEC-2024-0436"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "policy_validation": [
+    {
+      "artifact": "14146838517",
+      "exit": 0,
+      "expected_exit": 0,
+      "findings": [],
+      "ignored": []
+    },
+    {
+      "artifact": "14147158089",
+      "exit": 0,
+      "expected_exit": 0,
+      "findings": [],
+      "ignored": []
+    },
+    {
+      "artifact": "14148411481",
+      "exit": 0,
+      "expected_exit": 0,
+      "findings": [
+        {
+          "id": "CVE-2026-40228",
+          "severity": "Low"
+        }
+      ],
+      "ignored": []
+    },
+    {
+      "artifact": "14150167141",
+      "exit": 0,
+      "expected_exit": 0,
+      "findings": [],
+      "ignored": [
+        "CVE-2026-85091"
+      ]
+    },
+    {
+      "artifact": "14150965579",
+      "exit": 0,
+      "expected_exit": 0,
+      "findings": [],
+      "ignored": [
+        "CVE-2026-85091"
+      ]
+    },
+    {
+      "artifact": "next-version",
+      "exit": 2,
+      "expected_exit": 2,
+      "findings": [
+        {
+          "id": "CVE-2026-85091",
+          "severity": "High"
+        }
+      ],
+      "ignored": []
+    },
+    {
+      "artifact": "old-rc",
+      "exit": 2,
+      "expected_exit": 2,
+      "findings": [
+        {
+          "id": "CVE-2026-85091",
+          "severity": "High"
+        }
+      ],
+      "ignored": []
+    }
+  ],
+  "policy_validation_scope": "Previously verified packages rescanned with the new rules; synthetic old-rc and next-version locations must retain a blocking finding."
+}

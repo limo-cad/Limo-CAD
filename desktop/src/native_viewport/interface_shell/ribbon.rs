@@ -738,6 +738,7 @@ fn message_key(semantic: &str) -> Option<&'static str> {
         "Fillet" => "ribbon.sketch.fillet",
         "Chamfer" => "ribbon.sketch.chamfer",
         "Offset" => "ribbon.sketch.offset",
+        "Project" => "ribbon.sketch.project",
         "Move/Copy" => "ribbon.sketch.moveCopy",
         "Mirror" => "ribbon.sketch.mirror",
         "Scale" => "ribbon.solid.scale",
