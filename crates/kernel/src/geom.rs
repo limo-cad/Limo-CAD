@@ -30,7 +30,7 @@ pub enum SurfKind {
 /// | Cone     | `o` apex, `z` into the nappe  | –            | half-angle   |
 /// | Sphere   | `o` centre, `z` pole axis     | radius       | –            |
 /// | Torus    | `o` centre, `z` axis          | major radius | minor radius |
-/// | Helicoid | `o` on axis, `z` axis         | –            | flank angle  |
+/// | Helicoid | `o` on axis, `z` axis         | –            | ruling angle |
 /// | Coil     | `o` on axis, `z` axis         | major radius | minor radius |
 ///
 /// The two helical kinds also have a lead `t`, the climb along the axis
@@ -129,8 +129,10 @@ impl Surface {
 
     /// The surface a straight line through the axis sweeps when it turns
     /// about the axis and climbs it by `lead` with every radian. `angle`
-    /// is the angle between the line and the axis; negative, the line
-    /// falls as it leaves the axis.
+    /// is the angle between the line and the axis, up to a right angle,
+    /// where the line goes straight out; negative, the line falls as it
+    /// leaves the axis. `v` is the way along the line from the axis:
+    /// `o + (radial(u)·sin|angle| ± z·cos|angle|)·v + z·lead·u`.
     pub fn helicoid(o: V3, axis: V3, x_hint: V3, angle: f64, lead: f64) -> Surface {
         Surface {
             kind: SurfKind::Helicoid,
@@ -185,7 +187,7 @@ impl Surface {
             SurfKind::Cone => self.around(u) * (v * self.s.tan()),
             SurfKind::Sphere => self.around(u) * (self.r * v.cos()),
             SurfKind::Torus => self.around(u) * (self.r + self.s * v.cos()),
-            SurfKind::Helicoid => self.around(u) * (v * self.s.abs().tan()) + self.f.z * self.t,
+            SurfKind::Helicoid => self.around(u) * (v * self.s.abs().sin()) + self.f.z * self.t,
             SurfKind::Coil => self.around(u) * (self.r + self.s * v.cos()) + self.f.z * self.t,
         }
     }
@@ -205,8 +207,19 @@ impl Surface {
                 let (sv, cv) = v.sin_cos();
                 (f.z * cv - self.radial(u) * sv) * self.s
             }
-            SurfKind::Helicoid => self.radial(u) * self.s.abs().tan() + f.z * self.s.signum(),
+            SurfKind::Helicoid => {
+                let (out, up) = self.ruling();
+                self.radial(u) * out + f.z * up
+            }
         }
+    }
+
+    /// A helicoid's ruling, a unit long: how far it goes out from the axis
+    /// and how far up it.
+    #[inline]
+    pub(crate) fn ruling(&self) -> (f64, f64) {
+        let (sin, cos) = self.s.abs().sin_cos();
+        (sin, self.s.signum() * cos)
     }
 
     /// Model length of a unit step in each parameter at `(u, v)`.
@@ -217,10 +230,7 @@ impl Surface {
             SurfKind::Cone => v2((v * self.s.tan()).abs(), 1.0 / self.s.cos()),
             SurfKind::Sphere => v2(self.r * v.cos().abs(), self.r),
             SurfKind::Torus => v2((self.r + self.s * v.cos()).abs(), self.s),
-            SurfKind::Helicoid => {
-                let slope = self.s.abs().tan();
-                v2((v * slope).hypot(self.t), slope.hypot(1.0))
-            }
+            SurfKind::Helicoid => v2((v * self.s.abs().sin()).hypot(self.t), 1.0),
             SurfKind::Coil => v2((self.r + self.s * v.cos()).hypot(self.t), self.s.abs()),
         }
     }
@@ -240,8 +250,8 @@ impl Surface {
                 f.o + self.radial(u) * (self.r + self.s * cv) + f.z * (self.s * sv)
             }
             SurfKind::Helicoid => {
-                f.o + self.radial(u) * (v * self.s.abs().tan())
-                    + f.z * (self.s.signum() * v + self.t * u)
+                let (out, up) = self.ruling();
+                f.o + self.radial(u) * (v * out) + f.z * (up * v + self.t * u)
             }
             SurfKind::Coil => {
                 let (sv, cv) = v.sin_cos();
@@ -272,10 +282,11 @@ impl Surface {
             // A point is on the nearest turn: the one whose height at the
             // point's angle is closest to the point's own.
             SurfKind::Helicoid => {
+                let (out, up) = self.ruling();
                 let rho = l.x.hypot(l.y);
-                let v = rho / self.s.abs().tan();
+                let v = rho / out;
                 let around = if rho > 0.0 { l.y.atan2(l.x) } else { 0.0 };
-                let turns = (((l.z - self.s.signum() * v) / self.t - around) / TAU).round();
+                let turns = (((l.z - up * v) / self.t - around) / TAU).round();
                 v2(around + TAU * turns, v)
             }
             SurfKind::Coil => {
@@ -322,9 +333,9 @@ impl Surface {
                 if rho < 1.0e-12 {
                     return 0.0;
                 }
-                let above = l.z - self.s.signum() * q.y - self.t * q.x;
-                let slope = self.s.abs().tan();
-                -above / (1.0 + 1.0 / (slope * slope) + (self.t / rho).powi(2)).sqrt()
+                let (out, up) = self.ruling();
+                let above = l.z - up * q.y - self.t * q.x;
+                -above / (1.0 + (up / out).powi(2) + (self.t / rho).powi(2)).sqrt()
             }
             // In the half-plane through the axis and the point the tube
             // is a circle about the nearest turn of its centre line.

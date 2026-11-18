@@ -351,14 +351,14 @@ fn in_span(candidates: &[(f64, bool)], t0: f64, t1: f64, periodic: bool) -> Vec<
 /// axis carried along the curve without a jump, is continuous: the curve
 /// crosses a turn wherever it passes a whole number of leads.
 fn helicoid_hits(c: &Curve, t0: f64, t1: f64, s: &Surface) -> Vec<Root> {
-    let (slope, falls) = (s.s.abs().tan(), s.s.signum());
+    let (out, up) = s.ruling();
     let lead = TAU * s.t;
     // Height above the first turn before the angle is taken off, the angle,
     // and the distance from the axis.
     let at = |t: f64| {
         let l = s.f.local(c.point(t));
         let rho = l.x.hypot(l.y);
-        (l.z - falls * rho / slope, l.y.atan2(l.x), rho)
+        (l.z - up * rho / out, l.y.atan2(l.x), rho)
     };
     let nearest = |a: f64| a - TAU * (a / TAU).round();
     let start = match c.kind {

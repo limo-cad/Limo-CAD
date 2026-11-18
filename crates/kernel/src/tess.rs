@@ -660,7 +660,7 @@ fn u_step(trim: &FaceTrim, opts: &TessOptions, scale: f64) -> f64 {
         SurfKind::Torus => s.r + s.s,
         SurfKind::Cone => trim.hi.y.abs().max(trim.lo.y.abs()) * s.s.tan(),
         // As far from the axis as the face goes.
-        SurfKind::Helicoid => trim.hi.y.abs().max(trim.lo.y.abs()) * s.s.abs().tan(),
+        SurfKind::Helicoid => trim.hi.y.abs().max(trim.lo.y.abs()) * s.s.abs().sin(),
         SurfKind::Coil => s.r + s.s.abs(),
         _ => s.r,
     }

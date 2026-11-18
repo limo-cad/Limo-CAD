@@ -1327,9 +1327,9 @@ pub fn revolve(
 ///
 /// The profile is one loop in the half-plane `(ρ, h)`, clear of the axis,
 /// and no taller than one turn climbs, so that the turns do not run into
-/// each other. A side of it along the axis sweeps a cylinder, a slanted
-/// side a helicoid, an arc a coil; a side square to the axis is not
-/// supported. However many turns there are, each side is one face.
+/// each other. A side of it along the axis sweeps a cylinder, any other
+/// straight side a helicoid, square to the axis or slanted, and an arc a
+/// coil. However many turns there are, each side is one face.
 pub fn screw(
     profile: &[PSeg],
     origin: V3,
@@ -1448,11 +1448,6 @@ pub fn screw(
                 if len <= TOL {
                     return Err("the screw profile contains a zero-length line".into());
                 }
-                if dh.abs() <= 1.0e-9 * len {
-                    return Err(
-                        "a side of a screw profile square to its axis is not supported".into(),
-                    );
-                }
                 if dr.abs() <= 1.0e-9 * len {
                     (
                         Surface {
@@ -1463,13 +1458,17 @@ pub fn screw(
                     )
                 } else {
                     // The line runs on to the axis at one height; from
-                    // there it rises or falls on its way out.
+                    // there it rises or falls on its way out, or goes
+                    // straight out. Going outwards, the solid is above it.
                     let apex = pa.y - pa.x * dh / dr;
-                    let rises = (dh / dr).signum();
-                    let slope = (dr / dh).abs();
+                    let angle = if dh.abs() <= 1.0e-9 * len {
+                        std::f64::consts::FRAC_PI_2
+                    } else {
+                        (dh / dr).signum() * (dr / dh).abs().atan()
+                    };
                     (
-                        Surface::helicoid(origin + a * apex, a, x0, rises * slope.atan(), lead),
-                        rises * dh + slope * dr > 0.0,
+                        Surface::helicoid(origin + a * apex, a, x0, angle, lead),
+                        dr > 0.0,
                     )
                 }
             }

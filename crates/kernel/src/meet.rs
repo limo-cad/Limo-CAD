@@ -174,9 +174,11 @@ impl Grid<'_> {
             SurfKind::Helicoid => {
                 let (lo, hi) = range(|p| p.z);
                 let far = local.iter().map(|p| p.x.hypot(p.y)).fold(0.0, f64::max);
-                let slope = base.s.abs().tan();
-                let out = far / slope;
-                let rise = base.s.signum() * out;
+                // As far along a ruling as it takes to get that far out,
+                // and what the ruling has climbed by then.
+                let (sideways, up) = base.ruling();
+                let out = far / sideways;
+                let rise = up * out;
                 let turns = [lo, hi, lo - rise, hi - rise].map(|z| z / base.t);
                 let first = turns.iter().copied().fold(f64::INFINITY, f64::min);
                 let last = turns.iter().copied().fold(f64::NEG_INFINITY, f64::max);
@@ -184,7 +186,7 @@ impl Grid<'_> {
                     (first - PI, last + PI),
                     (1.0e-6 * out.max(1.0e-6), out),
                     [false, false],
-                    v2(far.hypot(base.t), slope.hypot(1.0)),
+                    v2(far.hypot(base.t), 1.0),
                 )
             }
             SurfKind::Coil => {
@@ -950,7 +952,8 @@ fn through_the_axis(a: &Surface, b: &Surface, region: &Aabb) -> Option<Vec<Curve
     // What passes those heights starts this much lower or higher.
     let (down, up) = match screw.kind {
         SurfKind::Helicoid => {
-            let rise = screw.s.signum() * out / screw.s.abs().tan();
+            let (sideways, up) = screw.ruling();
+            let rise = up * out / sideways;
             (rise.max(0.0), (-rise).max(0.0))
         }
         _ => (screw.s.abs(), screw.s.abs()),
@@ -973,10 +976,10 @@ fn through_the_axis(a: &Surface, b: &Surface, region: &Aabb) -> Option<Vec<Curve
                 let u = start + PI * k as f64;
                 let on_axis = screw.f.o + axis * (screw.t * u);
                 match screw.kind {
-                    SurfKind::Helicoid => Curve::line(
-                        on_axis,
-                        radial(u) * screw.s.abs().tan() + axis * screw.s.signum(),
-                    ),
+                    SurfKind::Helicoid => {
+                        let (sideways, up) = screw.ruling();
+                        Curve::line(on_axis, radial(u) * sideways + axis * up)
+                    }
                     _ => Curve::circle(on_axis + radial(u) * screw.r, n, radial(u), screw.s.abs()),
                 }
             })

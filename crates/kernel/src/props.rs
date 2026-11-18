@@ -233,7 +233,7 @@ fn stride(s: &Surface, along_v: bool) -> f64 {
         // Straight along its rulings, but they fan out from a waist as wide
         // as the lead: what a strip of it weighs is a polynomial along a
         // ruling, its area is not.
-        (SurfKind::Helicoid, true) => (2.0 * s.t.abs() * s.s.abs().cos()).max(1.0e-6),
+        (SurfKind::Helicoid, true) => (2.0 * s.t.abs()).max(1.0e-6),
         _ => PI / 6.0,
     }
 }

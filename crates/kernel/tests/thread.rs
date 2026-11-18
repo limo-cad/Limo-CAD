@@ -40,8 +40,18 @@ fn per_radian(inner: f64, half_in: f64, outer: f64, half_out: f64) -> f64 {
 fn a_tooth_swept_along_a_screw() {
     let pitch = 2.0;
     let lead = pitch / TAU;
-    let (inner, outer, half_in, half_out) = (4.0, 5.2, 0.8, 0.3);
-    for (turns, hand) in [(0.4, 1.0), (1.0, 1.0), (6.5, 1.0), (3.25, -1.0)] {
+    // A tooth that narrows outwards, one that widens, and a square one,
+    // whose flanks go straight out from the axis.
+    for (inner, outer, half_in, half_out, turns, hand) in [
+        (4.0, 5.2, 0.8, 0.3, 0.4, 1.0),
+        (4.0, 5.2, 0.8, 0.3, 1.0, 1.0),
+        (4.0, 5.2, 0.8, 0.3, 6.5, 1.0),
+        (4.0, 5.2, 0.8, 0.3, 3.25, -1.0),
+        (4.0, 5.2, 0.3, 0.6, 2.5, 1.0),
+        (4.0, 5.2, 0.5, 0.5, 0.4, 1.0),
+        (4.0, 5.2, 0.5, 0.5, 6.5, 1.0),
+        (4.0, 5.2, 0.5, 0.5, 3.25, -1.0),
+    ] {
         let body = make::screw(
             &tooth(inner, half_in, outer, half_out),
             v3(1.0, -2.0, 0.5),
@@ -86,6 +96,70 @@ fn a_tooth_swept_along_a_screw() {
             m.area
         );
         assert_mesh_is_a_clean_skin(&body);
+    }
+}
+
+/// A square thread: flanks straight out from the axis, groove and ridge
+/// each half the pitch wide, so the groove takes half of the ring between
+/// root and crest whatever the length.
+#[test]
+fn a_square_thread_and_its_nut() {
+    use limo_cad_kernel::step::write;
+    use limo_cad_kernel::thread::{clipped, cutter, Run};
+    let (major, minor, pitch) = (12.0, 10.0, 4.0);
+    for left_hand in [false, true] {
+        let rod = make::cylinder(V3::ZERO, V3::Z, 0.5 * major, 30.0).unwrap();
+        let run = Run {
+            start: V3::ZERO,
+            along: V3::Z,
+            zero: V3::X,
+            pitch,
+            depth: 30.0,
+            left_hand,
+        };
+        let groove = cutter(
+            &tooth(0.5 * minor, 0.25 * pitch, 0.5 * major + 0.5, 0.25 * pitch),
+            &run,
+        )
+        .unwrap();
+        groove.check().unwrap();
+        assert_eq!(count(&groove, SurfKind::Helicoid), 2);
+        let groove = clipped(&groove, &run, 0.5 * major, true).unwrap();
+        let screw = boolean(&rod, &groove, Op::Cut).unwrap();
+        screw.check().unwrap();
+        assert_mesh_is_a_clean_skin(&screw);
+        assert_eq!(count(&screw, SurfKind::Helicoid), 2);
+        let ring = PI * 0.25 * (major * major - minor * minor);
+        let taken = mass(&rod).volume - mass(&screw).volume;
+        assert!(
+            (taken - 0.5 * ring * 30.0).abs() < 1.0e-7 * ring * 30.0,
+            "the screw loses {taken} of {}",
+            0.5 * ring * 30.0
+        );
+        // It goes out to STEP like any other thread.
+        assert!(write(&[("screw".to_string(), &screw)], "test").contains("B_SPLINE_SURFACE"));
+
+        // The nut: a block bored to the root, with the same groove cut
+        // outwards from inside the bore.
+        let block = make::block(v3(-12.0, -12.0, 0.0), v3(12.0, 12.0, 12.0)).unwrap();
+        let bore = make::cylinder(v3(0.0, 0.0, -1.0), V3::Z, 0.5 * minor, 14.0).unwrap();
+        let bored = boolean(&block, &bore, Op::Cut).unwrap();
+        let run = Run { depth: 12.0, ..run };
+        let groove = cutter(
+            &tooth(0.5 * minor - 0.5, 0.25 * pitch, 0.5 * major, 0.25 * pitch),
+            &run,
+        )
+        .unwrap();
+        let groove = clipped(&groove, &run, 0.5 * major, true).unwrap();
+        let nut = boolean(&bored, &groove, Op::Cut).unwrap();
+        nut.check().unwrap();
+        assert_mesh_is_a_clean_skin(&nut);
+        let taken = mass(&bored).volume - mass(&nut).volume;
+        assert!(
+            (taken - 0.5 * ring * 12.0).abs() < 1.0e-7 * ring * 12.0,
+            "the nut loses {taken} of {}",
+            0.5 * ring * 12.0
+        );
     }
 }
 

@@ -85,7 +85,8 @@ fn helical(h: &Surface, s: &Surface) -> Ssi {
         SurfKind::Helicoid => {
             // The flank reaches the radius of the cylinder at one height
             // above the turn.
-            let rise = h.s.signum() * s.r / h.s.abs().tan();
+            let (out, up) = h.ruling();
+            let rise = up * s.r / out;
             Ssi::Curves(vec![Curve::helix(
                 h.f.o + axis * rise,
                 axis,
