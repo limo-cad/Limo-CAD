@@ -65,6 +65,26 @@ fn a_tooth_swept_along_a_screw() {
             "{turns} turns: volume {} for {wanted}",
             m.volume
         );
+        // Its skin: two flanks, each a line from `inner` to `outer` that
+        // leans as the tooth narrows; two strips of a cylinder between
+        // helices; two flat ends. A flank is no polynomial along its
+        // rulings, which a rule fit for the volume once took it for.
+        let lean = ((half_out - half_in) / (outer - inner)).hypot(1.0);
+        let flank = |r: f64| {
+            let root = (lean * r).hypot(lead);
+            0.5 * r * root + 0.5 * lead * lead / lean * (lean * r / lead).asinh()
+        };
+        let skin = TAU
+            * turns
+            * (2.0 * (flank(outer) - flank(inner))
+                + 2.0 * half_in * inner
+                + 2.0 * half_out * outer)
+            + 2.0 * (half_in + half_out) * (outer - inner);
+        assert!(
+            (m.area - skin).abs() < 1.0e-9 * skin,
+            "{turns} turns: area {} for {skin}",
+            m.area
+        );
         assert_mesh_is_a_clean_skin(&body);
     }
 }

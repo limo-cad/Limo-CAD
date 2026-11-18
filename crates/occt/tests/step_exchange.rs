@@ -193,6 +193,119 @@ fn sample_parts_survive_the_reference_kernel() {
     }
 }
 
+/// Volume and area of a body of the Limo kernel as Open CASCADE measures
+/// them on the solid it reads from the STEP file: its own exact integrals,
+/// not a mesh.
+fn weighed_by_the_reference(name: &str, body: &Body) -> (f64, f64) {
+    use limo_cad_occt::measurement::ResolvedMeasurementSelection;
+    let text = write(&[(name.to_string(), body)], "exchange test");
+    let mut kernel = OcctKernel::new().unwrap();
+    let scene = kernel
+        .recompute(&RecomputePlanDto {
+            transaction_id: 1,
+            errors: vec![],
+            jobs: vec![KernelJobDto::ImportStep(KernelImportStepJobDto {
+                feature_id: FeatureId(1),
+                result_body_id: BodyId(1),
+                data_base64: base64(text.as_bytes()),
+            })],
+        })
+        .unwrap();
+    assert!(scene.errors.is_empty(), "{name}: {:?}", scene.errors);
+    assert_eq!(scene.bodies.len(), 1, "{name}");
+    let found = kernel
+        .detached_measurement_snapshot(&[BodyId(1)])
+        .unwrap()
+        .inspect(&[ResolvedMeasurementSelection {
+            body_id: BodyId(1),
+            kind: 0,
+            index: 0,
+            translation: [0.0; 3],
+            rotation: [0.0, 0.0, 0.0, 1.0],
+        }])
+        .unwrap();
+    let whole = &found.selections[0];
+    (whole.volume.unwrap(), whole.area.unwrap())
+}
+
+/// Threads go out as spline surfaces that follow the screw surfaces to a
+/// few millionths of a millimetre. The reference kernel reads each as one
+/// closed solid and weighs it with its own integrals.
+///
+/// Solids of planes, cylinders and tori come back to the last digit. On a
+/// spline face the reference has to work out for itself where the edges
+/// run, and its area is a few parts in a million off. Its volume is as
+/// good while a face makes a turn or two; over the seven and a half turns
+/// of the long thread it is two parts in ten thousand low, with the same
+/// surfaces, the same area and nothing else changed.
+#[test]
+fn threads_weigh_the_same_in_the_reference_kernel() {
+    use limo_cad_kernel::thread::{clipped, cutter, iso_external, rounded, Run};
+    use limo_cad_solid::{iso_metric_grade6_envelope, ThreadFit};
+    let run = |pitch: f64, depth: f64| Run {
+        start: V3::ZERO,
+        along: V3::Z,
+        zero: V3::X,
+        pitch,
+        depth,
+        left_hand: false,
+    };
+    // M8 x 1.25 - 6g along ten millimetres of a pin.
+    let limits = iso_metric_grade6_envelope(8.0, 1.25, ThreadFit::External).unwrap();
+    let pin = make::cylinder(V3::ZERO, V3::Z, 0.5 * limits.modeled_major, 14.0).unwrap();
+    let profile = iso_external(
+        limits.modeled_major,
+        limits.modeled_pitch,
+        limits.modeled_minor,
+        1.25,
+    )
+    .unwrap();
+    let groove = cutter(&profile, &run(1.25, 10.0)).unwrap();
+    let groove = clipped(&groove, &run(1.25, 10.0), 0.5 * limits.modeled_major, true).unwrap();
+    let metric = boolean(&pin, &groove, Op::Cut).unwrap();
+    // A rounded 30 degree thread, 24 across with a pitch of 4, over a turn
+    // and a half and over seven and a half.
+    let rounded_rod = |length: f64| {
+        let rod = make::cylinder(V3::ZERO, V3::Z, 12.0, length).unwrap();
+        let profile = rounded(24.0, 20.0, 4.0, 0.3, 0.0, false).unwrap();
+        let groove = cutter(&profile, &run(4.0, length)).unwrap();
+        let groove = clipped(&groove, &run(4.0, length), 12.0, true).unwrap();
+        boolean(&rod, &groove, Op::Cut).unwrap()
+    };
+    let (short, long) = (rounded_rod(6.0), rounded_rod(30.0));
+    let ring = make::revolve(
+        &[vec![PSeg::Circle {
+            c: v2(12.0, 0.0),
+            r: 3.0,
+        }]],
+        V3::ZERO,
+        V3::Z,
+        V3::X,
+        std::f64::consts::TAU,
+    )
+    .unwrap();
+    for (name, body, volume_near, area_near) in [
+        ("ring", &ring, 1.0e-12, 1.0e-12),
+        ("plain pin", &pin, 1.0e-12, 1.0e-12),
+        ("metric thread", &metric, 3.0e-5, 3.0e-5),
+        ("short rounded thread", &short, 3.0e-5, 3.0e-5),
+        ("long rounded thread", &long, 1.0e-3, 3.0e-5),
+    ] {
+        let exact = mass(body);
+        let (volume, area) = weighed_by_the_reference(name, body);
+        assert!(
+            (volume - exact.volume).abs() < volume_near * exact.volume,
+            "{name}: volume {volume} for {}",
+            exact.volume
+        );
+        assert!(
+            (area - exact.area).abs() < area_near * exact.area,
+            "{name}: area {area} for {}",
+            exact.area
+        );
+    }
+}
+
 /// A thread goes out as spline surfaces; the reference kernel reads it
 /// as the same solid.
 #[test]

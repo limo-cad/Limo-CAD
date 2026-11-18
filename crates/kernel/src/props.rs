@@ -229,9 +229,11 @@ fn span(a: f64, b: f64, piece: f64, mut f: impl FnMut(f64) -> Sums) -> Sums {
 /// it bends.
 fn stride(s: &Surface, along_v: bool) -> f64 {
     match (s.kind, along_v) {
-        (SurfKind::Plane, _) | (SurfKind::Cylinder | SurfKind::Cone | SurfKind::Helicoid, true) => {
-            f64::INFINITY
-        }
+        (SurfKind::Plane, _) | (SurfKind::Cylinder | SurfKind::Cone, true) => f64::INFINITY,
+        // Straight along its rulings, but they fan out from a waist as wide
+        // as the lead: what a strip of it weighs is a polynomial along a
+        // ruling, its area is not.
+        (SurfKind::Helicoid, true) => (2.0 * s.t.abs() * s.s.abs().cos()).max(1.0e-6),
         _ => PI / 6.0,
     }
 }
@@ -305,11 +307,16 @@ fn face_sums(body: &Body, f: u32, origin: V3, size: f64) -> Option<Sums> {
     }
     let torus = s.kind == SurfKind::Torus;
     // Where the inner integral starts: the tip of a cone and the upper pole
-    // of a sphere, where a loop round the axis closes on nothing.
-    let from = if s.kind == SurfKind::Sphere {
-        0.5 * PI
-    } else {
-        0.0
+    // of a sphere, where a loop round the axis closes on nothing. A screw
+    // surface never closes on itself, so anywhere will do, and next to the
+    // face keeps the stretch short.
+    let from = match s.kind {
+        SurfKind::Sphere => 0.5 * PI,
+        SurfKind::Helicoid => body
+            .face_hes(f)
+            .next()
+            .map_or(0.0, |h| s.uv(body.verts[body.h_origin(h) as usize]).y),
+        _ => 0.0,
     };
     let scale = {
         let l = size.max(1.0);
