@@ -180,7 +180,7 @@ fn add(a: &mut Sums, b: &Sums, k: f64) {
 /// tip.
 fn at(s: &Surface, u: f64, v: f64) -> (V3, V3, V3) {
     if s.kind != SurfKind::Cone {
-        return (s.point(u, v), s.du(u, v), s.dv(u, v));
+        return s.d1(u, v);
     }
     let (sin, cos) = u.sin_cos();
     let radial = s.f.x * cos + s.f.y * sin;
@@ -219,6 +219,34 @@ fn span(a: f64, b: f64, piece: f64, mut f: impl FnMut(f64) -> Sums) -> Sums {
                 &f(lo + half * (1.0 + GAUSS_X[k])),
                 GAUSS_W[k] * half,
             );
+        }
+    }
+    sum
+}
+
+/// The inner integral along `v` of a spline, from `from` to `to`: knot span
+/// by knot span, since the surface is a different polynomial on each, and
+/// each span in four, for the area and for weights, which are no
+/// polynomials at all.
+fn up_a_spline(s: &Surface, from: f64, to: f64, mut f: impl FnMut(f64) -> Sums) -> Sums {
+    let knots = &s.spline_form().knots[1];
+    let (lo, hi) = (from.min(to), from.max(to));
+    let mut sum = [0.0; N];
+    let mut a = lo;
+    for &k in knots.iter().chain(std::iter::once(&f64::INFINITY)) {
+        let b = k.min(hi);
+        if b > a {
+            let width = b - a;
+            add(&mut sum, &span(a, b, 0.25 * width, &mut f), 1.0);
+            a = b;
+        }
+        if k >= hi {
+            break;
+        }
+    }
+    if to < from {
+        for x in &mut sum {
+            *x = -*x;
         }
     }
     sum
@@ -316,6 +344,8 @@ fn face_sums(body: &Body, f: u32, origin: V3, size: f64) -> Option<Sums> {
             .face_hes(f)
             .next()
             .map_or(0.0, |h| s.uv(body.verts[body.h_origin(h) as usize]).y),
+        // The edge of the patch: every face on it lies above.
+        SurfKind::Spline => s.spline_box().0.y,
         _ => 0.0,
     };
     let scale = {
@@ -428,7 +458,11 @@ fn face_sums(body: &Body, f: u32, origin: V3, size: f64) -> Option<Sums> {
                 add(&mut out, &inner, dv);
             } else {
                 // ∮ P du, with P minus the integral along v.
-                let inner = span(from, q.y, stride(&s, true), |v| density(&s, q.x, v, origin));
+                let inner = if s.kind == SurfKind::Spline {
+                    up_a_spline(&s, from, q.y, |v| density(&s, q.x, v, origin))
+                } else {
+                    span(from, q.y, stride(&s, true), |v| density(&s, q.x, v, origin))
+                };
                 add(&mut out, &inner, -du);
             }
             out

@@ -49,12 +49,27 @@ impl EdgeMesh {
             // A face that bends along the edge needs it as fine as its own
             // triangles will be: a curve can run nearly straight across a
             // surface that turns quickly under it.
-            if for_faces && c.kind != CurveKind::Line {
-                let faces = [2 * e, 2 * e + 1].map(|h| body.f_surface(body.h_face(h)));
+            // On a free-form face even a straight edge can have the surface
+            // twist along it. (A body still being put together has edges
+            // that belong to no face yet; it is never sampled for faces.)
+            let faces =
+                for_faces.then(|| [2 * e, 2 * e + 1].map(|h| body.f_surface(body.h_face(h))));
+            let free = faces.is_some_and(|faces| faces.iter().any(|s| s.kind == SurfKind::Spline));
+            if let Some(faces) = faces.filter(|_| c.kind != CurveKind::Line || free) {
                 let allowed = TAU / min_per_turn;
+                if free && n < 8 {
+                    // Too few pieces to see anything by: the normal can
+                    // be the same at both ends of an edge and lean over
+                    // in between. Look at eight, and take as many as what
+                    // they show calls for.
+                    let (turn, twist) = widest_turn(c, t0, t1, 8, &faces);
+                    let by_turn = (8.0 * turn / allowed).ceil();
+                    let by_twist = (8.0 * (twist / (2.5 * sag)).sqrt()).ceil();
+                    n = n.max(by_turn.max(by_twist).min(4096.0) as usize);
+                }
                 let mut before = f64::INFINITY;
                 for _ in 0..6 {
-                    let turn = widest_turn(c, t0, t1, n, &faces);
+                    let (turn, _) = widest_turn(c, t0, t1, n, &faces);
                     // More pieces that turn no less have found a kink, and
                     // no number of them will smooth that out.
                     if turn <= 1.05 * allowed || n >= 4096 || turn > 0.75 * before {
@@ -62,6 +77,16 @@ impl EdgeMesh {
                     }
                     before = turn;
                     n = ((n as f64 * turn / allowed).ceil() as usize).clamp(n + 1, 4096);
+                }
+                // Both the turn and the length of a piece fall as there
+                // are more of them: their product with the square.
+                for _ in 0..6 {
+                    let (_, twist) = widest_turn(c, t0, t1, n, &faces);
+                    if !free || twist <= 2.5 * sag || n >= 4096 {
+                        break;
+                    }
+                    let more = (twist / (2.5 * sag)).sqrt();
+                    n = ((n as f64 * more).ceil() as usize).clamp(n + 1, 4096);
                 }
             }
             // End points are the vertices themselves so loops close exactly.
@@ -128,25 +153,33 @@ fn pins(body: &Body, sag: f64) -> Vec<Vec<f64>> {
 }
 
 /// The most that the normal of any of `faces` turns across one of `n` equal
-/// pieces of the curve from `t0` to `t1`.
-fn widest_turn(c: &Curve, t0: f64, t1: f64, n: usize, faces: &[&Surface]) -> f64 {
-    let mut widest: f64 = 0.0;
+/// pieces of the curve from `t0` to `t1`; and the most that such a turn
+/// times the length of its piece comes to on a free-form face, which is
+/// four times how far a triangle as high as the piece is long would stand
+/// off a surface that twists that much.
+fn widest_turn(c: &Curve, t0: f64, t1: f64, n: usize, faces: &[&Surface]) -> (f64, f64) {
+    let (mut widest, mut twist): (f64, f64) = (0.0, 0.0);
     for s in faces {
         if s.kind == SurfKind::Plane {
             continue;
         }
-        let mut last = s.normal(c.point(t0));
+        let mut from = c.point(t0);
+        let mut last = s.normal(from);
         for i in 1..=n {
-            let next = s.normal(c.point(t0 + (t1 - t0) * i as f64 / n as f64));
+            let to = c.point(t0 + (t1 - t0) * i as f64 / n as f64);
+            let next = s.normal(to);
             let turn = last.cross(next).len().atan2(last.dot(next));
             // At the tip of a cone the normal is anybody's guess.
             if turn.is_finite() {
                 widest = widest.max(turn);
+                if s.kind == SurfKind::Spline {
+                    twist = twist.max(turn * from.dist(to));
+                }
             }
-            last = next;
+            (from, last) = (to, next);
         }
     }
-    widest
+    (widest, twist)
 }
 
 /// Sample points of a loop given by its half-edges, without the closing
@@ -439,7 +472,15 @@ impl FaceTrim {
     /// Outward face normal at face-oriented parameters.
     #[inline]
     pub fn normal(&self, q: V2) -> V3 {
-        let n = self.surf.normal(self.point(q));
+        // A spline knows its normal from its parameters; asking by point
+        // would mean searching for the parameters again.
+        let n = if self.surf.kind == SurfKind::Spline {
+            let s = if self.turned { v2(-q.y, q.x) } else { q };
+            let u = if self.flip { -s.x } else { s.x };
+            self.surf.du(u, s.y).cross(self.surf.dv(u, s.y)).unit()
+        } else {
+            self.surf.normal(self.point(q))
+        };
         if self.flip {
             -n
         } else {
@@ -509,11 +550,13 @@ impl FaceTrim {
                 // crossings alone would go on through the tip for ever.
                 false
             }
+            // A spline closes one way at most, and that way is `u`.
             SurfKind::Plane
             | SurfKind::Cylinder
             | SurfKind::Cone
             | SurfKind::Helicoid
-            | SurfKind::Coil => {
+            | SurfKind::Coil
+            | SurfKind::Spline => {
                 let mut odd = false;
                 self.cross_vertical(q.x, |v, _| {
                     if v > q.y {
@@ -576,7 +619,8 @@ impl FaceTrim {
 
     /// Model-space length of a parameter step at `q`.
     pub fn metric(&self, q: V2) -> V2 {
-        let m = self.surf.scale(0.0, if self.turned { q.x } else { q.y });
+        let s = if self.turned { v2(-q.y, q.x) } else { q };
+        let m = self.surf.scale(if self.flip { -s.x } else { s.x }, s.y);
         if self.turned {
             v2(m.y, m.x)
         } else {

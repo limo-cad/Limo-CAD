@@ -4,6 +4,7 @@
 //! `match` on the tag, so the hot loops stay branch-predictable and inline
 //! without virtual dispatch or heap indirection.
 
+use crate::form::{CurveForm, SplineCurve, SplineSurface, SurfForm};
 use crate::math::*;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -19,6 +20,8 @@ pub enum SurfKind {
     Helicoid,
     /// A circle carried the same way: the rounded root or crest of one.
     Coil,
+    /// A free-form surface: a spline, kept in [`crate::form`].
+    Spline,
 }
 
 /// Analytic surface.
@@ -32,6 +35,7 @@ pub enum SurfKind {
 /// | Torus    | `o` centre, `z` axis          | major radius | minor radius |
 /// | Helicoid | `o` on axis, `z` axis         | –            | ruling angle |
 /// | Coil     | `o` on axis, `z` axis         | major radius | minor radius |
+/// | Spline   | where its definition was put  | –            | –            |
 ///
 /// The two helical kinds also have a lead `t`, the climb along the axis
 /// per radian of `u`, which for them is not an angle that comes round
@@ -46,6 +50,13 @@ pub enum SurfKind {
 /// above the apex; sphere `v` is latitude; torus `v` is the tube angle.
 /// In every case `∂u × ∂v` is the *natural normal*, which points away from the
 /// axis / centre / along `z`.
+///
+/// A spline is defined once, in coordinates of its own, and `f` says where
+/// those are: moving the surface moves the frame and leaves the definition
+/// alone. `u` and `v` are the spline's own parameters; a direction that
+/// closes smoothly is an angle from `-π` to `π`. A reflection leaves the
+/// frame left-handed, and `u` then runs backwards, so that `∂u × ∂v` is
+/// still the definition's normal carried along with everything else.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Surface {
     pub kind: SurfKind,
@@ -55,6 +66,8 @@ pub struct Surface {
     /// Lead of the helical kinds: how far along the axis one radian of
     /// `u` carries a point. Zero for the others.
     pub t: f64,
+    /// The definition of a spline; nothing for the others.
+    pub form: Option<SurfForm>,
 }
 
 impl Surface {
@@ -65,6 +78,7 @@ impl Surface {
             r: 0.0,
             s: 0.0,
             t: 0.0,
+            form: None,
         }
     }
     pub fn plane_frame(f: Frame) -> Surface {
@@ -74,6 +88,7 @@ impl Surface {
             r: 0.0,
             s: 0.0,
             t: 0.0,
+            form: None,
         }
     }
     pub fn cylinder(o: V3, axis: V3, radius: f64) -> Surface {
@@ -83,6 +98,7 @@ impl Surface {
             r: radius,
             s: 0.0,
             t: 0.0,
+            form: None,
         }
     }
     /// Cone with its apex at `apex`, opening along `axis` with the given
@@ -94,6 +110,7 @@ impl Surface {
             r: 0.0,
             s: half_angle,
             t: 0.0,
+            form: None,
         }
     }
     pub fn sphere(centre: V3, radius: f64) -> Surface {
@@ -106,6 +123,7 @@ impl Surface {
             r: radius,
             s: 0.0,
             t: 0.0,
+            form: None,
         }
     }
     pub fn sphere_axis(centre: V3, axis: V3, radius: f64) -> Surface {
@@ -115,6 +133,7 @@ impl Surface {
             r: radius,
             s: 0.0,
             t: 0.0,
+            form: None,
         }
     }
     pub fn torus(centre: V3, axis: V3, major: f64, minor: f64) -> Surface {
@@ -124,6 +143,7 @@ impl Surface {
             r: major,
             s: minor,
             t: 0.0,
+            form: None,
         }
     }
 
@@ -140,6 +160,7 @@ impl Surface {
             r: 0.0,
             s: angle,
             t: lead,
+            form: None,
         }
     }
     /// The tube a circle of radius `minor` sweeps when its centre, `major`
@@ -152,7 +173,63 @@ impl Surface {
             r: major,
             s: minor,
             t: lead,
+            form: None,
         }
+    }
+    /// A spline surface where it was defined.
+    pub fn spline(form: SurfForm) -> Surface {
+        Surface {
+            kind: SurfKind::Spline,
+            f: Frame::WORLD,
+            r: 0.0,
+            s: 0.0,
+            t: 0.0,
+            form: Some(form),
+        }
+    }
+    /// The definition of a spline surface.
+    #[inline]
+    pub fn spline_form(&self) -> &'static SplineSurface {
+        self.form.expect("a spline surface has a definition").get()
+    }
+    /// `-1` where a reflection has left a spline's frame left-handed, and
+    /// its `u` runs backwards; `+1` otherwise.
+    #[inline]
+    pub fn hand(&self) -> f64 {
+        if self.f.x.cross(self.f.y).dot(self.f.z) < 0.0 {
+            -1.0
+        } else {
+            1.0
+        }
+    }
+    /// A direction of a spline's own coordinates, in the model's.
+    #[inline]
+    fn carry(&self, v: V3) -> V3 {
+        self.f.x * v.x + self.f.y * v.y + self.f.z * v.z
+    }
+    /// The rectangle of parameters a spline is defined on. A closed
+    /// direction runs from `-π` to `π`.
+    pub fn spline_box(&self) -> (V2, V2) {
+        let form = self.spline_form();
+        if self.hand() < 0.0 {
+            (v2(-form.hi.x, form.lo.y), v2(-form.lo.x, form.hi.y))
+        } else {
+            (form.lo, form.hi)
+        }
+    }
+    /// A box that is sure to hold all of a spline: the one round its
+    /// control points, wherever the frame has put them.
+    pub fn spline_bounds(&self) -> Aabb {
+        let b = self.spline_form().bbox;
+        let mut out = Aabb::EMPTY;
+        for i in 0..8 {
+            out.add(self.f.global(v3(
+                if i & 1 == 0 { b.lo.x } else { b.hi.x },
+                if i & 2 == 0 { b.lo.y } else { b.hi.y },
+                if i & 4 == 0 { b.lo.z } else { b.hi.z },
+            )));
+        }
+        out
     }
     #[inline]
     pub fn is_plane(&self) -> bool {
@@ -189,6 +266,10 @@ impl Surface {
             SurfKind::Torus => self.around(u) * (self.r + self.s * v.cos()),
             SurfKind::Helicoid => self.around(u) * (v * self.s.abs().sin()) + self.f.z * self.t,
             SurfKind::Coil => self.around(u) * (self.r + self.s * v.cos()) + self.f.z * self.t,
+            SurfKind::Spline => {
+                let hand = self.hand();
+                self.carry(self.spline_form().derivs(hand * u, v, 1)[1]) * hand
+            }
         }
     }
 
@@ -211,6 +292,7 @@ impl Surface {
                 let (out, up) = self.ruling();
                 self.radial(u) * out + f.z * up
             }
+            SurfKind::Spline => self.carry(self.spline_form().derivs(self.hand() * u, v, 1)[2]),
         }
     }
 
@@ -222,8 +304,22 @@ impl Surface {
         (sin, self.s.signum() * cos)
     }
 
+    /// Point and both first derivatives at `(u, v)` in one go.
+    pub fn d1(&self, u: f64, v: f64) -> (V3, V3, V3) {
+        if self.kind == SurfKind::Spline {
+            let hand = self.hand();
+            let d = self.spline_form().derivs(hand * u, v, 1);
+            return (
+                self.f.global(d[0]),
+                self.carry(d[1]) * hand,
+                self.carry(d[2]),
+            );
+        }
+        (self.point(u, v), self.du(u, v), self.dv(u, v))
+    }
+
     /// Model length of a unit step in each parameter at `(u, v)`.
-    pub fn scale(&self, _u: f64, v: f64) -> V2 {
+    pub fn scale(&self, u: f64, v: f64) -> V2 {
         match self.kind {
             SurfKind::Plane => v2(1.0, 1.0),
             SurfKind::Cylinder => v2(self.r, 1.0),
@@ -232,6 +328,10 @@ impl Surface {
             SurfKind::Torus => v2((self.r + self.s * v.cos()).abs(), self.s),
             SurfKind::Helicoid => v2((v * self.s.abs().sin()).hypot(self.t), 1.0),
             SurfKind::Coil => v2((self.r + self.s * v.cos()).hypot(self.t), self.s.abs()),
+            SurfKind::Spline => {
+                let d = self.spline_form().derivs(self.hand() * u, v, 1);
+                v2(d[1].len(), d[2].len())
+            }
         }
     }
 
@@ -257,6 +357,7 @@ impl Surface {
                 let (sv, cv) = v.sin_cos();
                 f.o + self.radial(u) * (self.r + self.s * cv) + f.z * (self.s * sv + self.t * u)
             }
+            SurfKind::Spline => f.global(self.spline_form().point(self.hand() * u, v)),
         }
     }
 
@@ -295,6 +396,10 @@ impl Surface {
                 let u = around + TAU * ((l.z / self.t - around) / TAU).round();
                 let side = self.s.signum();
                 v2(u, ((l.z - self.t * u) * side).atan2((rho - self.r) * side))
+            }
+            SurfKind::Spline => {
+                let q = self.spline_form().nearest(l);
+                v2(self.hand() * q.x, q.y)
             }
         }
     }
@@ -351,6 +456,14 @@ impl Surface {
                 };
                 (from - self.s.abs()) / steep
             }
+            // Along the normal at the nearest point: exact wherever that
+            // point is the only one of its kind nearby.
+            SurfKind::Spline => {
+                let form = self.spline_form();
+                let q = form.nearest(l);
+                let [s, su, sv, ..] = form.derivs(q.x, q.y, 1);
+                (l - s).dot(su.cross(sv).unit())
+            }
         }
     }
 
@@ -385,12 +498,23 @@ impl Surface {
                 let q = self.uv(p);
                 self.du(q.x, q.y).cross(self.dv(q.x, q.y)).unit()
             }
+            SurfKind::Spline => {
+                let form = self.spline_form();
+                let q = form.nearest(f.local(p));
+                let [_, su, sv, ..] = form.derivs(q.x, q.y, 1);
+                self.carry(su.cross(sv).unit())
+            }
         }
     }
 
     /// Closest point on the surface.
     #[inline]
     pub fn project(&self, p: V3) -> V3 {
+        if self.kind == SurfKind::Spline {
+            let form = self.spline_form();
+            let q = form.nearest(self.f.local(p));
+            return self.f.global(form.point(q.x, q.y));
+        }
         if !self.is_helical() {
             return p - self.normal(p) * self.sdist(p);
         }
@@ -409,14 +533,19 @@ impl Surface {
     /// Period of the `u` parameter, if any.
     #[inline]
     pub fn u_periodic(&self) -> bool {
-        !matches!(
-            self.kind,
-            SurfKind::Plane | SurfKind::Helicoid | SurfKind::Coil
-        )
+        match self.kind {
+            SurfKind::Plane | SurfKind::Helicoid | SurfKind::Coil => false,
+            SurfKind::Spline => self.spline_form().closed[0],
+            _ => true,
+        }
     }
     #[inline]
     pub fn v_periodic(&self) -> bool {
-        self.kind == SurfKind::Torus
+        match self.kind {
+            SurfKind::Torus => true,
+            SurfKind::Spline => self.spline_form().closed[1],
+            _ => false,
+        }
     }
 
     /// Geometric coincidence. `Some(true)` when the natural normals agree,
@@ -481,6 +610,14 @@ impl Surface {
                 }
                 Some(facing > 0.0)
             }
+            // One definition in one place. Two that only happen to describe
+            // the same shape are not recognised.
+            SurfKind::Spline => (self.form == o.form
+                && self.f.o.dist(o.f.o) < TOL
+                && self.f.x.dist(o.f.x) < ANG_TOL * 10.0
+                && self.f.y.dist(o.f.y) < ANG_TOL * 10.0
+                && self.f.z.dist(o.f.z) < ANG_TOL * 10.0)
+                .then_some(true),
         }
     }
 
@@ -493,6 +630,15 @@ impl Surface {
         // right-hand thread in the mirror is a left-hand one.
         if x.mirror {
             out.t = -self.t;
+        }
+        // A spline's frame is carried as it is, mirror image and all.
+        if self.kind == SurfKind::Spline {
+            out.f = Frame {
+                o: x.point(self.f.o),
+                x: x.vec(self.f.x),
+                y: x.vec(self.f.y),
+                z: x.vec(self.f.z),
+            };
         }
         out
     }
@@ -519,7 +665,7 @@ impl Surface {
                     return None;
                 }
             }
-            SurfKind::Helicoid | SurfKind::Coil => return None,
+            SurfKind::Helicoid | SurfKind::Coil | SurfKind::Spline => return None,
         }
         Some(out)
     }
@@ -537,6 +683,8 @@ pub enum CurveKind {
     Meet,
     /// A point turning about an axis and climbing it at once.
     Helix,
+    /// A free-form curve: a spline, kept in [`crate::form`].
+    Spline,
 }
 
 /// Curve as plain data.
@@ -562,6 +710,9 @@ pub enum CurveKind {
 ///   which is as far as the search may go, so it cannot wander off to
 ///   another branch of the intersection. A point costs a few Newton steps
 ///   and is exact.
+/// * Spline: a free-form curve, defined in coordinates of its own that `f`
+///   places. `t` is the spline's parameter, an angle from `-π` to `π` if
+///   it closes smoothly.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Curve {
     pub kind: CurveKind,
@@ -577,6 +728,8 @@ pub struct Curve {
     /// derivative with respect to `t` at both, and the furthest the curve
     /// strays from the cubic those four define (zero: not known).
     pub w: [f64; 5],
+    /// The definition of a spline; nothing for the others.
+    pub form: Option<CurveForm>,
 }
 
 const NO_SURFACE: Surface = Surface {
@@ -585,6 +738,7 @@ const NO_SURFACE: Surface = Surface {
     r: 0.0,
     s: 0.0,
     t: 0.0,
+    form: None,
 };
 
 impl Curve {
@@ -598,6 +752,7 @@ impl Curve {
             span: [0.0; 2],
             base: NO_SURFACE,
             w: [0.0; 5],
+            form: None,
         }
     }
     /// Circle whose parameter runs counter-clockwise about `normal`, with
@@ -612,6 +767,7 @@ impl Curve {
             span: [0.0; 2],
             base: NO_SURFACE,
             w: [0.0; 5],
+            form: None,
         }
     }
     pub fn ellipse(centre: V3, normal: V3, major_dir: V3, major: f64, minor: f64) -> Curve {
@@ -624,6 +780,7 @@ impl Curve {
             span: [0.0; 2],
             base: NO_SURFACE,
             w: [0.0; 5],
+            form: None,
         }
     }
     /// The helix of `radius` about `axis` through the point `radius` from
@@ -638,6 +795,7 @@ impl Curve {
             span: [0.0; 2],
             base: NO_SURFACE,
             w: [0.0; 5],
+            form: None,
         }
     }
     /// Intersection of `cylinder` with `other` (a cylinder or sphere) on the
@@ -653,6 +811,7 @@ impl Curve {
             span,
             base: NO_SURFACE,
             w: [0.0; 5],
+            form: None,
         }
     }
 
@@ -675,7 +834,28 @@ impl Curve {
             span,
             base: *base,
             w,
+            form: None,
         }
+    }
+
+    /// A spline curve where it was defined.
+    pub fn spline(form: CurveForm) -> Curve {
+        Curve {
+            kind: CurveKind::Spline,
+            f: Frame::WORLD,
+            r: 0.0,
+            s: 0.0,
+            other: NO_SURFACE,
+            span: [0.0; 2],
+            base: NO_SURFACE,
+            w: [0.0; 5],
+            form: Some(form),
+        }
+    }
+    /// The definition of a spline curve.
+    #[inline]
+    pub fn spline_form(&self) -> &'static SplineCurve {
+        self.form.expect("a spline curve has a definition").get()
     }
 
     /// Where the cubic through the ends of a meet puts the dependent
@@ -840,6 +1020,10 @@ impl Curve {
         match self.kind {
             CurveKind::Trace if !self.trace_closed() => Some((0.0, PI)),
             CurveKind::Meet => Some((self.span[0], self.span[1])),
+            CurveKind::Spline if !self.spline_form().closed => {
+                let form = self.spline_form();
+                Some((form.lo, form.hi))
+            }
             _ => None,
         }
     }
@@ -872,6 +1056,7 @@ impl Curve {
                 let (s, c) = t.sin_cos();
                 f.o + (f.x * c + f.y * s) * self.r + f.z * (self.s * t)
             }
+            CurveKind::Spline => f.global(self.spline_form().point(t)),
         }
     }
 
@@ -915,6 +1100,10 @@ impl Curve {
                 let (s, c) = t.sin_cos();
                 (f.y * c - f.x * s) * self.r + f.z * self.s
             }
+            CurveKind::Spline => {
+                let d = self.spline_form().derivs(t, 1)[1];
+                f.x * d.x + f.y * d.y + f.z * d.z
+            }
         }
     }
 
@@ -923,6 +1112,7 @@ impl Curve {
         match self.kind {
             CurveKind::Line | CurveKind::Meet | CurveKind::Helix => false,
             CurveKind::Trace => self.trace_closed(),
+            CurveKind::Spline => self.spline_form().closed,
             _ => true,
         }
     }
@@ -941,6 +1131,7 @@ impl Curve {
                 around + TAU * ((l.z / self.s - around) / TAU).round()
             }
             CurveKind::Ellipse => (l.y / self.s).atan2(l.x / self.r),
+            CurveKind::Spline => return self.spline_form().nearest(l),
             CurveKind::Trace => {
                 let theta = l.y.atan2(l.x);
                 if self.trace_closed() {
@@ -1072,6 +1263,7 @@ impl Curve {
                 // Only the identical piece counts as the same curve.
                 let close = |a: &Surface, b: &Surface| {
                     a.kind == b.kind
+                        && a.form == b.form
                         && a.f.o.dist(b.f.o) < TOL
                         && a.f.x.dist(b.f.x) < ANG_TOL * 10.0
                         && a.f.z.dist(b.f.z) < ANG_TOL * 10.0
@@ -1086,6 +1278,13 @@ impl Curve {
                     && (0..4).all(|i| (self.w[i] - o.w[i]).abs() < 1.0e-9))
                 .then_some((1.0, 0.0))
             }
+            // One definition in one place.
+            CurveKind::Spline => (self.form == o.form
+                && self.f.o.dist(o.f.o) < TOL
+                && self.f.x.dist(o.f.x) < ANG_TOL * 10.0
+                && self.f.y.dist(o.f.y) < ANG_TOL * 10.0
+                && self.f.z.dist(o.f.z) < ANG_TOL * 10.0)
+                .then_some((1.0, 0.0)),
         }
     }
 
@@ -1107,13 +1306,23 @@ impl Curve {
         if self.kind == CurveKind::Helix && x.mirror {
             out.s = -self.s;
         }
+        // A spline's frame is carried as it is: nothing about the curve
+        // depends on which hand it is.
+        if self.kind == CurveKind::Spline {
+            out.f = Frame {
+                o: x.point(self.f.o),
+                x: x.vec(self.f.x),
+                y: x.vec(self.f.y),
+                z: x.vec(self.f.z),
+            };
+        }
         if self.kind == CurveKind::Meet {
             out.f = Frame::WORLD;
             out.base = self.base.transformed(x);
             out.other = self.other.transformed(x);
             if x.mirror {
                 // A reflected surface runs one of its parameters backwards:
-                // `v` on a plane, the angle `u` on everything else.
+                // `v` on a plane, `u` on everything else.
                 let flips_v = self.base.kind == SurfKind::Plane;
                 if flips_v == (self.r != 0.0) {
                     out.s = -self.s;
@@ -1144,6 +1353,35 @@ impl Curve {
                 }
                 len
             }
+            // The speed, summed over pieces short enough for four points
+            // each to be exact to many places.
+            CurveKind::Spline => {
+                const AT: [f64; 4] = [
+                    -0.861_136_311_594_052_6,
+                    -0.339_981_043_584_856_3,
+                    0.339_981_043_584_856_3,
+                    0.861_136_311_594_052_6,
+                ];
+                const WEIGHT: [f64; 4] = [
+                    0.347_854_845_137_453_85,
+                    0.652_145_154_862_546_2,
+                    0.652_145_154_862_546_2,
+                    0.347_854_845_137_453_85,
+                ];
+                let form = self.spline_form();
+                let spans = form.knots.windows(2).filter(|w| w[1] > w[0]).count();
+                let share = ((t1 - t0).abs() / (form.hi - form.lo)).min(1.0);
+                let n = ((4 * spans) as f64 * share).ceil().max(4.0) as usize;
+                let h = (t1 - t0) / n as f64;
+                let mut len = 0.0;
+                for i in 0..n {
+                    let mid = t0 + h * (i as f64 + 0.5);
+                    for k in 0..4 {
+                        len += WEIGHT[k] * form.derivs(mid + 0.5 * h * AT[k], 1)[1].len();
+                    }
+                }
+                len * 0.5 * h.abs()
+            }
         }
     }
 
@@ -1157,7 +1395,7 @@ impl Curve {
     pub fn segments(&self, t0: f64, t1: f64, sag: f64, min_per_turn: f64) -> usize {
         let (r, per_turn) = match self.kind {
             CurveKind::Line => return 1,
-            CurveKind::Meet => {
+            CurveKind::Meet | CurveKind::Spline => {
                 // No radius to go by: double until every chord is close.
                 let mut n = 2;
                 loop {

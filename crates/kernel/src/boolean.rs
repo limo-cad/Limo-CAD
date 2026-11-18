@@ -247,6 +247,8 @@ fn face_bounds(body: &Body, eboxes: &[Aabb], f: u32) -> Aabb {
         // can bulge beyond them, by its tube at most.
         SurfKind::Helicoid => return edges.grown(10.0 * TOL),
         SurfKind::Coil => return edges.grown(2.0 * s.s.abs() + 10.0 * TOL),
+        // A spline stays within the box round its control points.
+        SurfKind::Spline => return s.spline_bounds().grown(10.0 * TOL),
     };
     if !edges.is_empty() {
         bounds.union(&edges);
@@ -1540,6 +1542,7 @@ fn beside_edges(g: &Body, this: &Side, piece: &Piece) -> Vec<V3> {
             SurfKind::Torus | SurfKind::Coil => 0.2 * surf.s.abs(),
             SurfKind::Cone => 0.2 * from_axis,
             SurfKind::Helicoid => 0.2 * from_axis.min(PI * surf.t.abs()),
+            SurfKind::Spline => 0.2 * surf.spline_form().radius,
         });
         for &k in &hes {
             if k >> 1 != e {

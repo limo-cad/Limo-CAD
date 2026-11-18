@@ -44,11 +44,14 @@ fn rank(kind: SurfKind) -> u8 {
         // only its own parameters tell them apart.
         SurfKind::Helicoid => 0,
         SurfKind::Coil => 1,
-        SurfKind::Plane => 2,
-        SurfKind::Cylinder => 3,
-        SurfKind::Torus => 4,
-        SurfKind::Cone => 5,
-        SurfKind::Sphere => 6,
+        // A spline's distance costs a search for the nearest point; its
+        // points cost next to nothing. Better to walk on it than to ask it.
+        SurfKind::Spline => 2,
+        SurfKind::Plane => 3,
+        SurfKind::Cylinder => 4,
+        SurfKind::Torus => 5,
+        SurfKind::Cone => 6,
+        SurfKind::Sphere => 7,
     }
 }
 
@@ -61,6 +64,7 @@ fn bend(s: &Surface) -> f64 {
         // Half the way from one turn to the next, square to the flank.
         SurfKind::Helicoid => PI * s.t.abs() * s.s.abs().sin(),
         SurfKind::Coil => s.s.abs(),
+        SurfKind::Spline => s.spline_form().radius,
     }
 }
 
@@ -199,6 +203,26 @@ impl Grid<'_> {
                     [false, false],
                     v2((base.r + tube).hypot(base.t), tube),
                 )
+            }
+            // The part of the spline's own rectangle that comes near the
+            // region, by the net of points it keeps.
+            SurfKind::Spline => {
+                let form = base.spline_form();
+                let mut within = Aabb::EMPTY;
+                for p in &local {
+                    within.add(*p);
+                }
+                let (mut lo, mut hi) = form.window(&within)?;
+                let hand = base.hand();
+                if hand < 0.0 {
+                    (lo.x, hi.x) = (-hi.x, -lo.x);
+                }
+                let whole = form.closed[0] && hi.x - lo.x >= TAU - 1.0e-9;
+                let u = if whole { turn(0.0123) } else { (lo.x, hi.x) };
+                let fast = form
+                    .bend(v2(hand * u.0, lo.y), v2(hand * u.1, hi.y))
+                    .fastest;
+                (u, (lo.y, hi.y), [whole, false], fast)
             }
         };
         // An open range is widened unevenly for the same reason.
@@ -1060,5 +1084,6 @@ fn name(kind: SurfKind) -> &'static str {
         SurfKind::Torus => "torus",
         SurfKind::Helicoid => "helicoid",
         SurfKind::Coil => "coil",
+        SurfKind::Spline => "spline",
     }
 }

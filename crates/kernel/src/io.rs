@@ -146,6 +146,7 @@ impl Body {
                 r: v[13],
                 s: v[14],
                 t: v.get(15).copied().unwrap_or(0.0),
+                form: None,
             });
         }
         for _ in 0..count(next()?, "curves")? {
@@ -164,6 +165,7 @@ impl Body {
                         r: v[28],
                         s: v[29],
                         t: v.get(32).copied().unwrap_or(0.0),
+                        form: None,
                     };
                     Curve::trace(&other, &other, 1.0, [v[30], v[31]])
                 }
@@ -174,6 +176,7 @@ impl Body {
                         r: v[28],
                         s: v[29],
                         t: v.get(52).copied().unwrap_or(0.0),
+                        form: None,
                     };
                     let base = Surface {
                         kind: surf_kind(v[32])?,
@@ -181,6 +184,7 @@ impl Body {
                         r: v[45],
                         s: v[46],
                         t: v.get(53).copied().unwrap_or(0.0),
+                        form: None,
                     };
                     let w = [v[47], v[48], v[49], v[50], v[51]];
                     Curve::meet(&base, &other, false, [v[30], v[31]], w)

@@ -90,15 +90,15 @@ pub fn arc_circle(a: V3, m: V3, b: V3) -> Option<(V3, f64, V3)> {
 
 /// A profile segment placed in its loop, possibly traversed backwards.
 #[derive(Clone, Copy)]
-struct Placed {
-    seg: Seg,
-    reversed: bool,
+pub(crate) struct Placed {
+    pub(crate) seg: Seg,
+    pub(crate) reversed: bool,
     /// Which segment of the loop this is, as the caller gave them.
-    index: u32,
+    pub(crate) index: u32,
 }
 
 impl Placed {
-    fn start(&self) -> V3 {
+    pub(crate) fn start(&self) -> V3 {
         let (a, b) = self.seg.ends();
         if self.reversed {
             b
@@ -106,7 +106,7 @@ impl Placed {
             a
         }
     }
-    fn end(&self) -> V3 {
+    pub(crate) fn end(&self) -> V3 {
         let (a, b) = self.seg.ends();
         if self.reversed {
             a
@@ -119,7 +119,7 @@ impl Placed {
 const CHAIN_TOL: f64 = 1.0e-5;
 
 /// Order and orient the segments head to tail.
-fn chain(segs: &[Seg]) -> Result<Vec<Placed>, String> {
+pub(crate) fn chain(segs: &[Seg]) -> Result<Vec<Placed>, String> {
     if segs.is_empty() {
         return Err("profile loop has no boundary curves".into());
     }
@@ -171,7 +171,7 @@ fn chain(segs: &[Seg]) -> Result<Vec<Placed>, String> {
 }
 
 /// Twice the signed area of the loop about `n`.
-fn signed_area2(lp: &[Placed], n: V3) -> f64 {
+pub(crate) fn signed_area2(lp: &[Placed], n: V3) -> f64 {
     let mut pts: Vec<V3> = Vec::new();
     for placed in lp {
         match placed.seg {
@@ -209,7 +209,7 @@ fn signed_area2(lp: &[Placed], n: V3) -> f64 {
     sum.dot(n)
 }
 
-fn reverse_loop(lp: &mut [Placed]) {
+pub(crate) fn reverse_loop(lp: &mut [Placed]) {
     lp.reverse();
     for p in lp.iter_mut() {
         match &mut p.seg {
@@ -221,7 +221,7 @@ fn reverse_loop(lp: &mut [Placed]) {
 
 /// Perimeter-weighted centre that Open CASCADE uses as the origin of a plane
 /// fitted through a wire (`BRepLib_FindSurface`).
-fn wire_barycentre(lp: &[Placed]) -> V3 {
+pub(crate) fn wire_barycentre(lp: &[Placed]) -> V3 {
     let mut sum = V3::ZERO;
     let mut weight = 0.0;
     for placed in lp {

@@ -564,6 +564,7 @@ pub fn curve_surface(c: &Curve, t0: f64, t1: f64, s: &Surface) -> Hits {
                 SurfKind::Cylinder | SurfKind::Sphere => s.r,
                 SurfKind::Torus => s.s,
                 SurfKind::Coil => s.s.abs(),
+                SurfKind::Spline => s.spline_form().radius,
                 SurfKind::Plane | SurfKind::Cone | SurfKind::Helicoid => f64::INFINITY,
             };
             let by_size = if feature.is_finite() && feature > TOL {

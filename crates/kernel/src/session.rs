@@ -1309,8 +1309,14 @@ fn face_region(body: &Body, f: u32) -> Result<(Region, Vec<Vec<u32>>), String> {
                     m: c.point(0.5 * (t0 + t1)),
                     b,
                 }),
-                CurveKind::Ellipse | CurveKind::Trace | CurveKind::Meet | CurveKind::Helix => {
-                    return Err(unsupported("Extruding a face with an elliptical edge"))
+                CurveKind::Ellipse
+                | CurveKind::Trace
+                | CurveKind::Meet
+                | CurveKind::Helix
+                | CurveKind::Spline => {
+                    return Err(unsupported(
+                        "Extruding a face with an edge that is neither straight nor circular",
+                    ))
                 }
             }
         }

@@ -27,6 +27,10 @@ pub fn intersect(a: &Surface, b: &Surface) -> Ssi {
         return Ssi::Same(same);
     }
     use SurfKind::*;
+    // Nothing about a spline can be written down in closed form.
+    if a.kind == Spline || b.kind == Spline {
+        return Ssi::General;
+    }
     if a.is_helical() || b.is_helical() {
         return if a.is_helical() {
             helical(a, b)
@@ -193,7 +197,7 @@ fn plane_other(p: &Surface, s: &Surface) -> Ssi {
             Ssi::General
         }
         SurfKind::Plane => unreachable!(),
-        SurfKind::Helicoid | SurfKind::Coil => Ssi::General,
+        SurfKind::Helicoid | SurfKind::Coil | SurfKind::Spline => Ssi::General,
     }
 }
 
@@ -470,7 +474,7 @@ fn profile(s: &Surface, origin: V3, axis: V3) -> Option<Profile> {
             h: height(s.f.o),
             r: s.s,
         }),
-        SurfKind::Plane | SurfKind::Helicoid | SurfKind::Coil => None,
+        SurfKind::Plane | SurfKind::Helicoid | SurfKind::Coil | SurfKind::Spline => None,
     }
 }
 

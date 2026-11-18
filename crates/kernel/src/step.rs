@@ -126,6 +126,7 @@ impl Out {
                     real(s.s)
                 ))
             }
+            SurfKind::Spline => self.spline_surface(s),
         }
     }
 
@@ -145,8 +146,92 @@ impl Out {
                 let at = self.placement(c.f.o, c.f.z, c.f.x);
                 self.add(format!("ELLIPSE('',#{at},{},{})", real(c.r), real(c.s)))
             }
+            CurveKind::Spline => self.spline_curve(c),
             _ => self.spline(c, t0, t1),
         }
+    }
+
+    /// Knots as STEP wants them: each value once, and how often it occurs.
+    fn knots(knots: &[f64]) -> (String, String) {
+        let (mut values, mut counts): (Vec<String>, Vec<String>) = (Vec::new(), Vec::new());
+        let mut i = 0;
+        while i < knots.len() {
+            let same = knots[i..].iter().take_while(|&&k| k == knots[i]).count();
+            values.push(real(knots[i]));
+            counts.push(same.to_string());
+            i += same;
+        }
+        (counts.join(","), values.join(","))
+    }
+
+    /// A spline curve as it is defined: the same control points, weights
+    /// and knots, put where its frame puts them.
+    fn spline_curve(&mut self, c: &Curve) -> usize {
+        let form = c.spline_form();
+        let points: Vec<String> = form
+            .points()
+            .into_iter()
+            .map(|p| format!("#{}", self.point(c.f.global(p))))
+            .collect();
+        let (counts, values) = Self::knots(&form.knots);
+        let closed = if form.closed { ".T." } else { ".F." };
+        if !form.rational {
+            return self.add(format!(
+                "B_SPLINE_CURVE_WITH_KNOTS('',{},({}),.UNSPECIFIED.,{closed},.F.,({counts}),({values}),.UNSPECIFIED.)",
+                form.degree,
+                points.join(",")
+            ));
+        }
+        let weights: Vec<String> = form.weights().into_iter().map(real).collect();
+        self.add(format!(
+            "(BOUNDED_CURVE() B_SPLINE_CURVE({},({}),.UNSPECIFIED.,{closed},.F.) B_SPLINE_CURVE_WITH_KNOTS(({counts}),({values}),.UNSPECIFIED.) CURVE() GEOMETRIC_REPRESENTATION_ITEM() RATIONAL_B_SPLINE_CURVE(({})) REPRESENTATION_ITEM(''))",
+            form.degree,
+            points.join(","),
+            weights.join(",")
+        ))
+    }
+
+    /// A spline surface as it is defined. Where a reflection has turned
+    /// its `u` round, the net is written from the other end, so that the
+    /// surface in the file faces the way this one does.
+    fn spline_surface(&mut self, s: &Surface) -> usize {
+        let form = s.spline_form();
+        let turned = s.hand() < 0.0;
+        let [nu, nv] = form.count;
+        let (points, weights) = (form.points(), form.weights());
+        let (mut rows, mut weight_rows) = (Vec::new(), Vec::new());
+        for i in 0..nu {
+            let i = if turned { nu - 1 - i } else { i };
+            let (mut row, mut weight_row) = (Vec::new(), Vec::new());
+            for j in 0..nv {
+                let at = i + nu * j;
+                row.push(format!("#{}", self.point(s.f.global(points[at]))));
+                weight_row.push(real(weights[at]));
+            }
+            rows.push(format!("({})", row.join(",")));
+            weight_rows.push(format!("({})", weight_row.join(",")));
+        }
+        let ku: Vec<f64> = if turned {
+            let ends = form.lo.x + form.hi.x;
+            form.knots[0].iter().rev().map(|k| ends - k).collect()
+        } else {
+            form.knots[0].clone()
+        };
+        let ((mu, ku), (mv, kv)) = (Self::knots(&ku), Self::knots(&form.knots[1]));
+        let closed = |yes: bool| if yes { ".T." } else { ".F." };
+        let (cu, cv) = (closed(form.closed[0]), closed(form.closed[1]));
+        let [du, dv] = form.degree;
+        if !form.rational {
+            return self.add(format!(
+                "B_SPLINE_SURFACE_WITH_KNOTS('',{du},{dv},({}),.UNSPECIFIED.,{cu},{cv},.F.,({mu}),({mv}),({ku}),({kv}),.UNSPECIFIED.)",
+                rows.join(",")
+            ));
+        }
+        self.add(format!(
+            "(BOUNDED_SURFACE() B_SPLINE_SURFACE({du},{dv},({}),.UNSPECIFIED.,{cu},{cv},.F.) B_SPLINE_SURFACE_WITH_KNOTS(({mu}),({mv}),({ku}),({kv}),.UNSPECIFIED.) GEOMETRIC_REPRESENTATION_ITEM() RATIONAL_B_SPLINE_SURFACE(({})) REPRESENTATION_ITEM('') SURFACE())",
+            rows.join(","),
+            weight_rows.join(",")
+        ))
     }
 
     /// A screw surface over the stretch of its parameters a face uses, as
@@ -876,6 +961,7 @@ impl Model {
                 r: 0.0,
                 s: 0.0,
                 t: 0.0,
+                form: None,
             },
             "CYLINDRICAL_SURFACE" => Surface {
                 kind: SurfKind::Cylinder,
@@ -883,6 +969,7 @@ impl Model {
                 r: self.radius(args.get(2))?,
                 s: 0.0,
                 t: 0.0,
+                form: None,
             },
             "CONICAL_SURFACE" => {
                 let radius = self.radius(args.get(2))?;
@@ -902,6 +989,7 @@ impl Model {
                     r: 0.0,
                     s: half,
                     t: 0.0,
+                    form: None,
                 }
             }
             "SPHERICAL_SURFACE" => Surface {
@@ -910,6 +998,7 @@ impl Model {
                 r: self.radius(args.get(2))?,
                 s: 0.0,
                 t: 0.0,
+                form: None,
             },
             _ => Surface {
                 kind: SurfKind::Torus,
@@ -917,6 +1006,7 @@ impl Model {
                 r: self.radius(args.get(2))?,
                 s: self.radius(args.get(3))?,
                 t: 0.0,
+                form: None,
             },
         })
     }

@@ -655,6 +655,9 @@ fn steady(cs: &[Corner], upwards: bool) -> bool {
 /// within tolerance.
 fn u_step(trim: &FaceTrim, opts: &TessOptions, scale: f64) -> f64 {
     let s = &trim.surf;
+    if s.kind == SurfKind::Spline {
+        return spline_steps(trim, opts).x;
+    }
     let radius = match s.kind {
         SurfKind::Torus if trim.turned => s.s,
         SurfKind::Torus => s.r + s.s,
@@ -674,10 +677,54 @@ fn u_step(trim: &FaceTrim, opts: &TessOptions, scale: f64) -> f64 {
     chord.min(opts.angular).max(1.0e-3)
 }
 
+/// Largest steps in the two parameters of a spline face that keep a chord
+/// within tolerance, by how much the surface bends over the face. A chord
+/// along a curve of second derivative `c''` strays `|c''|·step²/8` from it;
+/// one across a twisted patch, `|S_uv|·du·dv/4`. Straight along `v` and not
+/// twisted, the step in `v` is unbounded, as on any ruled surface.
+fn spline_steps(trim: &FaceTrim, opts: &TessOptions) -> V2 {
+    let form = trim.surf.spline_form();
+    let hand = trim.surf.hand() * if trim.flip { -1.0 } else { 1.0 };
+    let (a, b) = (hand * trim.lo.x, hand * trim.hi.x);
+    let (lo, hi) = (v2(a.min(b), trim.lo.y), v2(a.max(b), trim.hi.y));
+    let bend = form.bend(lo, hi);
+    let wide = v2((hi.x - lo.x).max(1.0e-12), (hi.y - lo.y).max(1.0e-12));
+    // A side of a triangle that goes `x` steps one way and `y` the other
+    // strays by the bend each way and by the twist at once. With each of
+    // the three held to two thirds of the tolerance, the side strays no
+    // further than `x² + y²` times the tolerance, as on a torus.
+    let linear = opts.linear * 2.0 / 3.0;
+    let step = |second: f64, slowest: f64, fastest: f64| {
+        if second <= 1.0e-9 * fastest.max(1.0e-300) {
+            return f64::INFINITY;
+        }
+        (8.0 * linear / second)
+            .sqrt()
+            .min(opts.angular * slowest.max(1.0e-3 * fastest) / second)
+    };
+    let mut du = step(bend.uu, bend.slowest.x, bend.fastest.x);
+    let mut dv = step(bend.vv, bend.slowest.y, bend.fastest.y);
+    let size = v2(bend.fastest.x * wide.x, bend.fastest.y * wide.y);
+    if bend.uv * wide.x * wide.y > 1.0e-9 * size.x.max(size.y) {
+        // Squares of side `h` in the model: `h² |S_uv| / (4 |S_u| |S_v|)`.
+        let h = (4.0 * linear * bend.fastest.x * bend.fastest.y / bend.uv).sqrt();
+        du = du.min(h / bend.fastest.x);
+        dv = dv.min(h / bend.fastest.y);
+    }
+    // Flat along `u` there is still a `u` to step along.
+    v2(
+        du.min(0.5 * wide.x).max(1.0e-6 * wide.x),
+        dv.max(1.0e-6 * wide.y),
+    )
+}
+
 /// Largest parameter step in `v` that keeps a chord within tolerance, on a
 /// surface that bends that way too.
 fn v_step(trim: &FaceTrim, opts: &TessOptions) -> f64 {
     let s = &trim.surf;
+    if s.kind == SurfKind::Spline {
+        return spline_steps(trim, opts).y;
+    }
     let tube = match s.kind {
         SurfKind::Sphere => s.r,
         SurfKind::Torus if trim.turned => s.r + s.s,
