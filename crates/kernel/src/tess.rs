@@ -773,7 +773,7 @@ fn strip(
         layers = ((gap / step).ceil() as usize).max(1);
     }
     if !joined && layers == 1 {
-        zipper(bottom, top, tris);
+        zipper(fv, bottom, top, tris);
         return;
     }
     let same = |fv: &FaceVerts, a: Corner, b: Corner| {
@@ -821,6 +821,7 @@ fn strip(
         };
         if joined {
             stitch(
+                fv,
                 &prev,
                 &row,
                 &left[prev_ends.0..=ends.0],
@@ -828,7 +829,7 @@ fn strip(
                 tris,
             );
         } else {
-            zipper(&prev, &row, tris);
+            zipper(fv, &prev, &row, tris);
         }
         prev = row;
         prev_ends = ends;
@@ -839,6 +840,7 @@ fn strip(
 /// and `right` are the stretches of those sides between the rows' end
 /// points, running from the lower row up to the upper one.
 fn stitch(
+    fv: &FaceVerts,
     lower: &[Corner],
     upper: &[Corner],
     left: &[Corner],
@@ -860,7 +862,7 @@ fn stitch(
     for w in right.windows(2) {
         emit(apex, w[0], w[1]);
     }
-    zipper(&lower[1..], &upper[..upper.len() - 1], tris);
+    zipper(fv, &lower[1..], &upper[..upper.len() - 1], tris);
 }
 
 /// Of two u-winding loops, the one that travels in +u has the face above it.
@@ -943,7 +945,12 @@ fn monotone_chains(cs: &[Corner]) -> Option<(Vec<Corner>, Vec<Corner>)> {
 }
 
 /// Triangulate the strip between two chains ordered by increasing `u`.
-fn zipper(bottom: &[Corner], top: &[Corner], tris: &mut Vec<[Corner; 3]>) {
+///
+/// Whichever chain is behind takes the next step. Where both are level,
+/// four corners make a quadrilateral, and it is cut along its shorter
+/// diagonal: between rows that slant, the other one is half as long again
+/// and twice as far off the surface.
+fn zipper(fv: &FaceVerts, bottom: &[Corner], top: &[Corner], tris: &mut Vec<[Corner; 3]>) {
     let (n, m) = (bottom.len() - 1, top.len() - 1);
     let (mut i, mut j) = (0, 0);
     let mut emit = |a: Corner, b: Corner, c: Corner| {
@@ -951,13 +958,20 @@ fn zipper(bottom: &[Corner], top: &[Corner], tris: &mut Vec<[Corner; 3]>) {
             tris.push([a, b, c]);
         }
     };
+    let apart = |a: Corner, b: Corner| (fv.p[a.src as usize] - fv.p[b.src as usize]).len2();
     while i < n || j < m {
         let advance_bottom = if i == n {
             false
         } else if j == m {
             true
         } else {
-            bottom[i + 1].uv.x <= top[j + 1].uv.x
+            let (ub, ut) = (bottom[i + 1].uv.x, top[j + 1].uv.x);
+            let step = (ub - bottom[i].uv.x).max(ut - top[j].uv.x);
+            if (ub - ut).abs() <= 0.25 * step {
+                apart(bottom[i + 1], top[j]) <= apart(bottom[i], top[j + 1])
+            } else {
+                ub <= ut
+            }
         };
         if advance_bottom {
             emit(bottom[i], bottom[i + 1], top[j]);
@@ -999,6 +1013,8 @@ fn assemble(
     let kind = trim.surf.kind;
     let mut polys: Vec<Poly> = Vec::new();
     let mut holes: Vec<Vec<Corner>> = Vec::new();
+    // Holes that an outline already runs along, where a cut went through.
+    let mut used: Vec<usize> = Vec::new();
     for &i in plain {
         if trim.loops[i].area > 0.0 {
             polys.push(Poly {
@@ -1057,6 +1073,7 @@ fn assemble(
                 (&lc, trim.loops[i].shift),
                 (&uc, trim.loops[j].shift),
                 &holes,
+                &mut used,
             );
             polys.push(Poly {
                 outer,
@@ -1120,9 +1137,25 @@ fn assemble(
             }
             let back = v2(-lp.shift.x, -lp.shift.y);
             let outer = if up {
-                band(trim, opts, fv, (cs, lp.shift), (&ring, back), &holes)
+                band(
+                    trim,
+                    opts,
+                    fv,
+                    (cs, lp.shift),
+                    (&ring, back),
+                    &holes,
+                    &mut used,
+                )
             } else {
-                band(trim, opts, fv, (&ring, back), (cs, lp.shift), &holes)
+                band(
+                    trim,
+                    opts,
+                    fv,
+                    (&ring, back),
+                    (cs, lp.shift),
+                    &holes,
+                    &mut used,
+                )
             };
             polys.push(Poly {
                 outer,
@@ -1136,7 +1169,7 @@ fn assemble(
     // parameter rectangle, cut along seams that avoid the holes.
     let closed = matches!(kind, SurfKind::Sphere | SurfKind::Torus);
     if closed && polys.is_empty() && winding.is_empty() {
-        if let Some(outer) = full_rectangle(trim, &holes, fv, opts, tris) {
+        if let Some(outer) = full_rectangle(trim, &holes, fv, opts, tris, &mut used) {
             polys.push(Poly {
                 outer,
                 holes: Vec::new(),
@@ -1148,7 +1181,10 @@ fn assemble(
     // image puts it there.
     let pu = trim.surf.u_periodic();
     let pv = trim.surf.v_periodic();
-    for hole in holes {
+    for (h, hole) in holes.into_iter().enumerate() {
+        if used.contains(&h) {
+            continue;
+        }
         let probe = hole[0].uv;
         let mut placed = false;
         'search: for poly in &mut polys {
@@ -1255,6 +1291,7 @@ fn band(
     lower: (&[Corner], V2),
     upper: (&[Corner], V2),
     holes: &[Vec<Corner>],
+    used: &mut Vec<usize>,
 ) -> Vec<Corner> {
     let (lower, turn) = lower;
     let (upper, back) = upper;
@@ -1361,13 +1398,85 @@ fn band(
             (!blocked(a, b + turn * (turns(a, b) + extra), 4)).then_some((i, j, extra))
         })
     };
-    let (i0, j0, extra) = straight.or_else(slanted).unwrap_or_else(|| {
-        if crate::diag::trace() {
-            eprintln!("tess: no clear cut across a band of {n} and {m} corners");
+    // A hole can fill the band from side to side, all but a neck too thin
+    // to cut along: one that reaches right round a ring and almost meets
+    // itself. The cut then goes through the hole instead: from the lower
+    // loop to the hole, and from the far side of the hole on to the upper
+    // loop. The hole's outline becomes part of the band's, half of it on
+    // each bank.
+    let through = || {
+        for (h, hole) in holes.iter().enumerate() {
+            let size = hole.len();
+            let (di, dj, dh) = (n.div_ceil(48), m.div_ceil(48), size.div_ceil(96));
+            // The image of the hole nearest each corner of the lower loop.
+            let mut down: Vec<(f64, usize, usize, V2)> = Vec::new();
+            for i in (0..n).step_by(di) {
+                let a = lower[i].uv;
+                for k in (0..size).step_by(dh) {
+                    let round = turn * turns(a, hole[k].uv);
+                    // The band lies to the left of the lower loop as it
+                    // goes; an image of the hole on the other side is in
+                    // some other band.
+                    let nearest = lifts
+                        .iter()
+                        .map(|&lift| {
+                            let shift = round + other * lift;
+                            (apart(a, hole[k].uv + shift), shift)
+                        })
+                        .filter(|&(_, shift)| turn.cross(hole[k].uv + shift - a) > 0.0)
+                        .min_by(|x, y| x.0.total_cmp(&y.0));
+                    if let Some((far, shift)) = nearest {
+                        down.push((far, i, k, shift));
+                    }
+                }
+            }
+            down.sort_by(|x, y| x.0.total_cmp(&y.0));
+            let Some((_, i, a, shift)) = down
+                .into_iter()
+                .take(64)
+                .find(|&(_, i, k, shift)| !blocked(lower[i].uv, hole[k].uv + shift, 4))
+            else {
+                continue;
+            };
+            let mut up: Vec<(f64, usize, usize, f64)> = Vec::new();
+            for k in (0..size).step_by(dh) {
+                let q = hole[k].uv + shift;
+                for j in (0..m).step_by(dj) {
+                    let round = turns(q, upper[j].uv);
+                    up.push((apart(q, upper[j].uv + turn * round), k, j, round));
+                }
+            }
+            up.sort_by(|x, y| x.0.total_cmp(&y.0));
+            let Some((_, b, j, round)) = up.into_iter().take(64).find(|&(_, k, j, round)| {
+                !blocked(hole[k].uv + shift, upper[j].uv + turn * round, 4)
+            }) else {
+                continue;
+            };
+            return Some((i, j, round, h, shift, a, b));
         }
-        (pairs[0].1, pairs[0].2, 0.0)
-    });
-    let near_turns = turns(lower[i0].uv, upper[j0].uv) + extra;
+        None
+    };
+    // Where the cut goes: from which corner to which, how many turns round
+    // the upper one is when it arrives, and by which points on the way if
+    // it cannot go straight.
+    let mut detour = None;
+    let (i0, j0, near_turns, route) = match straight.or_else(slanted) {
+        Some((i, j, extra)) => (i, j, turns(lower[i].uv, upper[j].uv) + extra, Vec::new()),
+        None => match through() {
+            Some((i, j, round, h, shift, a, b)) => {
+                detour = Some((h, shift, a, b));
+                (i, j, round, Vec::new())
+            }
+            None => way_across(lower, upper, turn, other, lifts, &walls, unit, &blocked)
+                .unwrap_or_else(|| {
+                    if crate::diag::trace() {
+                        eprintln!("tess: no clear cut across a band of {n} and {m} corners");
+                    }
+                    let (_, i, j) = pairs[0];
+                    (i, j, turns(lower[i].uv, upper[j].uv), Vec::new())
+                }),
+        },
+    };
 
     // Along the lower loop for one turn, up the far bank of the cut, back
     // along the upper loop, and down the near bank.
@@ -1385,15 +1494,271 @@ fn band(
             fv.shifted(upper[j], turn * (near_turns + 1.0 - wraps))
         })
         .collect();
-    let far = cut_points(trim, opts, fv, outer[n].uv, top[0].uv);
-    let near: Vec<Corner> = far
-        .iter()
-        .map(|c| fv.shifted(*c, v2(-turn.x, -turn.y)))
-        .collect();
+    let home = v2(-turn.x, -turn.y);
+    if let Some((h, shift, a, b)) = detour {
+        // Up the far bank to the hole, round the hole from where the cut
+        // goes in to where it comes out, and on up; back along the upper
+        // loop; down the near bank to the hole, round the rest of it, and
+        // down to the start.
+        used.push(h);
+        let hole = &holes[h];
+        let size = hole.len();
+        let (way_in, way_out) = (hole[a].uv + shift, hole[b].uv + shift);
+        let first = cut_points(trim, opts, fv, outer[n].uv, way_in + turn);
+        let second = cut_points(trim, opts, fv, way_out + turn, top[0].uv);
+        let top_end = top[m];
+        outer.extend(first.iter().copied());
+        for k in 0..=(b + size - a) % size {
+            outer.push(fv.shifted(hole[(a + k) % size], shift + turn));
+        }
+        outer.extend(second.iter().copied());
+        outer.extend(top);
+        debug_assert!((top_end.uv - (upper[j0].uv + turn * near_turns)).len() < 1.0e-9);
+        outer.extend(second.iter().rev().map(|c| fv.shifted(*c, home)));
+        let rest = match (a + size - b) % size {
+            0 => size,
+            rest => rest,
+        };
+        for k in 0..=rest {
+            // Each a vertex of its own: the same place seen on this bank.
+            let c = hole[(b + k) % size];
+            outer.push(Corner {
+                uv: c.uv + shift,
+                src: fv.alias(c.src),
+            });
+        }
+        outer.extend(first.iter().rev().map(|c| fv.shifted(*c, home)));
+        return outer;
+    }
+    let mut far: Vec<Corner> = Vec::new();
+    let mut from = outer[n].uv;
+    for q in route.iter().map(|q| *q + turn) {
+        far.extend(cut_points(trim, opts, fv, from, q));
+        far.push(Corner {
+            uv: q,
+            src: fv.push(trim.point(q), trim.normal(q)),
+        });
+        from = q;
+    }
+    far.extend(cut_points(trim, opts, fv, from, top[0].uv));
+    let near: Vec<Corner> = far.iter().map(|c| fv.shifted(*c, home)).collect();
     outer.extend(far);
     outer.extend(top);
     outer.extend(near.into_iter().rev());
     outer
+}
+
+/// A way across a band that no straight line gets across: holes can leave
+/// only a crooked channel between them. The band is laid over a lattice,
+/// every node near a wall is struck out, and the shortest way over what is
+/// left from beside the lower loop to beside the upper one is pulled taut.
+///
+/// `walls` are the sides of the lower loop, then of the upper loop, then
+/// of the holes; `blocked` says whether a straight line meets any of them
+/// within so many turns. Returns the corners of the two loops that the way
+/// joins, how many turns round the upper one is when it gets there, and
+/// the points in between.
+#[allow(clippy::too_many_arguments)]
+fn way_across(
+    lower: &[Corner],
+    upper: &[Corner],
+    turn: V2,
+    other: V2,
+    lifts: &[f64],
+    walls: &[[V2; 2]],
+    unit: V2,
+    blocked: &dyn Fn(V2, V2, i32) -> bool,
+) -> Option<(usize, usize, f64, Vec<V2>)> {
+    // In units of the longest chord each way, so that near means near; and
+    // with the way the loops go as the first coordinate.
+    let around = turn.x != 0.0;
+    let flat = |q: V2| {
+        let s = v2(q.x / unit.x, q.y / unit.y);
+        if around {
+            s
+        } else {
+            v2(s.y, s.x)
+        }
+    };
+    let back = |s: V2| {
+        let s = if around { s } else { v2(s.y, s.x) };
+        v2(s.x * unit.x, s.y * unit.y)
+    };
+    let whole = flat(turn).x.abs();
+    let (mut lo, mut hi) = (flat(lower[0].uv), flat(lower[0].uv));
+    for c in lower.iter().chain(upper) {
+        let q = flat(c.uv);
+        lo = v2(lo.x.min(q.x), lo.y.min(q.y));
+        hi = v2(hi.x.max(q.x), hi.y.max(q.y));
+    }
+    // A turn to either side of the lower loop, for a way that slants.
+    let (from, to) = (lo.x - whole, lo.x + 2.0 * whole);
+    // Finer and finer, for a channel with a narrow neck.
+    [96.0, 192.0, 384.0, 768.0].into_iter().find_map(|rows| {
+        let cell = ((hi.y - lo.y) / rows).max((to - from) / 8192.0);
+        if cell.is_nan() || cell <= 0.0 {
+            return None;
+        }
+        way_over_cells(
+            lower, upper, turn, other, lifts, walls, blocked, &flat, &back, cell, from, to, lo.y,
+            hi.y,
+        )
+    })
+}
+
+/// [`way_across`] on a lattice of one cell size. `flat` and `back` go to
+/// and from the lattice's coordinates; it reaches from `from` to `to` the
+/// way the loops go and from `low` to `high` across.
+#[allow(clippy::too_many_arguments)]
+fn way_over_cells(
+    lower: &[Corner],
+    upper: &[Corner],
+    turn: V2,
+    other: V2,
+    lifts: &[f64],
+    walls: &[[V2; 2]],
+    blocked: &dyn Fn(V2, V2, i32) -> bool,
+    flat: &dyn Fn(V2) -> V2,
+    back: &dyn Fn(V2) -> V2,
+    cell: f64,
+    from: f64,
+    to: f64,
+    low: f64,
+    high: f64,
+) -> Option<(usize, usize, f64, Vec<V2>)> {
+    let (n, m) = (lower.len(), upper.len());
+    let (lo, hi) = (v2(from, low), v2(to, high));
+    let base = v2(from, lo.y - 2.0 * cell);
+    let (nx, ny) = (
+        ((to - from) / cell).ceil() as usize + 1,
+        ((hi.y - lo.y) / cell).ceil() as usize + 5,
+    );
+    let node = |i: usize, j: usize| base + v2(i as f64, j as f64) * cell;
+    // Per node: struck out; beside the lower loop; beside which image of
+    // the upper loop, counted from three turns back.
+    let mut shut = vec![false; nx * ny];
+    let mut start = vec![false; nx * ny];
+    let mut goal = vec![0u8; nx * ny];
+    for (w, &[r, s]) in walls.iter().enumerate() {
+        for k in -3i32..=3 {
+            for &lift in lifts {
+                let by = turn * f64::from(k) + other * lift;
+                let (a, b) = (flat(r + by), flat(s + by));
+                let reach = 2.2 * cell;
+                let (i0, i1) = (
+                    ((a.x.min(b.x) - reach - base.x) / cell).floor(),
+                    ((a.x.max(b.x) + reach - base.x) / cell).ceil(),
+                );
+                let (j0, j1) = (
+                    ((a.y.min(b.y) - reach - base.y) / cell).floor(),
+                    ((a.y.max(b.y) + reach - base.y) / cell).ceil(),
+                );
+                if i1 < 0.0 || j1 < 0.0 || i0 >= nx as f64 || j0 >= ny as f64 {
+                    continue;
+                }
+                let d = b - a;
+                for i in i0.max(0.0) as usize..=(i1 as usize).min(nx - 1) {
+                    for j in j0.max(0.0) as usize..=(j1 as usize).min(ny - 1) {
+                        let q = node(i, j);
+                        let along = ((q - a).dot(d) / d.dot(d).max(1.0e-300)).clamp(0.0, 1.0);
+                        let off = (q - (a + d * along)).len();
+                        let at = j * nx + i;
+                        if off < 0.75 * cell {
+                            shut[at] = true;
+                        }
+                        if off < reach && lift == 0.0 {
+                            if w < n && k == 0 {
+                                start[at] = true;
+                            } else if (n..n + m).contains(&w) {
+                                goal[at] = (k + 4) as u8;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    // Breadth first from everything beside the lower loop.
+    const NONE: u32 = u32::MAX;
+    let mut before = vec![NONE; nx * ny];
+    let mut queue: std::collections::VecDeque<u32> = std::collections::VecDeque::new();
+    for at in 0..nx * ny {
+        if start[at] && !shut[at] {
+            before[at] = at as u32;
+            queue.push_back(at as u32);
+        }
+    }
+    let mut end = None;
+    while let Some(at) = queue.pop_front() {
+        let at = at as usize;
+        if goal[at] != 0 {
+            end = Some(at);
+            break;
+        }
+        let (i, j) = (at % nx, at / nx);
+        let mut visit = |i: usize, j: usize| {
+            let next = j * nx + i;
+            if !shut[next] && before[next] == NONE {
+                before[next] = at as u32;
+                queue.push_back(next as u32);
+            }
+        };
+        if i > 0 {
+            visit(i - 1, j);
+        }
+        if i + 1 < nx {
+            visit(i + 1, j);
+        }
+        if j > 0 {
+            visit(i, j - 1);
+        }
+        if j + 1 < ny {
+            visit(i, j + 1);
+        }
+    }
+    let end = end?;
+    let round = f64::from(goal[end]) - 4.0;
+    let mut way: Vec<V2> = Vec::new();
+    let mut at = end;
+    loop {
+        way.push(back(node(at % nx, at / nx)));
+        let prior = before[at] as usize;
+        if prior == at {
+            break;
+        }
+        at = prior;
+    }
+    way.reverse();
+    // The corners that the two ends of the way can see, nearest first.
+    let seen = |corners: &[Corner], by: V2, q: V2| {
+        let mut order: Vec<usize> = (0..corners.len()).collect();
+        let far = |i: usize| (flat(corners[i].uv + by) - flat(q)).len();
+        order.sort_by(|&x, &y| far(x).total_cmp(&far(y)));
+        order
+            .into_iter()
+            .take(12)
+            .find(|&i| !blocked(corners[i].uv + by, q, 4))
+    };
+    let i0 = seen(lower, v2(0.0, 0.0), way[0])?;
+    let j0 = seen(upper, turn * round, way[way.len() - 1])?;
+    // Pulled taut: from each point straight to the furthest one in sight.
+    let mut points = vec![lower[i0].uv];
+    points.extend(way);
+    points.push(upper[j0].uv + turn * round);
+    let mut taut = vec![points[0]];
+    let mut k = 0;
+    while k + 1 < points.len() {
+        let mut next = (k + 64).min(points.len() - 1);
+        while next > k + 1 && blocked(points[k], points[next], 4) {
+            next = k + (next - k) / 2;
+        }
+        taut.push(points[next]);
+        k = next;
+    }
+    let between = taut[1..taut.len() - 1].to_vec();
+    // Counted the way the straight cuts count: from the image of the upper
+    // corner nearest the lower one.
+    Some((i0, j0, round, between))
 }
 
 /// The middle of the widest stretch of a whole turn that none of `spans`
@@ -1449,6 +1814,7 @@ fn full_rectangle(
     fv: &mut FaceVerts,
     opts: &TessOptions,
     tris: &mut Vec<[Corner; 3]>,
+    used: &mut Vec<usize>,
 ) -> Option<Vec<Corner>> {
     let sphere = trim.surf.kind == SurfKind::Sphere;
     let spans = |axis: usize| -> Vec<(f64, f64)> {
@@ -1471,7 +1837,7 @@ fn full_rectangle(
     let around = widest_gap(&spans(0));
     let (u0, v0, v1) = if sphere {
         let Some(u0) = around else {
-            return sphere_between_caps(trim, holes, fv, opts, tris, nu);
+            return sphere_between_caps(trim, holes, fv, opts, tris, nu, used);
         };
         (u0, -0.5 * PI, 0.5 * PI)
     } else {
@@ -1488,7 +1854,15 @@ fn full_rectangle(
                     .map(|c| fv.shifted(*c, v2(0.0, TAU)))
                     .collect();
                 let (turn, back) = (v2(TAU, 0.0), v2(-TAU, 0.0));
-                return Some(band(trim, opts, fv, (&lower, turn), (&upper, back), holes));
+                return Some(band(
+                    trim,
+                    opts,
+                    fv,
+                    (&lower, turn),
+                    (&upper, back),
+                    holes,
+                    used,
+                ));
             }
             (Some(u0), None) => {
                 // Round the tube along `u0`: the same a quarter turn on,
@@ -1500,7 +1874,15 @@ fn full_rectangle(
                 let far: Vec<Corner> = near.iter().map(|c| fv.shifted(*c, v2(TAU, 0.0))).collect();
                 let down: Vec<Corner> = near.iter().rev().copied().collect();
                 let (turn, back) = (v2(0.0, TAU), v2(0.0, -TAU));
-                return Some(band(trim, opts, fv, (&far, turn), (&down, back), holes));
+                return Some(band(
+                    trim,
+                    opts,
+                    fv,
+                    (&far, turn),
+                    (&down, back),
+                    holes,
+                    used,
+                ));
             }
             (None, None) => {
                 if crate::diag::trace() {
@@ -1555,6 +1937,7 @@ fn sphere_between_caps(
     opts: &TessOptions,
     tris: &mut Vec<[Corner; 3]>,
     steps: usize,
+    used: &mut Vec<usize>,
 ) -> Option<Vec<Corner>> {
     // Between each pole and whatever comes nearest to it.
     let nearest = holes
@@ -1602,7 +1985,15 @@ fn sphere_between_caps(
     };
     let (south, north) = (cap(1.0), cap(-1.0));
     let (turn, back) = (v2(TAU, 0.0), v2(-TAU, 0.0));
-    Some(band(trim, opts, fv, (&south, turn), (&north, back), holes))
+    Some(band(
+        trim,
+        opts,
+        fv,
+        (&south, turn),
+        (&north, back),
+        holes,
+        used,
+    ))
 }
 
 /// Triangulate a polygon on a curved surface.
@@ -1635,6 +2026,8 @@ fn fill(
     /// The longest side left alone, where the lattice stopped short of the
     /// outline and a triangle has to span the gap.
     const LONGEST: f64 = 1.4;
+    /// The longest side left alone even right against the outline.
+    const FAR_TOO_LONG: f64 = 1.5;
 
     let (mut step, ruled) = units(trim, opts);
     // How much of a side's length counts against the tolerance.
@@ -1800,26 +2193,30 @@ fn fill(
         }
     }
     // Halve what is still too long, unless that would crowd the outline.
+    // A side half as long again as the tolerance allows is halved all the
+    // same: it would be more than twice as far off the surface.
     for _ in 0..8 {
-        let mut long: Vec<V2> = Vec::new();
+        let mut long: Vec<(V2, bool)> = Vec::new();
         for (t, tri) in net.tris.iter().enumerate() {
             for k in 0..3 {
                 let (a, b) = (tri[k], tri[(k + 1) % 3]);
                 if a < b && !net.on_outline(t, k) {
                     let (pa, pb) = (net.points[a as usize], net.points[b as usize]);
                     let d = pb - pa;
-                    if d.x * d.x * bends.x + d.y * d.y * bends.y > LONGEST * LONGEST {
-                        long.push((pa + pb) * 0.5);
+                    let length = d.x * d.x * bends.x + d.y * d.y * bends.y;
+                    if length > LONGEST * LONGEST {
+                        long.push(((pa + pb) * 0.5, length > FAR_TOO_LONG * FAR_TOO_LONG));
                     }
                 }
             }
         }
         let mut added = false;
-        for q in long {
+        for (q, far_too_long) in long {
             // On a ruled face a side that long cuts a corner off the
             // surface wherever it lies; a needle against the outline is
             // the lesser evil there, and nothing can tip it over.
             let crowded = !ruled
+                && !far_too_long
                 && sides.iter().any(|&[a, b]| {
                     let d = b - a;
                     let along = ((q - a).dot(d) / d.dot(d).max(1.0e-300)).clamp(0.0, 1.0);

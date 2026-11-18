@@ -919,8 +919,76 @@ pub fn too_close(a: &Surface, b: &Surface) -> String {
     )
 }
 
+/// Where a plane through the axis of a screw surface cuts it: the rulings
+/// of a flank, or the circles a rounded root is swept from, one each half
+/// turn. These are exact, and there are as many as the screw has half
+/// turns, so they are counted out here, where it is known how far to go.
+/// `None` for any other pair.
+fn through_the_axis(a: &Surface, b: &Surface, region: &Aabb) -> Option<Vec<Curve>> {
+    let (plane, screw) = match (a.kind, b.kind) {
+        (SurfKind::Plane, SurfKind::Helicoid | SurfKind::Coil) => (a, b),
+        (SurfKind::Helicoid | SurfKind::Coil, SurfKind::Plane) => (b, a),
+        _ => return None,
+    };
+    let (n, axis) = (plane.f.z, screw.f.z);
+    if n.dot(axis).abs() > 1.0e-9 || plane.sdist(screw.f.o).abs() > crate::math::TOL {
+        return None;
+    }
+    // The heights the region takes up along the axis, and how far out from
+    // it the region goes.
+    let (mut low, mut high, mut out): (f64, f64, f64) = (f64::INFINITY, f64::NEG_INFINITY, 0.0);
+    for i in 0..8 {
+        let local = screw.f.local(v3(
+            if i & 1 == 0 { region.lo.x } else { region.hi.x },
+            if i & 2 == 0 { region.lo.y } else { region.hi.y },
+            if i & 4 == 0 { region.lo.z } else { region.hi.z },
+        ));
+        low = low.min(local.z);
+        high = high.max(local.z);
+        out = out.max(local.x.hypot(local.y));
+    }
+    // What passes those heights starts this much lower or higher.
+    let (down, up) = match screw.kind {
+        SurfKind::Helicoid => {
+            let rise = screw.s.signum() * out / screw.s.abs().tan();
+            (rise.max(0.0), (-rise).max(0.0))
+        }
+        _ => (screw.s.abs(), screw.s.abs()),
+    };
+    let ends = [(low - down) / screw.t, (high + up) / screw.t];
+    let (first, last) = (ends[0].min(ends[1]), ends[0].max(ends[1]));
+    // The plane goes out from the axis twice in a turn.
+    let start = (-n.dot(screw.f.x)).atan2(n.dot(screw.f.y));
+    let (from, to) = (
+        ((first - start) / PI).floor() as i64 - 1,
+        ((last - start) / PI).ceil() as i64 + 1,
+    );
+    if to - from > 8192 {
+        return None;
+    }
+    let radial = |u: f64| screw.f.x * u.cos() + screw.f.y * u.sin();
+    Some(
+        (from..=to)
+            .map(|k| {
+                let u = start + PI * k as f64;
+                let on_axis = screw.f.o + axis * (screw.t * u);
+                match screw.kind {
+                    SurfKind::Helicoid => Curve::line(
+                        on_axis,
+                        radial(u) * screw.s.abs().tan() + axis * screw.s.signum(),
+                    ),
+                    _ => Curve::circle(on_axis + radial(u) * screw.r, n, radial(u), screw.s.abs()),
+                }
+            })
+            .collect(),
+    )
+}
+
 /// Pieces of the intersection of `a` and `b` inside `region`.
 pub fn trace(a: &Surface, b: &Surface, region: &Aabb) -> Vec<Curve> {
+    if let Some(exact) = through_the_axis(a, b, region) {
+        return exact;
+    }
     let (base, other) = if rank(a.kind) <= rank(b.kind) {
         (a, b)
     } else {
@@ -928,7 +996,9 @@ pub fn trace(a: &Surface, b: &Surface, region: &Aabb) -> Vec<Curve> {
     };
     // Finer cells each time a piece will not follow the curve.
     let mut out = Vec::new();
-    for finer in 0..3 {
+    // As many times as it takes two cones, which have no size of their own
+    // to set the first cells by.
+    for finer in 0..5 {
         let Some(mut grid) = Grid::new(base, other, region, finer) else {
             return Vec::new();
         };

@@ -72,9 +72,22 @@ fn pin_hole_through_a_ring_off_its_axis() {
 ///   and the two were called apart.
 /// * 2482: a rod leaves a cone a rim that rises steeply to just under its
 ///   base, and zipping the two edges together turned a triangle over.
+/// * 1389: the base of one cone passes a hair from the tip of another. A
+///   cone used to count with its mirror image behind the tip, and the two
+///   sheets of the section all but touched there.
+/// * 2731: two cones, which have no size of their own for the tracer to
+///   set its first cells by; it gave up two rounds too early.
+/// * 1830: the hole in a ring reaches right round it and all but meets
+///   itself, leaving a neck a few hundredths of a millimetre wide. The cut
+///   that opens the face out now goes through the hole.
+/// * 2921: on a ball, rows of the mesh that slant were always joined
+///   along the same diagonal, the long one where they slant the other way.
 #[test]
 fn pairs_that_once_went_wrong() {
-    for seed in [188, 361, 367, 496, 541, 562, 574, 1074, 1548, 2482, 3019] {
+    let seeds = [
+        188, 361, 367, 496, 541, 562, 574, 1074, 1389, 1548, 1830, 2482, 2731, 2921, 3019,
+    ];
+    for seed in seeds {
         let [(_, a), (_, b)] = random_pair(seed);
         let done = |op: Op| boolean(&a, &b, op).unwrap_or_else(|e| panic!("pair {seed}: {e}"));
         let (rest, shared, joined) = (done(Op::Cut), done(Op::Intersect), done(Op::Union));
@@ -85,7 +98,7 @@ fn pairs_that_once_went_wrong() {
         for body in [&rest, &shared, &joined] {
             body.check().unwrap();
             for options in [TessOptions::default(), fine] {
-                if options.linear < 0.1 && seed != 188 {
+                if options.linear < 0.1 && seed != 188 && seed != 2921 {
                     continue;
                 }
                 tessellate(body, &options)

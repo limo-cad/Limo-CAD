@@ -289,8 +289,13 @@ impl Surface {
     }
 
     /// Signed distance from `p` to the surface, positive on the natural-normal
-    /// side. Exact for every kind (the cone value is exact for the nappe that
-    /// `p` projects onto).
+    /// side. Exact for every kind.
+    ///
+    /// A cone is the one nappe that opens along its axis, tip included. The
+    /// lines through its tip go on behind it, but that mirror image is no
+    /// part of the surface: from back there the nearest point of the cone is
+    /// its tip. Counting both made two sheets that all but touch out of any
+    /// plane passing close by a tip.
     pub fn sdist(&self, p: V3) -> f64 {
         let l = self.f.local(p);
         match self.kind {
@@ -298,7 +303,12 @@ impl Surface {
             SurfKind::Cylinder => l.x.hypot(l.y) - self.r,
             SurfKind::Cone => {
                 let (sa, ca) = self.s.sin_cos();
-                l.x.hypot(l.y) * ca - l.z.abs() * sa
+                let rho = l.x.hypot(l.y);
+                if rho * sa + l.z * ca >= 0.0 {
+                    rho * ca - l.z * sa
+                } else {
+                    rho.hypot(l.z)
+                }
             }
             SurfKind::Sphere => l.len() - self.r,
             SurfKind::Torus => (l.x.hypot(l.y) - self.r).hypot(l.z) - self.s,
@@ -345,9 +355,14 @@ impl Surface {
             SurfKind::Cone => {
                 let d = p - f.o;
                 let h = d.dot(f.z);
-                let rad = (d - f.z * h).unit();
+                let out = d - f.z * h;
                 let (sa, ca) = self.s.sin_cos();
-                rad * ca - f.z * (sa * h.signum())
+                if out.len() * sa + h * ca >= 0.0 {
+                    out.unit() * ca - f.z * sa
+                } else {
+                    // Behind the tip: straight away from it.
+                    d.unit()
+                }
             }
             SurfKind::Sphere => (p - f.o).unit(),
             SurfKind::Torus => {

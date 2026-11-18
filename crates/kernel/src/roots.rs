@@ -21,6 +21,11 @@ pub enum Hits {
     Roots(Vec<Root>),
 }
 
+/// Where along a span to look whether it lies in something. Unevenly: a
+/// helix passes a plane through its axis every half turn, and looked at
+/// only at its quarters, fourteen turns of it seemed to lie in the plane.
+const ALONG: [f64; 7] = [0.0, 0.1173, 0.2511, 0.5, 0.6337, 0.8819, 1.0];
+
 /// Roots of a smooth function on `[a, b]`: sign changes, plus local minima of
 /// `|g|` below `tol` (tangential contact).
 pub fn solve(g: &dyn Fn(f64) -> f64, a: f64, b: f64, samples: usize, tol: f64) -> Vec<Root> {
@@ -285,9 +290,12 @@ fn line_cone(c: &Curve, s: &Surface) -> Vec<(f64, bool)> {
     let qa = d.x * d.x + d.y * d.y - k * d.z * d.z;
     let qb = 2.0 * (o.x * d.x + o.y * d.y - k * o.z * d.z);
     let qc = o.x * o.x + o.y * o.y - k * o.z * o.z;
+    // The quadratic is the cone and its mirror image behind the tip; only
+    // the cone counts.
+    let ahead = |t: f64| o.z + t * d.z >= -1.0e-9 * (1.0 + o.z.abs());
     if qa.abs() < 1.0e-12 {
         // Parallel to a ruling: one crossing at most.
-        if qb.abs() < 1.0e-12 {
+        if qb.abs() < 1.0e-12 || !ahead(-qc / qb) {
             return Vec::new();
         }
         return vec![(-qc / qb, false)];
@@ -301,7 +309,11 @@ fn line_cone(c: &Curve, s: &Surface) -> Vec<(f64, bool)> {
         return Vec::new();
     }
     let half = disc.sqrt() / (2.0 * qa.abs());
-    vec![(t_mid - half, false), (t_mid + half, false)]
+    [t_mid - half, t_mid + half]
+        .into_iter()
+        .filter(|&t| ahead(t))
+        .map(|t| (t, false))
+        .collect()
 }
 
 /// Keep roots of a periodic closed form that fall inside `[t0, t1]`.
@@ -467,7 +479,7 @@ fn helicoid_hits(c: &Curve, t0: f64, t1: f64, s: &Surface) -> Vec<Root> {
 /// Where the span `[t0, t1]` of `c` meets surface `s`.
 pub fn curve_surface(c: &Curve, t0: f64, t1: f64, s: &Surface) -> Hits {
     // Lying in the surface is the common degenerate case (shared faces).
-    let on = [0.0, 0.25, 0.5, 0.75, 1.0]
+    let on = ALONG
         .iter()
         .all(|k| s.sdist(c.point(t0 + (t1 - t0) * k)).abs() < TOL);
     if on {
@@ -623,10 +635,7 @@ pub fn curve_curve(c: &Curve, t0: f64, t1: f64, other: &Curve, s: &Surface) -> H
         (p - foot).dot(s.normal(foot).cross(along))
     };
     let dist = |t: f64| other.dist(c.point(t));
-    if [0.0, 0.25, 0.5, 0.75, 1.0]
-        .iter()
-        .all(|k| dist(t0 + (t1 - t0) * k) < TOL)
-    {
+    if ALONG.iter().all(|k| dist(t0 + (t1 - t0) * k) < TOL) {
         return Hits::Coincident;
     }
     if c.kind == CurveKind::Circle {

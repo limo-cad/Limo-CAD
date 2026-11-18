@@ -448,6 +448,84 @@ fn threads_on_a_pin_and_in_a_plate() {
     }
 }
 
+/// A hole tapped right on the edge of a plate, and right on its corner:
+/// the faces of the plate pass through the axis of the thread and cut its
+/// flanks along their rulings.
+#[test]
+fn tapped_holes_on_the_edge_and_the_corner_of_a_plate() {
+    // The same with the rounded thread, whose roots the plate cuts in the
+    // circles they are swept from.
+    let round = HoleThreadDto {
+        standard: HoleThreadStandard::CustomTrapezoidal,
+        series: HoleThreadSeries::Rounded,
+        designation: "Tr8 x 2 rounded".to_string(),
+        class: "custom".to_string(),
+        nominal_diameter: 8.0,
+        pitch: 2.0,
+        threads_per_inch: None,
+        hand: HoleThreadHand::Right,
+        depth: None,
+        representation: HoleThreadRepresentation::Modeled,
+        tap_drill_designation: None,
+        rounded_profile: Some(RoundedThreadProfile {
+            radial_depth: 1.0,
+            corner_radius: 0.2,
+            radial_clearance: 0.1,
+            axial_clearance: 0.1,
+        }),
+    };
+    for (x, y, part, tap, drill) in [
+        (15.0, 0.0, 0.5, metric(6.0, 1.0, "6H", None), 5.0),
+        (15.0, 10.0, 0.25, metric(6.0, 1.0, "6H", None), 5.0),
+        (15.0, 0.0, 0.5, round.clone(), 6.0),
+        (15.0, 10.0, 0.25, round.clone(), 6.0),
+    ] {
+        let plate = extrude(rectangle(30.0, 20.0, 0.0), 12.0, 0.0);
+        let hole = |thread: Option<HoleThreadDto>| {
+            KernelJobDto::Hole(KernelHoleJobDto {
+                feature_id: FeatureId(2),
+                target_body_id: BodyId(1),
+                center: at(x, y, 12.0),
+                direction: at(0.0, 0.0, -1.0),
+                diameter: drill,
+                extent: HoleExtent::ThroughAll,
+                style: HoleStyle::Simple,
+                counterbore_diameter: 0.0,
+                counterbore_depth: 0.0,
+                countersink_diameter: 0.0,
+                countersink_angle_deg: 90.0,
+                bottom_style: HoleBottomStyle::Flat,
+                drill_point_angle_deg: 118.0,
+                thread,
+            })
+        };
+        let plain = threaded(vec![plate.clone(), hole(None)]);
+        let tapped = threaded(vec![plate.clone(), hole(Some(tap.clone()))]);
+        // Each flank comes out in as many pieces as it has turns.
+        assert!(count(&tapped, SurfKind::Helicoid) >= 2 * 6, "at {x}, {y}");
+        // What the thread takes on top of the drill is that part of what it
+        // takes from a whole hole.
+        let whole = {
+            let hole = |thread: Option<HoleThreadDto>| {
+                let mut job = hole(thread);
+                if let KernelJobDto::Hole(job) = &mut job {
+                    job.center = at(3.0, -2.0, 12.0);
+                }
+                job
+            };
+            let weigh = |jobs| limo_cad_kernel::props::volume(&threaded(jobs));
+            weigh(vec![plate.clone(), hole(None)])
+                - weigh(vec![plate.clone(), hole(Some(tap.clone()))])
+        };
+        let taken =
+            limo_cad_kernel::props::volume(&plain) - limo_cad_kernel::props::volume(&tapped);
+        assert!(
+            (taken - part * whole).abs() < 1.0e-6 * whole,
+            "at {x}, {y}: the thread takes {taken}, {part} of {whole}"
+        );
+    }
+}
+
 #[test]
 fn a_rounded_thread_through_the_session() {
     let thread = HoleThreadDto {
