@@ -80,8 +80,10 @@ fn sound(body: &Body) -> (f64, f64) {
     let area = (4.0 * fine.1 - coarse.1) / 3.0;
     let m = mass(body);
     assert!(m.exact);
+    // (Two meshes take most of the chord error out of each other, not all
+    // of it: the number of chords round an arc is a whole number.)
     assert!(
-        (m.volume - volume).abs() < 2.0e-6 * volume,
+        (m.volume - volume).abs() < 1.0e-5 * volume,
         "volume {} against {volume} from meshes",
         m.volume
     );
@@ -373,4 +375,137 @@ fn threads_come_back_from_step() {
     let long = boolean(&rod, &groove, Op::Cut).unwrap();
     let (volume, area) = through_step("rounded thread", &long);
     assert!(volume < 1.0e-7 && area < 1.0e-6, "{volume} {area}");
+}
+
+#[test]
+fn a_profile_carried_without_turning() {
+    // Whatever the path does on the way, every slice parallel to the
+    // profile is a copy of it: the volume is its area times how far the
+    // path gets along the profile's normal.
+    let rectangle: Vec<Seg> = {
+        let p = [
+            v3(-4.0, -2.0, 0.0),
+            v3(4.0, -2.0, 0.0),
+            v3(4.0, 2.0, 0.0),
+            v3(-4.0, 2.0, 0.0),
+        ];
+        (0..4)
+            .map(|i| Seg::Line {
+                a: p[i],
+                b: p[(i + 1) % 4],
+            })
+            .collect()
+    };
+    let line = |a: V3, b: V3| Seg::Line { a, b };
+    // A quarter turn in the plane x-z, bulging towards +x, then on.
+    let bend = Seg::Arc {
+        a: v3(0.0, 0.0, 10.0),
+        m: v3(
+            20.0 * (1.0 - (PI / 8.0).cos()),
+            0.0,
+            10.0 + 20.0 * (PI / 8.0).sin(),
+        ),
+        b: v3(
+            20.0 * (1.0 - (PI / 4.0).cos()),
+            0.0,
+            10.0 + 20.0 * (PI / 4.0).sin(),
+        ),
+    };
+    let end = v3(
+        20.0 * (1.0 - (PI / 4.0).cos()),
+        0.0,
+        10.0 + 20.0 * (PI / 4.0).sin(),
+    );
+    let onward = end + v3(5.0, 3.0, 5.0);
+    /// What is carried, along what, its area and where it ends up.
+    type Case = (&'static str, Vec<Seg>, Vec<Seg>, f64, V3);
+    let cases: Vec<Case> = vec![
+        (
+            "slanted bar",
+            rectangle.clone(),
+            vec![line(V3::ZERO, v3(3.0, 2.0, 12.0))],
+            32.0,
+            v3(3.0, 2.0, 12.0),
+        ),
+        (
+            "bar round a bend",
+            rectangle.clone(),
+            vec![line(V3::ZERO, v3(0.0, 0.0, 10.0)), bend, line(end, onward)],
+            32.0,
+            onward,
+        ),
+        (
+            "rod up a slope",
+            circle(3.0, 0.0),
+            vec![line(V3::ZERO, v3(4.0, -2.0, 9.0))],
+            PI * 9.0,
+            v3(4.0, -2.0, 9.0),
+        ),
+        (
+            "rod round a bend",
+            circle(3.0, 0.0),
+            vec![line(V3::ZERO, v3(0.0, 0.0, 10.0)), bend, line(end, onward)],
+            PI * 9.0,
+            onward,
+        ),
+        (
+            "slot round a bend",
+            slot(5.0, 2.0, 0.0),
+            vec![bend_from_origin()],
+            PI * 4.0 + 40.0,
+            v3(
+                20.0 * (1.0 - (PI / 4.0).cos()),
+                0.0,
+                20.0 * (PI / 4.0).sin(),
+            ),
+        ),
+    ];
+    for (name, profile, path, area, to) in cases {
+        let body = loft::carried(&profile, &path).unwrap_or_else(|e| panic!("{name}: {e}"));
+        let (volume, _) = sound(&body);
+        let exact = area * to.z;
+        assert!(
+            (volume - exact).abs() < 1.0e-9 * exact,
+            "{name}: {volume} for {exact}"
+        );
+        saved(&body);
+        // Every edge is a line or an arc.
+        for e in 0..body.edge_count() as u32 {
+            let kind = body.e_curve_ref(e).kind;
+            assert!(
+                matches!(
+                    kind,
+                    limo_cad_kernel::CurveKind::Line | limo_cad_kernel::CurveKind::Circle
+                ),
+                "{name}: {kind:?}"
+            );
+        }
+    }
+    // A bar straight up is the block it always was.
+    let block = loft::carried(&rectangle, &[line(V3::ZERO, v3(0.0, 0.0, 7.0))]).unwrap();
+    assert_eq!(count(&block, SurfKind::Plane), 6);
+    // A path that doubles back through the profile's plane is refused.
+    let back = Seg::Arc {
+        a: V3::ZERO,
+        m: v3(10.0, 0.0, 10.0),
+        b: v3(20.0, 0.0, 0.0),
+    };
+    assert!(loft::carried(&rectangle, &[back]).is_err());
+}
+
+/// The same quarter-turn-less bend, starting at the origin.
+fn bend_from_origin() -> Seg {
+    Seg::Arc {
+        a: V3::ZERO,
+        m: v3(
+            20.0 * (1.0 - (PI / 8.0).cos()),
+            0.0,
+            20.0 * (PI / 8.0).sin(),
+        ),
+        b: v3(
+            20.0 * (1.0 - (PI / 4.0).cos()),
+            0.0,
+            20.0 * (PI / 4.0).sin(),
+        ),
+    }
 }

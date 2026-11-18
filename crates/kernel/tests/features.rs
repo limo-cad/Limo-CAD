@@ -344,24 +344,9 @@ fn a_bar_swept_along_a_line_and_a_bend() {
         volume(&body)
     );
 
-    // A path that turns a corner is not followed.
-    let corner = vec![
-        KernelCurveDto::Line {
-            entity_id: 21,
-            start: at(0.0, 0.0, 0.0),
-            end: at(0.0, 0.0, 15.0),
-        },
-        KernelCurveDto::Line {
-            entity_id: 22,
-            start: at(0.0, 0.0, 15.0),
-            end: at(10.0, 0.0, 15.0),
-        },
-    ];
-    let refused = refusal(vec![sweep(rectangle(8.0, 6.0, 0.0), corner)]);
-    assert!(refused.contains("smoothly"), "{refused}");
-
     // A profile kept facing one way is the same solid along a straight
-    // line. Round a bend it is another one, and that is said, not guessed.
+    // line. Round the bend every slice level with the profile is still a
+    // copy of it: the volume is its area times the height gained.
     let facing_one_way = |path: Vec<KernelCurveDto>| {
         let mut job = sweep(rectangle(8.0, 6.0, 0.0), path);
         if let KernelJobDto::Sweep(job) = &mut job {
@@ -371,8 +356,131 @@ fn a_bar_swept_along_a_line_and_a_bend() {
     };
     let straight = built(vec![facing_one_way(vec![path[0].clone()])]);
     assert!((volume(&straight) - 48.0 * 15.0).abs() < 1e-9);
+    // Half the bend: an eighth of a turn.
+    let (sin, cos) = (PI / 4.0).sin_cos();
+    let (half_sin, half_cos) = (PI / 8.0).sin_cos();
+    let gentler = vec![
+        path[0].clone(),
+        KernelCurveDto::Arc {
+            entity_id: 22,
+            start: at(0.0, 0.0, 15.0),
+            mid: at(30.0 - 30.0 * half_cos, 0.0, 15.0 + 30.0 * half_sin),
+            end: at(30.0 - 30.0 * cos, 0.0, 15.0 + 30.0 * sin),
+        },
+    ];
+    let carried = built(vec![facing_one_way(gentler)]);
+    let weighed = limo_cad_kernel::props::mass(&carried).volume;
+    let exact = 48.0 * (15.0 + 30.0 * sin);
+    assert!((weighed - exact).abs() < 1e-7, "{weighed} {exact}");
+    assert!(count(&carried, SurfKind::Spline) + count(&carried, SurfKind::Cylinder) >= 4);
+    // By the end of the whole bend the path runs along the profile, and
+    // the bar would thin out to nothing: that is said, not built.
     let refused = refusal(vec![facing_one_way(path)]);
     assert!(refused.contains("facing one way"), "{refused}");
+}
+
+/// A sweep job with the way its profile is held and its corners are made.
+fn sweep_as(
+    profile: KernelProfileDto,
+    path: Vec<KernelCurveDto>,
+    orientation: SweepOrientation,
+    transition: SweepTransition,
+) -> KernelJobDto {
+    let mut job = sweep(profile, path);
+    if let KernelJobDto::Sweep(job) = &mut job {
+        job.orientation = orientation;
+        job.transition = transition;
+    }
+    job
+}
+
+#[test]
+fn a_bar_swept_round_a_corner() {
+    // Up ten, then eight across: a right-angled corner, turning towards
+    // +x. The bar is 4 across the turn and 2 along the line it turns about.
+    let corner = |across: f64, rise: f64| {
+        vec![
+            KernelCurveDto::Line {
+                entity_id: 21,
+                start: at(0.0, 0.0, 0.0),
+                end: at(0.0, 0.0, 10.0),
+            },
+            KernelCurveDto::Line {
+                entity_id: 22,
+                start: at(0.0, 0.0, 10.0),
+                end: at(across, 0.0, 10.0 + rise),
+            },
+        ]
+    };
+    let weigh = |body: &Body| limo_cad_kernel::props::mass(body).volume;
+    // Sharp: both legs run on until they meet. Each is the bar cut on the
+    // slant through the middle of its end, which weighs what it would cut
+    // square.
+    for transition in [SweepTransition::RightCorner, SweepTransition::Transformed] {
+        let sharp = built(vec![sweep_as(
+            rectangle(4.0, 2.0, 0.0),
+            corner(8.0, 0.0),
+            SweepOrientation::CorrectedFrenet,
+            transition,
+        )]);
+        assert!(
+            (weigh(&sharp) - 8.0 * 18.0).abs() < 1e-9,
+            "{}",
+            weigh(&sharp)
+        );
+        assert_eq!(count(&sharp, SurfKind::Plane), sharp.face_count());
+    }
+    // Round: the outer half of the bar swung a quarter turn about the
+    // corner, in place of the square the two legs share on the inside.
+    let round = built(vec![sweep_as(
+        rectangle(4.0, 2.0, 0.0),
+        corner(8.0, 0.0),
+        SweepOrientation::CorrectedFrenet,
+        SweepTransition::RoundCorner,
+    )]);
+    let exact = 8.0 * 18.0 - 2.0 * 16.0 / 4.0 + 0.5 * PI * 2.0 * 16.0 / 8.0;
+    assert!((weigh(&round) - exact).abs() < 1e-9, "{}", weigh(&round));
+    assert_eq!(count(&round, SurfKind::Cylinder), 1);
+    // A corner of another angle, either way.
+    for (across, rise) in [(8.0, 5.0), (8.0, -4.0), (-6.0, 3.0)] {
+        for transition in [SweepTransition::RightCorner, SweepTransition::RoundCorner] {
+            let body = built(vec![sweep_as(
+                rectangle(4.0, 2.0, 0.0),
+                corner(across, rise),
+                SweepOrientation::CorrectedFrenet,
+                transition,
+            )]);
+            let legs = 8.0 * (10.0 + (across * across + rise * rise).sqrt());
+            if transition == SweepTransition::RightCorner {
+                assert!((weigh(&body) - legs).abs() < 1e-9, "{}", weigh(&body));
+            } else {
+                assert!(weigh(&body) < legs && weigh(&body) > 0.9 * legs);
+            }
+        }
+    }
+    // A tube round a sharp corner keeps its bore.
+    let mut tube = rectangle(4.0, 2.0, 0.0);
+    tube.holes.push(circle(0.5, 0.0));
+    let piped = built(vec![sweep_as(
+        tube,
+        corner(8.0, 0.0),
+        SweepOrientation::CorrectedFrenet,
+        SweepTransition::RightCorner,
+    )]);
+    let exact = (8.0 - PI * 0.25) * 18.0;
+    assert!((weigh(&piped) - exact).abs() < 1e-9, "{}", weigh(&piped));
+    // Kept facing one way, the bar just goes where the path goes.
+    let level = built(vec![sweep_as(
+        rectangle(4.0, 2.0, 0.0),
+        corner(8.0, 6.0),
+        SweepOrientation::Fixed,
+        SweepTransition::Transformed,
+    )]);
+    assert!(
+        (weigh(&level) - 8.0 * 16.0).abs() < 1e-9,
+        "{}",
+        weigh(&level)
+    );
 }
 
 #[test]

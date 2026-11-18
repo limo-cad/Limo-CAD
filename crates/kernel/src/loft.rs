@@ -529,3 +529,281 @@ pub fn skin(sections: &[Vec<Seg>], ruled: bool) -> Result<Body, String> {
     body.check()?;
     Ok(body)
 }
+
+impl Part {
+    /// The same part moved by `by`.
+    fn moved(&self, by: V3) -> Part {
+        Part {
+            shape: match self.shape {
+                Shape::Line => Shape::Line,
+                Shape::Arc { c, axis } => Shape::Arc { c: c + by, axis },
+            },
+            a: self.a + by,
+            b: self.b + by,
+            ..*self
+        }
+    }
+
+    /// The way it is heading at its start, a unit long.
+    fn heading(&self) -> V3 {
+        self.heading_at(0.0)
+    }
+
+    /// The way it is heading a fraction `f` of the way along.
+    fn heading_at(&self, f: f64) -> V3 {
+        match self.shape {
+            Shape::Line => (self.b - self.a).unit(),
+            Shape::Arc { c, axis } => axis.cross(self.at(f) - c).unit(),
+        }
+    }
+
+    /// The edge of `body` along it, between two vertices already there.
+    fn edge(&self, body: &mut Body, v0: u32, v1: u32) -> u32 {
+        match self.shape {
+            Shape::Line => body.add_line_edge(v0, v1),
+            Shape::Arc { c, axis } => {
+                let frame = Frame::from_zx(c, axis, self.a - c);
+                let l = frame.local(self.b);
+                let sweep = wrap_from(l.y.atan2(l.x), 1.0e-12);
+                let radius = 0.5 * ((self.a - c).len() + (self.b - c).len());
+                let curve = body.add_curve(Curve::circle(c, axis, self.a - c, radius));
+                body.add_edge(curve, 0.0, sweep, v0, v1)
+            }
+        }
+    }
+}
+
+/// The pieces of a path of lines and arcs, each running on from the end of
+/// the one before, with no arc wider than one curve can carry.
+fn path_parts(path: &[Seg]) -> Result<Vec<Part>, String> {
+    let mut out: Vec<Part> = Vec::new();
+    for (index, seg) in path.iter().enumerate() {
+        let placed = Placed {
+            seg: *seg,
+            reversed: false,
+            index: index as u32,
+        };
+        if matches!(seg, Seg::Circle { .. }) {
+            return Err(
+                "a profile kept facing one way cannot be carried round a full circle".into(),
+            );
+        }
+        let part = parts(&[placed])?.remove(0);
+        if let Some(before) = out.last() {
+            if before.b.dist(part.a) > 1.0e-5 {
+                return Err("the sweep path is not connected end to end".into());
+            }
+        }
+        let n = match part.shape {
+            Shape::Line => 1,
+            Shape::Arc { .. } => (part.sweep / WIDEST).ceil().max(1.0) as usize,
+        };
+        out.extend(part.cut(n));
+    }
+    Ok(out)
+}
+
+/// A profile carried along a path without turning: every point of it
+/// follows a copy of the path. `profile` is one closed outline of lines and
+/// arcs, or a circle; `path` is lines and arcs in order, each starting
+/// where the one before ends.
+///
+/// A line carried along a line sweeps a plane, and a line or an arc carried
+/// along its own axis a cylinder. Anything else is the surface every point
+/// of one curve carried along the other makes, which as a spline is exact:
+/// its control points are the sums of theirs, its weights the products.
+/// Every edge is a line or an arc: a copy of a piece of the profile, or of
+/// a piece of the path.
+///
+/// Sides are named as [`skin`] names them, with the piece of the path for
+/// the band.
+pub fn carried(profile: &[Seg], path: &[Seg]) -> Result<Body, String> {
+    let legs = path_parts(path)?;
+    if legs.is_empty() {
+        return Err("Sweep needs a path".into());
+    }
+    let mut lp = chain(profile)?;
+    let middle = wire_barycentre(&lp);
+    // The flat of the profile, facing the way the path sets out.
+    let setting_out = legs[0].heading();
+    let area = signed_area2(&lp, setting_out);
+    if area == 0.0 || !area.is_finite() {
+        return Err("a profile kept facing one way has to be crossed by its path".into());
+    }
+    if area < 0.0 {
+        reverse_loop(&mut lp);
+    }
+    let mut row = parts(&lp)?;
+    if row.len() == 1 && row[0].sweep == TAU {
+        let Shape::Arc { c, axis } = row[0].shape else {
+            unreachable!()
+        };
+        let x = row[0].a - c;
+        let y = axis.cross(x);
+        row = cut_circle(&row[0], &[c + x, c + y, c - x, c - y]);
+    }
+    let row: Vec<Part> = row
+        .iter()
+        .flat_map(|part| {
+            let n = match part.shape {
+                Shape::Line => 1,
+                Shape::Arc { .. } => (part.sweep / WIDEST).ceil().max(1.0) as usize,
+            };
+            let first = part.sub;
+            let mut cut = part.cut(n);
+            for piece in &mut cut {
+                piece.sub += first * 64;
+            }
+            cut
+        })
+        .collect();
+    let count = row.len();
+    // One point for each corner, whichever of its two parts it is asked of.
+    let row: Vec<Part> = (0..count)
+        .map(|i| Part {
+            b: row[(i + 1) % count].a,
+            ..row[i]
+        })
+        .collect();
+    let around: Vec<V3> = row.iter().flat_map(|p| [p.a, p.at(0.5)]).collect();
+    let mut flat = V3::ZERO;
+    for i in 0..around.len() {
+        flat += (around[i] - middle).cross(around[(i + 1) % around.len()] - middle);
+    }
+    let flat = flat.unit();
+    if !flat.is_finite() || flat.len2() < 0.5 {
+        return Err("profile encloses no area".into());
+    }
+    // The path must keep leaving the profile's plane on the same side, or
+    // the solid would fold back through itself.
+    for leg in &legs {
+        for f in [0.0, 0.25, 0.5, 0.75, 1.0] {
+            if leg.heading_at(f).dot(flat) < 0.02 {
+                return Err(
+                    "a profile kept facing one way cannot follow a path that turns to run along \
+                     it, or back through it"
+                        .into(),
+                );
+            }
+        }
+    }
+    let origin = legs[0].a;
+    let mut body = Body::new();
+    let station = |body: &mut Body, at: V3| -> (Vec<u32>, Vec<u32>) {
+        let by = at - origin;
+        let verts: Vec<u32> = row.iter().map(|p| body.add_vert(p.a + by)).collect();
+        let edges: Vec<u32> = (0..count)
+            .map(|i| {
+                row[i]
+                    .moved(by)
+                    .edge(body, verts[i], verts[(i + 1) % count])
+            })
+            .collect();
+        (verts, edges)
+    };
+    let (mut low_verts, mut low_edges) = station(&mut body, origin);
+    let first_edges = low_edges.clone();
+    let unit_knots = || vec![0.0, 0.0, 0.0, 1.0, 1.0, 1.0];
+    for (band, leg) in legs.iter().enumerate() {
+        let (high_verts, high_edges) = station(&mut body, leg.b);
+        let rails: Vec<u32> = (0..count)
+            .map(|i| {
+                leg.moved(row[i].a - origin)
+                    .edge(&mut body, low_verts[i], high_verts[i])
+            })
+            .collect();
+        let along = leg.hom()?;
+        for i in 0..count {
+            let j = (i + 1) % count;
+            let part = row[i].moved(leg.a - origin);
+            // Which way the face looks, at its first corner.
+            let outward = part.heading().cross(leg.heading());
+            if outward.len() < 1.0e-9 {
+                return Err("a sweep path runs along a side of its own profile".into());
+            }
+            let outward = outward.unit();
+            let (surface, sense) = match (part.shape, leg.shape) {
+                (Shape::Line, Shape::Line) => {
+                    let x = part.heading();
+                    (
+                        Surface::plane_frame(Frame {
+                            o: part.a,
+                            x,
+                            y: outward.cross(x),
+                            z: outward,
+                        }),
+                        true,
+                    )
+                }
+                // A line carried round an arc about its own direction, or
+                // an arc carried along its own axis.
+                (Shape::Line, Shape::Arc { c, axis })
+                    if part.heading().cross(axis).len() < 1.0e-9 =>
+                {
+                    let centre = c + (part.a - leg.a);
+                    let radius = (leg.a - c).len();
+                    (
+                        Surface::cylinder(centre, axis, radius),
+                        (part.a - centre).dot(outward) > 0.0,
+                    )
+                }
+                (Shape::Arc { c, axis }, Shape::Line)
+                    if leg.heading().cross(axis).len() < 1.0e-9 =>
+                {
+                    let radius = (part.a - c).len();
+                    (
+                        Surface::cylinder(c, axis, radius),
+                        (part.a - c).dot(outward) > 0.0,
+                    )
+                }
+                _ => {
+                    let across = part.hom()?;
+                    let mut net = Vec::with_capacity(9);
+                    for q in &along {
+                        for p in &across {
+                            let w = p[3] * q[3];
+                            let at =
+                                v3(p[0], p[1], p[2]) / p[3] + v3(q[0], q[1], q[2]) / q[3] - leg.a;
+                            net.push([at.x * w, at.y * w, at.z * w, w]);
+                        }
+                    }
+                    (
+                        Surface::spline(SplineSurface::from_hom(
+                            [2, 2],
+                            [unit_knots(), unit_knots()],
+                            [3, 3],
+                            net,
+                        )?),
+                        true,
+                    )
+                }
+            };
+            let s = body.add_surf(surface);
+            body.add_tagged_face(
+                s,
+                sense,
+                &[vec![
+                    2 * low_edges[i],
+                    2 * rails[j],
+                    2 * high_edges[i] + 1,
+                    2 * rails[i] + 1,
+                ]],
+                Role::Side {
+                    lp: band as u32 + BANDS * row[i].sub,
+                    seg: row[i].index,
+                }
+                .tag(),
+            );
+        }
+        (low_verts, low_edges) = (high_verts, high_edges);
+    }
+    let s = body.add_surf(Surface::plane(middle, -flat));
+    let bottom: Vec<u32> = first_edges.iter().rev().map(|e| 2 * e + 1).collect();
+    body.add_tagged_face(s, true, &[bottom], Role::Start.tag());
+    let end = legs[legs.len() - 1].b - origin;
+    let s = body.add_surf(Surface::plane(middle + end, flat));
+    let top: Vec<u32> = low_edges.iter().map(|e| 2 * e).collect();
+    body.add_tagged_face(s, true, &[top], Role::End.tag());
+    body.check()?;
+    Ok(body)
+}
