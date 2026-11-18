@@ -988,6 +988,16 @@ impl Curve {
         let start = self.meet_guess(t);
         let drive = self.s * t;
         let along_v = self.r != 0.0;
+        // A piece ends where it was pinned. Where the curve crosses itself
+        // the two surfaces touch, the distance has no slope to search down,
+        // and the pinned place is the only good answer there is.
+        if t == self.span[0] || t == self.span[1] {
+            return if along_v {
+                v2(start, drive)
+            } else {
+                v2(drive, start)
+            };
+        }
         // Distance from the other surface at dependent parameter `w`, and
         // how fast it changes with `w`.
         let value = |w: f64| {
@@ -1202,7 +1212,14 @@ impl Curve {
                 let (du, dv) = (self.base.du(q.x, q.y), self.base.dv(q.x, q.y));
                 let (along, across) = if self.r != 0.0 { (dv, du) } else { (du, dv) };
                 let slope = n.dot(across);
-                let dw = if slope.abs() > 1.0e-300 {
+                // At its ends a piece heads the way it was pinned to head:
+                // where the curve crosses itself the slope is nought over
+                // nought.
+                let dw = if t == self.span[0] {
+                    self.w[2] / self.s
+                } else if t == self.span[1] {
+                    self.w[3] / self.s
+                } else if slope.abs() > 1.0e-300 {
                     -n.dot(along) / slope
                 } else {
                     0.0

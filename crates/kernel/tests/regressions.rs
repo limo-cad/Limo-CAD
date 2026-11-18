@@ -95,11 +95,22 @@ fn pin_hole_through_a_ring_off_its_axis() {
 ///   hole, and the pocket between the two kept the long triangles it was
 ///   first clipped into: too narrow for a lattice point, so nothing ever
 ///   looked at it again.
+/// * 7168: a rod leans a few thousandths of a turn off the side of a
+///   block and dips in through it, leaving a tongue whose outline is one
+///   end of an ellipse eight thousand times longer than wide. The point
+///   taken beside the tip stepped clean across to the other side of it:
+///   the room there is now measured to whatever the step would cross.
+/// * 4041, 4560: one cone only just dips through another. The closed
+///   curve round the dip was found from two cells of the tracer, drawn
+///   twice, and its second drawing was not seen to be the first again.
+/// * 5720: the flat end of a cone slices a cap off a ring. The cap and the
+///   patch of ring inside the cone are written a turn of the tube apart,
+///   and the hole the cap leaves was given to the wrong one.
 #[test]
 fn pairs_that_once_went_wrong() {
     let seeds = [
         188, 218, 361, 367, 496, 541, 562, 574, 1074, 1389, 1548, 1830, 2482, 2731, 2921, 3019,
-        4117, 4327, 4938, 6616,
+        4041, 4117, 4327, 4560, 4938, 5720, 6616, 7168,
     ];
     for seed in seeds {
         let [(_, a), (_, b)] = random_pair(seed);

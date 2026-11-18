@@ -295,6 +295,59 @@ fn free_form_solids_against_each_other() {
     saved(&common);
 }
 
+/// A skin against its own image in a mirror, or against itself turned a
+/// little: the two touch wherever the curve they meet in crosses itself,
+/// and each crossing has four curves ending at it.
+#[test]
+fn a_skin_against_itself_moved_a_little() {
+    let vase = loft::skin(
+        &[circle(8.0, 0.0), circle(12.0, 15.0), circle(6.0, 30.0)],
+        false,
+    )
+    .unwrap();
+    let moved = [
+        // The mirror passes through the widest part, where the skin
+        // stands square to it.
+        Xform::mirror(v3(3.0, 0.0, 0.0), v3(1.0, 0.1, 0.2).unit()),
+        Xform::mirror(v3(3.0, 0.0, 1.0), v3(1.0, 0.1, 0.2).unit()),
+        Xform::rotation(v3(0.0, 0.0, 10.0), V3::X, 0.1),
+        Xform::rotation(v3(0.0, 0.0, 10.0), V3::X, 0.02),
+        // Moved by less than a hair, the two skins cross at next to no
+        // angle all the way along.
+        Xform::translation(v3(0.1, 0.0, 0.0)),
+        Xform::translation(v3(0.01, 0.0, 0.0)),
+        Xform::translation(v3(0.0, 0.0, 0.01)),
+    ];
+    let whole = mass(&vase).volume;
+    for (k, x) in moved.iter().enumerate() {
+        let other = vase.transformed(x);
+        let done =
+            |op: Op| boolean(&vase, &other, op).unwrap_or_else(|e| panic!("{k} {op:?}: {e}"));
+        let out = [done(Op::Cut), done(Op::Intersect), done(Op::Union)];
+        for body in &out {
+            limo_cad_kernel::audit::audit(body, limo_cad_kernel::audit::CLOSE)
+                .unwrap_or_else(|flaw| panic!("{k}: {flaw}"));
+            assert_mesh_is_a_clean_skin(body);
+        }
+        let [cut, common, union] = [&out[0], &out[1], &out[2]].map(|body| mass(body).volume);
+        assert!((cut + common - whole).abs() < 1.0e-6, "{k}: {cut} {common}");
+        assert!(
+            (union + common - 2.0 * whole).abs() < 1.0e-4,
+            "{k}: {union} {common}"
+        );
+    }
+    // Turned by a third of a degree the crossings lie a hundredth of a
+    // millimetre from the edges of two patches at once. That is refused,
+    // not guessed at.
+    let nearly = vase.transformed(&Xform::rotation(v3(0.0, 0.0, 10.0), V3::X, 0.005));
+    for op in [Op::Cut, Op::Intersect, Op::Union] {
+        if let Ok(body) = boolean(&vase, &nearly, op) {
+            limo_cad_kernel::audit::audit(&body, limo_cad_kernel::audit::CLOSE).unwrap();
+            assert_mesh_is_a_clean_skin(&body);
+        }
+    }
+}
+
 /// What a body weighs after a trip through a STEP file, against what it
 /// weighed before: volume and area, as fractions off.
 fn through_step(name: &str, body: &Body) -> (f64, f64) {

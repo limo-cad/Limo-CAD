@@ -251,3 +251,41 @@ fn hole_into_a_ball() {
     assert!(coarse < 4.0 / 3.0 * PI * 1728.0 && coarse > 0.9 * 4.0 / 3.0 * PI * 1728.0);
     r.check().unwrap();
 }
+
+/// A rod half as thick as a ball, through it and touching it from the
+/// inside: the curve the two meet in is a figure of eight, crossing itself
+/// where they touch. The part of the ball inside the rod has been known
+/// since 1692 to hold `2/3 (π − 4/3) R³`.
+#[test]
+fn a_rod_that_touches_the_ball_it_goes_through() {
+    use limo_cad_kernel::make::PSeg;
+    use limo_cad_kernel::props::mass;
+    let r = 10.0;
+    let half = [
+        PSeg::Arc {
+            a: v2(0.0, -r),
+            b: v2(0.0, r),
+            c: v2(0.0, 0.0),
+            ccw: true,
+        },
+        PSeg::Line {
+            a: v2(0.0, r),
+            b: v2(0.0, -r),
+        },
+    ];
+    let ball = make::revolve(&[half.to_vec()], V3::ZERO, V3::Z, V3::X, TAU).unwrap();
+    let rod = make::cylinder(v3(0.5 * r, 0.0, -2.0 * r), V3::Z, 0.5 * r, 4.0 * r).unwrap();
+    let window = 2.0 / 3.0 * (PI - 4.0 / 3.0) * r * r * r;
+    let (whole, bar) = (mass(&ball).volume, mass(&rod).volume);
+    for (op, expected) in [
+        (Op::Intersect, window),
+        (Op::Cut, whole - window),
+        (Op::Union, whole + bar - window),
+    ] {
+        let body = boolean(&ball, &rod, op).unwrap_or_else(|e| panic!("{op:?}: {e}"));
+        limo_cad_kernel::audit::audit(&body, limo_cad_kernel::audit::CLOSE).unwrap();
+        let options = TessOptions::default();
+        tessellate(&body, &options).check(&body, &options).unwrap();
+        close(mass(&body).volume, expected, 1e-10);
+    }
+}

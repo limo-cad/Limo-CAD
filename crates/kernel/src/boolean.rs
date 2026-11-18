@@ -103,16 +103,17 @@ impl Arr {
         let mid = c.point(mid_t);
         if let Some(list) = self.by_verts.get(&key) {
             for &e in list {
-                let [a0, a1] = self.g.e_t[e as usize];
-                let ec = self.g.e_curve_ref(e);
-                let emid_t = 0.5 * (a0 + a1);
-                if ec.point(emid_t).dist(mid) > ON_CURVE {
+                // The same stretch of the same curve, however each of the
+                // two is written: a curve followed along one parameter and
+                // again along the other has its middle in different places.
+                let (at, off, _) = edge_closest(&self.g, e, mid);
+                if off > ON_CURVE {
                     continue;
                 }
                 let same = if v0 != v1 {
                     self.g.e_v[e as usize][0] == v0
                 } else {
-                    ec.deriv(emid_t).dot(c.deriv(mid_t)) > 0.0
+                    self.g.e_curve_ref(e).deriv(at).dot(c.deriv(mid_t)) > 0.0
                 };
                 return 2 * e + u32::from(!same);
             }
@@ -455,13 +456,18 @@ fn evaluate(a: &Body, b: &Body, op: Op) -> Result<Body, String> {
             split(&mut arr, b.e_curve_ref(e), t0, t1, &for_b)
         })
         .collect();
+    // Per registry edge, the face of each body it runs strictly inside.
+    let mut within_a: HashMap<u32, u32> = HashMap::default();
+    let mut within_b: HashMap<u32, u32> = HashMap::default();
     for s in &segs {
         for h in split(&mut arr, &s.curve, s.t0, s.t1, &for_segs) {
             if let Some(f) = s.in_a {
                 sa.interior[f as usize].push(h >> 1);
+                within_a.insert(h >> 1, f);
             }
             if let Some(f) = s.in_b {
                 sb.interior[f as usize].push(h >> 1);
+                within_b.insert(h >> 1, f);
             }
         }
     }
@@ -472,8 +478,8 @@ fn evaluate(a: &Body, b: &Body, op: Op) -> Result<Body, String> {
     let pieces_a = pieces(&arr, &gmesh, &sa)?;
     let pieces_b = pieces(&arr, &gmesh, &sb)?;
     lap("split");
-    let cls_a = classify_pieces(&arr, &gmesh, &pieces_a, &sa, &sb)?;
-    let cls_b = classify_pieces(&arr, &gmesh, &pieces_b, &sb, &sa)?;
+    let cls_a = classify_pieces(&arr, &gmesh, &pieces_a, &sa, &sb, &within_b)?;
+    let cls_b = classify_pieces(&arr, &gmesh, &pieces_b, &sb, &sa, &within_a)?;
     lap("classify");
 
     // 5. Select and sew.
@@ -900,12 +906,31 @@ fn split(arr: &mut Arr, c: &Curve, t0: f64, t1: f64, cands: &[(u32, V3)]) -> Vec
         for i in 0..=n {
             bounds.add(c.point(t0 + (t1 - t0) * i as f64 / n as f64));
         }
-        let bulge = if curved {
+        let bulge = match c.kind {
+            CurveKind::Line => 0.0,
             // Chord sag of one sampling step, with a margin for curves that
             // bend faster than a circle of their radius.
-            2.0 * c.r.abs().max(c.s.abs()) * (1.0 - (0.5 * (t1 - t0) / n as f64).cos())
-        } else {
-            0.0
+            CurveKind::Circle | CurveKind::Ellipse | CurveKind::Helix | CurveKind::Trace => {
+                2.0 * c.r.abs().max(c.s.abs()) * (1.0 - (0.5 * (t1 - t0) / n as f64).cos())
+            }
+            // The other kinds have no radius to go by. How far the curve
+            // stands off its chords halfway between the samples says how
+            // far it can reach beyond them, with half as much again for a
+            // bend that is not at its sharpest there.
+            _ => {
+                let step = (t1 - t0) / n as f64;
+                let mut off: f64 = 0.0;
+                for i in 0..n {
+                    let (a, b) = (
+                        c.point(t0 + step * i as f64),
+                        c.point(t0 + step * (i + 1) as f64),
+                    );
+                    let middle = c.point(t0 + step * (i as f64 + 0.5));
+                    off = off.max(middle.dist((a + b) * 0.5));
+                    bounds.add(middle);
+                }
+                1.5 * off
+            }
         };
         let bounds = bounds.grown(bulge + 2.0 * VTOL);
         for &(v, p) in cands {
@@ -1261,11 +1286,20 @@ fn group(
     } else {
         &[0.0]
     };
+    // Round the tube of a torus a loop is written on whichever turn it was
+    // started on, and the next loop may be written a turn away.
+    let tube_turns: &[f64] = if surf.v_periodic() {
+        &[0.0, TAU, -TAU]
+    } else {
+        &[0.0]
+    };
     let holds = |kind: Kind, q: V2| -> bool {
         match kind {
-            Kind::Disk(i) => shifts
-                .iter()
-                .any(|s| inside_polygon(&polys[i].uv, v2(q.x + s, q.y))),
+            Kind::Disk(i) => shifts.iter().any(|s| {
+                tube_turns
+                    .iter()
+                    .any(|t| inside_polygon(&polys[i].uv, v2(q.x + s, q.y + t)))
+            }),
             Kind::Band(lo, hi, up_lo, up_hi) => {
                 let turns: &[f64] = if surf.v_periodic() {
                     &[0.0, TAU, -TAU, 2.0 * TAU, -2.0 * TAU]
@@ -1500,7 +1534,7 @@ fn edge_distance(g: &Body, e: u32, p: V3) -> f64 {
 
 /// Points just inside a piece of a face: beside the middle of each of its
 /// longest edges, a quarter of the way to the nearest other edge.
-fn beside_edges(g: &Body, this: &Side, piece: &Piece) -> Vec<V3> {
+fn beside_edges(g: &Body, gmesh: &EdgeMesh, this: &Side, piece: &Piece) -> Vec<V3> {
     let f = piece.orig;
     let surf = this.body.f_surface(f);
     let mut hes: Vec<u32> = piece.loops.iter().flatten().copied().collect();
@@ -1566,6 +1600,42 @@ fn beside_edges(g: &Body, this: &Side, piece: &Piece) -> Vec<V3> {
                 room = room.min(ahead);
             }
         }
+        // What the walk from the foot runs into first is the room there
+        // is. The walk lies in the plane across the edge at the foot, so
+        // whatever it meets crosses that plane: an edge that comes near
+        // without the estimates above noticing, or this edge itself, which
+        // round the tip of a tongue is its own other side a hair away.
+        if room.is_finite() {
+            let wall = Surface::plane(foot, travel);
+            for &k in &hes {
+                let ek = k >> 1;
+                // The outline as drawn says which edges can matter at all.
+                let reach = room + 4.0 * SAG;
+                let drawn = gmesh.edge(ek);
+                let near = drawn.windows(2).any(|w| {
+                    let (a, along) = (w[0], w[1] - w[0]);
+                    let on = ((foot - a).dot(along) / along.len2().max(1.0e-300)).clamp(0.0, 1.0);
+                    (a + along * on).dist(foot) < reach
+                });
+                if !near {
+                    continue;
+                }
+                let ck = g.e_curve_ref(ek);
+                let [k0, k1] = g.e_t[ek as usize];
+                let Hits::Roots(roots) = curve_surface(ck, k0, k1, &wall) else {
+                    continue;
+                };
+                for root in roots {
+                    let q = ck.point(root.t);
+                    let ahead = (q - foot).dot(into);
+                    // Behind the foot is outside the piece, and the foot is
+                    // where its own edge crosses.
+                    if ahead > 1.0e-8 && q.dist(foot) < room {
+                        room = q.dist(foot);
+                    }
+                }
+            }
+        }
         let step = 0.25 * room;
         if step.is_finite() && step > 1.0e-7 {
             let p = surf.project(foot + into * step);
@@ -1577,12 +1647,68 @@ fn beside_edges(g: &Body, this: &Side, piece: &Piece) -> Vec<V3> {
     probes
 }
 
+/// Which way a piece of a face leaves the other body's skin, read off one
+/// of its own edges: the sine of the angle at which it dips below the face
+/// that cut it there (negative), or rises above it. `within` says which
+/// edges run strictly inside a face of the other body, and which face.
+///
+/// Where one skin passes through another, what lies just beside the
+/// crossing is inside or outside by the lie of the two surfaces alone. No
+/// ray has to find its way out of a sliver thinner than a tolerance.
+fn across_an_edge(
+    g: &Body,
+    this: &Side,
+    other: &Side,
+    piece: &Piece,
+    within: &HashMap<u32, u32>,
+) -> Option<f64> {
+    let f = piece.orig;
+    let mut best: Option<f64> = None;
+    for &h in piece.loops.iter().flatten() {
+        let e = h >> 1;
+        let Some(&cutter) = within.get(&e) else {
+            continue;
+        };
+        // A slit has the piece on both sides of it.
+        if piece.loops.iter().flatten().any(|&k| k == h ^ 1) {
+            continue;
+        }
+        let c = g.e_curve_ref(e);
+        let [t0, t1] = g.e_t[e as usize];
+        for share in [0.5, 0.25, 0.75] {
+            let t = t0 + (t1 - t0) * share;
+            let foot = c.point(t);
+            let mut travel = c.deriv(t);
+            if h & 1 == 1 {
+                travel = -travel;
+            }
+            // The piece lies to the left of its boundary, seen from outside.
+            let into = this.body.f_normal(f, foot).cross(travel);
+            let len = into.len();
+            if !(len.is_finite() && len > 1.0e-12) {
+                continue;
+            }
+            let dip = (into * (1.0 / len)).dot(other.body.f_normal(cutter, foot));
+            if dip.is_finite() && best.is_none_or(|b| dip.abs() > b.abs()) {
+                best = Some(dip);
+            }
+        }
+    }
+    best
+}
+
+/// A crossing this steep is plain to see at the edge.
+const STEEP: f64 = 0.05;
+/// And one this shallow is still a crossing, where nothing else can tell.
+const SHALLOW: f64 = 1.0e-7;
+
 fn classify_pieces(
     arr: &Arr,
     gmesh: &EdgeMesh,
     list: &[Piece],
     this: &Side,
     other: &Side,
+    within: &HashMap<u32, u32>,
 ) -> Result<Vec<Cls>, String> {
     let mut out = Vec::with_capacity(list.len());
     let reach = other.bbox.grown(10.0 * VTOL);
@@ -1591,6 +1717,14 @@ fn classify_pieces(
         // Most faces are nowhere near the other body.
         if !this.boxes[f as usize].overlaps(&reach) {
             out.push(Cls::Out);
+            continue;
+        }
+        let dip = across_an_edge(&arr.g, this, other, piece, within);
+        let by_dip = |dip: f64| if dip < 0.0 { Cls::In } else { Cls::Out };
+        // A face that shares its surface with one of the other body can
+        // lie in it; that is for the points below to find out.
+        if let Some(dip) = dip.filter(|d| d.abs() > STEEP && this.partners[f as usize].is_empty()) {
+            out.push(by_dip(dip));
             continue;
         }
         let trim = FaceTrim::from_points(
@@ -1607,7 +1741,7 @@ fn classify_pieces(
         // Points found from the exact edges come first: a piece thinner
         // than the chords its outline is drawn with has no inside to
         // speak of in the outline, but it has one beside its edges.
-        let candidates = beside_edges(&arr.g, this, piece).into_iter().chain(
+        let candidates = beside_edges(&arr.g, gmesh, this, piece).into_iter().chain(
             trim.interior_points()
                 .into_iter()
                 .map(|(q, _)| trim.point(q)),
@@ -1652,6 +1786,9 @@ fn classify_pieces(
                     .collect();
                 eprintln!("   loop {}", text.join(" "));
             }
+        }
+        if decided.is_none() {
+            decided = dip.filter(|d| d.abs() > SHALLOW).map(by_dip);
         }
         out.push(decided.ok_or_else(|| {
             "could not tell whether part of a face is inside the other body".to_string()

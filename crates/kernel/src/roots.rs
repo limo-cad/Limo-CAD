@@ -524,9 +524,17 @@ pub fn curve_surface(c: &Curve, t0: f64, t1: f64, s: &Surface) -> Hits {
                 false,
             ))
         }
-        (CurveKind::Circle, SurfKind::Plane) => {
+        (CurveKind::Circle | CurveKind::Ellipse, SurfKind::Plane) => {
+            // Height above the plane is one wave round the curve. An
+            // ellipse drawn out a thousand times longer than wide still
+            // has its two crossings found exactly, however close together.
             let n = s.f.z;
-            let (a, b) = (c.r * c.f.x.dot(n), c.r * c.f.y.dot(n));
+            let across = if c.kind == CurveKind::Ellipse {
+                c.s
+            } else {
+                c.r
+            };
+            let (a, b) = (c.r * c.f.x.dot(n), across * c.f.y.dot(n));
             let c0 = s.sdist(c.f.o);
             let amp = a.hypot(b);
             if amp < TOL {
