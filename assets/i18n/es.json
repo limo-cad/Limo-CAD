@@ -1,4 +1,23 @@
 {
+  "projection": {
+    "title": "Proyectar",
+    "instruction": "Elija una curva anterior para previsualizar y confirmar. Cancelar no cambia el croquis. Los círculos requieren planos paralelos.",
+    "add": "Añadir",
+    "references": "Referencias",
+    "close": "Cancelar",
+    "confirm": "Confirmar",
+    "unavailable": "Origen no disponible. Abra Proyectar de nuevo o repare el croquis de origen.",
+    "previous": "Anterior",
+    "next": "Siguiente",
+    "noReferences": "Este croquis no tiene referencias.",
+    "noSources": "No hay curvas anteriores compatibles. Termine el croquis de origen.",
+    "missing": "Origen ausente",
+    "remove": "Quitar",
+    "line": "Línea",
+    "arc": "Arco",
+    "circle": "Círculo",
+    "spline": "Spline"
+  },
   "namedViews": {
     "activate": "Activar vista",
     "edit": "Editar vista guardada {name}",
@@ -426,6 +445,7 @@
       "simulateNc": "Simulación NC"
     },
     "sketch": {
+      "project": "Proyectar",
       "line": "Línea",
       "midpointLine": "Línea por punto medio",
       "rectangle": "Rectángulo",

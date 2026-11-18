@@ -36,6 +36,7 @@ fn face_session() -> SketchSession {
     );
     session.set_reference_midpoints(vec![(EdgeId(9), v(10.0, 10.0))]);
     session.set_projected_edges(vec![ProjectedEdgeDto {
+        origin: Default::default(),
         id: RESERVED_ID_FLOOR,
         edge_id: EdgeId(7),
         points: vec![v(0.0, 20.0), v(20.0, 20.0)],

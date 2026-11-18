@@ -110,7 +110,7 @@ impl SketchSession {
                 candidates.push((point, target));
             }
         }
-        for edge in &self.projected_edges {
+        for edge in self.reference_edges_iter() {
             let points: Vec<_> = if let Some(circle) = edge.circle {
                 trimext::line_circle(
                     &ray,
@@ -249,6 +249,7 @@ mod tests {
         let mut session = fixture(0.1);
         let edge = EdgeId(55);
         session.set_projected_edges(vec![ProjectedEdgeDto {
+            origin: Default::default(),
             id: 1 << 40,
             edge_id: edge,
             points: vec![Vec2::new(0., 20.), Vec2::new(40., 20.)],
@@ -335,6 +336,7 @@ mod tests {
         assert_eq!(point.snap, SnapTarget::Point { entity: target });
         assert!(!point.inferences.contains(&Inference::Vertical));
         session.set_projected_edges(vec![ProjectedEdgeDto {
+            origin: Default::default(),
             id: 1 << 40,
             edge_id: EdgeId(55),
             points: vec![Vec2::new(0., 20.), Vec2::new(20., 20.)],

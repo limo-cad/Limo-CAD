@@ -27,6 +27,49 @@ fn export(engine: &mut WasmEngine) -> String {
         .into()
 }
 
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen_test)]
+#[cfg_attr(not(target_arch = "wasm32"), test)]
+fn browser_facade_projection_uses_shared_association_and_history() {
+    let mut engine = WasmEngine::new();
+    let plane = r#"{"plane":{"type":"origin_plane","plane":"xy"}}"#;
+    unwrap(engine.begin_sketch(plane));
+    unwrap(engine.set_grid_snap(r#"{"enabled":false}"#));
+    let source = unwrap(
+        engine.add_line(r#"{"from":{"x":1,"y":2},"to_raw":{"x":8,"y":6},"ctrl_held":true}"#),
+    )["entity_id"]
+        .clone();
+    unwrap(engine.end_sketch());
+    unwrap(engine.begin_sketch(plane));
+    let sources = unwrap(engine.sketch_projection_sources());
+    assert_eq!(
+        sources["sources"][0]["source"],
+        json!({"feature":1,"entity":source})
+    );
+    let projected = unwrap(
+        engine.sketch_project(&json!({"sources":[{"feature":1,"entity":source}]}).to_string()),
+    );
+    assert_eq!(projected["projected_edges"].as_array().unwrap().len(), 1);
+    assert!(projected["entities"].as_array().unwrap().is_empty());
+    assert_eq!(
+        unwrap(engine.sketch_projections())["projections"][0]["id"],
+        1
+    );
+    assert!(unwrap(engine.undo())["sketch"]["projected_edges"]
+        .as_array()
+        .unwrap()
+        .is_empty());
+    assert_eq!(
+        unwrap(engine.redo())["sketch"]["projected_edges"],
+        projected["projected_edges"]
+    );
+    assert!(
+        unwrap(engine.sketch_projection_remove(r#"{"id":1}"#))["projected_edges"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+}
+
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen_test]
 fn javascript_optional_export_arguments_remain_compatible() {
