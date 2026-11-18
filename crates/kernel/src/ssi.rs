@@ -197,6 +197,65 @@ fn plane_other(p: &Surface, s: &Surface) -> Ssi {
     }
 }
 
+/// Where a plane cuts a cone in a curve that does not close: one branch of
+/// a hyperbola, or a parabola.
+///
+/// Every ruling of the cone meets the plane once at most, so for each
+/// angle round the cone the place along its ruling is known outright. The
+/// curve is written on the cone with the angle driving, and the search
+/// along a ruling lands in one step from anywhere. It stops short of the
+/// rulings that run beside the plane and never reach it, at a distance no
+/// model gets to.
+fn open_conic(p: &Surface, s: &Surface) -> Ssi {
+    let n = p.f.z;
+    let (apex, axis, alpha) = (s.f.o, s.f.z, s.s);
+    // How far the tip is from the plane, and how fast a ruling at angle
+    // `phase + psi` closes in on it per unit of height: `a + b cos psi`.
+    let gap = p.sdist(apex);
+    let (nx, ny) = (n.dot(s.f.x), n.dot(s.f.y));
+    let (a, b) = (n.dot(axis), alpha.tan() * nx.hypot(ny));
+    if b < 1.0e-14 {
+        return Ssi::None;
+    }
+    let phase = ny.atan2(nx);
+    let closing = |t: f64| a + b * (t - phase).cos();
+    let height = |t: f64| -gap / closing(t);
+    // The rulings that get there on the cone's side of its tip: those
+    // about the middle one, as far as the two that run beside the plane.
+    let beside = (-a / b).clamp(-1.0, 1.0).acos();
+    let (middle, half) = if gap < 0.0 {
+        (phase, beside)
+    } else {
+        (phase + PI, PI - beside)
+    };
+    let far = 1.0e7_f64.max(1.0e4 * gap.abs());
+    let end = |way: f64| {
+        let (mut near, mut out) = (0.0, half);
+        for _ in 0..80 {
+            let m = 0.5 * (near + out);
+            let h = height(middle + way * m);
+            if h > 0.0 && h < far {
+                near = m;
+            } else {
+                out = m;
+            }
+        }
+        middle + way * near
+    };
+    let (t0, t1) = (end(-1.0), end(1.0));
+    if t1 - t0 <= 1.0e-9 {
+        return Ssi::None;
+    }
+    let slope = |t: f64| -gap * b * (t - phase).sin() / closing(t).powi(2);
+    Ssi::Curves(vec![Curve::meet(
+        s,
+        p,
+        false,
+        [t0, t1],
+        [height(t0), height(t1), slope(t0), slope(t1), 0.0],
+    )])
+}
+
 fn plane_cone(p: &Surface, s: &Surface, perpendicular: bool) -> Ssi {
     let n = p.f.z;
     let (apex, axis, alpha) = (s.f.o, s.f.z, s.s);
@@ -231,7 +290,7 @@ fn plane_cone(p: &Surface, s: &Surface, perpendicular: bool) -> Ssi {
         ]);
     }
     if na.abs() <= alpha.sin() + 1.0e-12 {
-        return Ssi::General;
+        return open_conic(p, s);
     }
     // Ellipse: work in the plane spanned by the axis and the plane normal.
     let tq = (p.f.o - apex).dot(n) / na;

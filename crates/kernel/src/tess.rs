@@ -967,8 +967,15 @@ fn zipper(fv: &FaceVerts, bottom: &[Corner], top: &[Corner], tris: &mut Vec<[Cor
         } else {
             let (ub, ut) = (bottom[i + 1].uv.x, top[j + 1].uv.x);
             let step = (ub - bottom[i].uv.x).max(ut - top[j].uv.x);
-            if (ub - ut).abs() <= 0.25 * step {
-                apart(bottom[i + 1], top[j]) <= apart(bottom[i], top[j + 1])
+            // Either diagonal, as long as the two triangles it makes both
+            // lie the right way round: a quadrilateral with a dent in it
+            // has only one diagonal inside.
+            let turn = |a: Corner, b: Corner, c: Corner| (b.uv - a.uv).cross(c.uv - a.uv);
+            let (b0, b1, t0, t1) = (bottom[i], bottom[i + 1], top[j], top[j + 1]);
+            let bottom_first = turn(b0, b1, t0) > 0.0 && turn(b1, t1, t0) > 0.0;
+            let top_first = turn(b0, t1, t0) > 0.0 && turn(b0, b1, t1) > 0.0;
+            if (ub - ut).abs() <= 0.25 * step && bottom_first && top_first {
+                apart(b1, t0) <= apart(b0, t1)
             } else {
                 ub <= ut
             }
@@ -2026,8 +2033,6 @@ fn fill(
     /// The longest side left alone, where the lattice stopped short of the
     /// outline and a triangle has to span the gap.
     const LONGEST: f64 = 1.4;
-    /// The longest side left alone even right against the outline.
-    const FAR_TOO_LONG: f64 = 1.5;
 
     let (mut step, ruled) = units(trim, opts);
     // How much of a side's length counts against the tolerance.
@@ -2193,30 +2198,26 @@ fn fill(
         }
     }
     // Halve what is still too long, unless that would crowd the outline.
-    // A side half as long again as the tolerance allows is halved all the
-    // same: it would be more than twice as far off the surface.
     for _ in 0..8 {
-        let mut long: Vec<(V2, bool)> = Vec::new();
+        let mut long: Vec<V2> = Vec::new();
         for (t, tri) in net.tris.iter().enumerate() {
             for k in 0..3 {
                 let (a, b) = (tri[k], tri[(k + 1) % 3]);
                 if a < b && !net.on_outline(t, k) {
                     let (pa, pb) = (net.points[a as usize], net.points[b as usize]);
                     let d = pb - pa;
-                    let length = d.x * d.x * bends.x + d.y * d.y * bends.y;
-                    if length > LONGEST * LONGEST {
-                        long.push(((pa + pb) * 0.5, length > FAR_TOO_LONG * FAR_TOO_LONG));
+                    if d.x * d.x * bends.x + d.y * d.y * bends.y > LONGEST * LONGEST {
+                        long.push((pa + pb) * 0.5);
                     }
                 }
             }
         }
         let mut added = false;
-        for (q, far_too_long) in long {
+        for q in long {
             // On a ruled face a side that long cuts a corner off the
             // surface wherever it lies; a needle against the outline is
             // the lesser evil there, and nothing can tip it over.
             let crowded = !ruled
-                && !far_too_long
                 && sides.iter().any(|&[a, b]| {
                     let d = b - a;
                     let along = ((q - a).dot(d) / d.dot(d).max(1.0e-300)).clamp(0.0, 1.0);

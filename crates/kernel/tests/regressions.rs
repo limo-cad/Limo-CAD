@@ -82,10 +82,16 @@ fn pin_hole_through_a_ring_off_its_axis() {
 ///   that opens the face out now goes through the hole.
 /// * 2921: on a ball, rows of the mesh that slant were always joined
 ///   along the same diagonal, the long one where they slant the other way.
+/// * 4117: a plane cuts a cone in a hyperbola close by its tip. Such a
+///   curve is now written down exactly, ruling by ruling.
+/// * 4327: a cone leaves most of a narrow ellipse in the side of a block.
+///   The point taken to stand for the inside of it lay beyond its far
+///   side.
 #[test]
 fn pairs_that_once_went_wrong() {
     let seeds = [
-        188, 361, 367, 496, 541, 562, 574, 1074, 1389, 1548, 1830, 2482, 2731, 2921, 3019,
+        188, 361, 367, 496, 541, 562, 574, 1074, 1389, 1548, 1830, 2482, 2731, 2921, 3019, 4117,
+        4327,
     ];
     for seed in seeds {
         let [(_, a), (_, b)] = random_pair(seed);

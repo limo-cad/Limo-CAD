@@ -1508,6 +1508,20 @@ fn beside_edges(g: &Body, this: &Side, piece: &Piece) -> Vec<V3> {
                 room = room.min(edge_closest(g, k >> 1, foot).1);
             }
         }
+        // Nor further than whatever of this same edge lies ahead: round a
+        // narrow piece it comes back as the other side. Half an ellipse
+        // bends gently where it is flattest, and is narrowest there.
+        for i in 0..=32 {
+            let t = t0 + (t1 - t0) * i as f64 / 32.0;
+            if (t - middle).abs() < 0.2 * (t1 - t0).abs() {
+                continue;
+            }
+            let d = c.point(t) - foot;
+            let ahead = d.dot(into);
+            if ahead > 0.0 && (d - into * ahead).len() < 0.6 * ahead {
+                room = room.min(ahead);
+            }
+        }
         let step = 0.25 * room;
         if step.is_finite() && step > 1.0e-7 {
             let p = surf.project(foot + into * step);
