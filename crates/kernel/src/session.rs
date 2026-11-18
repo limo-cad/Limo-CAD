@@ -696,12 +696,44 @@ impl Kernel {
                 )
             }
             KernelJobDto::Loft(j) => {
-                if !j.centerline.is_empty() || !j.guide_rail.is_empty() {
-                    return Err(unsupported("A loft along a centerline or guide rail"));
-                }
                 if j.sections.len() < 2 {
                     return Err("Loft needs at least two sections".into());
                 }
+                // What steers the loft from one section to the next, if
+                // anything but the sections themselves does.
+                let steered = !j.centerline.is_empty() || !j.guide_rail.is_empty();
+                let trail = |curves: &[KernelCurveDto], what: &str| -> Result<Vec<Seg>, String> {
+                    let mut segs = Vec::new();
+                    for curve in curves {
+                        match curve {
+                            KernelCurveDto::Line { start, end, .. } => segs.push(Seg::Line {
+                                a: p3(start),
+                                b: p3(end),
+                            }),
+                            KernelCurveDto::Arc {
+                                start, mid, end, ..
+                            } => segs.push(Seg::Arc {
+                                a: p3(start),
+                                m: p3(mid),
+                                b: p3(end),
+                            }),
+                            KernelCurveDto::Polyline { points, .. } => {
+                                segs.extend(points.windows(2).map(|w| Seg::Line {
+                                    a: p3(&w[0]),
+                                    b: p3(&w[1]),
+                                }))
+                            }
+                            KernelCurveDto::Circle { .. } => {
+                                return Err(unsupported(&format!(
+                                    "A full circle as the {what} of a loft"
+                                )))
+                            }
+                        }
+                    }
+                    Ok(segs)
+                };
+                let centerline = trail(&j.centerline, "centerline")?;
+                let guide_rail = trail(&j.guide_rail, "guide rail")?;
                 // Two sections are joined by straight lines either way.
                 let ruled = j.ruled || j.sections.len() == 2;
                 let holes = j.sections[0].holes.len();
@@ -718,13 +750,20 @@ impl Kernel {
                     // Flat sides and cones where the sections allow them;
                     // a free-form skin where they do not, or where the
                     // skin is to run smoothly through every section.
-                    let exact = if ruled {
+                    let exact = if ruled && !steered {
                         make::loft(&outlines).ok()
                     } else {
                         None
                     };
+                    // The rail steers the outline it was drawn beside; a
+                    // hole follows the centerline the outline follows.
                     let mut tool = match exact {
                         Some(tool) => tool,
+                        None if steered => crate::loft::along(
+                            &outlines,
+                            &centerline,
+                            if part == 0 { &guide_rail } else { &[] },
+                        )?,
                         None => crate::loft::skin(&outlines, ruled)?,
                     };
                     // A side is named after the sketch line under it, the

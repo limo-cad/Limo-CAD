@@ -531,3 +531,110 @@ fn a_rolling_ball_round_weighs_what_the_reference_makes_it() {
         );
     }
 }
+
+/// What each kernel makes of the same loft job: the volume by this kernel's
+/// own sums, and by the reference's.
+fn lofted_by_both(job: limo_cad_solid::KernelLoftJobDto) -> (f64, f64) {
+    use limo_cad_occt::measurement::ResolvedMeasurementSelection;
+    let plan = RecomputePlanDto {
+        transaction_id: 1,
+        errors: vec![],
+        jobs: vec![KernelJobDto::Loft(job)],
+    };
+    let mut ours = limo_cad_kernel::Kernel::new();
+    let scene = ours.recompute(&plan);
+    assert!(scene.errors.is_empty(), "{:?}", scene.errors);
+    let ours = mass(ours.body(1).unwrap()).volume;
+    let mut theirs = OcctKernel::new().unwrap();
+    let scene = theirs.recompute(&plan).unwrap();
+    assert!(scene.errors.is_empty(), "{:?}", scene.errors);
+    let measured = theirs
+        .detached_measurement_snapshot(&[BodyId(1)])
+        .unwrap()
+        .inspect(&[ResolvedMeasurementSelection {
+            body_id: BodyId(1),
+            kind: 0,
+            index: 0,
+            translation: [0.0; 3],
+            rotation: [0.0, 0.0, 0.0, 1.0],
+        }])
+        .unwrap();
+    (ours, measured.selections[0].volume.unwrap())
+}
+
+/// A loft that follows a centerline: the same job through both kernels.
+/// The two do not build it the same way (the reference fits a spline to a
+/// sweep of its own; this one draws a skin through stations along the
+/// way), so they agree to how well each follows the centerline, not to
+/// rounding. Where there is a closed form, as for a ring carried round a
+/// quarter bend, this kernel's own tests hold it to that.
+///
+/// A loft steered by a rail is not compared. Between two equal rings and a
+/// rail that swells from 4 to 6 and back, the reference's skin is 6.4 wide
+/// past the middle and 6.7 deep, lopsided along a rail that is not: there
+/// is nothing there to hold another kernel to. This one's own test holds
+/// its skin to the rail.
+#[test]
+fn lofts_along_a_centerline_weigh_what_the_reference_makes_them() {
+    use limo_cad_kernel::Frame;
+    use limo_cad_solid::{
+        ExtrudeOperation, KernelCurveDto, KernelLoftJobDto, KernelProfileDto, LoftContinuity,
+        Point3Dto,
+    };
+    use std::f64::consts::PI;
+    let at = |p: V3| Point3Dto {
+        x: p.x,
+        y: p.y,
+        z: p.z,
+    };
+    let ring = |radius: f64, centre: V3, normal: V3| -> KernelProfileDto {
+        let frame = Frame::from_z(centre, normal);
+        let on = |a: f64| centre + (frame.x * a.cos() + frame.y * a.sin()) * radius;
+        KernelProfileDto {
+            profile_index: 0,
+            points: (0..24)
+                .map(|i| at(on(2.0 * PI * i as f64 / 24.0)))
+                .collect(),
+            curves: vec![KernelCurveDto::Circle {
+                entity_id: 7,
+                center: at(centre),
+                axis_point: at(on(0.0)),
+                normal: at(frame.z),
+            }],
+            holes: Vec::new(),
+        }
+    };
+    let job = |sections, centerline, guide_rail| KernelLoftJobDto {
+        feature_id: FeatureId(1),
+        operation: ExtrudeOperation::NewBody,
+        sections,
+        ruled: false,
+        continuity: LoftContinuity::G1,
+        centerline,
+        guide_rail,
+        target_body_ids: Vec::new(),
+        result_body_ids: vec![BodyId(1)],
+    };
+    let (sin, cos) = (PI / 4.0).sin_cos();
+    let bend = vec![KernelCurveDto::Arc {
+        entity_id: 21,
+        start: at(V3::ZERO),
+        mid: at(v3(30.0 - 30.0 * cos, 0.0, 30.0 * sin)),
+        end: at(v3(30.0, 0.0, 30.0)),
+    }];
+    // A ring carried round a quarter bend, and one that grows on the way.
+    for (from, to, within) in [(5.0, 5.0, 1.0e-4), (4.0, 6.0, 5.0e-3)] {
+        let (ours, theirs) = lofted_by_both(job(
+            vec![
+                ring(from, V3::ZERO, V3::Z),
+                ring(to, v3(30.0, 0.0, 30.0), V3::X),
+            ],
+            bend.clone(),
+            Vec::new(),
+        ));
+        assert!(
+            (ours - theirs).abs() < within * theirs,
+            "{from} to {to}: {ours} here, {theirs} there"
+        );
+    }
+}

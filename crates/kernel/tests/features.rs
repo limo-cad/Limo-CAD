@@ -794,3 +794,154 @@ fn a_rounded_thread_through_the_session() {
     assert_eq!(count(&body, SurfKind::Helicoid), 2);
     assert_eq!(count(&body, SurfKind::Coil), 4);
 }
+
+/// A circle of `radius` about `centre`, flat against `normal`.
+fn circle_at(radius: f64, centre: [f64; 3], normal: [f64; 3]) -> KernelProfileDto {
+    use limo_cad_kernel::{v3, Frame};
+    let frame = Frame::from_z(
+        v3(centre[0], centre[1], centre[2]),
+        v3(normal[0], normal[1], normal[2]),
+    );
+    let on = |a: f64| {
+        let p = frame.o + (frame.x * a.cos() + frame.y * a.sin()) * radius;
+        at(p.x, p.y, p.z)
+    };
+    KernelProfileDto {
+        profile_index: 0,
+        points: (0..24).map(|i| on(2.0 * PI * i as f64 / 24.0)).collect(),
+        curves: vec![KernelCurveDto::Circle {
+            entity_id: 7,
+            center: at(centre[0], centre[1], centre[2]),
+            axis_point: on(0.0),
+            normal: at(frame.z.x, frame.z.y, frame.z.z),
+        }],
+        holes: Vec::new(),
+    }
+}
+
+#[test]
+fn a_loft_along_a_centerline() {
+    let steered = |sections, centerline, rail| {
+        let mut job = loft(sections, false);
+        if let KernelJobDto::Loft(job) = &mut job {
+            job.centerline = centerline;
+            job.guide_rail = rail;
+        }
+        job
+    };
+    // Two equal rings at the ends of a quarter bend: a quarter of a ring
+    // doughnut, which holds the ring's area times the way its middle goes.
+    let (sin, cos) = (PI / 4.0).sin_cos();
+    let bend = vec![KernelCurveDto::Arc {
+        entity_id: 21,
+        start: at(0.0, 0.0, 0.0),
+        mid: at(30.0 - 30.0 * cos, 0.0, 30.0 * sin),
+        end: at(30.0, 0.0, 30.0),
+    }];
+    let elbow = built(vec![steered(
+        vec![
+            circle_at(5.0, [0.0, 0.0, 0.0], [0.0, 0.0, 1.0]),
+            circle_at(5.0, [30.0, 0.0, 30.0], [1.0, 0.0, 0.0]),
+        ],
+        bend.clone(),
+        Vec::new(),
+    )]);
+    let weighed = limo_cad_kernel::props::mass(&elbow);
+    let exact = PI * 25.0 * 30.0 * PI / 2.0;
+    assert!(
+        (weighed.volume - exact).abs() < 2.0e-5 * exact,
+        "{} {exact}",
+        weighed.volume
+    );
+    // Without the centerline the same two rings are joined straight across
+    // the corner, which is a good deal less.
+    let straight = built(vec![loft(
+        vec![
+            circle_at(5.0, [0.0, 0.0, 0.0], [0.0, 0.0, 1.0]),
+            circle_at(5.0, [30.0, 0.0, 30.0], [1.0, 0.0, 0.0]),
+        ],
+        false,
+    )]);
+    assert!(limo_cad_kernel::props::mass(&straight).volume < 0.95 * exact);
+    // A ring that grows on the way round: every station between is a ring
+    // of the size in between, so the elbow holds what a cone bent round
+    // holds, to the second order in how thick it is.
+    let flared = built(vec![steered(
+        vec![
+            circle_at(4.0, [0.0, 0.0, 0.0], [0.0, 0.0, 1.0]),
+            circle_at(6.0, [30.0, 0.0, 30.0], [1.0, 0.0, 0.0]),
+        ],
+        bend.clone(),
+        Vec::new(),
+    )]);
+    let exact = PI * (16.0 + 24.0 + 36.0) / 3.0 * 30.0 * PI / 2.0;
+    let weighed = limo_cad_kernel::props::mass(&flared).volume;
+    assert!(
+        (weighed - exact).abs() < 2.0e-3 * exact,
+        "{weighed} {exact}"
+    );
+    // Three sections along a line and a bend, the middle one where the
+    // two join: the skin passes through all three.
+    let reach = vec![
+        KernelCurveDto::Line {
+            entity_id: 20,
+            start: at(0.0, 0.0, -20.0),
+            end: at(0.0, 0.0, 0.0),
+        },
+        bend[0].clone(),
+    ];
+    let necked = built(vec![steered(
+        vec![
+            circle_at(5.0, [0.0, 0.0, -20.0], [0.0, 0.0, 1.0]),
+            circle_at(3.0, [0.0, 0.0, 0.0], [0.0, 0.0, 1.0]),
+            circle_at(5.0, [30.0, 0.0, 30.0], [1.0, 0.0, 0.0]),
+        ],
+        reach,
+        Vec::new(),
+    )]);
+    let bounds = limo_cad_kernel::props::bounds(&necked);
+    assert!((bounds.lo.z + 20.0).abs() < 1e-9 && (bounds.hi.x - 30.0).abs() < 1e-9);
+    let waist = limo_cad_kernel::boolean(
+        &necked,
+        &limo_cad_kernel::make::block(
+            limo_cad_kernel::v3(-10.0, -10.0, -0.01),
+            limo_cad_kernel::v3(10.0, 10.0, 0.01),
+        )
+        .unwrap(),
+        limo_cad_kernel::Op::Intersect,
+    )
+    .unwrap();
+    let slice = limo_cad_kernel::props::mass(&waist).volume / 0.02;
+    assert!((slice - PI * 9.0).abs() < 1e-3 * PI * 9.0, "{slice}");
+}
+
+#[test]
+fn a_loft_steered_by_a_rail() {
+    // Two equal rings one above the other, and a rail beside them that
+    // swells out halfway up: the loft swells with it.
+    let (r, height, swell) = (4.0, 40.0, 1.5);
+    let rail = vec![KernelCurveDto::Arc {
+        entity_id: 31,
+        start: at(r, 0.0, 0.0),
+        mid: at(r * swell, 0.0, 0.5 * height),
+        end: at(r, 0.0, height),
+    }];
+    let mut job = loft(vec![circle(r, 0.0), circle(r, height)], false);
+    if let KernelJobDto::Loft(job) = &mut job {
+        job.guide_rail = rail;
+    }
+    let barrel = built(vec![job]);
+    let bounds = limo_cad_kernel::props::bounds(&barrel);
+    assert!(
+        (bounds.hi.x - r * swell).abs() < 1e-3 && (bounds.lo.x + r * swell).abs() < 1e-3,
+        "{bounds:?}"
+    );
+    // It holds more than the rod between the rings and less than a rod as
+    // wide as the swell.
+    let weighed = limo_cad_kernel::props::mass(&barrel).volume;
+    let rod = PI * r * r * height;
+    assert!(
+        weighed > 1.3 * rod && weighed < swell * swell * rod,
+        "{weighed}"
+    );
+}

@@ -208,6 +208,80 @@ fn cut_circle(circle: &Part, towards: &[V3]) -> Vec<Part> {
 /// band in the low part of `lp` (see [`BANDS`]) and, above it, which piece
 /// of the segment this is where an arc had to be cut.
 pub fn skin(sections: &[Vec<Seg>], ruled: bool) -> Result<Body, String> {
+    let ready = prepare(sections, None, &|_, _, p| p)?;
+    let last = ready.rows.len() - 1;
+    let bands: Vec<Band> = if ruled {
+        (0..last)
+            .map(|k| {
+                Ok(Band {
+                    first: k,
+                    last: k + 1,
+                    through: vec![ready.station(k)?, ready.station(k + 1)?],
+                })
+            })
+            .collect::<Result<_, String>>()?
+    } else {
+        let through = (0..=last)
+            .map(|k| ready.station(k))
+            .collect::<Result<_, String>>()?;
+        vec![Band {
+            first: 0,
+            last,
+            through,
+        }]
+    };
+    build(&ready, &bands, ruled)
+}
+
+/// The sections of a loft, put in order: every one counter-clockwise seen
+/// against the way the loft runs, cut into the same parts, starting at the
+/// corner nearest the start of the one before.
+struct Ready {
+    rows: Vec<Vec<Part>>,
+    /// One point for each corner of each section.
+    corners: Vec<Vec<V3>>,
+    /// The middle of each section, and the flat of it facing onward.
+    middles: Vec<V3>,
+    flats: Vec<V3>,
+}
+
+/// One row of what a skin is drawn through: the corners of a section, and
+/// for each part the middle control point of its curve of degree two.
+struct Station {
+    corners: Vec<V3>,
+    mids: Vec<Hom>,
+}
+
+/// A stretch of a loft that is one skin: from one section to another,
+/// through these stations. The first and last stations are those two
+/// sections.
+struct Band {
+    first: usize,
+    last: usize,
+    through: Vec<Station>,
+}
+
+impl Ready {
+    fn station(&self, k: usize) -> Result<Station, String> {
+        Ok(Station {
+            corners: self.corners[k].clone(),
+            mids: self.rows[k]
+                .iter()
+                .map(|part| Ok(part.hom()?[1]))
+                .collect::<Result<_, String>>()?,
+        })
+    }
+}
+
+/// `ways` is the way the loft heads at each section, where that is not
+/// simply towards the next one, and `carry(from, to, p)` is where a point
+/// of section `from` would be by the time the loft has reached section
+/// `to`: the same place, unless something carries the sections along.
+fn prepare(
+    sections: &[Vec<Seg>],
+    ways: Option<&[V3]>,
+    carry: &dyn Fn(usize, usize, V3) -> V3,
+) -> Result<Ready, String> {
     if sections.len() < 2 {
         return Err("Loft needs at least two sections".into());
     }
@@ -217,12 +291,10 @@ pub fn skin(sections: &[Vec<Seg>], ruled: bool) -> Result<Body, String> {
     }
     let middles: Vec<V3> = loops.iter().map(|lp| wire_barycentre(lp)).collect();
     let last = loops.len() - 1;
-    let onward = |k: usize| {
-        if k < last {
-            middles[k + 1] - middles[k]
-        } else {
-            middles[k] - middles[k - 1]
-        }
+    let onward = |k: usize| match ways {
+        Some(ways) => ways[k],
+        None if k < last => middles[k + 1] - middles[k],
+        None => middles[k] - middles[k - 1],
     };
     // Every section counter-clockwise seen against the way the loft runs.
     let mut rows: Vec<Vec<Part>> = Vec::with_capacity(loops.len());
@@ -260,8 +332,8 @@ pub fn skin(sections: &[Vec<Seg>], ruled: bool) -> Result<Body, String> {
             continue;
         }
         let guide: Vec<V3> = match (k.checked_sub(1), outline) {
-            (Some(before), _) => rows[before].iter().map(|p| p.a).collect(),
-            (None, Some(first)) => rows[first].iter().map(|p| p.a).collect(),
+            (Some(before), _) => rows[before].iter().map(|p| carry(before, k, p.a)).collect(),
+            (None, Some(first)) => rows[first].iter().map(|p| carry(first, k, p.a)).collect(),
             (None, None) => {
                 let Shape::Arc { c, axis } = rows[k][0].shape else {
                     unreachable!()
@@ -277,7 +349,9 @@ pub fn skin(sections: &[Vec<Seg>], ruled: bool) -> Result<Body, String> {
     for k in 1..rows.len() {
         let apart = |shift: usize| -> f64 {
             (0..sides)
-                .map(|i| (rows[k][(i + shift) % sides].a - rows[k - 1][i].a).len2())
+                .map(|i| {
+                    (rows[k][(i + shift) % sides].a - carry(k - 1, k, rows[k - 1][i].a)).len2()
+                })
                 .sum()
         };
         let shift = (0..sides)
@@ -357,7 +431,26 @@ pub fn skin(sections: &[Vec<Seg>], ruled: bool) -> Result<Body, String> {
         }
         flats.push(normal);
     }
+    Ok(Ready {
+        rows,
+        corners,
+        middles,
+        flats,
+    })
+}
 
+/// The solid whose sides are the skins of `bands` and whose ends are the
+/// first and last sections. `ruled` joins the stations of a band by
+/// straight lines.
+fn build(ready: &Ready, bands: &[Band], ruled: bool) -> Result<Body, String> {
+    let Ready {
+        rows,
+        corners,
+        middles,
+        flats,
+    } = ready;
+    let last = rows.len() - 1;
+    let count = rows[0].len();
     let mut body = Body::new();
     // The corners and outline of a section, made when a band first needs
     // them.
@@ -389,21 +482,25 @@ pub fn skin(sections: &[Vec<Seg>], ruled: bool) -> Result<Body, String> {
         (verts, edges)
     };
 
-    let bands: Vec<Vec<usize>> = if ruled {
-        (0..last).map(|k| vec![k, k + 1]).collect()
-    } else {
-        vec![(0..=last).collect()]
-    };
-    for (band, through) in bands.iter().enumerate() {
+    for (band, stretch) in bands.iter().enumerate() {
+        let through = &stretch.through;
         let deep = through.len();
         let degree = if ruled { 1 } else { (deep - 1).min(3) };
-        // How far along the loft each section is: by how far its corners
+        // The middle of a part: where its curve of degree two is halfway.
+        let halfway = |row: &Station, i: usize| {
+            let (a, b, m) = (row.corners[i], row.corners[(i + 1) % count], row.mids[i]);
+            (a + v3(m[0], m[1], m[2]) * 2.0 + b) / (2.0 + 2.0 * m[3])
+        };
+        // How far along the loft each station is: by how far its corners
         // and the middles of its parts are from those of the one before.
         let mut at = vec![0.0; deep];
         for j in 1..deep {
-            let (here, before) = (&rows[through[j]], &rows[through[j - 1]]);
+            let (here, before) = (&through[j], &through[j - 1]);
             let moved: f64 = (0..count)
-                .map(|i| here[i].a.dist(before[i].a) + here[i].at(0.5).dist(before[i].at(0.5)))
+                .map(|i| {
+                    here.corners[i].dist(before.corners[i])
+                        + halfway(here, i).dist(halfway(before, i))
+                })
                 .sum();
             if moved < 1.0e-9 {
                 return Err("Loft sections lie on top of each other".into());
@@ -416,16 +513,16 @@ pub fn skin(sections: &[Vec<Seg>], ruled: bool) -> Result<Body, String> {
         }
         at[deep - 1] = 1.0;
         let knots = form::knots_through(&at, degree);
-        // The curve up the loft through one control point of each section.
-        let up = |pick: &dyn Fn(usize) -> Hom| -> Result<Vec<Hom>, String> {
-            let data: Vec<Hom> = through.iter().map(|&k| pick(k)).collect();
+        // The curve up the loft through one control point of each station.
+        let up = |pick: &dyn Fn(&Station) -> Hom| -> Result<Vec<Hom>, String> {
+            let data: Vec<Hom> = through.iter().map(pick).collect();
             if degree == 1 {
                 Ok(data)
             } else {
                 form::through(&knots, degree, &at, &data)
             }
         };
-        let (first, final_) = (through[0], through[deep - 1]);
+        let (first, final_) = (stretch.first, stretch.last);
         let ((low_verts, low_edges), (high_verts, high_edges)) =
             (ring(&mut body, first), ring(&mut body, final_));
         // The rails up the corners. All of their weights are one, apart
@@ -433,8 +530,8 @@ pub fn skin(sections: &[Vec<Seg>], ruled: bool) -> Result<Body, String> {
         let mut columns: Vec<Vec<Hom>> = Vec::with_capacity(count);
         let mut rails: Vec<u32> = Vec::with_capacity(count);
         for i in 0..count {
-            let mut column = up(&|k| {
-                let p = corners[k][i];
+            let mut column = up(&|row| {
+                let p = row.corners[i];
                 [p.x, p.y, p.z, 1.0]
             })?;
             for h in &mut column {
@@ -478,13 +575,7 @@ pub fn skin(sections: &[Vec<Seg>], ruled: bool) -> Result<Body, String> {
             let surface = match flat {
                 Some(plane) => plane,
                 None => {
-                    let middle = {
-                        let mut homs = Vec::with_capacity(deep);
-                        for &k in through {
-                            homs.push(rows[k][i].hom()?[1]);
-                        }
-                        up(&|k| homs[through.iter().position(|&t| t == k).unwrap()])?
-                    };
+                    let middle = up(&|row| row.mids[i])?;
                     let mut net = Vec::with_capacity(3 * deep);
                     for row in 0..deep {
                         net.extend([columns[i][row], middle[row], columns[j][row]]);
@@ -912,4 +1003,251 @@ pub fn guided(profile: &[Seg], path: &[Seg], rail: &[Seg]) -> Result<Body, Strin
         );
     }
     skin(&sections, false)
+}
+
+impl Trail {
+    /// The same trail walked from its other end.
+    fn reversed(&self) -> Trail {
+        let parts = self
+            .parts
+            .iter()
+            .rev()
+            .map(|part| Part {
+                shape: match part.shape {
+                    Shape::Line => Shape::Line,
+                    Shape::Arc { c, axis } => Shape::Arc { c, axis: -axis },
+                },
+                a: part.b,
+                b: part.a,
+                ..*part
+            })
+            .collect();
+        Trail {
+            parts,
+            lengths: self.lengths.iter().rev().copied().collect(),
+            total: self.total,
+        }
+    }
+
+    /// How far along, as a share of its length, the trail comes nearest to
+    /// `p`.
+    fn nearest(&self, p: V3) -> f64 {
+        const LOOKS: usize = 256;
+        let away = |f: f64| self.at(f).0.dist(p);
+        let best = (0..=LOOKS)
+            .min_by(|&a, &b| {
+                away(a as f64 / LOOKS as f64).total_cmp(&away(b as f64 / LOOKS as f64))
+            })
+            .unwrap_or(0);
+        let (mut lo, mut hi) = (
+            best.saturating_sub(1) as f64 / LOOKS as f64,
+            (best + 1).min(LOOKS) as f64 / LOOKS as f64,
+        );
+        const G: f64 = 0.618_033_988_749_894_9;
+        let (mut a, mut b) = (hi - G * (hi - lo), lo + G * (hi - lo));
+        let (mut da, mut db) = (away(a), away(b));
+        for _ in 0..60 {
+            if da < db {
+                (hi, b, db) = (b, a, da);
+                a = hi - G * (hi - lo);
+                da = away(a);
+            } else {
+                (lo, a, da) = (a, b, db);
+                b = lo + G * (hi - lo);
+                db = away(b);
+            }
+        }
+        0.5 * (lo + hi)
+    }
+}
+
+/// A solid through a row of sections that follows a centerline from one to
+/// the next, with a rail beside the centerline to steer it if there is one.
+///
+/// Each section is taken up by a frame that travels along the centerline
+/// without twisting (or, with a rail, keeps facing the rail), and between
+/// two sections the outline is what the two are in that frame, changing
+/// smoothly from one into the other. With a rail the outline also grows and
+/// shrinks about the centerline as the rail comes nearer or goes further
+/// off than it is at the sections. With no centerline the straight way
+/// from the middle of each section to the next stands in for one.
+///
+/// The solid is the smooth skin through the sections and through outlines
+/// set down along the way between them, close enough together that the
+/// skin between two stays near where one more would be. It passes through
+/// every section exactly, and its two ends are the first and last as drawn.
+pub fn along(sections: &[Vec<Seg>], centerline: &[Seg], rail: &[Seg]) -> Result<Body, String> {
+    if sections.len() < 2 {
+        return Err("Loft needs at least two sections".into());
+    }
+    let middles: Vec<V3> = sections
+        .iter()
+        .map(|segs| Ok(wire_barycentre(&chain(segs)?)))
+        .collect::<Result<_, String>>()?;
+    let last = middles.len() - 1;
+    let mut spine = if centerline.is_empty() {
+        let straight: Vec<Seg> = middles
+            .windows(2)
+            .map(|w| Seg::Line { a: w[0], b: w[1] })
+            .collect();
+        Trail::of(&straight)?
+    } else {
+        Trail::of(centerline)?
+    };
+    let mut rail = if rail.is_empty() {
+        None
+    } else {
+        Some(Trail::of(rail)?)
+    };
+    // Where along the centerline each section sits. It may have been drawn
+    // from the far end; so may the rail.
+    if spine.nearest(middles[0]) > spine.nearest(middles[last]) {
+        spine = spine.reversed();
+    }
+    if let Some(beside) = &mut rail {
+        let start = spine.at(0.0).0;
+        if beside.at(1.0).0.dist(start) < beside.at(0.0).0.dist(start) {
+            *beside = beside.reversed();
+        }
+    }
+    let sits: Vec<f64> = middles.iter().map(|m| spine.nearest(*m)).collect();
+    if sits.windows(2).any(|w| w[1] - w[0] < 1.0e-6) {
+        return Err(
+            "the sections of a loft have to follow one another along its centerline".into(),
+        );
+    }
+    // The frame that travels along: the way the centerline heads, and two
+    // directions across. Without a rail the first of those is carried along
+    // turning only as much as the centerline does.
+    const STEPS: usize = 512;
+    let mut carried: Vec<V3> = Vec::with_capacity(STEPS + 1);
+    let mut across = spine.at(0.0).1.any_perp();
+    for k in 0..=STEPS {
+        let heading = spine.at(k as f64 / STEPS as f64).1;
+        across = (across - heading * across.dot(heading)).unit();
+        if !across.is_finite() {
+            return Err("the centerline of a loft turns back on itself".into());
+        }
+        carried.push(across);
+    }
+    // At a share `f` of the way: where, heading, the two directions across,
+    // and how far off the rail is.
+    let frame = |f: f64| -> Result<(V3, V3, V3, V3, f64), String> {
+        let (at, heading) = spine.at(f);
+        let (side, reach) = match &rail {
+            Some(beside) => {
+                let d = beside.at(f).0 - at;
+                let off = d - heading * d.dot(heading);
+                if off.len() < 1.0e-6 {
+                    return Err("the guide rail of a loft crosses its centerline".into());
+                }
+                (off.unit(), off.len())
+            }
+            None => {
+                let place = (f.clamp(0.0, 1.0) * STEPS as f64).min(STEPS as f64 - 1.0e-9);
+                let (k, share) = (place.floor() as usize, place.fract());
+                let side = carried[k].lerp(carried[k + 1], share);
+                ((side - heading * side.dot(heading)).unit(), 1.0)
+            }
+        };
+        Ok((at, heading, side, heading.cross(side), reach))
+    };
+    // The sections are matched corner to corner as the frame carries them,
+    // not as they happen to lie in space: round a bend the nearest corner
+    // of the next section is not the one this corner turns into.
+    let stood: Vec<(V3, V3, V3, V3, f64)> = sits
+        .iter()
+        .map(|&f| frame(f))
+        .collect::<Result<_, String>>()?;
+    let ways: Vec<V3> = stood.iter().map(|frame| frame.1).collect();
+    let ready = prepare(sections, Some(&ways), &|from, to, p| {
+        let (at, heading, side, up, _) = stood[from];
+        let d = p - at;
+        let (x, y, z) = (d.dot(heading), d.dot(side), d.dot(up));
+        let (at, heading, side, up, _) = stood[to];
+        at + heading * x + side * y + up * z
+    })?;
+    let count = ready.rows[0].len();
+    // Each section as the travelling frame sees it.
+    struct Seen {
+        corners: Vec<V3>,
+        mids: Vec<(V3, f64)>,
+        reach: f64,
+    }
+    let mut seen: Vec<Seen> = Vec::with_capacity(last + 1);
+    for (k, &f) in sits.iter().enumerate() {
+        let (at, heading, side, up, reach) = frame(f)?;
+        let local = |p: V3| {
+            let d = p - at;
+            v3(d.dot(heading), d.dot(side), d.dot(up))
+        };
+        let station = ready.station(k)?;
+        seen.push(Seen {
+            corners: station.corners.iter().map(|p| local(*p)).collect(),
+            mids: station
+                .mids
+                .iter()
+                .map(|m| (local(v3(m[0], m[1], m[2]) / m[3]), m[3]))
+                .collect(),
+            reach,
+        });
+    }
+    // A value between two sections: on the smooth curve through what it is
+    // at each of them, with the slope at a section the one from the section
+    // before to the section after.
+    let between = |k: usize, share: f64, pick: &dyn Fn(&Seen) -> V3| -> V3 {
+        let (y0, y1) = (pick(&seen[k]), pick(&seen[k + 1]));
+        let span = sits[k + 1] - sits[k];
+        let slope = |j: usize| {
+            let (before, after) = (j.saturating_sub(1), (j + 1).min(last));
+            (pick(&seen[after]) - pick(&seen[before])) / (sits[after] - sits[before])
+        };
+        let (m0, m1) = (slope(k) * span, slope(k + 1) * span);
+        let (t2, t3) = (share * share, share * share * share);
+        y0 * (2.0 * t3 - 3.0 * t2 + 1.0)
+            + m0 * (t3 - 2.0 * t2 + share)
+            + y1 * (3.0 * t2 - 2.0 * t3)
+            + m1 * (t3 - t2)
+    };
+    // As many stations as the centerline has bends to follow.
+    let wanted = (12 * spine.parts.len() + 1).clamp(9, 65) as f64;
+    let whole = sits[last] - sits[0];
+    let mut through: Vec<Station> = Vec::new();
+    for k in 0..last {
+        through.push(ready.station(k)?);
+        let more = (wanted * (sits[k + 1] - sits[k]) / whole).ceil().max(2.0) as usize;
+        for step in 1..more {
+            let share = step as f64 / more as f64;
+            let f = sits[k] + (sits[k + 1] - sits[k]) * share;
+            let (at, heading, side, up, reach) = frame(f)?;
+            // The rail further off than the sections on either side would
+            // have it, and the outline is that much larger.
+            let usual = seen[k].reach + (seen[k + 1].reach - seen[k].reach) * share;
+            let grown = reach / usual;
+            let placed = |l: V3| at + heading * l.x + (side * l.y + up * l.z) * grown;
+            let corners: Vec<V3> = (0..count)
+                .map(|i| placed(between(k, share, &|s| s.corners[i])))
+                .collect();
+            let mids: Vec<Hom> = (0..count)
+                .map(|i| {
+                    let p = placed(between(k, share, &|s| s.mids[i].0));
+                    let w = between(k, share, &|s| v3(s.mids[i].1, 0.0, 0.0))
+                        .x
+                        .max(0.05);
+                    [p.x * w, p.y * w, p.z * w, w]
+                })
+                .collect();
+            through.push(Station { corners, mids });
+        }
+    }
+    through.push(ready.station(last)?);
+    build(
+        &ready,
+        &[Band {
+            first: 0,
+            last,
+            through,
+        }],
+        false,
+    )
 }
