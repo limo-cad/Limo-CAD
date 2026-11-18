@@ -168,9 +168,46 @@ fn a_loft_through_three_rectangles() {
     assert_eq!(body.face_count(), 10);
     assert_eq!(count(&body, SurfKind::Plane), 10);
 
-    // A smooth loft through three would bulge between them.
-    let smooth = refusal(vec![loft(sections, false)]);
-    assert!(smooth.contains("not supported"), "{smooth}");
+    // A smooth loft through the three bulges between them: one skin up
+    // each side, no edge where the middle section was.
+    let smooth = built(vec![loft(sections, false)]);
+    assert_eq!(smooth.face_count(), 6);
+    assert_eq!(count(&smooth, SurfKind::Spline), 4);
+    // Every slice is still a rectangle. Its sides and its height are the
+    // parabolas through the three sections, each at its place along the
+    // skin: by how far its corners and the middles of its sides are from
+    // those of the section before.
+    let moved = |dx: f64, dy: f64| {
+        4.0 * (dx * dx + dy * dy + 144.0).sqrt()
+            + 2.0 * (dx * dx + 144.0).sqrt()
+            + 2.0 * (dy * dy + 144.0).sqrt()
+    };
+    let (first, second) = (moved(2.0, 2.0), moved(3.0, 2.0));
+    let mid = first / (first + second);
+    let through = |a: f64, b: f64, c: f64, t: f64| {
+        a * (t - mid) * (t - 1.0) / mid
+            + b * t * (t - 1.0) / (mid * (mid - 1.0))
+            + c * t * (t - mid) / (1.0 - mid)
+    };
+    let n = 2000;
+    let bulged: f64 = (0..n)
+        .map(|i| {
+            let (a, b) = (i as f64 / n as f64, (i + 1) as f64 / n as f64);
+            let f = |t: f64| {
+                let rise = (through(0.0, 12.0, 24.0, t + 1.0e-6)
+                    - through(0.0, 12.0, 24.0, t - 1.0e-6))
+                    / 2.0e-6;
+                through(20.0, 16.0, 10.0, t) * through(16.0, 12.0, 8.0, t) * rise
+            };
+            (b - a) / 6.0 * (f(a) + 4.0 * f(0.5 * (a + b)) + f(b))
+        })
+        .sum();
+    let weighed = limo_cad_kernel::props::mass(&smooth).volume;
+    assert!(
+        (weighed - bulged).abs() < 1.0e-7 * bulged,
+        "{weighed} {bulged}"
+    );
+    assert!(bulged > exact);
 }
 
 #[test]
@@ -208,8 +245,34 @@ fn a_loft_through_circles_and_one_with_a_twist() {
             spin(end);
         }
     }
-    let twisted = refusal(vec![loft(vec![rectangle(20.0, 20.0, 0.0), turned], true)]);
-    assert!(twisted.contains("twisted"), "{twisted}");
+    let twisted = built(vec![loft(vec![rectangle(20.0, 20.0, 0.0), turned], true)]);
+    assert_eq!(
+        (
+            count(&twisted, SurfKind::Spline),
+            count(&twisted, SurfKind::Plane)
+        ),
+        (4, 2)
+    );
+    // A slice at height `t` is the square a fraction `t` of the way from
+    // each corner to the corner it is joined to, an eighth of a turn on.
+    // Its area is a parabola in `t`: 400 at both ends, and in the middle
+    // what the mixed products of the two squares' corners make it.
+    let k = 0.5_f64.sqrt();
+    let low = [(-10.0, -10.0), (10.0, -10.0), (10.0, 10.0), (-10.0, 10.0)];
+    let high = low.map(|(x, y): (f64, f64)| (k * (x - y), k * (x + y)));
+    let cross = |p: &[(f64, f64); 4], q: &[(f64, f64); 4]| -> f64 {
+        (0..4)
+            .map(|i| p[i].0 * q[(i + 1) % 4].1 - p[i].1 * q[(i + 1) % 4].0)
+            .sum::<f64>()
+            * 0.5
+    };
+    let mixed = cross(&low, &high) + cross(&high, &low);
+    let exact = 10.0 * (400.0 + 400.0 + 0.5 * mixed) / 3.0;
+    let weighed = limo_cad_kernel::props::mass(&twisted).volume;
+    assert!(
+        (weighed - exact).abs() < 1.0e-9 * exact,
+        "{weighed} {exact}"
+    );
 }
 
 #[test]

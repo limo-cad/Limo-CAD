@@ -615,6 +615,8 @@ pub struct SplineSurface {
     pub hom: Vec<Hom>,
     pub rational: bool,
     /// Per direction: it closes smoothly, and its parameter is an angle.
+    /// Only ever `u`: a surface defined closed along `v` is kept turned a
+    /// quarter, and one closed both ways is refused.
     pub closed: [bool; 2],
     pub lo: V2,
     pub hi: V2,
@@ -703,7 +705,9 @@ impl SplineSurface {
         SplineSurface::from_hom(degree, [knots[0].to_vec(), knots[1].to_vec()], count, hom)
     }
 
-    /// The same from weighted control points.
+    /// The same from weighted control points. A surface that closes along
+    /// `v` only comes back turned a quarter, closed along `u` instead and
+    /// facing the same way: see [`SplineSurface::closed`].
     pub fn from_hom(
         degree: [usize; 2],
         mut knots: [Vec<f64>; 2],
@@ -770,6 +774,30 @@ impl SplineSurface {
                 s.closed[dir] = true;
                 rescale(&mut knots[dir], -PI, PI);
             }
+        }
+        if s.closed == [true, true] {
+            return Err("a spline surface that closes both ways is not supported".into());
+        }
+        if s.closed[1] {
+            // Everything that follows a surface round expects `u` to be the
+            // way round. Turn the net a quarter: the old `v` becomes `u`,
+            // and `v` is the old `u` run backwards, which leaves the
+            // surface facing the way it did.
+            let [nu, nv] = count;
+            let mut turned = Vec::with_capacity(s.hom.len());
+            for i in (0..nu).rev() {
+                for j in 0..nv {
+                    turned.push(s.hom[i + nu * j]);
+                }
+            }
+            let ends = s.knots[0][0] + s.knots[0][s.knots[0].len() - 1];
+            let back: Vec<f64> = s.knots[0].iter().rev().map(|k| ends - k).collect();
+            return SplineSurface::from_hom(
+                [degree[1], degree[0]],
+                [s.knots[1].clone(), back],
+                [nv, nu],
+                turned,
+            );
         }
         s.lo = v2(knots[0][0], knots[1][0]);
         s.hi = v2(knots[0][knots[0].len() - 1], knots[1][knots[1].len() - 1]);
@@ -1430,6 +1458,49 @@ mod tests {
                     "{q:?} for {u} {v}"
                 );
             }
+        }
+    }
+
+    #[test]
+    fn a_tube_defined_the_other_way_round_is_turned() {
+        // The same kind of tube with its circles along `v`.
+        let w = std::f64::consts::FRAC_1_SQRT_2;
+        let ring = [
+            (1.0, 0.0, 1.0),
+            (1.0, 1.0, w),
+            (0.0, 1.0, 1.0),
+            (-1.0, 1.0, w),
+            (-1.0, 0.0, 1.0),
+            (-1.0, -1.0, w),
+            (0.0, -1.0, 1.0),
+            (1.0, -1.0, w),
+            (1.0, 0.0, 1.0),
+        ];
+        let (mut points, mut weights) = (Vec::new(), Vec::new());
+        for &(x, y, w) in &ring {
+            for z in [0.0, 6.0] {
+                points.push(v3(2.0 * x, 2.0 * y, z));
+                weights.push(w);
+            }
+        }
+        // Stored `u` first: two points along the axis for each of nine
+        // round it.
+        let along = [0.0, 0.0, 1.0, 1.0];
+        let round = [0.0, 0.0, 0.0, 1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 4.0, 4.0, 4.0];
+        let s = SplineSurface::on([1, 2], [&along, &round], [2, 9], &points, &weights).unwrap();
+        assert_eq!(s.closed, [true, false]);
+        assert_eq!(s.degree, [2, 1]);
+        // As defined, `∂u × ∂v` is along the axis crossed with the way
+        // round: inwards. Turned, it still is.
+        for i in 0..12 {
+            let (u, v) = (-PI + TAU * (i as f64 + 0.4) / 12.0, 0.3);
+            let [p, su, sv, ..] = s.derivs(u, v, 1);
+            assert!((p.x.hypot(p.y) - 2.0).abs() < 1.0e-13);
+            let n = su.cross(sv).unit();
+            assert!(
+                near(n, v3(-p.x, -p.y, 0.0) / 2.0, 1.0e-12),
+                "{n:?} at {p:?}"
+            );
         }
     }
 

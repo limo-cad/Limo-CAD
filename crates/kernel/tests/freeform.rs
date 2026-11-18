@@ -3,10 +3,10 @@ mod common;
 
 use common::*;
 use limo_cad_kernel::loft;
-use limo_cad_kernel::make::Seg;
+use limo_cad_kernel::make::{self, Seg};
 use limo_cad_kernel::props::mass;
 use limo_cad_kernel::tess::{tessellate, TessOptions};
-use limo_cad_kernel::{v3, Body, SurfKind, V3};
+use limo_cad_kernel::{boolean, v3, Body, Op, SurfKind, Xform, V3};
 use std::f64::consts::PI;
 
 /// The corners of a square about the `z` axis, turned by `turn`.
@@ -211,4 +211,83 @@ fn sections_that_cannot_be_joined_are_refused() {
     assert!(refused.contains("same number of segments"), "{refused}");
     let refused = loft::skin(&[square(10.0, 0.0, 0.0), square(10.0, 0.0, 0.2)], true).unwrap_err();
     assert!(refused.contains("on top of each other"), "{refused}");
+}
+
+/// Cut, shared part and union of two solids: each a sound solid under a
+/// clean skin, and together weighing what the two weigh.
+fn combined(a: &Body, b: &Body) -> [Body; 3] {
+    let done = |op: Op| boolean(a, b, op).unwrap_or_else(|e| panic!("{op:?}: {e}"));
+    let out = [done(Op::Cut), done(Op::Intersect), done(Op::Union)];
+    for body in &out {
+        body.check().unwrap();
+        assert_mesh_is_a_clean_skin(body);
+    }
+    let (va, vb) = (mass(a).volume, mass(b).volume);
+    let [cut, common, union] = [&out[0], &out[1], &out[2]].map(|body| mass(body).volume);
+    let scale = va.max(vb);
+    assert!((cut + common - va).abs() < 1.0e-8 * scale);
+    assert!((union + common - va - vb).abs() < 1.0e-8 * scale);
+    assert!(common > 1.0e-3 * scale, "the two were meant to overlap");
+    out
+}
+
+/// Written out and read back, a body is the same body.
+fn saved(body: &Body) {
+    let text = body.to_text();
+    let back = Body::from_text(&text).unwrap();
+    assert_eq!(back.to_text(), text);
+    back.check().unwrap();
+    assert_eq!(mass(&back).volume, mass(body).volume);
+}
+
+#[test]
+fn lofts_cut_by_blocks_and_rods() {
+    let lofts = [
+        loft::skin(&[square(10.0, 0.0, 0.0), square(6.0, 25.0, 0.5)], true).unwrap(),
+        loft::skin(&[square(10.0, 0.0, 0.0), circle(8.0, 30.0)], true).unwrap(),
+        loft::skin(
+            &[circle(8.0, 0.0), circle(12.0, 15.0), circle(6.0, 30.0)],
+            false,
+        )
+        .unwrap(),
+    ];
+    let tools = [
+        make::block(v3(2.0, -30.0, 5.0), v3(30.0, 30.0, 12.0)).unwrap(),
+        make::cylinder(v3(-30.0, 1.0, 12.0), V3::X, 3.0, 60.0).unwrap(),
+        make::cylinder(v3(1.0, 0.5, -5.0), V3::Z, 3.0, 50.0).unwrap(),
+        make::cylinder(v3(-25.0, -3.0, 2.0), v3(1.0, 0.2, 0.4).unit(), 2.5, 70.0).unwrap(),
+    ];
+    for skin in &lofts {
+        saved(skin);
+        for tool in &tools {
+            let [cut, common, _] = combined(skin, tool);
+            // A hole through a free-form face has an edge written on it.
+            saved(&cut);
+            saved(&common);
+        }
+    }
+}
+
+#[test]
+fn free_form_solids_against_each_other() {
+    let prism = loft::skin(&[square(10.0, 0.0, 0.0), square(6.0, 25.0, 0.5)], true).unwrap();
+    let vase = loft::skin(
+        &[circle(8.0, 0.0), circle(12.0, 15.0), circle(6.0, 30.0)],
+        false,
+    )
+    .unwrap();
+    combined(
+        &prism,
+        &vase.transformed(&Xform::translation(v3(9.0, 2.0, 3.0))),
+    );
+    let turned = Xform::rotation(V3::ZERO, v3(1.0, 0.3, 0.0).unit(), 0.9);
+    combined(&prism, &prism.transformed(&turned));
+    // In a mirror the skin is the same skin, seen the other way round.
+    let mirror = Xform::mirror(v3(9.0, 0.0, 0.0), V3::X);
+    let image = vase.transformed(&mirror);
+    sound(&image);
+    saved(&image);
+    assert!((mass(&image).volume - mass(&vase).volume).abs() < 1.0e-9);
+    let [_, common, _] = combined(&vase, &image);
+    saved(&common);
 }

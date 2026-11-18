@@ -2,7 +2,12 @@
 //!
 //! The format mirrors the flat arrays one line per entity. Floats are written
 //! with enough digits to round-trip exactly.
+//!
+//! Splines come first, each written out in full once: its degrees, knots
+//! and weighted control points. A surface or curve made of one names it by
+//! its place in that list, counted from one.
 
+use crate::form::{CurveForm, SplineCurve, SplineSurface, SurfForm};
 use crate::geom::{Curve, CurveKind, SurfKind, Surface};
 use crate::math::*;
 use crate::topo::Body;
@@ -24,27 +29,75 @@ fn surf_kind(code: f64) -> Result<SurfKind, String> {
         4 => SurfKind::Torus,
         5 => SurfKind::Helicoid,
         6 => SurfKind::Coil,
+        7 => SurfKind::Spline,
         _ => return Err("unknown surface kind".into()),
     })
 }
 
+/// A spline of either sort, as the list at the head of a file holds them.
+#[derive(Clone, Copy)]
+enum Form {
+    Surface(SurfForm),
+    Curve(CurveForm),
+}
+
+fn numbers(values: &[f64]) -> String {
+    values
+        .iter()
+        .map(|x| format!("{x:?}"))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// The place of a surface's spline in the list, added if it is new; zero
+/// for a surface that has none.
+fn surface_form(forms: &mut Vec<Form>, s: &Surface) -> usize {
+    let Some(form) = s.form else { return 0 };
+    let found = forms
+        .iter()
+        .position(|f| matches!(f, Form::Surface(other) if *other == form));
+    found.unwrap_or_else(|| {
+        forms.push(Form::Surface(form));
+        forms.len() - 1
+    }) + 1
+}
+
+fn curve_form(forms: &mut Vec<Form>, c: &Curve) -> usize {
+    let Some(form) = c.form else { return 0 };
+    let found = forms
+        .iter()
+        .position(|f| matches!(f, Form::Curve(other) if *other == form));
+    found.unwrap_or_else(|| {
+        forms.push(Form::Curve(form));
+        forms.len() - 1
+    }) + 1
+}
+
 impl Body {
     pub fn to_text(&self) -> String {
-        let mut out = String::from("limo-body 1\n");
+        let mut forms: Vec<Form> = Vec::new();
+        let mut out = String::new();
         out += &format!("surfs {}\n", self.surfs.len());
         for s in &self.surfs {
             out += &format!(
-                "{} {} {:?} {:?} {:?}\n",
+                "{} {} {:?} {:?} {:?}",
                 s.kind as u8,
                 frame_text(&s.f),
                 s.r,
                 s.s,
                 s.t
             );
+            if s.kind == SurfKind::Spline {
+                out += &format!(" {}", surface_form(&mut forms, s));
+            }
+            out.push('\n');
         }
         out += &format!("curves {}\n", self.curves.len());
         for c in &self.curves {
             out += &format!("{} {} {:?} {:?}", c.kind as u8, frame_text(&c.f), c.r, c.s);
+            if c.kind == CurveKind::Spline {
+                out += &format!(" {}", curve_form(&mut forms, c));
+            }
             if matches!(c.kind, CurveKind::Trace | CurveKind::Meet) {
                 out += &format!(
                     " {} {} {:?} {:?} {:?} {:?}",
@@ -77,6 +130,14 @@ impl Body {
             }
             if c.kind == CurveKind::Meet {
                 out += &format!(" {:?}", c.base.t);
+                // And, last of all, the splines of the two surfaces.
+                if c.other.form.is_some() || c.base.form.is_some() {
+                    out += &format!(
+                        " {} {}",
+                        surface_form(&mut forms, &c.other),
+                        surface_form(&mut forms, &c.base)
+                    );
+                }
             }
             out.push('\n');
         }
@@ -105,7 +166,38 @@ impl Body {
                 out += &format!("{}\n", hes.join(" "));
             }
         }
-        out
+        // The splines head the file, though which there are is only known
+        // once everything that uses one has been written.
+        let mut head = String::from("limo-body 1\n");
+        if !forms.is_empty() {
+            head += &format!("forms {}\n", forms.len());
+            for form in &forms {
+                match form {
+                    Form::Surface(s) => {
+                        head += &format!(
+                            "surface {} {} {} {}\n{}\n{}\n{}\n",
+                            s.degree[0],
+                            s.degree[1],
+                            s.count[0],
+                            s.count[1],
+                            numbers(&s.knots[0]),
+                            numbers(&s.knots[1]),
+                            numbers(s.hom.as_flattened())
+                        );
+                    }
+                    Form::Curve(c) => {
+                        head += &format!(
+                            "curve {} {}\n{}\n{}\n",
+                            c.degree,
+                            c.hom.len(),
+                            numbers(&c.knots),
+                            numbers(c.hom.as_flattened())
+                        );
+                    }
+                }
+            }
+        }
+        head + &out
     }
 
     pub fn from_text(text: &str) -> Result<Body, String> {
@@ -135,26 +227,78 @@ impl Body {
             z: v3(v[9], v[10], v[11]),
         };
         let mut body = Body::new();
-        for _ in 0..count(next()?, "surfs")? {
+        let mut forms: Vec<Form> = Vec::new();
+        let mut line = next()?;
+        if line.starts_with("forms") {
+            let weighted = |flat: Vec<f64>| -> Result<Vec<[f64; 4]>, String> {
+                if flat.len() % 4 != 0 {
+                    return Err("malformed spline".into());
+                }
+                Ok(flat.as_chunks::<4>().0.to_vec())
+            };
+            for _ in 0..count(line, "forms")? {
+                let head: Vec<&str> = next()?.split_whitespace().collect();
+                let sizes: Vec<usize> = head[1..]
+                    .iter()
+                    .map(|v| v.parse::<usize>().map_err(|e| e.to_string()))
+                    .collect::<Result<_, _>>()?;
+                match (head.first().copied(), sizes.as_slice()) {
+                    (Some("surface"), &[p, q, nu, nv]) => {
+                        let (ku, kv) = (floats(next()?)?, floats(next()?)?);
+                        let hom = weighted(floats(next()?)?)?;
+                        forms.push(Form::Surface(SplineSurface::from_hom(
+                            [p, q],
+                            [ku, kv],
+                            [nu, nv],
+                            hom,
+                        )?));
+                    }
+                    (Some("curve"), &[p, _]) => {
+                        let knots = floats(next()?)?;
+                        let hom = weighted(floats(next()?)?)?;
+                        forms.push(Form::Curve(SplineCurve::from_hom(p, knots, hom)?));
+                    }
+                    _ => return Err("malformed spline".into()),
+                }
+            }
+            line = next()?;
+        }
+        let surface_at = |forms: &[Form], place: f64| -> Result<Option<SurfForm>, String> {
+            match forms.get((place as usize).wrapping_sub(1)) {
+                Some(Form::Surface(s)) => Ok(Some(*s)),
+                None if place == 0.0 => Ok(None),
+                _ => Err("a surface names a spline that is not there".into()),
+            }
+        };
+        for _ in 0..count(line, "surfs")? {
             let v = floats(next()?)?;
-            if v.len() != 15 && v.len() != 16 {
+            if ![15, 16, 17].contains(&v.len()) {
+                return Err("malformed surface".into());
+            }
+            let kind = surf_kind(v[0])?;
+            let form = surface_at(&forms, v.get(16).copied().unwrap_or(0.0))?;
+            if (kind == SurfKind::Spline) != form.is_some() {
                 return Err("malformed surface".into());
             }
             body.surfs.push(Surface {
-                kind: surf_kind(v[0])?,
+                kind,
                 f: frame(&v[1..13]),
                 r: v[13],
                 s: v[14],
                 t: v.get(15).copied().unwrap_or(0.0),
-                form: None,
+                form,
             });
         }
         for _ in 0..count(next()?, "curves")? {
             let v = floats(next()?)?;
-            if ![15, 32, 33, 52, 54].contains(&v.len()) {
+            if ![15, 16, 32, 33, 52, 54, 56].contains(&v.len()) {
                 return Err("malformed curve".into());
             }
             let mut curve = match v[0] as u8 {
+                6 if v.len() == 16 => match forms.get((v[15] as usize).wrapping_sub(1)) {
+                    Some(Form::Curve(c)) => Curve::spline(*c),
+                    _ => return Err("a curve names a spline that is not there".into()),
+                },
                 0 => Curve::line(V3::ZERO, V3::X),
                 1 => Curve::circle(V3::ZERO, V3::Z, V3::X, 1.0),
                 2 => Curve::ellipse(V3::ZERO, V3::Z, V3::X, 1.0, 1.0),
@@ -169,14 +313,14 @@ impl Body {
                     };
                     Curve::trace(&other, &other, 1.0, [v[30], v[31]])
                 }
-                4 if v.len() == 52 || v.len() == 54 => {
+                4 if v.len() == 52 || v.len() == 54 || v.len() == 56 => {
                     let other = Surface {
                         kind: surf_kind(v[15])?,
                         f: frame(&v[16..28]),
                         r: v[28],
                         s: v[29],
                         t: v.get(52).copied().unwrap_or(0.0),
-                        form: None,
+                        form: surface_at(&forms, v.get(54).copied().unwrap_or(0.0))?,
                     };
                     let base = Surface {
                         kind: surf_kind(v[32])?,
@@ -184,7 +328,7 @@ impl Body {
                         r: v[45],
                         s: v[46],
                         t: v.get(53).copied().unwrap_or(0.0),
-                        form: None,
+                        form: surface_at(&forms, v.get(55).copied().unwrap_or(0.0))?,
                     };
                     let w = [v[47], v[48], v[49], v[50], v[51]];
                     Curve::meet(&base, &other, false, [v[30], v[31]], w)

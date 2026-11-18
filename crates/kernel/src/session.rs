@@ -703,9 +703,7 @@ impl Kernel {
                     return Err("Loft needs at least two sections".into());
                 }
                 // Two sections are joined by straight lines either way.
-                if !j.ruled && j.sections.len() > 2 {
-                    return Err(unsupported("A smooth loft through more than two sections"));
-                }
+                let ruled = j.ruled || j.sections.len() == 2;
                 let holes = j.sections[0].holes.len();
                 if j.sections.iter().any(|s| s.holes.len() != holes) {
                     return Err(
@@ -717,12 +715,25 @@ impl Kernel {
                  -> Result<Body, String> {
                     let outlines: Vec<Vec<Seg>> =
                         j.sections.iter().map(|s| segs_of(pick(s))).collect();
-                    let mut tool = make::loft(&outlines)?;
-                    // A side is named after the sketch line under it and
-                    // the stretch of the loft it belongs to.
+                    // Flat sides and cones where the sections allow them;
+                    // a free-form skin where they do not, or where the
+                    // skin is to run smoothly through every section.
+                    let exact = if ruled {
+                        make::loft(&outlines).ok()
+                    } else {
+                        None
+                    };
+                    let mut tool = match exact {
+                        Some(tool) => tool,
+                        None => crate::loft::skin(&outlines, ruled)?,
+                    };
+                    // A side is named after the sketch line under it, the
+                    // stretch of the loft it belongs to and, where an arc
+                    // had to be cut, which piece of it this is.
                     tool.retag(|tag| match Role::of(tag) {
                         Role::Side { lp, seg } => {
-                            let entity = entities(pick(&j.sections[lp as usize]))
+                            let band = (lp % crate::loft::BANDS) as usize;
+                            let entity = entities(pick(&j.sections[band]))
                                 .get(seg as usize)
                                 .copied()
                                 .unwrap_or(u64::from(seg));
