@@ -394,9 +394,16 @@ cargo test --release -p limo-cad-native-engine --features native-occt
 LIMO_CAD_KERNEL=limo cargo test --release -p limo-cad-native-engine --features native-occt
 ```
 
-Where the two differ on purpose a test says so: OCCT will not delete a
-feature next to bodies that share geometry with it, and the Limo kernel,
-whose bodies share nothing, performs the delete.
+Where the two differ on purpose a test says so. OCCT refers to faces and
+edges by their place in a list, so the host deletes a feature only where it
+can prove that what follows still means the same: a finish followed by a
+finish, at the end of the history, next to nothing that shares geometry.
+The Limo kernel refers to them by name, and names survive edits, so on it
+`solid_delete_feature` takes another road (`host/named_deletion.rs`): it
+tries the deletion on a copy of the project, refuses with nothing changed
+if a feature that was sound before no longer is, and otherwise deletes,
+wherever in the history the feature stands. `kernel_names_survive_edits()`
+is the one place that asks which road to take.
 
 [The kernel's README](../crates/kernel/README.md) covers its design, how
 names survive edits, what it models, the differential lab against OCCT and
