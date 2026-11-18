@@ -199,6 +199,7 @@ Not yet (each is refused by name, not approximated):
 - two skins that touch all along a curve without crossing, and crossings
   of a curve with itself that lie within a hundredth of a millimetre of the
   edges of two patches at once;
+- a ring cut along a curve that winds round both its axis and its tube;
 - tapers that would need a slanted cone, offsets that change which faces
   are neighbours, shells of free-form faces;
 - the text snapshot of a body with a rolling-ball round can be written but
@@ -331,15 +332,16 @@ Beyond the recipes:
   circles or three rectangles to seven.
 - `examples/pairs.rs` throws rings, cones, balls, rods and blocks at each
   other in random poses and cuts, intersects and unites every pair. Of the
-  first 8,000 pairs 2,181 miss each other and 25 are cuts that leave
-  nothing. Of the other 5,794, all three results are closed solids for
-  5,790: every edge within a hundred-millionth of a millimetre of both of
-  its faces, a clean display mesh, volumes that add up. None is wrong.
-  Four are refused rather than guessed at, each a near miss: two pairs of
-  cones whose sides all but touch, a ring grazing a cone, a rod running
-  along the face of a block a few thousandths of a millimetre inside it.
-  Every pair that went wrong on the way to these numbers is now a case in
-  `tests/regressions.rs`.
+  first 20,000 pairs 5,460 miss each other and 57 are cuts that leave
+  nothing. Of the other 14,483, all three results are closed solids for
+  14,481: every edge within a hundred-millionth of a millimetre of both of
+  its faces, a clean display mesh at three finenesses, volumes that add
+  up. None is wrong. Two are refused by name, both a ring cut along a
+  curve that winds round its axis and its tube at once. The near misses
+  that used to be refused are now right: cones whose sides all but touch,
+  a ring grazing a cone, a rod running along the face of a block a few
+  thousandths of a millimetre inside it. Every pair that went wrong on the
+  way to these numbers is now a case in `tests/regressions.rs`.
 
 Sample parts on the same machine, modelled from nothing
 (`examples/bench.rs`):
