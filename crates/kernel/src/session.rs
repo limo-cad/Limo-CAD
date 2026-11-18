@@ -19,7 +19,7 @@ use limo_cad_solid::{
     KernelPlanarFaceSourceDto, KernelProfileDto, KernelSceneDto, KernelTransformDto,
     PlanarFaceSignatureDto, Point3Dto, RecomputePlanDto, SweepOrientation, SweepTransition,
 };
-use limo_cad_solid::{EdgeMarkDto, FinishEdgesDto};
+use limo_cad_solid::{DisplayMeshWarningDto, EdgeMarkDto, FinishEdgesDto};
 
 use crate::blend;
 use crate::boolean::{boolean, Op};
@@ -2204,10 +2204,19 @@ pub fn body_dto(id: u64, body: &Body, options: &TessOptions) -> KernelBodyDto {
         });
     }
 
+    // A face the mesher could not draw is said, not passed over: the solid
+    // is whole, its picture is not, and nothing may be printed from it.
+    let display_warnings: Vec<DisplayMeshWarningDto> = (0..body.face_count())
+        .filter(|&f| mesh.faces[f][1] == 0)
+        .map(|f| DisplayMeshWarningDto {
+            face_key: names.faces[f].clone(),
+            message: "This face cannot be drawn yet; the exact solid is kept".into(),
+        })
+        .collect();
     KernelBodyDto {
         body_id: BodyId(id),
         topology_signature: topology_signature(body),
-        display_warnings: Vec::new(),
+        display_warnings,
         positions,
         normals,
         indices: mesh.indices,

@@ -109,8 +109,11 @@ impl Mesh {
                     .fold(0.0, f64::max);
                 // A sliver thinner than the chord tolerance has no direction
                 // to speak of: the surface's own bend decides how it tilts.
-                let thin = twice.len() < 1.0e-3 * longest
-                    || twice.len() / longest.sqrt() < 0.5 * opts.linear;
+                // (The mesher itself turns round what it can at half that:
+                // see `faces_out`. What is left is where two edges of a face
+                // run closer together than their chords stray from them.)
+                let thin =
+                    twice.len() < 1.0e-3 * longest || twice.len() / longest.sqrt() < opts.linear;
                 let facing = twice.unit().dot(n.unit());
                 if facing <= 0.0 && !thin {
                     return Err(format!(
@@ -175,13 +178,12 @@ fn face_trim(body: &Body, edges: &EdgeMesh, f: u32, sag: f64) -> FaceTrim {
     if s.kind != SurfKind::Sphere || loops.is_empty() {
         return FaceTrim::from_points(*s, !body.f_sense[f as usize], loops, sag);
     }
-    // Directions of the boundary from the centre, thinned to a few dozen.
-    let total: usize = loops.iter().map(Vec::len).sum();
-    let every = total.div_ceil(48).max(1);
+    // Directions of the boundary from the centre: every point of it. A
+    // few dozen picked evenly can step over the one that matters, where
+    // the boundary runs through a pole.
     let rim: Vec<V3> = loops
         .iter()
         .flatten()
-        .step_by(every)
         .map(|p| (*p - s.f.o).unit())
         .collect();
     let middle = rim.iter().fold(V3::ZERO, |sum, d| sum + *d);
@@ -203,10 +205,16 @@ fn face_trim(body: &Body, edges: &EdgeMesh, f: u32, sag: f64) -> FaceTrim {
             .fold(f64::INFINITY, f64::min)
     };
     let mut best = (room(axes[0]), axes[0]);
+    // A boundary that passes through a pole, or within a few degrees of
+    // one, cannot be drawn in that pole's angles at all: every angle meets
+    // there, and a triangle with a corner on it faces whichever way its
+    // other two corners happen to lie. Any axis that keeps clear is better.
+    let through = best.0 < 2.0e-3;
     for &z in &axes[1..] {
         let r = room(z);
-        // The surface's own axis stays unless another is clearly better.
-        if r > best.0 + 0.05 {
+        // Otherwise the surface's own axis stays unless another is clearly
+        // better.
+        if r > best.0 + if through { 0.0 } else { 0.05 } {
             best = (r, z);
         }
     }
@@ -1974,6 +1982,158 @@ fn full_rectangle(
                 ));
             }
             (None, None) => {
+                // No circle either way round misses the holes. A circle
+                // that climbs round the tube as it goes round the axis may:
+                // a hole that lies aslant across the ring stands in the
+                // way of both straight kinds and of few slanted ones. The
+                // seam winds `climb` times round the tube in one turn
+                // about the axis, and the band between it and itself a
+                // turn of the tube further up is the whole ring.
+                for climb in [1.0, -1.0, 2.0, -2.0] {
+                    // Where the holes reach, counted across such seams.
+                    let across: Vec<(f64, f64)> = holes
+                        .iter()
+                        .map(|hole| {
+                            hole.iter()
+                                .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), c| {
+                                    let w = c.uv.y - climb * c.uv.x;
+                                    (lo.min(w), hi.max(w))
+                                })
+                        })
+                        .collect();
+                    let Some(w0) = widest_gap(&across) else {
+                        continue;
+                    };
+                    let lower: Vec<Corner> = (0..nu)
+                        .map(|i| {
+                            let u = -PI + TAU * i as f64 / nu as f64;
+                            fresh(fv, v2(u, w0 + climb * u))
+                        })
+                        .collect();
+                    let upper: Vec<Corner> = lower
+                        .iter()
+                        .rev()
+                        .map(|c| fv.shifted(*c, v2(0.0, TAU)))
+                        .collect();
+                    let turn = v2(TAU, climb * TAU);
+                    if crate::diag::trace() {
+                        eprintln!("tess: a seam that climbs {climb} round the tube");
+                    }
+                    return Some(band(
+                        trim,
+                        opts,
+                        fv,
+                        (&lower, turn),
+                        (&upper, turn * -1.0),
+                        holes,
+                        used,
+                    ));
+                }
+                // No seam of any slant either. A hole can be a blob wider
+                // than the ring is round both ways, fitted between its own
+                // images like a piece of a puzzle; the face is the channel
+                // left between them. Then the seam goes over the hole:
+                // across the channel from one end of it to the other end
+                // of its image next door, and on round that image. One bank
+                // of the band follows one side of the hole, the other bank
+                // the other side, and nothing of the hole is left inside.
+                let (unit, _) = units(trim, opts);
+                let apart = |a: V2, b: V2| ((a.x - b.x) / unit.x).hypot((a.y - b.y) / unit.y);
+                let crosses = |p: V2, q: V2| {
+                    holes.iter().any(|other| {
+                        (0..other.len()).any(|k| {
+                            let (r, s) = (other[k].uv, other[(k + 1) % other.len()].uv);
+                            (-1..=1).any(|i| {
+                                (-1..=1).any(|j| {
+                                    let by = v2(TAU * i as f64, TAU * j as f64);
+                                    meets(p, q, r + by, s + by)
+                                })
+                            })
+                        })
+                    })
+                };
+                for (h, hole) in holes.iter().enumerate() {
+                    let size = hole.len();
+                    if size < 4 {
+                        continue;
+                    }
+                    for (along, up) in [(v2(TAU, 0.0), v2(0.0, TAU)), (v2(0.0, TAU), v2(-TAU, 0.0))]
+                    {
+                        // The shortest way across that touches nothing.
+                        let every = size.div_ceil(96);
+                        let mut ways: Vec<(f64, usize, usize)> = Vec::new();
+                        for i in (0..size).step_by(every) {
+                            for j in (0..size).step_by(every) {
+                                if i != j {
+                                    ways.push((apart(hole[i].uv, hole[j].uv + along), i, j));
+                                }
+                            }
+                        }
+                        ways.sort_by(|a, b| a.0.total_cmp(&b.0));
+                        let Some(&(length, i, j)) = ways
+                            .iter()
+                            .take(400)
+                            .find(|&&(_, i, j)| !crosses(hole[i].uv, hole[j].uv + along))
+                        else {
+                            continue;
+                        };
+                        // Across, with a vertex for every step of the mesh.
+                        let pieces = (length.ceil() as usize).max(1);
+                        let (from, to) = (hole[i].uv, hole[j].uv + along);
+                        let over: Vec<Corner> = (1..pieces)
+                            .map(|k| fresh(fv, from + (to - from) * (k as f64 / pieces as f64)))
+                            .collect();
+                        // The side of the hole from where the crossing lands
+                        // back to where it left, and the other side.
+                        let side = |from: usize, to: usize| -> Vec<Corner> {
+                            let mut out = Vec::new();
+                            let mut k = (from + 1) % size;
+                            while k != to {
+                                out.push(hole[k]);
+                                k = (k + 1) % size;
+                            }
+                            out
+                        };
+                        let mut lower: Vec<Corner> = vec![hole[i]];
+                        lower.extend(over.iter().copied());
+                        lower.push(fv.shifted(hole[j], along));
+                        for c in side(j, i) {
+                            lower.push(fv.shifted(c, along));
+                        }
+                        let mut upper: Vec<Corner> = vec![fv.shifted(hole[j], along + up)];
+                        for c in over.iter().rev() {
+                            upper.push(fv.shifted(*c, up));
+                        }
+                        upper.push(fv.shifted(hole[i], up));
+                        for c in side(i, j) {
+                            upper.push(fv.shifted(c, up));
+                        }
+                        if crate::diag::trace() {
+                            eprintln!("tess: a seam over a hole that fills the ring both ways");
+                        }
+                        used.push(h);
+                        let rest: Vec<Vec<Corner>> = holes
+                            .iter()
+                            .enumerate()
+                            .filter(|(k, _)| *k != h)
+                            .map(|(_, hole)| hole.clone())
+                            .collect();
+                        // The band counts the holes it is given, which
+                        // are all but this one.
+                        let mut taken: Vec<usize> = Vec::new();
+                        let outline = band(
+                            trim,
+                            opts,
+                            fv,
+                            (&lower, along),
+                            (&upper, along * -1.0),
+                            &rest,
+                            &mut taken,
+                        );
+                        used.extend(taken.into_iter().map(|k| if k >= h { k + 1 } else { k }));
+                        return Some(outline);
+                    }
+                }
                 if crate::diag::trace() {
                     eprintln!("tess: holes all the way round a torus both ways");
                 }

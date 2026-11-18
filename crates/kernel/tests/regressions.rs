@@ -106,11 +106,23 @@ fn pin_hole_through_a_ring_off_its_axis() {
 /// * 5720: the flat end of a cone slices a cap off a ring. The cap and the
 ///   patch of ring inside the cone are written a turn of the tube apart,
 ///   and the hole the cap leaves was given to the wrong one.
+/// * 17920: the edge of what is left of a ball runs through its pole.
+///   The few dozen points the choice of another pole was made by stepped
+///   over the one that mattered, and a triangle with a corner on the pole
+///   faced whichever way its other two corners lay.
+/// * 15145, 18773: meshed finely, two edges of a face run alongside each
+///   other closer than their chords stray from them, and the sliver
+///   between is thinner than the tolerance it is meshed to. It was held to
+///   half of that.
+/// * 19483: a cone swallows all of a ring but a blob wider than the ring
+///   is round both ways. No circle round the ring, straight or slanted,
+///   misses such a hole, and the face was left undrawn. The seam now goes
+///   over the hole.
 #[test]
 fn pairs_that_once_went_wrong() {
     let seeds = [
         188, 218, 361, 367, 496, 541, 562, 574, 1074, 1389, 1548, 1830, 2482, 2731, 2921, 3019,
-        4041, 4117, 4327, 4560, 4938, 5720, 6616, 7168,
+        4041, 4117, 4327, 4560, 4938, 5720, 6616, 7168, 15145, 17920, 18773, 19483,
     ];
     for seed in seeds {
         let [(_, a), (_, b)] = random_pair(seed);
@@ -123,7 +135,8 @@ fn pairs_that_once_went_wrong() {
         for body in [&rest, &shared, &joined] {
             body.check().unwrap();
             for options in [TessOptions::default(), fine] {
-                if options.linear < 0.1 && ![188, 2921, 4938].contains(&seed) {
+                let finely = [188, 2921, 4938, 15145, 17920, 18773, 19483];
+                if options.linear < 0.1 && !finely.contains(&seed) {
                     continue;
                 }
                 tessellate(body, &options)
