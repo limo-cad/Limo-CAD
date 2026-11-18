@@ -1206,7 +1206,7 @@ impl Grid<'_> {
 
 /// Join contour segments end to end. A closed chain repeats its first edge
 /// at the end.
-fn chains(links: &[(u64, u64)]) -> Vec<Vec<u64>> {
+pub(crate) fn chains(links: &[(u64, u64)]) -> Vec<Vec<u64>> {
     let mut at: Map<u64, Vec<u32>> = Map::default();
     for (k, &(a, b)) in links.iter().enumerate() {
         at.entry(a).or_default().push(k as u32);

@@ -1,8 +1,12 @@
 //! Line drawings: what an eye at infinity sees of a set of solids.
 //!
 //! The lines of a drawing are the edges of the solids and the outlines of
-//! their curved faces: the curves along which a cylinder, cone, sphere or
-//! torus turns away from the eye. Each is followed in small steps, and at
+//! their curved faces: the curves along which a face turns away from the
+//! eye. On a cylinder, cone, sphere or torus those are known by formula.
+//! On a free-form skin, the flank of a thread or a rolling-ball round they
+//! are where the normal is square to the line of sight, found the way a
+//! contour is drawn on a map: over a grid of the face's own parameters,
+//! with every crossing closed in on. Each line is followed in small steps, and at
 //! every step a ray towards the eye says whether something stands in the
 //! way. The steps are joined into runs that are seen and runs that are
 //! hidden, and the changes between them are closed in on by halving.
@@ -349,13 +353,12 @@ fn outlines<'b>(body: &'b Body, mesh: &EdgeMesh, view: &View, deflection: f64) -
         type Whole = (Box<dyn Fn(f64) -> V3>, f64, f64, bool, usize);
         let mut curves: Vec<Whole> = Vec::new();
         match s.kind {
-            // A thread shows by its edges, the helices along crest and
-            // root; the outline of its flanks is not drawn.
-            SurfKind::Plane
-            | SurfKind::Helicoid
-            | SurfKind::Coil
-            | SurfKind::Spline
-            | SurfKind::Pipe => {}
+            SurfKind::Plane => {}
+            // No formula for these: the outline is followed over the
+            // face's own parameters.
+            SurfKind::Helicoid | SurfKind::Coil | SurfKind::Spline | SurfKind::Pipe => {
+                out.extend(turnings(body, f, trim.clone(), d, deflection));
+            }
             SurfKind::Cylinder => {
                 if across.len() > 1.0e-9 {
                     let side = z.cross(across).unit();
@@ -429,33 +432,7 @@ fn outlines<'b>(body: &'b Body, mesh: &EdgeMesh, view: &View, deflection: f64) -
                 trim.contains_uv(trim.uv(p))
             };
             let samples = if straight { 64 } else { pieces.max(48) };
-            let t = |k: usize| from + (to - from) * k as f64 / samples as f64;
-            let mut spans: Vec<(f64, f64)> = Vec::new();
-            let mut start: Option<f64> = inside(from).then_some(from);
-            for k in 1..=samples {
-                let (was, now) = (inside(t(k - 1)), inside(t(k)));
-                if was == now {
-                    continue;
-                }
-                // Where the curve crosses the face's boundary.
-                let (mut a, mut b) = (t(k - 1), t(k));
-                for _ in 0..40 {
-                    let mid = 0.5 * (a + b);
-                    if inside(mid) == was {
-                        a = mid;
-                    } else {
-                        b = mid;
-                    }
-                }
-                let change = 0.5 * (a + b);
-                match start.take() {
-                    Some(begun) => spans.push((begun, change)),
-                    None => start = Some(change),
-                }
-            }
-            if let Some(begun) = start {
-                spans.push((begun, to));
-            }
+            let spans = stretches(&inside, from, to, samples);
             let at: std::rc::Rc<dyn Fn(f64) -> V3> = std::rc::Rc::from(at);
             for (a, b) in spans {
                 if b - a <= 1.0e-9 * (to - from) {
@@ -476,6 +453,265 @@ fn outlines<'b>(body: &'b Body, mesh: &EdgeMesh, view: &View, deflection: f64) -
     out
 }
 
+/// The stretches of `[from, to]` over which `inside` holds, looked at in
+/// `samples` places and closed in on where it changes.
+fn stretches(inside: &dyn Fn(f64) -> bool, from: f64, to: f64, samples: usize) -> Vec<(f64, f64)> {
+    let t = |k: usize| from + (to - from) * k as f64 / samples as f64;
+    let mut spans: Vec<(f64, f64)> = Vec::new();
+    let mut start: Option<f64> = inside(from).then_some(from);
+    let mut was = start.is_some();
+    for k in 1..=samples {
+        let now = inside(t(k));
+        if was == now {
+            continue;
+        }
+        let (mut a, mut b) = (t(k - 1), t(k));
+        for _ in 0..40 {
+            let mid = 0.5 * (a + b);
+            if inside(mid) == was {
+                a = mid;
+            } else {
+                b = mid;
+            }
+        }
+        let change = 0.5 * (a + b);
+        match start.take() {
+            Some(begun) => spans.push((begun, change)),
+            None => start = Some(change),
+        }
+        was = now;
+    }
+    if let Some(begun) = start {
+        spans.push((begun, to));
+    }
+    spans
+}
+
+/// The lines along which a face without a formula for them turns away
+/// from an eye looking along `-d`: where its normal is square to `d`.
+///
+/// The face's own parameters are laid out as a grid, fine enough for the
+/// turns of a thread and the spans of a spline. Where the normal leans
+/// towards the eye at one end of a grid line and away at the other, the
+/// place between where it does neither is closed in on, and those places
+/// are joined cell by cell into lines. A point anywhere along such a line
+/// is then put back on the outline itself: a chord between two points of
+/// it lies inside a round solid, where everything is hidden.
+///
+/// A line that runs along the very edge of the face is left to the edge:
+/// see [`turns_away`].
+fn turnings<'b>(body: &'b Body, f: u32, trim: FaceTrim, d: V3, deflection: f64) -> Vec<Path<'b>> {
+    let (lo, hi) = (trim.lo, trim.hi);
+    let size = hi - lo;
+    if !(size.x > 0.0 && size.y > 0.0 && size.x.is_finite() && size.y.is_finite()) {
+        return Vec::new();
+    }
+    let surf = trim.surf;
+    // The surface's own parameters at a place of the face's.
+    let own = move |trim: &FaceTrim, q: V2| {
+        let q = if trim.turned { v2(-q.y, q.x) } else { q };
+        (if trim.flip { -q.x } else { q.x }, q.y)
+    };
+    // How far the normal leans towards the eye.
+    let lean = std::rc::Rc::new({
+        let trim = trim.clone();
+        move |q: V2| {
+            let (u, v) = own(&trim, q);
+            let n = surf.du(u, v).cross(surf.dv(u, v));
+            let len = n.len();
+            if len > 0.0 {
+                n.dot(d) / len
+            } else {
+                0.0
+            }
+        }
+    });
+    // Cells: as many as it takes to see every turn about an axis and
+    // every span of a spline, and no coarser than a sixtieth of the face.
+    let middle = (lo + hi) * 0.5;
+    let metric = trim.metric(middle);
+    let lengths = v2(size.x * metric.x, size.y * metric.y);
+    let longest = lengths.x.max(lengths.y).max(1.0e-9);
+    let by_length = |length: f64| (length / (longest / 60.0)).ceil();
+    let turn = TAU / 24.0;
+    let (by_u, by_v) = match surf.kind {
+        SurfKind::Helicoid => (size.x / turn, 4.0),
+        SurfKind::Coil => (size.x / turn, size.y / turn),
+        SurfKind::Pipe => (16.0, size.y / turn),
+        SurfKind::Spline => {
+            let form = surf.spline_form();
+            let spans = |k: usize| form.knots[k].windows(2).filter(|w| w[1] > w[0]).count() as f64;
+            let (su, sv) = (4.0 * spans(0), 4.0 * spans(1));
+            if trim.turned {
+                (sv, su)
+            } else {
+                (su, sv)
+            }
+        }
+        _ => (8.0, 8.0),
+    };
+    let cells =
+        |wanted: f64, length: f64| (wanted.max(by_length(length)).ceil() as usize).clamp(6, 768);
+    let n = [cells(by_u, lengths.x), cells(by_v, lengths.y)];
+    let step = v2(size.x / n[0] as f64, size.y / n[1] as f64);
+    let node = |i: usize, j: usize| v2(lo.x + i as f64 * step.x, lo.y + j as f64 * step.y);
+    let values: Vec<f64> = (0..=n[1])
+        .flat_map(|j| (0..=n[0]).map(move |i| (i, j)))
+        .map(|(i, j)| lean(node(i, j)))
+        .collect();
+    let value = |i: usize, j: usize| values[j * (n[0] + 1) + i];
+    // A grid edge by number: from node `(i, j)` across, or up.
+    let key = |i: usize, j: usize, up: bool| ((i as u64) << 33) | ((j as u64) << 1) | u64::from(up);
+    let mut links: Vec<(u64, u64)> = Vec::new();
+    for j in 0..n[1] {
+        for i in 0..n[0] {
+            let above = [
+                value(i, j) > 0.0,
+                value(i + 1, j) > 0.0,
+                value(i + 1, j + 1) > 0.0,
+                value(i, j + 1) > 0.0,
+            ];
+            let sides = [
+                (above[0] != above[1], key(i, j, false)),
+                (above[1] != above[2], key(i + 1, j, true)),
+                (above[3] != above[2], key(i, j + 1, false)),
+                (above[0] != above[3], key(i, j, true)),
+            ];
+            let cut: Vec<u64> = sides.iter().filter(|s| s.0).map(|s| s.1).collect();
+            match cut.len() {
+                2 => links.push((cut[0], cut[1])),
+                4 => {
+                    // A saddle: the middle says which corners are joined.
+                    let mid = lean(node(i, j) + step * 0.5) > 0.0;
+                    if mid == above[0] {
+                        links.push((cut[0], cut[1]));
+                        links.push((cut[2], cut[3]));
+                    } else {
+                        links.push((cut[0], cut[3]));
+                        links.push((cut[1], cut[2]));
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    // Where on its grid edge the normal is square to the line of sight.
+    let crossing = |key: u64| -> V2 {
+        let (i, j, up) = (
+            (key >> 33) as usize,
+            ((key >> 1) & 0xffff_ffff) as usize,
+            key & 1 == 1,
+        );
+        let (a, b) = (node(i, j), if up { node(i, j + 1) } else { node(i + 1, j) });
+        let below = lean(a) > 0.0;
+        let (mut near, mut far) = (0.0, 1.0);
+        for _ in 0..48 {
+            let mid = 0.5 * (near + far);
+            if (lean(a + (b - a) * mid) > 0.0) == below {
+                near = mid;
+            } else {
+                far = mid;
+            }
+        }
+        a + (b - a) * (0.5 * (near + far))
+    };
+    let trim = std::rc::Rc::new(trim);
+    let mut out: Vec<Path<'b>> = Vec::new();
+    for chain in crate::meet::chains(&links) {
+        let points: Vec<V2> = chain.into_iter().map(crossing).collect();
+        if points.len() < 2 {
+            continue;
+        }
+        let points = std::rc::Rc::new(points);
+        // A place along the line, back on the outline: between two of its
+        // points, then down the slope of the lean to where there is none.
+        let place = {
+            let (points, lean) = (points.clone(), lean.clone());
+            move |t: f64| -> V2 {
+                let last = points.len() - 1;
+                let k = (t.floor().max(0.0) as usize).min(last - 1);
+                let mut q =
+                    points[k] + (points[k + 1] - points[k]) * (t - k as f64).clamp(0.0, 1.0);
+                let (hu, hv) = (1.0e-4 * step.x, 1.0e-4 * step.y);
+                for _ in 0..3 {
+                    let here = lean(q);
+                    let slope = v2(
+                        (lean(v2(q.x + hu, q.y)) - lean(v2(q.x - hu, q.y))) / (2.0 * hu) * step.x,
+                        (lean(v2(q.x, q.y + hv)) - lean(v2(q.x, q.y - hv))) / (2.0 * hv) * step.y,
+                    );
+                    let steep = slope.dot(slope);
+                    if steep < 1.0e-24 {
+                        break;
+                    }
+                    // No further than the cell it is in.
+                    let fix = slope * (here / steep);
+                    if fix.len() > 1.0 {
+                        break;
+                    }
+                    q = v2(q.x - fix.x * step.x, q.y - fix.y * step.y);
+                }
+                q
+            }
+        };
+        let (from, to) = (0.0, (points.len() - 1) as f64);
+        // Chords enough that none strays further than a drawn curve may.
+        let mut sag: f64 = 0.0;
+        for k in 0..points.len() - 1 {
+            let (a, b) = (trim.point(points[k]), trim.point(points[k + 1]));
+            let middle = trim.point(place(k as f64 + 0.5));
+            sag = sag.max(middle.dist((a + b) * 0.5));
+        }
+        let finer = (sag / deflection).sqrt().ceil().clamp(1.0, 8.0) as usize;
+        let pieces = (points.len() - 1) * finer;
+        let inside = {
+            let (trim, place) = (trim.clone(), place.clone());
+            move |t: f64| classify(body, &trim, f, trim.point(place(t))) == PtClass::In
+        };
+        for (a, b) in stretches(&inside, from, to, pieces.max(48)) {
+            if b - a <= 1.0e-9 * (to - from) {
+                continue;
+            }
+            let (trim, place) = (trim.clone(), place.clone());
+            let share = ((b - a) / (to - from) * pieces as f64).ceil() as usize;
+            out.push(Path {
+                at: Box::new(move |t| trim.point(place(t))),
+                from: a,
+                to: b,
+                straight: false,
+                pieces: share.max(1),
+            });
+        }
+    }
+    out
+}
+
+/// Whether the skin turns away from the eye along edge `e` at `t`: the
+/// face on one side of it faces the eye, a short way in, and the face on
+/// the other side faces away.
+///
+/// Two patches of one smooth skin meet in an edge that is no line of the
+/// drawing, unless the skin happens to turn away from the eye exactly
+/// there. From the front, the side and above it often does: skins are
+/// drawn round the same axes that drawings are looked along.
+fn turns_away(body: &Body, e: u32, t: f64, d: V3, reach: f64) -> bool {
+    let curve = body.e_curve_ref(e);
+    let foot = curve.point(t);
+    let travel = curve.deriv(t);
+    let mut facing = [0.0; 2];
+    for (side, slot) in facing.iter_mut().enumerate() {
+        let f = body.h_face(2 * e + side as u32);
+        // The face lies to the left of its own way along the edge.
+        let way = if side == 0 { travel } else { -travel };
+        let into = body.f_normal(f, foot).cross(way);
+        if !(into.is_finite() && into.len2() > 0.0) {
+            return false;
+        }
+        let within = body.f_surface(f).project(foot + into.unit() * reach);
+        *slot = body.f_normal(f, within).dot(d);
+    }
+    facing[0] * facing[1] < 0.0
+}
+
 /// The drawing of some solids seen from `view`.
 pub fn draw(bodies: &[&Body], view: &View, options: &DrawOptions) -> Drawing {
     let deflection = options.deflection.clamp(1.0e-4, 10.0);
@@ -492,11 +728,41 @@ pub fn draw(bodies: &[&Body], view: &View, options: &DrawOptions) -> Drawing {
     let mut drawing = Drawing::default();
     for (body, mesh) in bodies.iter().zip(&meshes) {
         for e in 0..body.edge_count() as u32 {
-            if !options.smooth_edges && !body.e_sharp(e) {
-                continue;
-            }
             let curve = body.e_curve_ref(e);
             let [from, to] = body.e_t[e as usize];
+            if !options.smooth_edges && !body.e_sharp(e) {
+                // A smooth edge is drawn only where it is the outline: on
+                // skins that have no formula for theirs.
+                let free = [2 * e, 2 * e + 1].iter().any(|&h| {
+                    matches!(
+                        body.f_surface(body.h_face(h)).kind,
+                        SurfKind::Spline | SurfKind::Pipe | SurfKind::Helicoid | SurfKind::Coil
+                    )
+                });
+                if !free {
+                    continue;
+                }
+                let pieces = mesh.edge(e).len() - 1;
+                let reach = 1.0e-3 * (1.0 + size);
+                let outline = |t: f64| turns_away(body, e, t, view.toward, reach);
+                for (a, b) in stretches(&outline, from, to, pieces.max(16)) {
+                    // A crossing of the outline and the edge is a point,
+                    // not a stretch of either.
+                    if curve.point(a).dist(curve.point(b)) < 20.0 * reach {
+                        continue;
+                    }
+                    let share = ((b - a) / (to - from) * pieces as f64).ceil() as usize;
+                    let path = Path {
+                        at: Box::new(move |t| curve.point(t)),
+                        from: a,
+                        to: b,
+                        straight: curve.kind == CurveKind::Line,
+                        pieces: share.max(1),
+                    };
+                    scene.sort(&path, step, &mut drawing, options.hidden);
+                }
+                continue;
+            }
             let path = Path {
                 at: Box::new(move |t| curve.point(t)),
                 from,
