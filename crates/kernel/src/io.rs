@@ -231,7 +231,7 @@ impl Body {
         let mut line = next()?;
         if line.starts_with("forms") {
             let weighted = |flat: Vec<f64>| -> Result<Vec<[f64; 4]>, String> {
-                if flat.len() % 4 != 0 {
+                if !flat.len().is_multiple_of(4) {
                     return Err("malformed spline".into());
                 }
                 Ok(flat.as_chunks::<4>().0.to_vec())

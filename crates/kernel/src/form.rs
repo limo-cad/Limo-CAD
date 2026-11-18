@@ -806,7 +806,13 @@ impl SplineSurface {
         // same hill as the nearest point of the surface.
         for (dir, cells) in s.grid.iter_mut().enumerate() {
             let spans = s.knots[dir].windows(2).filter(|w| w[1] > w[0]).count();
-            *cells = (if degree[dir] == 1 { 1 } else { 3 } * spans).clamp(4, 96);
+            *cells = (if degree[dir] == 1 { 1 } else { 3 } * spans).clamp(4, 2048);
+        }
+        // No more than a quarter of a million seeds in all: the longer way
+        // gives up cells first.
+        while s.grid[0] * s.grid[1] > 250_000 {
+            let longer = usize::from(s.grid[1] > s.grid[0]);
+            s.grid[longer] = s.grid[longer].div_ceil(2);
         }
         let [gu, gv] = s.grid;
         for j in 0..=gv {

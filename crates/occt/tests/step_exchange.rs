@@ -332,3 +332,68 @@ fn a_threaded_rod_reaches_the_reference_kernel() {
     let threaded = boolean(&rod, &groove, Op::Cut).unwrap();
     let _ = through_the_reference("threaded rod", &threaded);
 }
+
+/// Free-form solids go out as the splines they are made of: the same
+/// degrees, knots, weights and control points. The reference kernel reads
+/// each as one closed solid and weighs it as this kernel does.
+#[test]
+fn free_form_solids_weigh_the_same_in_the_reference_kernel() {
+    use limo_cad_kernel::loft::skin;
+    use limo_cad_kernel::make::Seg;
+    use std::f64::consts::PI;
+    let square = |half: f64, z: f64, turn: f64| -> Vec<Seg> {
+        let p: Vec<V3> = (0..4)
+            .map(|i| {
+                let a = turn + PI / 4.0 + PI / 2.0 * i as f64;
+                let r = half * 2f64.sqrt();
+                v3(r * a.cos(), r * a.sin(), z)
+            })
+            .collect();
+        (0..4)
+            .map(|i| Seg::Line {
+                a: p[i],
+                b: p[(i + 1) % 4],
+            })
+            .collect()
+    };
+    let circle = |r: f64, z: f64| {
+        vec![Seg::Circle {
+            c: v3(0.0, 0.0, z),
+            p: v3(r, 0.0, z),
+            n: V3::Z,
+        }]
+    };
+    let prism = skin(&[square(10.0, 0.0, 0.0), square(6.0, 25.0, 0.5)], true).unwrap();
+    let funnel = skin(&[square(10.0, 0.0, 0.0), circle(8.0, 30.0)], true).unwrap();
+    let vase = skin(
+        &[circle(8.0, 0.0), circle(12.0, 15.0), circle(6.0, 30.0)],
+        false,
+    )
+    .unwrap();
+    let rod = make::cylinder(v3(-25.0, -3.0, 2.0), v3(1.0, 0.2, 0.4).unit(), 2.5, 70.0).unwrap();
+    let drilled = boolean(&vase, &rod, Op::Cut).unwrap();
+    let image = vase.transformed(&limo_cad_kernel::Xform::mirror(
+        v3(3.0, 0.0, 0.0),
+        v3(1.0, 0.1, 0.2).unit(),
+    ));
+    for (name, body) in [
+        ("twisted prism", &prism),
+        ("square to round", &funnel),
+        ("vase", &vase),
+        ("drilled vase", &drilled),
+        ("vase in a mirror", &image),
+    ] {
+        let exact = mass(body);
+        let (volume, area) = weighed_by_the_reference(name, body);
+        assert!(
+            (volume - exact.volume).abs() < 1.0e-9 * exact.volume,
+            "{name}: volume {volume} for {}",
+            exact.volume
+        );
+        assert!(
+            (area - exact.area).abs() < 1.0e-8 * exact.area,
+            "{name}: area {area} for {}",
+            exact.area
+        );
+    }
+}

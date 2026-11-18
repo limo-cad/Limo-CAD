@@ -99,10 +99,12 @@ fn plain_solids_come_back_as_they_went() {
 
 #[test]
 fn parts_come_back_as_they_went() {
-    let mut exact = 0;
+    let (mut exact, mut approximate) = (0, 0);
     for (name, body) in showcase().unwrap() {
-        // Curves where two round surfaces meet go out as splines, which
-        // are not read back.
+        // Curves where two round surfaces meet go out as cubics that
+        // follow them to a ten-millionth of a millimetre, and come back
+        // as those cubics: the same faces, and the same weight to within
+        // what that leaves.
         let free = (0..body.edge_count() as u32).any(|e| {
             !matches!(
                 body.e_curve_ref(e).kind,
@@ -112,13 +114,24 @@ fn parts_come_back_as_they_went() {
         if free {
             let text = write(&[(name.to_string(), &body)], "test");
             assert!(text.contains("B_SPLINE_CURVE_WITH_KNOTS"), "{name}");
-            let refused = read(&text).unwrap_err();
-            assert!(refused.contains("free-form curve"), "{name}: {refused}");
+            let back = read(&text).unwrap_or_else(|e| panic!("{name}: {e}"));
+            assert_eq!(back.len(), 1, "{name}");
+            assert_eq!(back[0].face_count(), body.face_count(), "{name}");
+            back[0].check().unwrap();
+            let (before, after) = (mass(&body), mass(&back[0]));
+            assert!(
+                (after.volume - before.volume).abs() < 1.0e-8 * before.volume,
+                "{name}: {} for {}",
+                after.volume,
+                before.volume
+            );
+            approximate += 1;
         } else {
             assert_survives(name, &body);
             exact += 1;
         }
     }
+    assert!(approximate >= 1, "no part with a free-form edge was tried");
     assert!(exact >= 3, "only {exact} parts went round");
 }
 

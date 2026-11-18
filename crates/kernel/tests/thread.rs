@@ -379,11 +379,17 @@ fn a_threaded_rod_is_drawn_and_exported() {
             assert!(p.x.abs() <= 5.0 + 1.0e-6 && p.y >= -1.0e-6 && p.y <= 9.0 + 1.0e-6);
         }
     }
-    // Written out, its flanks are spline surfaces; they are not read back.
+    // Written out, its flanks are spline surfaces, and are read back as
+    // such: the same faces round the same solid.
     let text = write(&[("threaded".to_string(), &threaded)], "test");
     assert!(text.contains("B_SPLINE_SURFACE_WITH_KNOTS"));
     assert!(text.contains("CYLINDRICAL_SURFACE"));
-    assert!(read(&text).unwrap_err().contains("free-form"));
+    let back = read(&text).unwrap();
+    assert_eq!(back.len(), 1);
+    assert_eq!(back[0].face_count(), threaded.face_count());
+    assert!(count(&back[0], SurfKind::Spline) >= 2);
+    let (before, after) = (mass(&threaded).volume, mass(&back[0]).volume);
+    assert!((after - before).abs() < 1.0e-8 * before, "{after} {before}");
     // The body's own text keeps everything.
     assert_eq!(Body::from_text(&threaded.to_text()).unwrap(), threaded);
 }

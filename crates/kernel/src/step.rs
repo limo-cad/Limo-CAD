@@ -13,6 +13,7 @@
 
 use std::collections::HashMap;
 
+use crate::form::{self, Hom, SplineCurve, SplineSurface};
 use crate::geom::{Curve, CurveKind, SurfKind, Surface};
 use crate::math::*;
 use crate::props;
@@ -939,13 +940,16 @@ impl Model {
             "TOROIDAL_SURFACE",
         ];
         let parts = self.all.get(&id).ok_or("a face has no surface")?;
+        if let Some(spline) = self.spline_surface(id)? {
+            return Ok(spline);
+        }
         let (name, args) = parts
             .iter()
             .find(|(name, _)| known.contains(&name.as_str()))
             .ok_or_else(|| {
                 format!(
-                    "the file has a free-form surface ({}); only planes, cylinders, cones, \
-                     spheres and tori can be read",
+                    "the file has a surface that cannot be read ({}); planes, cylinders, cones, \
+                     spheres, tori and splines can",
                     self.name(id).to_lowercase()
                 )
             })?;
@@ -1071,12 +1075,14 @@ impl Model {
             });
         }
         // A spline is often a line or an arc by another name: some systems
-        // write every curve they have touched that way.
+        // write every curve they have touched that way. Otherwise it is
+        // read as the spline it is.
         if let Some(found) = self.spline(id)? {
             return Ok(found);
         }
         Err(format!(
-            "the file has a free-form curve ({}); only lines, circles and ellipses can be read",
+            "the file has a curve that cannot be read ({}); lines, circles, ellipses and \
+             splines can",
             self.name(id).to_lowercase()
         ))
     }
@@ -1210,7 +1216,143 @@ impl Model {
                 return Ok(Some(Curve::circle(centre, axis, a - centre, radius)));
             }
         }
-        Ok(None)
+        // Neither: the spline itself.
+        let mut rows = vec![points
+            .iter()
+            .zip(&weights)
+            .map(|(p, &w)| [p.x * w, p.y * w, p.z * w, w])
+            .collect::<Vec<Hom>>()];
+        let clamped = full[..=degree].iter().all(|k| *k == full[0])
+            && full[n..].iter().all(|k| *k == full[n]);
+        if !clamped {
+            full = form::clamp(&full, degree, &mut rows)?;
+        }
+        let form = SplineCurve::from_hom(degree, full, rows.remove(0))
+            .map_err(|e| format!("the STEP file has a spline curve that cannot be used: {e}"))?;
+        Ok(Some(Curve::spline(form)))
+    }
+
+    /// Knots written out in full from STEP's list of values and list of how
+    /// often each occurs; for a single Bezier span that came without any,
+    /// the knots of one.
+    fn knots(
+        mults: Option<&Arg>,
+        values: Option<&Arg>,
+        degree: usize,
+        n: usize,
+    ) -> Result<Vec<f64>, String> {
+        let mut full: Vec<f64> = Vec::new();
+        let (mults, values) = (
+            mults.map(Arg::list).unwrap_or(&[]),
+            values.map(Arg::list).unwrap_or(&[]),
+        );
+        for (m, k) in mults.iter().zip(values) {
+            let (m, k) = (
+                m.number().unwrap_or(1.0) as usize,
+                k.number().unwrap_or(0.0),
+            );
+            full.extend(std::iter::repeat_n(k, m));
+        }
+        if full.len() != n + degree + 1 {
+            if full.is_empty() && n == degree + 1 {
+                full = [vec![0.0; n], vec![1.0; n]].concat();
+            } else {
+                return Err("the STEP file has a spline whose knots do not fit its points".into());
+            }
+        }
+        Ok(full)
+    }
+
+    /// A spline surface as it is written: degrees, a net of control points
+    /// with their weights if it is rational, and knots. `None` for any
+    /// other kind of surface.
+    fn spline_surface(&self, id: usize) -> Result<Option<Surface>, String> {
+        let Some(parts) = self.all.get(&id) else {
+            return Ok(None);
+        };
+        let part = |name: &str| {
+            parts
+                .iter()
+                .find(|(n, _)| n == name)
+                .map(|(_, a)| a.as_slice())
+        };
+        // On its own an entity starts with a name; as one part of a
+        // complex entity it does not.
+        let alone = parts.len() == 1;
+        let skip = usize::from(alone);
+        let (head, knots) = if let Some(args) = part("B_SPLINE_SURFACE_WITH_KNOTS") {
+            if alone {
+                (args.get(1..).unwrap_or(&[]), args.get(8..))
+            } else {
+                (part("B_SPLINE_SURFACE").unwrap_or(&[]), Some(args))
+            }
+        } else if let Some(args) = part("B_SPLINE_SURFACE").or(part("BEZIER_SURFACE")) {
+            (args.get(skip..).unwrap_or(&[]), None)
+        } else {
+            return Ok(None);
+        };
+        let degree = |k: usize| -> Result<usize, String> {
+            head.get(k)
+                .and_then(Arg::number)
+                .map(|d| d as usize)
+                .filter(|d| (1..=form::MAX_DEGREE).contains(d))
+                .ok_or_else(|| {
+                    "the STEP file has a spline surface of a degree that cannot be read".into()
+                })
+        };
+        let (du, dv) = (degree(0)?, degree(1)?);
+        let net = head.get(2).map(Arg::list).unwrap_or(&[]);
+        let (nu, nv) = (net.len(), net.first().map_or(0, |row| row.list().len()));
+        if nu <= du || nv <= dv || net.iter().any(|row| row.list().len() != nv) {
+            return Err("the STEP file has a spline surface with too few points".into());
+        }
+        let weights = part("RATIONAL_B_SPLINE_SURFACE")
+            .and_then(|args| args.first())
+            .map(Arg::list);
+        if weights.is_some_and(|w| w.len() != nu || w.iter().any(|row| row.list().len() != nv)) {
+            return Err("the STEP file has a spline surface whose weights do not fit".into());
+        }
+        // The control points, by `u` then `v`, as the file has them.
+        let mut by_u: Vec<Vec<Hom>> = Vec::with_capacity(nu);
+        for (i, row) in net.iter().enumerate() {
+            let mut out = Vec::with_capacity(nv);
+            for (j, pole) in row.list().iter().enumerate() {
+                let p = self.point(pole.reference().ok_or("a spline has no points")?)?;
+                let w = match weights {
+                    Some(w) => w[i].list()[j]
+                        .number()
+                        .filter(|w| *w > 0.0)
+                        .ok_or("the STEP file has a spline surface with a weight that is none")?,
+                    None => 1.0,
+                };
+                out.push([p.x * w, p.y * w, p.z * w, w]);
+            }
+            by_u.push(out);
+        }
+        let k = |at: usize| knots.and_then(|k| k.get(at));
+        let mut ku = Self::knots(k(0), k(2), du, nu)?;
+        let mut kv = Self::knots(k(1), k(3), dv, nv)?;
+        let clamped = |knots: &[f64], degree: usize, n: usize| {
+            knots[..=degree].iter().all(|k| *k == knots[0])
+                && knots[n..].iter().all(|k| *k == knots[n])
+        };
+        // Along `v` each row of the net is a curve of its own.
+        if !clamped(&kv, dv, nv) {
+            kv = form::clamp(&kv, dv, &mut by_u)?;
+        }
+        let nv = by_u[0].len();
+        // Along `u` the curves are the columns.
+        let mut by_v: Vec<Vec<Hom>> = (0..nv)
+            .map(|j| by_u.iter().map(|row| row[j]).collect())
+            .collect();
+        if !clamped(&ku, du, nu) {
+            ku = form::clamp(&ku, du, &mut by_v)?;
+        }
+        let nu = by_v[0].len();
+        let hom: Vec<Hom> = by_v.into_iter().flatten().collect();
+        let form = SplineSurface::from_hom([du, dv], [ku, kv], [nu, nv], hom)
+            .map_err(|e| format!("the STEP file has a spline surface that cannot be used: {e}"))?;
+        Ok(Some(Surface::spline(form)))
     }
 }
 
@@ -1380,7 +1522,15 @@ impl Model {
         let mut body = unify(&body);
         body.check()
             .map_err(|e| format!("the STEP solid is not a closed solid ({e})"))?;
-        if (props::volume(&body) < 0.0) != hollow {
+        // Which way round it is: by its exact volume, or where it has
+        // splines, which take a while to weigh, by that of its mesh.
+        let free = body.surfs.iter().any(|s| s.kind == SurfKind::Spline);
+        let volume = if free {
+            crate::tess::tessellate(&body, &crate::tess::TessOptions::default()).volume()
+        } else {
+            props::volume(&body)
+        };
+        if (volume < 0.0) != hollow {
             // Facing the wrong way for what it is.
             let mut turned = Body::new();
             turned.surfs = body.surfs.clone();
@@ -1448,6 +1598,14 @@ impl Model {
         }
         let (t0, t1) = if curve.kind == CurveKind::Line {
             (curve.param(p0), curve.param(p1))
+        } else if let Some((lo, hi)) = curve.bounds().filter(|_| curve.kind == CurveKind::Spline) {
+            // An open spline: between its ends, or all of it where both
+            // ends of the edge are one vertex.
+            if v0 == v1 {
+                (lo, hi)
+            } else {
+                (curve.param(p0), curve.param(p1))
+            }
         } else if v0 == v1 {
             // All the way round, starting at the vertex.
             if curve.kind == CurveKind::Circle {

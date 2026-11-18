@@ -5,6 +5,7 @@ use common::*;
 use limo_cad_kernel::loft;
 use limo_cad_kernel::make::{self, Seg};
 use limo_cad_kernel::props::mass;
+use limo_cad_kernel::step::{read, write};
 use limo_cad_kernel::tess::{tessellate, TessOptions};
 use limo_cad_kernel::{boolean, v3, Body, Op, SurfKind, Xform, V3};
 use std::f64::consts::PI;
@@ -290,4 +291,86 @@ fn free_form_solids_against_each_other() {
     assert!((mass(&image).volume - mass(&vase).volume).abs() < 1.0e-9);
     let [_, common, _] = combined(&vase, &image);
     saved(&common);
+}
+
+/// What a body weighs after a trip through a STEP file, against what it
+/// weighed before: volume and area, as fractions off.
+fn through_step(name: &str, body: &Body) -> (f64, f64) {
+    let text = write(&[(name.to_string(), body)], "free-form test");
+    let back = read(&text).unwrap_or_else(|e| panic!("{name}: {e}"));
+    assert_eq!(back.len(), 1, "{name}");
+    let back = &back[0];
+    assert_eq!(back.face_count(), body.face_count(), "{name}");
+    back.check().unwrap();
+    assert_mesh_is_a_clean_skin(back);
+    let (before, after) = (mass(body), mass(back));
+    (
+        (after.volume / before.volume - 1.0).abs(),
+        (after.area / before.area - 1.0).abs(),
+    )
+}
+
+#[test]
+fn free_form_solids_come_back_from_step() {
+    // A skin goes out as the spline it is and comes back the same spline.
+    let prism = loft::skin(&[square(10.0, 0.0, 0.0), square(6.0, 25.0, 0.5)], true).unwrap();
+    let vase = loft::skin(
+        &[circle(8.0, 0.0), circle(12.0, 15.0), circle(6.0, 30.0)],
+        false,
+    )
+    .unwrap();
+    let image = vase.transformed(&Xform::mirror(v3(3.0, 0.0, 0.0), v3(1.0, 0.1, 0.2).unit()));
+    for (name, body) in [("prism", &prism), ("vase", &vase), ("image", &image)] {
+        let (volume, area) = through_step(name, body);
+        assert!(
+            volume < 1.0e-13 && area < 1.0e-13,
+            "{name}: {volume} {area}"
+        );
+    }
+    // The rim of a hole through one is written as a cubic that follows it
+    // to a ten-millionth of a millimetre.
+    let rod = make::cylinder(v3(-25.0, -3.0, 2.0), v3(1.0, 0.2, 0.4).unit(), 2.5, 70.0).unwrap();
+    let drilled = boolean(&vase, &rod, Op::Cut).unwrap();
+    let (volume, area) = through_step("drilled", &drilled);
+    assert!(volume < 1.0e-9 && area < 1.0e-9, "{volume} {area}");
+}
+
+#[test]
+fn threads_come_back_from_step() {
+    use limo_cad_kernel::make::PSeg;
+    use limo_cad_kernel::thread::{clipped, cutter, rounded, Run};
+    use limo_cad_kernel::v2;
+    use std::f64::consts::TAU;
+    // A screw surface has no name in STEP and goes out as a spline that
+    // follows it closely. Read back, the thread is a solid of spline
+    // faces that weighs what the exact one does: what is in the file is
+    // the thread.
+    let plain = make::cylinder(V3::ZERO, V3::Z, 5.0, 9.0).unwrap();
+    let points = [v2(4.0, -0.3), v2(5.2, -0.9), v2(5.2, 0.9), v2(4.0, 0.3)];
+    let tooth: Vec<PSeg> = (0..4)
+        .map(|i| PSeg::Line {
+            a: points[i],
+            b: points[(i + 1) % 4],
+        })
+        .collect();
+    let groove = make::screw(&tooth, V3::ZERO, V3::Z, V3::X, 2.0 / TAU, -TAU, TAU * 5.5).unwrap();
+    let cut = boolean(&plain, &groove, Op::Cut).unwrap();
+    let (volume, area) = through_step("trapezoid thread", &cut);
+    assert!(volume < 1.0e-8 && area < 1.0e-7, "{volume} {area}");
+    // A rounded thread over seven and a half turns, each face of it one
+    // long spline.
+    let run = Run {
+        start: V3::ZERO,
+        along: V3::Z,
+        zero: V3::X,
+        pitch: 4.0,
+        depth: 30.0,
+        left_hand: false,
+    };
+    let rod = make::cylinder(V3::ZERO, V3::Z, 12.0, 30.0).unwrap();
+    let profile = rounded(24.0, 20.0, 4.0, 0.3, 0.0, false).unwrap();
+    let groove = clipped(&cutter(&profile, &run).unwrap(), &run, 12.0, true).unwrap();
+    let long = boolean(&rod, &groove, Op::Cut).unwrap();
+    let (volume, area) = through_step("rounded thread", &long);
+    assert!(volume < 1.0e-7 && area < 1.0e-6, "{volume} {area}");
 }

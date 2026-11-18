@@ -225,11 +225,19 @@ fn span(a: f64, b: f64, piece: f64, mut f: impl FnMut(f64) -> Sums) -> Sums {
 }
 
 /// The inner integral along `v` of a spline, from `from` to `to`: knot span
-/// by knot span, since the surface is a different polynomial on each, and
-/// each span in four, for the area and for weights, which are no
-/// polynomials at all.
+/// by knot span, since the surface is a different polynomial on each. What
+/// a strip of a polynomial patch of degree three weighs is a polynomial
+/// that one Gauss rule takes whole; each span is still cut in two for the
+/// area, and in four for a surface with weights, neither of which is a
+/// polynomial at all.
 fn up_a_spline(s: &Surface, from: f64, to: f64, mut f: impl FnMut(f64) -> Sums) -> Sums {
-    let knots = &s.spline_form().knots[1];
+    let form = s.spline_form();
+    let knots = &form.knots[1];
+    let share = if form.rational || form.degree[1] > 3 {
+        0.25
+    } else {
+        0.5
+    };
     let (lo, hi) = (from.min(to), from.max(to));
     let mut sum = [0.0; N];
     let mut a = lo;
@@ -237,7 +245,7 @@ fn up_a_spline(s: &Surface, from: f64, to: f64, mut f: impl FnMut(f64) -> Sums) 
         let b = k.min(hi);
         if b > a {
             let width = b - a;
-            add(&mut sum, &span(a, b, 0.25 * width, &mut f), 1.0);
+            add(&mut sum, &span(a, b, share * width, &mut f), 1.0);
             a = b;
         }
         if k >= hi {
@@ -469,6 +477,14 @@ fn face_sums(body: &Body, f: u32, origin: V3, size: f64) -> Option<Sums> {
         };
         let pieces = match c.kind {
             CurveKind::Line => 1,
+            // A spline is a different polynomial on each span: as many
+            // pieces, each of which is then smooth.
+            CurveKind::Spline => {
+                let form = c.spline_form();
+                let spans = form.knots.windows(2).filter(|w| w[1] > w[0]).count();
+                let share = ((b - a).abs() / (form.hi - form.lo)).min(1.0);
+                ((spans as f64 * share).ceil() as usize).max(1)
+            }
             _ => (((b - a).abs() / (PI / 8.0)).ceil() as usize).max(1),
         };
         let step = (b - a) / pieces as f64;
