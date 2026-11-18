@@ -29,6 +29,7 @@ use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::sync::{Mutex, OnceLock};
 
+use crate::geom::{Curve, Surface};
 use crate::math::*;
 
 /// The highest degree a spline may have.
@@ -1154,6 +1155,254 @@ impl SplineSurface {
         }
         SplineCurve::from_hom(self.degree[other], self.knots[other].clone(), hom)
     }
+}
+
+// ----------------------------------------------------------------- pipes
+
+/// What a ball leaves behind when it rolls along a crease between two
+/// surfaces, touching both: every point at one distance from the curve its
+/// centre follows. That curve, the spine, is where the two surfaces moved
+/// off by the ball's radius meet, and is kept as whatever curve it is, so
+/// the pipe is exact wherever the spine is.
+///
+/// `u` is the spine's own parameter. `v` is the angle round the spine, zero
+/// where the ball touches the surface `on`, and growing towards where it
+/// touches `other`.
+#[derive(Debug, PartialEq)]
+pub struct Pipe {
+    pub spine: Curve,
+    /// The stretch of the spine the pipe is made over; a whole turn of it
+    /// if the spine closes.
+    pub span: [f64; 2],
+    pub closed: bool,
+    pub radius: f64,
+    pub on: Surface,
+    pub other: Surface,
+    /// `+1` or `-1`: which way round the spine `v` grows, seen along it.
+    pub hand: f64,
+    /// Points of the spine, evenly spaced over the span.
+    seeds: Vec<V3>,
+}
+
+/// A reference to a pipe: equal exactly when it is the same one.
+#[derive(Clone, Copy)]
+pub struct PipeForm(&'static Pipe);
+
+impl PipeForm {
+    #[inline]
+    pub fn get(self) -> &'static Pipe {
+        self.0
+    }
+}
+
+impl PartialEq for PipeForm {
+    fn eq(&self, o: &PipeForm) -> bool {
+        std::ptr::eq(self.0, o.0)
+    }
+}
+
+impl std::ops::Deref for PipeForm {
+    type Target = Pipe;
+    fn deref(&self) -> &Pipe {
+        self.0
+    }
+}
+
+impl std::fmt::Debug for PipeForm {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "pipe of radius {} about a {:?}",
+            self.radius, self.spine.kind
+        )
+    }
+}
+
+/// The local picture at one place along a spine.
+pub struct Station {
+    /// The point of the spine.
+    pub at: V3,
+    /// Along the spine, a unit long, and how fast the spine's parameter
+    /// covers ground there.
+    pub along: V3,
+    pub speed: f64,
+    /// From the surface the ball touches at `v = 0` to the spine.
+    pub off: V3,
+    /// Square to both, the way `v` grows.
+    pub round: V3,
+}
+
+impl Pipe {
+    /// The pipe of `radius` about `spine` over `span`, between the
+    /// surfaces `on` and `other`.
+    pub fn about(
+        spine: Curve,
+        span: [f64; 2],
+        closed: bool,
+        radius: f64,
+        on: Surface,
+        other: Surface,
+    ) -> Result<PipeForm, String> {
+        if radius.is_nan() || radius <= 0.0 || !radius.is_finite() || span[1] <= span[0] {
+            return Err("a rolling ball needs a radius and somewhere to roll".into());
+        }
+        const SEEDS: usize = 96;
+        let seeds: Vec<V3> = (0..=SEEDS)
+            .map(|i| spine.point(span[0] + (span[1] - span[0]) * i as f64 / SEEDS as f64))
+            .collect();
+        let mut pipe = Pipe {
+            spine,
+            span,
+            closed,
+            radius,
+            on,
+            other,
+            hand: 1.0,
+            seeds,
+        };
+        // `v` grows from the one surface towards the other: whichever way
+        // round that is, half way along.
+        let middle = 0.5 * (span[0] + span[1]);
+        let station = pipe.station(middle);
+        let to_other = pipe.other.project(station.at) - station.at;
+        let lost = !station.off.is_finite() || !station.round.is_finite();
+        if lost || to_other.len() <= 0.0 {
+            return Err("a rolling ball has lost touch with one of its surfaces".into());
+        }
+        if to_other.dot(station.round) < 0.0 {
+            pipe.hand = -1.0;
+        }
+        Ok(PipeForm(intern_pipe(pipe)))
+    }
+
+    /// The same pipe with every part of it moved: which way round `v`
+    /// grows is kept as it was, so that the moved pipe faces the way the
+    /// pipe did. (In a mirror `v` then runs from the first surface away
+    /// from the second, as a mirrored angle does.)
+    pub fn moved(&self, spine: Curve, on: Surface, other: Surface) -> PipeForm {
+        const SEEDS: usize = 96;
+        let span = self.span;
+        let seeds: Vec<V3> = (0..=SEEDS)
+            .map(|i| spine.point(span[0] + (span[1] - span[0]) * i as f64 / SEEDS as f64))
+            .collect();
+        PipeForm(intern_pipe(Pipe {
+            spine,
+            span,
+            closed: self.closed,
+            radius: self.radius,
+            on,
+            other,
+            hand: self.hand,
+            seeds,
+        }))
+    }
+
+    /// The spine and the directions round it at parameter `u`.
+    pub fn station(&self, u: f64) -> Station {
+        let at = self.spine.point(u);
+        let velocity = self.spine.deriv(u);
+        let speed = velocity.len();
+        let along = velocity / speed.max(1.0e-300);
+        // Square to the spine: what is left of the way from the surface
+        // once anything along the spine is taken out. (There is nothing to
+        // take out but rounding.)
+        let off = at - self.on.project(at);
+        let off = (off - along * off.dot(along)).unit();
+        Station {
+            at,
+            along,
+            speed,
+            off,
+            round: along.cross(off) * self.hand,
+        }
+    }
+
+    pub fn point(&self, u: f64, v: f64) -> V3 {
+        let s = self.station(u);
+        let (sin, cos) = v.sin_cos();
+        s.at + (s.round * sin - s.off * cos) * self.radius
+    }
+
+    /// The parameter of the point of the spine nearest to `p`, within the
+    /// span.
+    pub fn along(&self, p: V3) -> f64 {
+        let n = self.seeds.len() - 1;
+        let mut best = (f64::INFINITY, 0usize);
+        for (i, s) in self.seeds.iter().enumerate() {
+            let d = (*s - p).len2();
+            if d < best.0 {
+                best = (d, i);
+            }
+        }
+        let [a, b] = self.span;
+        let step = (b - a) / n as f64;
+        let at = |i: f64| a + step * i;
+        // Golden section between the neighbours of the nearest seed, round
+        // the join if the spine closes.
+        let away = |t: f64| (self.spine.point(t) - p).len2();
+        let (mut lo, mut hi) = (at(best.1 as f64 - 1.0), at(best.1 as f64 + 1.0));
+        if !self.closed {
+            (lo, hi) = (lo.max(a), hi.min(b));
+        }
+        const G: f64 = 0.618_033_988_749_894_9;
+        let (mut x1, mut x2) = (hi - G * (hi - lo), lo + G * (hi - lo));
+        let (mut f1, mut f2) = (away(x1), away(x2));
+        for _ in 0..40 {
+            if f1 < f2 {
+                (hi, x2, f2) = (x2, x1, f1);
+                x1 = hi - G * (hi - lo);
+                f1 = away(x1);
+            } else {
+                (lo, x1, f1) = (x1, x2, f2);
+                x2 = lo + G * (hi - lo);
+                f2 = away(x2);
+            }
+        }
+        // Then Newton on "the way to the point is square to the spine",
+        // with the slope of that taken from two points beside.
+        let mut t = 0.5 * (lo + hi);
+        let slope = |t: f64| (self.spine.point(t) - p).dot(self.spine.deriv(t));
+        for _ in 0..3 {
+            let h = 1.0e-5 * step.abs().max(1.0e-9);
+            let (g, rise) = (slope(t), (slope(t + h) - slope(t - h)) / (2.0 * h));
+            if rise.is_nan() || rise <= 0.0 {
+                break;
+            }
+            let to = t - g / rise;
+            let (least, most) = (lo.min(a) - step.abs(), hi.max(b) + step.abs());
+            if to.is_nan() || to < least || to > most {
+                break;
+            }
+            t = to;
+        }
+        if self.closed {
+            t
+        } else {
+            t.clamp(a, b)
+        }
+    }
+
+    /// Parameters of the point of the pipe nearest to `p`.
+    pub fn uv(&self, p: V3) -> V2 {
+        let u = self.along(p);
+        let s = self.station(u);
+        let w = p - s.at;
+        v2(u, w.dot(s.round).atan2(-w.dot(s.off)))
+    }
+}
+
+fn intern_pipe(pipe: Pipe) -> &'static Pipe {
+    static PIPES: OnceLock<Mutex<Vec<&'static Pipe>>> = OnceLock::new();
+    let mut all = PIPES
+        .get_or_init(|| Mutex::new(Vec::new()))
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    if let Some(found) = all.iter().find(|o| ***o == pipe) {
+        return found;
+    }
+    let kept: &'static Pipe = Box::leak(Box::new(pipe));
+    all.push(kept);
+    kept
 }
 
 // ----------------------------------------------------------------- store

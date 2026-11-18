@@ -397,3 +397,137 @@ fn free_form_solids_weigh_the_same_in_the_reference_kernel() {
         );
     }
 }
+
+/// The volume the reference kernel finds after rounding, itself, the one
+/// edge of a body that is neither straight nor a circle (the body arrives
+/// there as STEP, and has to have exactly one such edge that it can round).
+fn rounded_by_the_reference(name: &str, body: &Body, radius: f64) -> f64 {
+    use limo_cad_occt::measurement::ResolvedMeasurementSelection;
+    use limo_cad_solid::KernelFilletJobDto;
+    let text = write(&[(name.to_string(), body)], "exchange test");
+    let import = KernelJobDto::ImportStep(KernelImportStepJobDto {
+        feature_id: FeatureId(1),
+        result_body_id: BodyId(1),
+        data_base64: base64(text.as_bytes()),
+    });
+    let mut kernel = OcctKernel::new().unwrap();
+    let scene = kernel
+        .recompute(&RecomputePlanDto {
+            transaction_id: 1,
+            errors: vec![],
+            jobs: vec![import.clone()],
+        })
+        .unwrap();
+    assert!(scene.errors.is_empty(), "{name}: {:?}", scene.errors);
+    // The edges that bend without being circles: more than two points
+    // drawn, and no circle to their name.
+    let candidates: Vec<String> = scene.bodies[0]
+        .edges
+        .iter()
+        .filter(|e| e.circle.is_none() && e.points.len() > 2 && e.refinable)
+        .map(|e| e.key.clone())
+        .collect();
+    assert!(!candidates.is_empty(), "{name}: no edge to round");
+    let mut found = Vec::new();
+    for key in candidates {
+        let mut kernel = OcctKernel::new().unwrap();
+        let scene = kernel
+            .recompute(&RecomputePlanDto {
+                transaction_id: 1,
+                errors: vec![],
+                jobs: vec![
+                    import.clone(),
+                    KernelJobDto::Fillet(KernelFilletJobDto {
+                        feature_id: FeatureId(2),
+                        target_body_id: BodyId(1),
+                        edge_keys: vec![key],
+                        radius,
+                        tangent_chain: false,
+                    }),
+                ],
+            })
+            .unwrap();
+        if !scene.errors.is_empty() {
+            continue;
+        }
+        let measured = kernel
+            .detached_measurement_snapshot(&[BodyId(1)])
+            .unwrap()
+            .inspect(&[ResolvedMeasurementSelection {
+                body_id: BodyId(1),
+                kind: 0,
+                index: 0,
+                translation: [0.0; 3],
+                rotation: [0.0, 0.0, 0.0, 1.0],
+            }])
+            .unwrap();
+        found.push(measured.selections[0].volume.unwrap());
+    }
+    // (The reference splits a closed edge where the seam of its cylinder
+    // crosses it; rounding either half rounds the whole rim.)
+    assert!(!found.is_empty(), "{name}: the reference rounded nothing");
+    for other in &found {
+        assert!(
+            (other - found[0]).abs() < 1.0e-6 * found[0],
+            "{name}: {found:?}"
+        );
+    }
+    found[0]
+}
+
+/// A round on an edge that is neither straight nor a circle: where a rod
+/// is cut off on a slant, the ball rolls along an ellipse. The reference
+/// kernel rounds the same edge of the same solid in its own way, with a
+/// spline fitted near where the ball goes, and the two solids weigh the
+/// same to a part in ten thousand. (That this kernel's round is the
+/// rolling ball's own surface, to rounding, its own tests show.)
+#[test]
+fn a_rolling_ball_round_weighs_what_the_reference_makes_it() {
+    use limo_cad_kernel::blend::fillet;
+    use limo_cad_kernel::make::{Region, Seg};
+    use limo_cad_kernel::{CurveKind, Frame};
+    let rod = make::cylinder(V3::ZERO, V3::Z, 5.0, 20.0).unwrap();
+    let n = v3(0.3, 0.0, 1.0).unit();
+    let f = Frame::from_z(v3(0.0, 0.0, 15.0), n);
+    let p: Vec<V3> = [(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)]
+        .iter()
+        .map(|&(x, y): &(f64, f64)| f.o + f.x * (x * 30.0) + f.y * (y * 30.0))
+        .collect();
+    let region = Region {
+        loops: vec![(0..4)
+            .map(|i| Seg::Line {
+                a: p[i],
+                b: p[(i + 1) % 4],
+            })
+            .collect()],
+    };
+    let above = make::extrude(&region, n, 0.0, 30.0).unwrap();
+    let slanted = boolean(&rod, &above, Op::Cut).unwrap();
+    let rim: Vec<u32> = (0..slanted.edge_count() as u32)
+        .filter(|&e| slanted.e_curve_ref(e).kind == CurveKind::Ellipse)
+        .collect();
+    assert_eq!(rim.len(), 1);
+    for radius in [1.0, 0.4, 2.0] {
+        let ours = mass(&fillet(&slanted, &rim, radius).unwrap()).volume;
+        let theirs = rounded_by_the_reference("slanted rod", &slanted, radius);
+        assert!(
+            (ours - theirs).abs() < 1.0e-4 * theirs,
+            "radius {radius}: {ours} here, {theirs} there"
+        );
+        // Written out, the round goes as a spline fitted to the ball's
+        // surface, and the reference reads the solid back whole.
+        let rounded = fillet(&slanted, &rim, radius).unwrap();
+        let (volume, area) = weighed_by_the_reference("rounded rim", &rounded);
+        let exact = mass(&rounded);
+        assert!(
+            (volume - exact.volume).abs() < 1.0e-5 * exact.volume,
+            "radius {radius}: {volume} read back for {}",
+            exact.volume
+        );
+        assert!(
+            (area - exact.area).abs() < 1.0e-5 * exact.area,
+            "radius {radius}: area {area} read back for {}",
+            exact.area
+        );
+    }
+}

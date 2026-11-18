@@ -556,7 +556,8 @@ impl FaceTrim {
             | SurfKind::Cone
             | SurfKind::Helicoid
             | SurfKind::Coil
-            | SurfKind::Spline => {
+            | SurfKind::Spline
+            | SurfKind::Pipe => {
                 let mut odd = false;
                 self.cross_vertical(q.x, |v, _| {
                     if v > q.y {

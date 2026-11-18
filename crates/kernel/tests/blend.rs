@@ -1,6 +1,7 @@
 use limo_cad_kernel::blend::{chamfer, fillet};
 use limo_cad_kernel::make::{self, PSeg, Region, Seg};
 use limo_cad_kernel::math::*;
+use limo_cad_kernel::props::mass;
 use limo_cad_kernel::tess::{tessellate, TessOptions};
 use limo_cad_kernel::{boolean, Body, CurveKind, Op, SurfKind};
 
@@ -470,4 +471,165 @@ fn rounds_meet_at_an_inside_corner() {
     let taken = 40.0 * 0.5 * d * d + d * d * d / 3.0;
     assert!((mass(&block).volume - mass(&broken).volume - taken).abs() < 1.0e-9);
     assert_eq!(count(&broken, SurfKind::Plane), 10);
+}
+
+/// A rod of radius 5 with its top cut off on a slant, and the block that
+/// cut it.
+fn slanted_rod() -> (Body, V3, V3) {
+    use limo_cad_kernel::make::{Region, Seg};
+    use limo_cad_kernel::Frame;
+    let rod = make::cylinder(V3::ZERO, V3::Z, 5.0, 20.0).unwrap();
+    let normal = v3(0.3, 0.0, 1.0).unit();
+    let f = Frame::from_z(v3(0.0, 0.0, 15.0), normal);
+    let p: Vec<V3> = [(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)]
+        .iter()
+        .map(|&(x, y): &(f64, f64)| f.o + f.x * (x * 30.0) + f.y * (y * 30.0))
+        .collect();
+    let region = Region {
+        loops: vec![(0..4)
+            .map(|i| Seg::Line {
+                a: p[i],
+                b: p[(i + 1) % 4],
+            })
+            .collect()],
+    };
+    let above = make::extrude(&region, normal, 0.0, 30.0).unwrap();
+    (boolean(&rod, &above, Op::Cut).unwrap(), f.o, normal)
+}
+
+/// Edges of a body that are neither straight nor circles.
+fn bent_edges(body: &Body) -> Vec<u32> {
+    (0..body.edge_count() as u32)
+        .filter(|&e| {
+            !matches!(
+                body.e_curve_ref(e).kind,
+                CurveKind::Line | CurveKind::Circle
+            )
+        })
+        .collect()
+}
+
+/// A body that holds up to its own geometry and meshes to a clean skin,
+/// coarse and fine.
+fn sound(body: &Body) {
+    use limo_cad_kernel::audit::{audit, CLOSE};
+    use limo_cad_kernel::tess::{tessellate, TessOptions};
+    audit(body, CLOSE).unwrap();
+    for (linear, angular) in [(0.05, 0.35), (0.002, 0.04)] {
+        let options = TessOptions { linear, angular };
+        tessellate(body, &options)
+            .check(body, &options)
+            .unwrap_or_else(|flaw| panic!("meshed to {linear}: {flaw}"));
+    }
+}
+
+#[test]
+fn a_ball_rolled_round_a_rim_that_is_an_ellipse() {
+    let (slanted, on_plane, normal) = slanted_rod();
+    let rim = bent_edges(&slanted);
+    assert_eq!(rim.len(), 1);
+    assert_eq!(slanted.e_curve_ref(rim[0]).kind, CurveKind::Ellipse);
+    let whole = mass(&slanted).volume;
+    let mut before = whole;
+    for radius in [0.4, 1.0, 2.0] {
+        let rounded = fillet(&slanted, &rim, radius).unwrap();
+        assert_eq!(rounded.face_count(), 4);
+        sound(&rounded);
+        // The bigger the ball, the more it takes.
+        let volume = mass(&rounded).volume;
+        assert!(volume < before && volume > 0.9 * whole, "{volume}");
+        before = volume;
+        // The round is the ball's own surface: its spine is the radius
+        // from the cut and from the rod's side all the way round, and
+        // where the ball touches lies in each of them.
+        let face = (0..rounded.face_count() as u32)
+            .find(|&f| rounded.f_surface(f).kind == SurfKind::Pipe)
+            .expect("a round");
+        let s = rounded.f_surface(face);
+        let pipe = s.pipe_form();
+        for i in 0..64 {
+            let u = pipe.span[0] + TAU * i as f64 / 64.0;
+            let centre = pipe.spine.point(u);
+            assert!(((centre - on_plane).dot(normal) + radius).abs() < 1.0e-12);
+            assert!((5.0 - centre.x.hypot(centre.y) - radius).abs() < 1.0e-12);
+            assert!((s.point(u, 0.0) - on_plane).dot(normal).abs() < 1.0e-12);
+            let other = s.uv(pipe.other.project(centre));
+            let touch = s.point(other.x, other.y);
+            assert!((touch.x.hypot(touch.y) - 5.0).abs() < 1.0e-12);
+            // And halfway between the two it is the radius from the spine.
+            let between = s.point(u, 0.5 * other.y);
+            assert!((between.dist(centre) - radius).abs() < 1.0e-12);
+        }
+        // Through STEP the round goes as a spline fitted to it.
+        let text = limo_cad_kernel::step::write(&[("rounded".to_string(), &rounded)], "test");
+        let back = limo_cad_kernel::step::read(&text).unwrap();
+        assert_eq!(back[0].face_count(), 4);
+        back[0].check().unwrap();
+        let again = mass(&back[0]).volume;
+        assert!((again - volume).abs() < 1.0e-6 * volume, "{again} {volume}");
+    }
+    // Too big a ball has nowhere to roll.
+    assert!(fillet(&slanted, &rim, 6.0).is_err());
+}
+
+#[test]
+fn rounds_where_one_bore_runs_into_another() {
+    let block = make::block(v3(-20.0, -20.0, -15.0), v3(20.0, 20.0, 15.0)).unwrap();
+    let big = make::cylinder(v3(0.0, 0.0, -20.0), V3::Z, 8.0, 40.0).unwrap();
+    let small = make::cylinder(v3(-30.0, 0.0, 0.0), V3::X, 4.0, 60.0).unwrap();
+    let bored = boolean(&boolean(&block, &big, Op::Cut).unwrap(), &small, Op::Cut).unwrap();
+    let saddles = bent_edges(&bored);
+    assert_eq!(saddles.len(), 2);
+    assert!(saddles.iter().all(|&e| bored.e_closed(e)));
+    let eased = fillet(&bored, &saddles, 0.8).unwrap();
+    assert_eq!(eased.face_count(), bored.face_count() + 2);
+    assert_eq!(count(&eased, SurfKind::Pipe), 2);
+    sound(&eased);
+    // The ridge between the two bores is what goes.
+    let (before, after) = (mass(&bored).volume, mass(&eased).volume);
+    assert!(after < before && after > before - 20.0, "{before} {after}");
+    // One at a time comes to the same thing.
+    let one = fillet(&bored, &saddles[..1], 0.8).unwrap();
+    // (The first round's own rims are bent edges too, and smooth: the
+    // saddle that is left is the one that is still a crease.)
+    let left: Vec<u32> = bent_edges(&one)
+        .into_iter()
+        .filter(|&e| one.e_curve_ref(e).kind == CurveKind::Trace)
+        .collect();
+    assert_eq!(left.len(), 1);
+    let both = fillet(&one, &left, 0.8).unwrap();
+    assert!((mass(&both).volume - after).abs() < 1.0e-7 * after);
+}
+
+#[test]
+fn a_round_that_fills_where_a_rod_stands_on_a_slope() {
+    use limo_cad_kernel::make::{Region, Seg};
+    use limo_cad_kernel::Frame;
+    // A block with a sloping top, and a rod standing up through the slope.
+    let block = make::block(v3(-20.0, -20.0, 0.0), v3(20.0, 20.0, 20.0)).unwrap();
+    let normal = v3(0.25, 0.1, 1.0).unit();
+    let f = Frame::from_z(v3(0.0, 0.0, 10.0), normal);
+    let p: Vec<V3> = [(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)]
+        .iter()
+        .map(|&(x, y): &(f64, f64)| f.o + f.x * (x * 60.0) + f.y * (y * 60.0))
+        .collect();
+    let region = Region {
+        loops: vec![(0..4)
+            .map(|i| Seg::Line {
+                a: p[i],
+                b: p[(i + 1) % 4],
+            })
+            .collect()],
+    };
+    let above = make::extrude(&region, normal, 0.0, 60.0).unwrap();
+    let slope = boolean(&block, &above, Op::Cut).unwrap();
+    let rod = make::cylinder(v3(2.0, -1.0, 2.0), V3::Z, 5.0, 30.0).unwrap();
+    let post = boolean(&slope, &rod, Op::Union).unwrap();
+    let foot = bent_edges(&post);
+    assert_eq!(foot.len(), 1);
+    let filled = fillet(&post, &foot, 1.5).unwrap();
+    assert_eq!(count(&filled, SurfKind::Pipe), 1);
+    sound(&filled);
+    let (before, after) = (mass(&post).volume, mass(&filled).volume);
+    assert!(after > before && after < before + 60.0, "{before} {after}");
 }

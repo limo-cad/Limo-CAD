@@ -373,7 +373,15 @@ fn face_sums(body: &Body, f: u32, origin: V3, size: f64) -> Option<Sums> {
     };
     let scale = {
         let l = size.max(1.0);
-        let small = 1.0e-13;
+        // How a rolling ball's surface changes along its spine is taken
+        // from two points close together, which is good to ten places or
+        // so. Asking such a face for thirteen would be asking the
+        // quadrature to settle on rounding noise.
+        let rough = s.kind == SurfKind::Pipe
+            || body
+                .face_hes(f)
+                .any(|h| body.e_curve_ref(h >> 1).kind == CurveKind::Iso);
+        let small = if rough { 1.0e-9 } else { 1.0e-13 };
         let (l3, l4, l5) = (l * l * l, l * l * l * l, l * l * l * l * l);
         [
             small * l3,

@@ -658,6 +658,9 @@ fn u_step(trim: &FaceTrim, opts: &TessOptions, scale: f64) -> f64 {
     if s.kind == SurfKind::Spline {
         return spline_steps(trim, opts).x;
     }
+    if s.kind == SurfKind::Pipe {
+        return pipe_step(trim, opts);
+    }
     let radius = match s.kind {
         SurfKind::Torus if trim.turned => s.s,
         SurfKind::Torus => s.r + s.s,
@@ -675,6 +678,37 @@ fn u_step(trim: &FaceTrim, opts: &TessOptions, scale: f64) -> f64 {
         2.0 * (1.0 - opts.linear / radius).acos()
     };
     chord.min(opts.angular).max(1.0e-3)
+}
+
+/// Largest step along the spine of a pipe that keeps a chord within
+/// tolerance: by how far the middle of three points a step apart stands
+/// off the line through the other two, wherever on the face that is most.
+fn pipe_step(trim: &FaceTrim, opts: &TessOptions) -> f64 {
+    let wide = (trim.hi.x - trim.lo.x).max(1.0e-9);
+    let h = wide / 64.0;
+    let (mut bend, mut slowest) = (0.0f64, f64::INFINITY);
+    for i in 0..=16 {
+        for j in 0..=2 {
+            let q = v2(
+                trim.lo.x + wide * i as f64 / 16.0,
+                trim.lo.y + (trim.hi.y - trim.lo.y) * j as f64 / 2.0,
+            );
+            let (before, at, after) = (
+                trim.point(v2(q.x - h, q.y)),
+                trim.point(q),
+                trim.point(v2(q.x + h, q.y)),
+            );
+            bend = bend.max((before + after - at * 2.0).len() / (h * h));
+            slowest = slowest.min((after - before).len() / (2.0 * h));
+        }
+    }
+    if bend <= 1.0e-12 {
+        return 0.5 * wide;
+    }
+    (8.0 * opts.linear / bend)
+        .sqrt()
+        .min(opts.angular * slowest / bend)
+        .clamp(1.0e-6 * wide, 0.5 * wide)
 }
 
 /// Largest steps in the two parameters of a spline face that keep a chord
@@ -730,6 +764,7 @@ fn v_step(trim: &FaceTrim, opts: &TessOptions) -> f64 {
         SurfKind::Torus if trim.turned => s.r + s.s,
         SurfKind::Torus => s.s,
         SurfKind::Coil => s.s.abs(),
+        SurfKind::Pipe => s.r,
         _ => return f64::INFINITY,
     };
     let chord = if opts.linear >= tube {

@@ -33,7 +33,11 @@ fn reversed(c: &Curve) -> Option<Curve> {
         CurveKind::Line => Some(Curve::line(c.f.o, -c.f.x)),
         CurveKind::Circle => Some(Curve::circle(c.f.o, -c.f.z, c.f.x, c.r)),
         CurveKind::Ellipse => Some(Curve::ellipse(c.f.o, -c.f.z, c.f.x, c.r, c.s)),
-        CurveKind::Trace | CurveKind::Meet | CurveKind::Helix | CurveKind::Spline => None,
+        CurveKind::Trace
+        | CurveKind::Meet
+        | CurveKind::Helix
+        | CurveKind::Spline
+        | CurveKind::Iso => None,
     }
 }
 

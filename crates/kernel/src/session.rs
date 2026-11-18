@@ -1615,7 +1615,8 @@ fn face_region(body: &Body, f: u32) -> Result<(Region, Vec<Vec<u32>>), String> {
                 | CurveKind::Trace
                 | CurveKind::Meet
                 | CurveKind::Helix
-                | CurveKind::Spline => {
+                | CurveKind::Spline
+                | CurveKind::Iso => {
                     return Err(unsupported(
                         "Extruding a face with an edge that is neither straight nor circular",
                     ))

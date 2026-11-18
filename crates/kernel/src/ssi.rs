@@ -27,6 +27,18 @@ pub fn intersect(a: &Surface, b: &Surface) -> Ssi {
         return Ssi::Same(same);
     }
     use SurfKind::*;
+    // A rolling ball touches the two surfaces it rolls on and does not
+    // cross them: where it touches is an edge of its own face already.
+    if a.kind == Pipe || b.kind == Pipe {
+        let (pipe, s) = if a.kind == Pipe { (a, b) } else { (b, a) };
+        let form = pipe.pipe_form();
+        let rolls_on = |t: &Surface| t.kind == s.kind && t.same(s).is_some();
+        return if rolls_on(&form.on) || rolls_on(&form.other) {
+            Ssi::None
+        } else {
+            Ssi::General
+        };
+    }
     // Nothing about a spline can be written down in closed form.
     if a.kind == Spline || b.kind == Spline {
         return Ssi::General;
@@ -197,7 +209,7 @@ fn plane_other(p: &Surface, s: &Surface) -> Ssi {
             Ssi::General
         }
         SurfKind::Plane => unreachable!(),
-        SurfKind::Helicoid | SurfKind::Coil | SurfKind::Spline => Ssi::General,
+        SurfKind::Helicoid | SurfKind::Coil | SurfKind::Spline | SurfKind::Pipe => Ssi::General,
     }
 }
 
@@ -474,7 +486,11 @@ fn profile(s: &Surface, origin: V3, axis: V3) -> Option<Profile> {
             h: height(s.f.o),
             r: s.s,
         }),
-        SurfKind::Plane | SurfKind::Helicoid | SurfKind::Coil | SurfKind::Spline => None,
+        SurfKind::Plane
+        | SurfKind::Helicoid
+        | SurfKind::Coil
+        | SurfKind::Spline
+        | SurfKind::Pipe => None,
     }
 }
 

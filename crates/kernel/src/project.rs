@@ -351,7 +351,11 @@ fn outlines<'b>(body: &'b Body, mesh: &EdgeMesh, view: &View, deflection: f64) -
         match s.kind {
             // A thread shows by its edges, the helices along crest and
             // root; the outline of its flanks is not drawn.
-            SurfKind::Plane | SurfKind::Helicoid | SurfKind::Coil | SurfKind::Spline => {}
+            SurfKind::Plane
+            | SurfKind::Helicoid
+            | SurfKind::Coil
+            | SurfKind::Spline
+            | SurfKind::Pipe => {}
             SurfKind::Cylinder => {
                 if across.len() > 1.0e-9 {
                     let side = z.cross(across).unit();

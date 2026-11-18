@@ -47,11 +47,14 @@ fn rank(kind: SurfKind) -> u8 {
         // A spline's distance costs a search for the nearest point; its
         // points cost next to nothing. Better to walk on it than to ask it.
         SurfKind::Spline => 2,
-        SurfKind::Plane => 3,
-        SurfKind::Cylinder => 4,
-        SurfKind::Torus => 5,
-        SurfKind::Cone => 6,
-        SurfKind::Sphere => 7,
+        // The same goes for a pipe, whose distance means finding the
+        // nearest point of its spine.
+        SurfKind::Pipe => 3,
+        SurfKind::Plane => 4,
+        SurfKind::Cylinder => 5,
+        SurfKind::Torus => 6,
+        SurfKind::Cone => 7,
+        SurfKind::Sphere => 8,
     }
 }
 
@@ -65,6 +68,7 @@ fn bend(s: &Surface) -> f64 {
         SurfKind::Helicoid => PI * s.t.abs() * s.s.abs().sin(),
         SurfKind::Coil => s.s.abs(),
         SurfKind::Spline => s.spline_form().radius,
+        SurfKind::Pipe => s.r,
     }
 }
 
@@ -203,6 +207,23 @@ impl Grid<'_> {
                     [false, false],
                     v2((base.r + tube).hypot(base.t), tube),
                 )
+            }
+            // All the way along the spine and all the way round it.
+            SurfKind::Pipe => {
+                let pipe = base.pipe_form();
+                let (u, whole) = if pipe.closed {
+                    (turn(0.0123), true)
+                } else {
+                    ((pipe.span[0], pipe.span[1]), false)
+                };
+                let mut fastest = 0.0f64;
+                for i in 0..=12 {
+                    for v in [0.0, 0.5 * PI, PI, -0.5 * PI] {
+                        let at = u.0 + (u.1 - u.0) * i as f64 / 12.0;
+                        fastest = fastest.max(base.du(at, v).len());
+                    }
+                }
+                (u, turn(0.0217), [whole, true], v2(fastest, base.r))
             }
             // The part of the spline's own rectangle that comes near the
             // region, by the net of points it keeps.
@@ -1085,5 +1106,6 @@ fn name(kind: SurfKind) -> &'static str {
         SurfKind::Helicoid => "helicoid",
         SurfKind::Coil => "coil",
         SurfKind::Spline => "spline",
+        SurfKind::Pipe => "pipe",
     }
 }

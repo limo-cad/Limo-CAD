@@ -10,10 +10,12 @@
 use std::collections::HashMap;
 
 use crate::boolean::{boolean, point_in_solid, Op, Side};
+use crate::form::Pipe;
 use crate::geom::{Curve, CurveKind, SurfKind, Surface};
 use crate::make::{self, PSeg, Region, Seg};
 use crate::math::*;
 use crate::name::mix;
+use crate::ssi::{intersect, Ssi};
 use crate::topo::Body;
 
 /// Blends smaller than this are below what the Booleans resolve reliably.
@@ -581,6 +583,14 @@ fn edge_tool_over(body: &Body, e: u32, shape: Shape, span: [f64; 2]) -> Result<T
             lp.push(PSeg::Line { a: a2, b: corner });
             make::revolve(&[lp], c.f.o, axis, radial, t1 - t0)?
         }
+        // Any other edge that closes on itself is rounded by rolling the
+        // ball along it.
+        _ if body.e_closed(e) && matches!(shape, Shape::Round(_)) => {
+            let Shape::Round(radius) = shape else {
+                unreachable!()
+            };
+            return rim_tool(body, e, radius, convex);
+        }
         _ => {
             if crate::diag::trace() {
                 eprintln!(
@@ -759,8 +769,135 @@ impl Across {
 
 fn unsupported_edge() -> String {
     "this kind of edge cannot be refined by the Limo kernel yet (supported: straight edges \
-     between flat faces and circular edges between a flat face and a cylinder)"
+     between flat faces and cylinders, circular edges, and rounds on edges of any shape \
+     that close on themselves)"
         .into()
+}
+
+/// The tool for a round on an edge that closes on itself, whatever curve
+/// it is: the rim where a rod is cut off on a slant, where one bore runs
+/// into another.
+///
+/// The ball's centre runs along the spine, where the two faces moved by
+/// the radius meet. What the round takes away (or, in an inside edge,
+/// fills) is a ring with three faces: a strip of each of the two faces,
+/// from the edge to where the ball touches, and between those two curves
+/// the ball's own surface. The strips lie in the very surfaces of the
+/// body, so the Boolean that applies the tool finds them coincident, and
+/// the curves the ball touches along are edges of the tool: nothing has to
+/// find where two surfaces that only touch would meet.
+fn rim_tool(body: &Body, e: u32, radius: f64, convex: bool) -> Result<Tool, String> {
+    let (f1, f2) = (body.h_face(2 * e), body.h_face(2 * e + 1));
+    let (s1, s2) = (*body.f_surface(f1), *body.f_surface(f2));
+    let c = *body.e_curve_ref(e);
+    let [t0, t1] = body.e_t[e as usize];
+    let p0 = c.point(t0);
+    // Each surface moved by the radius towards where the centre runs: into
+    // the material at an outside edge, out of it at an inside one.
+    let moved = |f: u32, s: &Surface| -> Result<Surface, String> {
+        let out = if body.f_sense[f as usize] { 1.0 } else { -1.0 };
+        let by = if convex { -radius } else { radius } * out;
+        s.offset(by).ok_or_else(|| {
+            "the round is too large for one of the faces it rolls on, or that face is of a \
+             kind a ball cannot yet be rolled on"
+                .to_string()
+        })
+    };
+    let (o1, o2) = (moved(f1, &s1)?, moved(f2, &s2)?);
+    let Ssi::Curves(found) = intersect(&o1, &o2) else {
+        return Err(unsupported_edge());
+    };
+    // Of the curves the two moved surfaces meet in, the closed one that
+    // passes the edge closest.
+    let spine = found
+        .into_iter()
+        .filter(Curve::periodic)
+        .min_by(|a, b| a.dist(p0).total_cmp(&b.dist(p0)))
+        .ok_or_else(unsupported_edge)?;
+    if spine.dist(p0) > 20.0 * radius {
+        return Err("the round is too large for the edge it is asked on".into());
+    }
+    let from = spine.param(p0);
+    let span = [from, from + TAU];
+    let pipe = Surface::pipe(Pipe::about(spine, span, true, radius, s1, s2)?);
+    let twin = Surface::pipe(Pipe::about(spine, span, true, radius, s2, s1)?);
+    let (touch1, touch2) = (Curve::iso(&pipe, 0.0, span), Curve::iso(&twin, 0.0, span));
+    // Whether the spine runs the way the edge does.
+    let along = spine.deriv(from).dot(c.deriv(t0)) > 0.0;
+    // The strips are on the left of the edge as each face of the body has
+    // it, and of the touching curve run the other way; the ball's face
+    // takes the two touching curves the other way again. A tool that adds
+    // material faces the opposite way throughout.
+    let build = |senses: [bool; 3]| -> Body {
+        let mut tool = Body::new();
+        let rim = {
+            let v = tool.add_vert(p0);
+            let k = tool.add_curve(c);
+            tool.add_edge(k, t0, t1, v, v)
+        };
+        let closed = |tool: &mut Body, curve: Curve| {
+            let v = tool.add_vert(curve.point(from));
+            let k = tool.add_curve(curve);
+            tool.add_edge(k, from, from + TAU, v, v)
+        };
+        let (e1, e2) = (closed(&mut tool, touch1), closed(&mut tool, touch2));
+        let flip = u32::from(!convex);
+        let back = u32::from(along);
+        let surfaces = [s1, s2, pipe].map(|s| tool.add_surf(s));
+        tool.add_face(
+            surfaces[0],
+            senses[0],
+            &[vec![(2 * rim) ^ flip], vec![(2 * e1 + back) ^ flip]],
+        );
+        tool.add_face(
+            surfaces[1],
+            senses[1],
+            &[vec![(2 * rim + 1) ^ flip], vec![(2 * e2 + 1 - back) ^ flip]],
+        );
+        tool.add_face(
+            surfaces[2],
+            senses[2],
+            &[
+                vec![(2 * e1 + 1 - back) ^ flip],
+                vec![(2 * e2 + back) ^ flip],
+            ],
+        );
+        tool
+    };
+    // The strips face the way the faces they lie in do (or the opposite
+    // way, on a tool that adds). The ball's face looks towards the spine:
+    // the tool is what lies outside the ball.
+    let senses = [
+        body.f_sense[f1 as usize] == convex,
+        body.f_sense[f2 as usize] == convex,
+        pipe.pipe_form().hand < 0.0,
+    ];
+    let tool = build(senses);
+    tool.check()?;
+    // Every face must lie to the left of its first edge, seen from
+    // outside: towards the other curve that bounds it. If one does not,
+    // the ball does not fit the edge the way this was put together.
+    for f in 0..3u32 {
+        let loops: Vec<u32> = tool.face_loops(f).collect();
+        let (h, across) = (
+            tool.l_first[loops[0] as usize],
+            tool.l_first[loops[1] as usize],
+        );
+        let (edge, other) = (tool.e_curve_ref(h >> 1), tool.e_curve_ref(across >> 1));
+        let [a, b] = tool.e_t[(h >> 1) as usize];
+        let t = a + 0.37 * (b - a);
+        let p = edge.point(t);
+        let travel = edge.deriv(t).unit() * if h & 1 == 0 { 1.0 } else { -1.0 };
+        let left = tool.f_normal(f, p).cross(travel);
+        let towards = other.point(other.param(p)) - p;
+        if left.dot(towards) <= 0.0 {
+            return Err("the round does not fit the edge it is asked on".into());
+        }
+    }
+    Ok(Tool {
+        body: tool,
+        add: !convex,
+    })
 }
 
 /// Where two blended edges of one flat face meet at a corner that turns

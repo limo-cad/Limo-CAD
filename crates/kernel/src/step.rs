@@ -86,7 +86,18 @@ impl Out {
         match s.kind {
             SurfKind::Helicoid | SurfKind::Coil => {
                 let (lo, hi) = spread(body, f);
-                self.patch(s, lo, hi)
+                self.patch(s, lo, hi, false)
+            }
+            // A round all the way along a closed edge goes out over one
+            // whole turn of its spine, no more: a surface that closes on
+            // itself exactly, which a reader can tell.
+            SurfKind::Pipe => {
+                let (mut lo, mut hi) = spread(body, f);
+                let pipe = s.pipe_form();
+                if pipe.closed {
+                    (lo.x, hi.x) = (pipe.span[0], pipe.span[0] + TAU);
+                }
+                self.patch(s, lo, hi, pipe.closed)
             }
             SurfKind::Plane => {
                 let at = self.placement(s.f.o, s.f.z, s.f.x);
@@ -240,7 +251,7 @@ impl Out {
     /// exact one. STEP has no name for a surface that turns and climbs at
     /// once, and no rational spline is one; sixty-four spans to the turn
     /// keep this within a few millionths of a millimetre.
-    fn patch(&mut self, s: &Surface, lo: V2, hi: V2) -> usize {
+    fn patch(&mut self, s: &Surface, lo: V2, hi: V2, closed: bool) -> usize {
         let fine = PI / 32.0;
         let nu = (((hi.x - lo.x) / fine).ceil() as usize).max(1);
         let nv = if s.kind == SurfKind::Helicoid {
@@ -292,8 +303,9 @@ impl Out {
             (multiplicities.join(","), values.join(","))
         };
         let ((mu, ku), (mv, kv)) = (knots(nu), knots(nv));
+        let round = if closed { ".T." } else { ".F." };
         self.add(format!(
-            "B_SPLINE_SURFACE_WITH_KNOTS('',3,3,({}),.UNSPECIFIED.,.F.,.F.,.F.,({mu}),({mv}),({ku}),({kv}),.UNSPECIFIED.)",
+            "B_SPLINE_SURFACE_WITH_KNOTS('',3,3,({}),.UNSPECIFIED.,{round},.F.,.F.,({mu}),({mv}),({ku}),({kv}),.UNSPECIFIED.)",
             rows.join(",")
         ))
     }
@@ -966,6 +978,7 @@ impl Model {
                 s: 0.0,
                 t: 0.0,
                 form: None,
+                pipe: None,
             },
             "CYLINDRICAL_SURFACE" => Surface {
                 kind: SurfKind::Cylinder,
@@ -974,6 +987,7 @@ impl Model {
                 s: 0.0,
                 t: 0.0,
                 form: None,
+                pipe: None,
             },
             "CONICAL_SURFACE" => {
                 let radius = self.radius(args.get(2))?;
@@ -994,6 +1008,7 @@ impl Model {
                     s: half,
                     t: 0.0,
                     form: None,
+                    pipe: None,
                 }
             }
             "SPHERICAL_SURFACE" => Surface {
@@ -1003,6 +1018,7 @@ impl Model {
                 s: 0.0,
                 t: 0.0,
                 form: None,
+                pipe: None,
             },
             _ => Surface {
                 kind: SurfKind::Torus,
@@ -1011,6 +1027,7 @@ impl Model {
                 s: self.radius(args.get(3))?,
                 t: 0.0,
                 form: None,
+                pipe: None,
             },
         })
     }

@@ -30,6 +30,7 @@ fn surf_kind(code: f64) -> Result<SurfKind, String> {
         5 => SurfKind::Helicoid,
         6 => SurfKind::Coil,
         7 => SurfKind::Spline,
+        8 => return Err("a body with a rolling-ball blend cannot be read from text yet".into()),
         _ => return Err("unknown surface kind".into()),
     })
 }
@@ -287,6 +288,7 @@ impl Body {
                 s: v[14],
                 t: v.get(15).copied().unwrap_or(0.0),
                 form,
+                pipe: None,
             });
         }
         for _ in 0..count(next()?, "curves")? {
@@ -310,6 +312,7 @@ impl Body {
                         s: v[29],
                         t: v.get(32).copied().unwrap_or(0.0),
                         form: None,
+                        pipe: None,
                     };
                     Curve::trace(&other, &other, 1.0, [v[30], v[31]])
                 }
@@ -321,6 +324,7 @@ impl Body {
                         s: v[29],
                         t: v.get(52).copied().unwrap_or(0.0),
                         form: surface_at(&forms, v.get(54).copied().unwrap_or(0.0))?,
+                        pipe: None,
                     };
                     let base = Surface {
                         kind: surf_kind(v[32])?,
@@ -329,6 +333,7 @@ impl Body {
                         s: v[46],
                         t: v.get(53).copied().unwrap_or(0.0),
                         form: surface_at(&forms, v.get(55).copied().unwrap_or(0.0))?,
+                        pipe: None,
                     };
                     let w = [v[47], v[48], v[49], v[50], v[51]];
                     Curve::meet(&base, &other, false, [v[30], v[31]], w)
