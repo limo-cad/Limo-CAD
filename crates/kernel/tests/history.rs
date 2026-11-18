@@ -363,7 +363,7 @@ fn an_edge_cut_in_two_is_still_that_edge() {
 }
 
 #[test]
-fn names_are_unique_and_indices_from_older_documents_still_work() {
+fn names_are_unique_and_a_count_is_not_taken_for_one() {
     let mut kernel = Kernel::new();
     let jobs = vec![
         extrude(1, plate(40.0, 30.0), 10.0),
@@ -380,16 +380,41 @@ fn names_are_unique_and_indices_from_older_documents_still_work() {
     edges.dedup();
     assert_eq!((faces.len(), edges.len()), (nf, ne), "a name is used twice");
 
-    // Before names there were indices; a document that kept one is read as
-    // it always was.
+    // A count is how the reference kernel names an edge or a face: by its
+    // place in that kernel's own list. It says nothing about the lists
+    // here, so a count that comes with nothing to find the thing by is
+    // refused, and the body is left as it was.
     let position = scene
         .edges
         .iter()
         .position(|e| e.key == upright_edge(&scene, 40.0, 0.0))
         .unwrap();
-    let mut old = jobs;
-    old.push(fillet(3, &format!("edge:{position}"), 3.0));
-    assert!(has_round(body(&run(&mut kernel, old)), 37.0, 3.0, 3.0));
+    let mut counted = jobs.clone();
+    counted.push(fillet(3, &format!("edge:{position}"), 3.0));
+    let refused = run(&mut kernel, counted);
+    assert!(
+        refused.errors[0].message.contains("carries no mark"),
+        "{:?}",
+        refused.errors
+    );
+    assert!(!has_round(&refused.bodies[0], 37.0, 3.0, 3.0));
+    let mut opened = jobs;
+    opened.push(KernelJobDto::Shell(limo_cad_solid::KernelShellJobDto {
+        feature_id: FeatureId(3),
+        target_body_id: BodyId(1),
+        face_keys: vec!["face:0".into()],
+        thickness: 1.0,
+        inward: true,
+    }));
+    let refused = run(&mut kernel, opened);
+    assert!(
+        refused.errors[0]
+            .message
+            .contains("written by the other kernel"),
+        "{:?}",
+        refused.errors
+    );
+    assert_eq!(refused.bodies[0].faces.len(), nf);
 }
 
 /// The point where a round rim starts is a vertex of the model, and stays

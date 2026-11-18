@@ -573,6 +573,11 @@ impl OcctKernel {
         })
     }
     pub fn new() -> Result<Self, OcctError> {
+        Self::on(limo_kernel_selected())
+    }
+
+    /// A kernel of the kind asked for, whatever the process has selected.
+    fn on(limo: bool) -> Result<Self, OcctError> {
         static NEXT_GEOMETRY_OWNER: AtomicU64 = AtomicU64::new(1);
         let geometry_owner = NEXT_GEOMETRY_OWNER
             .try_update(Ordering::Relaxed, Ordering::Relaxed, |owner| {
@@ -585,7 +590,7 @@ impl OcctKernel {
         }
         Ok(Self {
             inner,
-            limo: limo_kernel_selected().then(|| Box::new(limo_cad_kernel::Kernel::new())),
+            limo: limo.then(|| Box::new(limo_cad_kernel::Kernel::new())),
             geometry_owner,
             successful_jobs: None,
             finish_reports: Vec::new(),
@@ -909,7 +914,11 @@ impl OcctKernel {
         queries: &[limo_cad_solid::HistorySupportQuery],
     ) -> Result<(KernelSceneDto, BTreeSet<limo_cad_core::FeatureId>), OcctError> {
         if let Some(limo) = &mut self.limo {
-            let (scene, verified) = limo.recompute_with_supports(plan, queries);
+            // A project older than marks is carried over by the kernel that
+            // wrote it: see `marked_by_the_reference`.
+            let marked = marked_by_the_reference(plan);
+            let (scene, verified) =
+                limo.recompute_with_supports(marked.as_ref().unwrap_or(plan), queries);
             self.projection_cache.get_mut().unwrap().clear();
             self.support_cache.clear();
             self.successful_jobs = scene.errors.is_empty().then(|| plan.jobs.clone());
@@ -2781,6 +2790,62 @@ fn finish_by_count<'j>(
         _ => unreachable!(),
     }
     Ok((Cow::Owned(found), report))
+}
+
+/// A project saved before there were marks names the edges of its fillets
+/// and chamfers by Open CASCADE's count and by nothing else. A count means
+/// nothing to the Limo kernel, which refuses it rather than round whatever
+/// edge stands at that count in its own list.
+///
+/// Open CASCADE is at hand, though, and it can read its own counts. For a
+/// plan with such a job it replays the history once and says where each of
+/// those edges is; the plan comes back with that written in as the marks,
+/// and the Limo kernel finds the edges there. It then reports its own names
+/// for them and the host keeps those, so the reference is asked when such
+/// a project is first opened on the Limo kernel, and not again once the
+/// project has been saved from there.
+///
+/// `None` when no job needs it, and when the reference cannot replay the
+/// plan at all. A feature the reference could not reach stays unmarked,
+/// and is refused.
+fn marked_by_the_reference(plan: &RecomputePlanDto) -> Option<RecomputePlanDto> {
+    use limo_cad_solid::{is_counted_edge_key, EdgeMarkDto};
+    fn unmarked(keys: &[String], marks: &[EdgeMarkDto]) -> bool {
+        keys.iter().enumerate().any(|(at, key)| {
+            is_counted_edge_key(key) && !(marks.len() == keys.len() && !marks[at].points.is_empty())
+        })
+    }
+    fn asks(job: &KernelJobDto) -> bool {
+        match job {
+            KernelJobDto::Fillet(j) => unmarked(&j.edge_keys, &j.edge_marks),
+            KernelJobDto::Chamfer(j) => unmarked(&j.edge_keys, &j.edge_marks),
+            _ => false,
+        }
+    }
+    // The reference need not go on past the last job that asks.
+    let last = plan.jobs.iter().rposition(asks)?;
+    let mut so_far = plan.clone();
+    so_far.jobs.truncate(last + 1);
+    let mut reference = OcctKernel::on(false).ok()?;
+    reference.recompute_untimed(&so_far, &[]).ok()?;
+    let found = reference.finish_edges();
+    let mut marked = plan.clone();
+    for job in marked.jobs.iter_mut().filter(|job| asks(job)) {
+        let feature = job.feature_id();
+        let (keys, marks) = match job {
+            KernelJobDto::Fillet(j) => (&j.edge_keys, &mut j.edge_marks),
+            KernelJobDto::Chamfer(j) => (&j.edge_keys, &mut j.edge_marks),
+            _ => continue,
+        };
+        if let Some(report) = found.iter().find(|report| {
+            report.feature_id == feature
+                && report.edge_keys == *keys
+                && report.edge_marks.len() == keys.len()
+        }) {
+            *marks = report.edge_marks.clone();
+        }
+    }
+    Some(marked)
 }
 
 fn topology_indices(keys: &[String], kind: &str) -> Result<Vec<u32>, OcctError> {

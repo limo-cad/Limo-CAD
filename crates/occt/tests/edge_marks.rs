@@ -134,10 +134,10 @@ fn an_edge_chosen_on_one_kernel_is_found_on_the_other() {
     assert_eq!(found.len(), 1);
     assert_eq!(found[0].edge_keys, vec![counted.clone()]);
 
-    // A name with no mark beside it gives the reference kernel nothing to
-    // find the edge by, and it says so. (A count with no mark is from
-    // before there were marks; the Limo kernel takes it as it always did,
-    // as a count of its own edges.)
+    // A key in the other's language with no mark beside it leaves a kernel
+    // nothing to find the edge by. Each says so, and neither takes the edge
+    // that happens to stand under that name or at that count in its own
+    // list: on a block as plain as this one that is already another edge.
     let scene = reference
         .recompute(&plan(vec![block(), round(&named, Vec::new())]))
         .unwrap();
@@ -146,6 +146,13 @@ fn an_edge_chosen_on_one_kernel_is_found_on_the_other() {
         "{:?}",
         scene.errors
     );
+    let scene = limo.recompute(&plan(vec![block(), round(&counted, Vec::new())]));
+    assert!(
+        scene.errors[0].message.contains("carries no mark"),
+        "{:?}",
+        scene.errors
+    );
+    assert_eq!(scene.bodies[0].faces.len(), 6, "nothing was rounded");
 
     // A mark that points at nothing finds nothing: the edge it was made
     // for is not there, and no other is taken in its place.
@@ -185,4 +192,38 @@ fn an_edge_chosen_on_one_kernel_is_found_on_the_other() {
         "{:?}",
         scene.errors
     );
+
+    // A project saved before there were marks has only the count. Inside
+    // Limo CAD the Limo kernel does not have to refuse it: the adapter has
+    // Open CASCADE read its own count and say where the edge is, and the
+    // Limo kernel finds it there. (This file is one test, so nothing else
+    // is making kernels while the variable is set.)
+    std::env::set_var("LIMO_CAD_KERNEL", "limo");
+    let carried = OcctKernel::new();
+    std::env::remove_var("LIMO_CAD_KERNEL");
+    let mut carried = carried.unwrap();
+    assert!(carried.uses_limo_kernel());
+    let scene = carried
+        .recompute(&plan(vec![block(), round(&counted, Vec::new())]))
+        .unwrap();
+    assert!(scene.errors.is_empty(), "{:?}", scene.errors);
+    // The round is on the edge that was chosen: its axis stands 2 in from
+    // the corner at (10, 5).
+    let round_faces: Vec<_> = scene.bodies[0]
+        .faces
+        .iter()
+        .filter_map(|f| f.cylinder.as_ref())
+        .collect();
+    assert_eq!(round_faces.len(), 1);
+    let axis = round_faces[0];
+    assert!((axis.radius - 2.0).abs() < 1e-9, "{axis:?}");
+    assert!(
+        (axis.origin.x - 8.0).abs() < 1e-9 && (axis.origin.y - 3.0).abs() < 1e-9,
+        "{axis:?}"
+    );
+    // And from here on it goes by the name the Limo kernel gives it.
+    let found = carried.finish_edges();
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].edge_keys, vec![named]);
+    assert_eq!(found[0].edge_marks[0].points.len(), 5);
 }

@@ -421,6 +421,21 @@ read, and two jobs that differ only in their marks are the same work
 `crates/native-engine/tests/cross_kernel.rs` takes a project there and
 back, both ways round.
 
+A key in the other kernel's language with no mark beside it is refused,
+never followed: the edge at the same count in the other kernel's list is as
+a rule a different edge. Every project saved by a release older than marks
+has such keys, so the adapter carries those over when the Limo kernel is
+running: OCCT replays the history once, says where the edges it counts are
+(`marked_by_the_reference` in `crates/occt/src/native.rs`), and the Limo
+kernel finds them there and gives them names the host then keeps.
+
+Faces do not cross yet. A shell keeps the faces it opens, and an external
+thread its cylinder, by key alone, and there is no mark to find them by. A
+project with such a feature opens on the other kernel with that feature
+refused and a message to choose the face again; nothing is guessed. A
+sketch on a face is not affected: it finds its face by where the face is
+and what it measures, on either kernel.
+
 [The kernel's README](../crates/kernel/README.md) covers its design, how
 names survive edits, what it models, the differential lab against OCCT and
 the diagnostic switches.

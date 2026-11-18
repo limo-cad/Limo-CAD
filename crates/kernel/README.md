@@ -157,11 +157,26 @@ few points of the edge, none of them an end.
   is not read, and a change of mark alone is not a change of the job.
 - A mark that points at nothing finds nothing: the feature asks for its
   edge to be chosen again. No other edge is taken in its place.
+- A count with no mark beside it is refused here, and so is a face given
+  by its count. The edge or face that stands at the same count in this
+  kernel's list is as a rule another one, even on a plain block, and a
+  round on the wrong edge looks like a model that worked.
 
 A project with a round and a chamfer on rims that go right round is made
 on either kernel, opened on the other, edited there and opened on the
-first again (`crates/native-engine/tests/cross_kernel.rs`). A project from
-before there were marks opens as it always did on the kernel that made it.
+first again (`crates/native-engine/tests/cross_kernel.rs`).
+
+A project saved before there were marks has only counts. Inside Limo CAD
+it still opens on this kernel: Open CASCADE replays the history once, says
+where the edges it counts are, and this kernel finds them there and names
+them. That happens the first time such a project is opened here and not
+again.
+
+Faces do not cross yet. A shell keeps the faces it opens, and an external
+thread its cylinder, by key alone. Opened on the other kernel such a
+feature is refused, with a message to choose the face again, and the rest
+of the project is built. A sketch on a face is not affected: it finds its
+face by where the face is and what it measures.
 
 ## What it models
 
@@ -244,7 +259,9 @@ order it is meant to be taken on. This is the list to work down.
 9. **History on names alone.** Deleting anywhere already works here by
    name. The same for rolling back and editing in the middle of a history,
    and for sketches on faces, would let the host drop the bookkeeping it
-   keeps for a kernel that counts.
+   keeps for a kernel that counts. And marks for faces, as edges have
+   them, so that a shell or a thread made on one kernel opens on the
+   other instead of asking for its face again.
 10. **Proof.** Random pairs of free-form solids in the stress run beside
     the analytic ones, STEP files from other systems read in bulk, and the
     differential lab over more than the bundled recipes.

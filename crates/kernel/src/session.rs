@@ -539,8 +539,7 @@ impl Kernel {
                     return Err("external thread parameters are malformed".into());
                 }
                 let names = Names::of(&target);
-                let f = names
-                    .face(&j.face_key)
+                let f = named_face(&names, &j.face_key)?
                     .ok_or("referenced external-thread cylinder no longer exists")?;
                 let surface = *target.f_surface(f);
                 if surface.kind != SurfKind::Cylinder {
@@ -834,8 +833,7 @@ impl Kernel {
                     .face_keys
                     .iter()
                     .map(|key| {
-                        names
-                            .face(key)
+                        named_face(&names, key)?
                             .ok_or_else(|| "referenced Shell face no longer exists".to_string())
                     })
                     .collect::<Result<Vec<u32>, String>>()?;
@@ -1550,9 +1548,10 @@ fn mark_of(body: &Body, e: u32) -> Vec<Point3Dto> {
 /// A key written here is a name, and is looked up as one. A key the
 /// reference kernel wrote counts edges of a body as that kernel built it,
 /// which says nothing here; the edge is then whatever passes through the
-/// points of its mark. That may be more than one edge, where this kernel
-/// cuts in two what the other keeps whole, and it may be an edge longer
-/// than the one chosen, where it is the other way about.
+/// points of its mark, and with no mark it is refused. That may be more
+/// than one edge, where this kernel cuts in two what the other keeps whole,
+/// and it may be an edge longer than the one chosen, where it is the other
+/// way about.
 ///
 /// The same goes for telling a job from the one before it: see
 /// [`follows`].
@@ -1573,10 +1572,7 @@ fn finish_edges(
         let mark = marks
             .get(at)
             .filter(|mark| marks.len() == keys.len() && !mark.points.is_empty());
-        // A count with no mark beside it is from before there were marks.
-        // It is taken as it always was, as a count of this kernel's own
-        // edges, which is what the projects that have such keys mean.
-        if follows(key) || mark.is_none() {
+        if follows(key) {
             let found = names.edges_named(key);
             if found.is_empty() {
                 return Err(format!(
@@ -1594,7 +1590,14 @@ fn finish_edges(
             edges.extend(found);
             continue;
         }
-        let mark = mark.expect("a count without a mark was followed as a count");
+        // A count with no mark beside it, from a project older than marks,
+        // leaves nothing to find the edge by. The edge that stands at that
+        // count here is some other edge, so it is not taken.
+        let Some(mark) = mark else {
+            return Err(format!(
+                "Edge reference '{key}' was written by the other kernel and carries no mark to find it by; reselect the edge on the feature input body"
+            ));
+        };
         let mut found: Vec<u32> = Vec::new();
         for point in &mark.points {
             let p = p3(point);
@@ -1629,6 +1632,25 @@ fn finish_edges(
         }
     }
     Ok((once, report))
+}
+
+/// The face a job names, if the body still has it.
+///
+/// A count (`face:7`) is how the reference kernel names a face, by its
+/// place among the faces of the body as that kernel built it. The face that
+/// stands at the same count here is as a rule another one, so a count is
+/// refused and never followed: a shell opened at the wrong face, or a
+/// thread cut on the wrong shaft, would look like a model that worked.
+fn named_face(names: &Names, key: &str) -> Result<Option<u32>, String> {
+    let counted = key
+        .strip_prefix("face:")
+        .is_some_and(|count| !count.is_empty() && count.bytes().all(|b| b.is_ascii_digit()));
+    if counted {
+        return Err(format!(
+            "Face reference '{key}' was written by the other kernel; reselect the face on the feature input body"
+        ));
+    }
+    Ok(names.face(key))
 }
 
 /// Whether this kernel follows a key by itself: anything but a count of the

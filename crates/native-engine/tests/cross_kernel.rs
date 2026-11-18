@@ -49,6 +49,12 @@ fn rim(h: &NativeEngineHost, r: f64, y: f64) -> limo_cad_core::EdgeId {
 fn weight(h: &NativeEngineHost) -> f64 {
     let scene = h.solid_scene_snapshot();
     assert!(scene.errors.is_empty(), "{:?}", scene.errors);
+    enclosed(h)
+}
+
+/// The same, whether or not every feature of the project could be built.
+fn enclosed(h: &NativeEngineHost) -> f64 {
+    let scene = h.solid_scene_snapshot();
     assert_eq!(scene.bodies.len(), 1);
     let body = &scene.bodies[0];
     let at = |i: u32| {
@@ -102,6 +108,81 @@ fn turned(h: &NativeEngineHost) {
     ));
     let outer = rim(h, 22., 3.);
     ok(h.solid_chamfer(&json!({"body_id":1,"edge_ids":[outer],"distance":0.5,"angle_deg":null,"tangent_chain":false}).to_string()));
+}
+
+/// A block 40 by 25 by 10 with a smaller block standing 20 high in the
+/// middle of it, joined on: two features, and a body whose faces and edges
+/// the two kernels do not list in the same order.
+fn stepped(h: &NativeEngineHost) {
+    for (name, pts, height, join) in [
+        (
+            "Sketch1",
+            [(0., 0.), (40., 0.), (40., 25.), (0., 25.)],
+            10.,
+            false,
+        ),
+        (
+            "Sketch2",
+            [(10., 8.), (30., 8.), (30., 18.), (10., 18.)],
+            20.,
+            true,
+        ),
+    ] {
+        ok(h.engine_call("begin_sketch", r#"{"type":"origin_plane","plane":"xy"}"#));
+        ok(h.engine_call("set_grid_snap", r#"{"enabled":false}"#));
+        for i in 0..pts.len() {
+            let (a, b) = (pts[i], pts[(i + 1) % pts.len()]);
+            ok(h.engine_call(
+                "add_line",
+                &json!({"from":{"x":a.0,"y":a.1},"to_raw":{"x":b.0,"y":b.1},"ctrl_held":true})
+                    .to_string(),
+            ));
+        }
+        ok(h.engine_call("end_sketch", ""));
+        ok(h.solid_extrude(&json!({"sketch_name":name,"profile_indices":[0],"extent":{"type":"distance","distance":height},"taper_angle_deg":0.,"flip":false,"operation":if join {"join"} else {"new_body"},"target_body_ids":if join {vec![1]} else {vec![]}}).to_string()));
+    }
+}
+
+/// The upright edge of the stepped block at the corner `(x, y)`.
+fn upright(h: &NativeEngineHost, x: f64, y: f64) -> limo_cad_core::EdgeId {
+    h.solid_scene_snapshot().bodies[0]
+        .edges
+        .iter()
+        .find(|e| {
+            e.points.len() == 2
+                && e.points
+                    .iter()
+                    .all(|p| (p.x - x).abs() < 1e-9 && (p.y - y).abs() < 1e-9)
+        })
+        .unwrap_or_else(|| panic!("no upright edge at {x}, {y}"))
+        .id
+}
+
+/// The face the stepped block stands on.
+fn underside(h: &NativeEngineHost) -> limo_cad_core::FaceId {
+    h.solid_scene_snapshot().bodies[0]
+        .faces
+        .iter()
+        .find(|f| {
+            f.plane
+                .as_ref()
+                .is_some_and(|p| p.normal[2] < -1.0 + 1e-9 && p.origin[2].abs() < 1e-9)
+        })
+        .expect("the face underneath")
+        .id
+}
+
+/// Take every edge mark out of a project model, which leaves it as a
+/// release from before there were marks saved it. Says how many it took.
+fn forget_marks(model: &mut Value) -> usize {
+    match model {
+        Value::Object(fields) => {
+            usize::from(fields.remove("edge_marks").is_some())
+                + fields.values_mut().map(forget_marks).sum::<usize>()
+        }
+        Value::Array(items) => items.iter_mut().map(forget_marks).sum(),
+        _ => 0,
+    }
 }
 
 /// The keys of the one fillet and the one chamfer, and how many marks each
@@ -177,5 +258,66 @@ fn a_project_finished_on_one_kernel_opens_on_the_other() {
         );
         assert!(keys(&back).0.iter().all(|k| native(first, k)));
     }
+
+    // A project older than marks. Every project a release before this one
+    // saved has its fillets by Open CASCADE's count alone, and the edge at
+    // the same count in the Limo kernel's list is as a rule another edge:
+    // on this body, a longer one. Opened on the Limo kernel, Open CASCADE
+    // reads its own count once and says where the edge is, and the round
+    // goes where it was put.
+    let made = on("occt");
+    stepped(&made);
+    let corner = upright(&made, 40., 25.);
+    ok(made.solid_fillet(
+        &json!({"body_id":1,"edge_ids":[corner],"radius":2.,"tangent_chain":false}).to_string(),
+    ));
+    let whole = weight(&made);
+    let exported = ok(made.engine_call("project_export_model", ""));
+    let mut old: Value = serde_json::from_str(exported.as_str().unwrap()).unwrap();
+    assert_eq!(forget_marks(&mut old), 1);
+    let opened = on("limo");
+    ok(opened.project_load(&serde_json::to_string(&old.to_string()).unwrap()));
+    let again = weight(&opened);
+    assert!(
+        (again - whole).abs() < 1.0e-4 * whole,
+        "made as {whole}, opened as {again}"
+    );
+    // From there on it is in the Limo kernel's own keys, marked.
+    let fillet = model(&opened)["fillets"][0].clone();
+    let key = fillet["edge_keys"][0].as_str().unwrap();
+    assert!(!counted(key), "{key}");
+    assert_eq!(fillet["edge_marks"].as_array().map_or(0, Vec::len), 1);
+
+    // What does not cross yet: a face. A shell keeps the faces it opens by
+    // key alone, with no mark, and here the face at the same count is again
+    // another face. Neither kernel guesses: the shell is refused with a
+    // word on what to do, and the body is left solid.
+    for (first, second) in [("occt", "limo"), ("limo", "occt")] {
+        let made = on(first);
+        stepped(&made);
+        let solid = weight(&made);
+        let open = underside(&made);
+        ok(made.solid_body_feature(
+            &json!({"type":"shell","request":{"body_id":1,"face_ids":[open],"thickness":2.,"inward":true}})
+                .to_string(),
+        ));
+        assert!(weight(&made) < 0.6 * solid, "{first} did not hollow it");
+        let saved = made.project_snapshot().unwrap();
+        let opened = on(second);
+        ok(opened.project_load_snapshot(&saved));
+        let errors = opened.solid_scene_snapshot().errors.clone();
+        assert_eq!(errors.len(), 1, "{errors:?}");
+        assert!(
+            errors[0].message.contains("reselect the face"),
+            "{second} says {:?}",
+            errors[0].message
+        );
+        let left = enclosed(&opened);
+        assert!(
+            (left - solid).abs() < 1.0e-6 * solid,
+            "{second} left {left} of {solid}"
+        );
+    }
+
     std::env::remove_var("LIMO_CAD_KERNEL");
 }
