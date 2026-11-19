@@ -3,13 +3,23 @@
 //! A blend is modelled as the solid it removes or adds. For every selected
 //! edge the kernel builds that solid exactly — a prism for a straight edge,
 //! a solid of revolution for a circular one — and applies it with a Boolean.
-//! Mitres where two rounded edges meet fall out of the Boolean; where three
-//! meet at a square corner a spherical corner piece completes the rolling
-//! ball.
+//! Where the tools of two edges overlap at a corner, the mitre falls out of
+//! the Boolean. Where they stop short of each other, at a corner the face
+//! they share goes round the outside of, a piece is added for what both
+//! would take if they ran on. Where three meet at a square corner a
+//! spherical corner piece completes the rolling ball. All of this holds for
+//! edges that take material away and for edges that are filled in alike.
+//!
+//! A tool ends on the face that ends its edge, cut off by that face's own
+//! surface where the face is not square to the edge, and is never carried
+//! on past the end with nothing to stop it. It may be no wider than the
+//! faces beside its edge. An end, a corner or a width that has not been
+//! worked out is refused: put together wrongly, any of them still makes a
+//! closed solid that looks like the blend asked for.
 
 use std::collections::HashMap;
 
-use crate::boolean::{boolean, point_in_solid, Op, Side};
+use crate::boolean::{boolean, Op};
 use crate::form::Pipe;
 use crate::geom::{Curve, CurveKind, SurfKind, Surface};
 use crate::make::{self, PSeg, Region, Seg};
@@ -17,6 +27,7 @@ use crate::math::*;
 use crate::name::mix;
 use crate::ssi::{intersect, Ssi};
 use crate::topo::Body;
+use crate::trim::edge_closest;
 
 /// Blends smaller than this are below what the Booleans resolve reliably.
 const SMALLEST: f64 = 0.01;
@@ -33,6 +44,10 @@ struct Tool {
     body: Body,
     /// Material is added (a concave edge) rather than removed.
     add: bool,
+    /// How far from its edge the blend leaves each of the edge's two faces,
+    /// the face of the edge's first half-edge first. Zero where that is not
+    /// one distance all along.
+    reach: [f64; 2],
 }
 
 /// Round the given edges with a constant radius.
@@ -137,48 +152,51 @@ fn apply(
         }
         tool
     };
+    kinds_agree(body, &picked)?;
     let mut tools: Vec<Tool> = Vec::with_capacity(picked.len());
-    let side = Side::new(body);
+    let mut reaches: HashMap<u32, [f64; 2]> = HashMap::new();
     for &e in &picked {
-        let (span, ends) = carried(body, &side, e, shape, &picked);
-        let mut tool = edge_tool_over(body, e, shape, span)?;
+        let own = edge_tool_over(body, e, shape, body.e_t[e as usize])?;
+        reaches.insert(e, own.reach);
+        let (span, ends) = carried(body, e, &picked, own.reach[0].max(own.reach[1]))?;
+        let mut tool = if span == body.e_t[e as usize] {
+            own
+        } else {
+            edge_tool_over(body, e, shape, span)?
+        };
         // Carried into a leaning or a round face, the tool is cut off by
-        // it. If that cannot be done the blend stops square at the end of
-        // the edge, as it would without.
-        let mut cut_off = Some(tool.body.clone());
+        // it. A tool that cannot be is not left to end square instead: it
+        // would stand proud of that face or stop short of it.
         for end in &ends {
-            cut_off = cut_off.and_then(|piece| {
-                boolean(
-                    &piece,
-                    &end.solid,
-                    if end.keep_inside {
-                        Op::Intersect
-                    } else {
-                        Op::Cut
-                    },
-                )
-                .ok()
-            });
-        }
-        match cut_off {
-            Some(piece) => tool.body = piece,
-            None => tool = edge_tool_over(body, e, shape, body.e_t[e as usize])?,
+            let op = if end.keep_inside {
+                Op::Intersect
+            } else {
+                Op::Cut
+            };
+            tool.body = boolean(&tool.body, &end.solid, op).map_err(|_| {
+                "the blend could not be ended on the face that ends its edge".to_string()
+            })?;
         }
         tools.push(named(tool, tag(e)));
     }
-    if let Shape::Round(radius) = shape {
-        for (tool, around) in corner_tools(body, &picked, radius) {
-            // A corner belongs to the three edges that meet in it.
-            let mut tags = around.map(tag);
-            tags.sort_unstable();
-            tools.push(named(tool, mix(mix(tags[0], tags[1]), tags[2])));
-        }
+    strips_clear(body, &picked, &reaches)?;
+    // The corners where blended edges meet, and which of them a piece of
+    // its own finishes.
+    let mut finished: Vec<u32> = Vec::new();
+    for (tool, around, v) in corner_tools(body, &picked, shape) {
+        // A corner belongs to the three edges that meet in it.
+        let mut tags = around.map(tag);
+        tags.sort_unstable();
+        tools.push(named(tool, mix(mix(tags[0], tags[1]), tags[2])));
+        finished.push(v);
     }
-    for (tool, around) in inside_corner_tools(body, &picked, shape) {
+    for (tool, around, v) in inside_corner_tools(body, &picked, shape) {
         let mut tags = around.map(tag);
         tags.sort_unstable();
         tools.push(named(tool, mix(tags[0], tags[1])));
+        finished.push(v);
     }
+    corners_finished(body, &picked, &finished)?;
     let mut result = body.clone();
     for tool in &tools {
         let op = if tool.add { Op::Union } else { Op::Cut };
@@ -302,9 +320,18 @@ struct End {
     keep_inside: bool,
 }
 
-/// The surface of the one face other than the edge's own two that meets
-/// the edge at vertex `v`.
-fn end_surface(body: &Body, e: u32, v: u32) -> Option<Surface> {
+/// What ends an edge at one of its vertices: the faces there other than
+/// the edge's own two.
+enum Ending {
+    /// None: the edge's own two faces run on past the vertex.
+    Nothing,
+    /// One face, or several of one surface.
+    Face(Surface),
+    /// Faces of several surfaces.
+    Several,
+}
+
+fn ending(body: &Body, e: u32, v: u32) -> Ending {
     let own = [body.h_face(2 * e), body.h_face(2 * e + 1)];
     let mut found: Option<Surface> = None;
     for h in 0..2 * body.edge_count() as u32 {
@@ -315,93 +342,300 @@ fn end_surface(body: &Body, e: u32, v: u32) -> Option<Surface> {
         match found {
             None => found = Some(s),
             Some(known) if known.same(&s).is_some() => {}
-            Some(_) => return None,
+            Some(_) => return Ending::Several,
         }
     }
-    found
+    found.map_or(Ending::Nothing, Ending::Face)
 }
 
-/// The stretch of its line that the tool for a straight edge covers, and
-/// what the tool is cut off with at its ends.
+/// The unit direction in which an open edge leaves one of its vertices.
+fn leaving(body: &Body, v: u32, e: u32) -> V3 {
+    let c = body.e_curve_ref(e);
+    let [t0, t1] = body.e_t[e as usize];
+    if body.e_v[e as usize][0] == v {
+        c.deriv(t0).unit()
+    } else {
+        -c.deriv(t1).unit()
+    }
+}
+
+/// Whether two edges that meet at `v` run on into each other without a
+/// bend, as the pieces of one chain do.
+fn runs_on(body: &Body, v: u32, e1: u32, e2: u32) -> bool {
+    let (a, b) = (leaving(body, v, e1), leaving(body, v, e2));
+    a.cross(b).len() < 1.0e-6 && a.dot(b) < 0.0
+}
+
+const NO_END: &str = "one of these edges ends on a face, or on several, that a blend cannot yet \
+                      be ended on; leave that edge sharp";
+
+/// The stretch of its curve that the tool for an edge covers, and what the
+/// tool is cut off with at its ends. `width` is how far the blend reaches
+/// across the edge.
 ///
-/// A blend ends where its edge does, on the face that ends the edge. That
-/// face need not be square to the edge: it can lean, or be round, like
-/// the shaft a shoulder runs up against. The tool is then carried on past
-/// the end and cut off by that face's own surface, on the side the edge
-/// is on. Where the solid simply stops past the end, the tool is carried
-/// on into the open, where it takes nothing.
-fn carried(body: &Body, side: &Side, e: u32, shape: Shape, picked: &[u32]) -> ([f64; 2], Vec<End>) {
+/// A blend ends where its edge does, on the face that ends the edge, and
+/// nowhere else. Square to the edge, that face ends the tool where the
+/// edge ends. Leaning, or round like the shaft a shoulder runs up against,
+/// it does not: cut square, the blend would stop short of a face that
+/// leans away and stand proud of one that leans in. The tool is then
+/// carried on past the end of the edge and cut off by that face's own
+/// surface, on the side the edge is on. This holds for a blend that takes
+/// material away and for one that fills an inside edge in alike.
+///
+/// A tool is never carried on with nothing to stop it. Past the end of its
+/// edge it is among whatever else stands there, and would be cut into that
+/// or stand on its own in the open.
+///
+/// Where another blended edge meets this one at a corner, each of the two
+/// ends on the third face of the corner, the one that ends them both, as
+/// it would alone; what is between them is the business of the corner (see
+/// [`corners_finished`]). The pieces of a chain meet end to end, and where
+/// three blends meet the corner piece is made to fit tools that end square.
+///
+/// An end that is none of these is refused: several faces at once, a face
+/// of a kind no tool is cut off by yet, an arc that ends on anything but a
+/// flat face through its own axis.
+fn carried(
+    body: &Body,
+    e: u32,
+    picked: &[u32],
+    width: f64,
+) -> Result<([f64; 2], Vec<End>), String> {
     let [t0, t1] = body.e_t[e as usize];
     let c = body.e_curve_ref(e);
-    // Only a blend that takes material away: one that fills an inside
-    // edge would stick out past its end.
-    if c.kind != CurveKind::Line || convexity(body, e) != Some(true) {
-        return ([t0, t1], Vec::new());
+    if body.e_closed(e) || convexity(body, e).is_none() {
+        return Ok(([t0, t1], Vec::new()));
     }
-    let more = match shape {
-        Shape::Round(r) => 1.5 * r,
-        Shape::Bevel(d, _) => 2.0 * d,
-    };
     let middle = c.point(0.5 * (t0 + t1));
-    let reach = body.bbox().diagonal() + 4.0 * more + 1.0;
+    let size = body.bbox().diagonal() + 8.0 * width + 1.0;
     let mut span = [t0, t1];
     let mut ends = Vec::new();
     for (k, (t, away)) in [(t0, -1.0), (t1, 1.0)].into_iter().enumerate() {
-        // Where another blended edge takes over, the two meet as they are.
         let v = body.e_v[e as usize][k];
-        if picked
+        let others: Vec<u32> = picked
             .iter()
-            .any(|&other| other != e && body.e_v[other as usize].contains(&v))
-        {
-            continue;
+            .copied()
+            .filter(|&other| other != e && body.e_v[other as usize].contains(&v))
+            .collect();
+        match others.as_slice() {
+            [other] if runs_on(body, v, e, *other) => continue,
+            [] | [_] => {}
+            _ => continue,
         }
-        if point_in_solid(side, c.point(t + away * 1.0e-3)) == Some(false) {
-            span[k] = t + away * more;
-            continue;
-        }
-        let Some(s) = end_surface(body, e, body.e_v[e as usize][k]) else {
-            continue;
+        let s = match ending(body, e, v) {
+            Ending::Nothing => continue,
+            Ending::Face(s) => s,
+            Ending::Several => return Err(NO_END.into()),
         };
-        let outside = s.sdist(middle) > 0.0;
-        let solid = match s.kind {
-            // A face square to the edge ends the tool where the edge ends.
-            SurfKind::Plane if s.f.z.cross(c.f.x).len() > 1.0e-9 => {
-                let towards = if outside { s.f.z } else { -s.f.z };
-                let f = Frame::from_z(s.f.o, towards);
-                let corner = |x: f64, y: f64| s.f.o + f.x * (x * reach) + f.y * (y * reach);
-                let p = [
-                    corner(-1.0, -1.0),
-                    corner(1.0, -1.0),
-                    corner(1.0, 1.0),
-                    corner(-1.0, 1.0),
-                ];
-                let segs = (0..4)
-                    .map(|i| Seg::Line {
-                        a: p[i],
-                        b: p[(i + 1) % 4],
-                    })
-                    .collect();
-                make::extrude(&Region { loops: vec![segs] }, towards, 0.0, reach)
-                    .ok()
-                    .map(|solid| End {
-                        solid,
-                        keep_inside: true,
-                    })
+        // The way the edge runs on past this end.
+        let onward = c.deriv(t).unit() * away;
+        let p = c.point(t);
+        let solid = match (c.kind, s.kind) {
+            // A flat face through the axis of an arc ends its tool where
+            // the arc ends.
+            (CurveKind::Circle, SurfKind::Plane)
+                if s.f.z.dot(c.f.z).abs() < 1.0e-9 && s.sdist(c.f.o).abs() < 10.0 * TOL =>
+            {
+                continue
             }
-            SurfKind::Cylinder => make::cylinder(s.f.o - s.f.z * reach, s.f.z, s.r, 2.0 * reach)
-                .ok()
-                .map(|solid| End {
-                    solid,
-                    keep_inside: !outside,
-                }),
-            _ => None,
+            // A flat face square to a straight edge likewise.
+            (CurveKind::Line, SurfKind::Plane) if s.f.z.cross(onward).len() < 1.0e-9 => continue,
+            (CurveKind::Line, SurfKind::Plane | SurfKind::Cylinder) => {
+                // Far enough that the whole section is past the face.
+                let normal = s.normal(p);
+                let square = normal.dot(onward).abs();
+                if square < 0.05 {
+                    return Err(NO_END.into());
+                }
+                let more = width * ((1.0 - square * square).max(0.0).sqrt() / square) * 1.5 + width;
+                span[k] = t + away * more;
+                let outside = s.sdist(middle) > 0.0;
+                if s.sdist(middle).abs() < 10.0 * TOL {
+                    return Err(NO_END.into());
+                }
+                if s.kind == SurfKind::Plane {
+                    let towards = if outside { s.f.z } else { -s.f.z };
+                    let f = Frame::from_z(s.f.o, towards);
+                    let corner = |x: f64, y: f64| s.f.o + f.x * (x * size) + f.y * (y * size);
+                    let q = [
+                        corner(-1.0, -1.0),
+                        corner(1.0, -1.0),
+                        corner(1.0, 1.0),
+                        corner(-1.0, 1.0),
+                    ];
+                    let segs = (0..4)
+                        .map(|i| Seg::Line {
+                            a: q[i],
+                            b: q[(i + 1) % 4],
+                        })
+                        .collect();
+                    End {
+                        solid: make::extrude(&Region { loops: vec![segs] }, towards, 0.0, size)
+                            .map_err(|_| NO_END.to_string())?,
+                        keep_inside: true,
+                    }
+                } else {
+                    End {
+                        solid: make::cylinder(s.f.o - s.f.z * size, s.f.z, s.r, 2.0 * size)
+                            .map_err(|_| NO_END.to_string())?,
+                        keep_inside: !outside,
+                    }
+                }
+            }
+            _ => return Err(NO_END.into()),
         };
-        if let Some(end) = solid {
-            span[k] = t + away * more;
-            ends.push(end);
+        ends.push(solid);
+    }
+    Ok((span, ends))
+}
+
+/// The way into face `f` from a point of its boundary: across half-edge
+/// `h` at parameter `t` of its edge, to the left of the way `h` runs.
+fn into(body: &Body, f: u32, h: u32, t: f64) -> V3 {
+    let c = body.e_curve_ref(h >> 1);
+    let mut travel = c.deriv(t).unit();
+    if h & 1 == 1 {
+        travel = -travel;
+    }
+    body.f_normal(f, c.point(t)).cross(travel)
+}
+
+/// How far out from half-edge `own` of face `f`, across the face, the
+/// boundary of the face comes back at half-edge `other`: the least distance
+/// of a point of `other` that lies beside `own`, on the face's side of it.
+/// A point past either end of `own` is not beside it, and one behind it is
+/// across some other stretch of the face.
+///
+/// `theirs` is the width of a strip along `other` that is taken as well.
+/// Where that strip lies towards `own`, the room between the two is less
+/// by that much.
+fn room(body: &Body, f: u32, own: u32, other: u32, theirs: f64) -> f64 {
+    let (e, g) = (own >> 1, other >> 1);
+    let (c, ce) = (body.e_curve_ref(g), body.e_curve_ref(e));
+    let [t0, t1] = body.e_t[g as usize];
+    let from = |t: f64| {
+        let p = c.point(t);
+        let (at, d, within) = edge_closest(body, e, p);
+        let foot = ce.point(at);
+        if !within || (p - foot).dot(into(body, f, own, at)) <= 0.0 {
+            return f64::MAX;
+        }
+        if (foot - p).dot(into(body, f, other, t)) > 0.0 {
+            d - theirs
+        } else {
+            d
+        }
+    };
+    const STEPS: usize = 96;
+    let step = (t1 - t0) / STEPS as f64;
+    let (mut least, mut nearest) = (f64::MAX, 0usize);
+    for i in 0..=STEPS {
+        let d = from(t0 + step * i as f64);
+        if d < least {
+            (least, nearest) = (d, i);
         }
     }
-    (span, ends)
+    if least == f64::MAX {
+        return least;
+    }
+    // Between the samples either side of the nearest one.
+    let mut lo = (t0 + step * (nearest as f64 - 1.0)).max(t0);
+    let mut hi = (t0 + step * (nearest as f64 + 1.0)).min(t1);
+    for _ in 0..60 {
+        let (a, b) = (lo + (hi - lo) / 3.0, hi - (hi - lo) / 3.0);
+        if from(a) < from(b) {
+            hi = b;
+        } else {
+            lo = a;
+        }
+    }
+    least.min(from(0.5 * (lo + hi)))
+}
+
+/// Whether a loop of a flat face goes round a hole in the face and not
+/// round the face itself: it runs the other way about the face's normal.
+fn goes_round_a_hole(body: &Body, f: u32, l: u32) -> bool {
+    let mut points: Vec<V3> = Vec::new();
+    for h in body.loop_hes(l) {
+        let c = body.e_curve_ref(h >> 1);
+        let (a, b) = body.h_span(h);
+        let steps = if c.kind == CurveKind::Line { 1 } else { 16 };
+        points.extend((0..steps).map(|i| c.point(a + (b - a) * i as f64 / steps as f64)));
+    }
+    let Some(&o) = points.first() else {
+        return false;
+    };
+    let normal = body.f_normal(f, o);
+    let twice: f64 = (0..points.len())
+        .map(|i| {
+            (points[i] - o)
+                .cross(points[(i + 1) % points.len()] - o)
+                .dot(normal)
+        })
+        .sum();
+    twice < 0.0
+}
+
+/// A blend covers a strip of each of its two faces, from the edge out to
+/// where it leaves the face. Along the whole edge that strip has to be the
+/// face's own and nothing else's. A blend wider than its face would run on
+/// past the far side of it, into whatever is there or into the open, and
+/// what it left would not be a blend between these two faces. A boss or
+/// another blend standing in the strip would be cut into or built over.
+/// Either is refused.
+///
+/// One thing may lie in the strip of a blend that takes material away: a
+/// hole in a flat face, which has nothing in it to take. The blend runs
+/// over it and is cut through by it.
+///
+/// The two edges that the face's boundary runs on into at the ends of this
+/// one are left out: those are the ends of the blend, which [`carried`]
+/// sees to.
+fn strips_clear(
+    body: &Body,
+    picked: &[u32],
+    reaches: &HashMap<u32, [f64; 2]>,
+) -> Result<(), String> {
+    for &e in picked {
+        let takes = convexity(body, e) == Some(true);
+        for k in 0..2u32 {
+            let h = 2 * e + k;
+            let width = reaches[&e][k as usize];
+            if width <= 0.0 {
+                continue;
+            }
+            let f = body.h_face(h);
+            let own = body.h_loop[h as usize];
+            let ring: Vec<u32> = body.loop_hes(own).collect();
+            let at = ring.iter().position(|&x| x == h).unwrap_or(0);
+            let before = ring[(at + ring.len() - 1) % ring.len()] >> 1;
+            let after = ring[(at + 1) % ring.len()] >> 1;
+            for l in body.face_loops(f) {
+                let hole = takes
+                    && l != own
+                    && body.f_surface(f).is_plane()
+                    && goes_round_a_hole(body, f, l);
+                for other in body.loop_hes(l) {
+                    let g = other >> 1;
+                    if g == e || g == before || g == after {
+                        continue;
+                    }
+                    let theirs = reaches.get(&g).map(|r| r[(other & 1) as usize]);
+                    if hole && theirs.is_none() && convexity(body, g) == Some(true) {
+                        continue;
+                    }
+                    if room(body, f, h, other, theirs.unwrap_or(0.0)) < width - 1.0e-7 {
+                        return Err(
+                            "the blend is too large for one of the faces beside its edge: it \
+                             would run off that face or into something else on it"
+                                .into(),
+                        );
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 /// The tool for edge `e` over a stretch of its curve other than the
@@ -413,7 +647,7 @@ fn edge_tool_over(body: &Body, e: u32, shape: Shape, span: [f64; 2]) -> Result<T
     let (s1, s2) = (body.f_surface(f1), body.f_surface(f2));
     let c = *body.e_curve_ref(e);
     let [t0, t1] = span;
-    let tool = match (c.kind, s1.kind, s2.kind) {
+    let (tool, reach) = match (c.kind, s1.kind, s2.kind) {
         (CurveKind::Line, SurfKind::Plane, SurfKind::Plane) => {
             let d = c.f.x;
             let p = c.point(t0);
@@ -441,7 +675,10 @@ fn edge_tool_over(body: &Body, e: u32, shape: Shape, span: [f64; 2]) -> Result<T
                 None => segs.push(Seg::Line { a: a1, b: a2 }),
             }
             segs.push(Seg::Line { a: a2, b: p });
-            make::extrude(&Region { loops: vec![segs] }, d, 0.0, t1 - t0)?
+            (
+                make::extrude(&Region { loops: vec![segs] }, d, 0.0, t1 - t0)?,
+                [reach1, reach2],
+            )
         }
         (
             CurveKind::Line,
@@ -523,7 +760,10 @@ fn edge_tool_over(body: &Body, e: u32, shape: Shape, span: [f64; 2]) -> Result<T
                 join,
                 a2.run(q2, v2(0.0, 0.0), &lift),
             ];
-            make::extrude(&Region { loops: vec![segs] }, d, 0.0, t1 - t0)?
+            (
+                make::extrude(&Region { loops: vec![segs] }, d, 0.0, t1 - t0)?,
+                [q1.len(), q2.len()],
+            )
         }
         (
             CurveKind::Circle,
@@ -581,7 +821,10 @@ fn edge_tool_over(body: &Body, e: u32, shape: Shape, span: [f64; 2]) -> Result<T
                 None => lp.push(PSeg::Line { a: a1, b: a2 }),
             }
             lp.push(PSeg::Line { a: a2, b: corner });
-            make::revolve(&[lp], c.f.o, axis, radial, t1 - t0)?
+            (
+                make::revolve(&[lp], c.f.o, axis, radial, t1 - t0)?,
+                [reach1, reach2],
+            )
         }
         // Any other edge that closes on itself is rounded by rolling the
         // ball along it.
@@ -610,6 +853,7 @@ fn edge_tool_over(body: &Body, e: u32, shape: Shape, span: [f64; 2]) -> Result<T
     Ok(Tool {
         body: tool,
         add: !convex,
+        reach,
     })
 }
 
@@ -897,6 +1141,7 @@ fn rim_tool(body: &Body, e: u32, radius: f64, convex: bool) -> Result<Tool, Stri
     Ok(Tool {
         body: tool,
         add: !convex,
+        reach: [0.0; 2],
     })
 }
 
@@ -905,68 +1150,63 @@ fn rim_tool(body: &Body, e: u32, radius: f64, convex: bool) -> Result<Tool, Stri
 /// run on past the corner until it meets the other. Each edge's own tool
 /// stops at the corner; what is missing is the part both tools would take
 /// if they ran on: the piece of the corner that lies in both.
-fn inside_corner_tools(body: &Body, edges: &[u32], shape: Shape) -> Vec<(Tool, [u32; 2])> {
+///
+/// The two edges are both outside edges, as on top of an L-shaped block, or
+/// both inside edges, as round the foot of a boss that stands on a plate.
+/// In the second case each tool fills its edge in, and the piece fills the
+/// corner between them: without it the two rounds end square and leave a
+/// notch the size of the radius where they should run into each other.
+fn inside_corner_tools(body: &Body, edges: &[u32], shape: Shape) -> Vec<(Tool, [u32; 2], u32)> {
     // How far a blend can reach across the face it shares with the other.
     let reach = match shape {
         Shape::Round(r) => 2.0 * r,
         Shape::Bevel(d, _) => 4.0 * d,
     };
-    let straight = |e: u32| {
-        body.e_curve_ref(e).kind == CurveKind::Line
+    // A straight edge between flat faces, and which way it bends.
+    let bend = |e: u32| {
+        (body.e_curve_ref(e).kind == CurveKind::Line
             && body.f_surface(body.h_face(2 * e)).is_plane()
-            && body.f_surface(body.h_face(2 * e + 1)).is_plane()
-            && convexity(body, e) == Some(true)
+            && body.f_surface(body.h_face(2 * e + 1)).is_plane())
+        .then(|| convexity(body, e))
+        .flatten()
     };
-    let mut at: HashMap<u32, Vec<u32>> = HashMap::new();
+    let mut at: HashMap<Corner, Vec<u32>> = HashMap::new();
+    // Every blended edge at a vertex, whatever its kind.
+    let mut all: HashMap<u32, usize> = HashMap::new();
     for &e in edges {
-        if straight(e) {
-            let [v0, v1] = body.e_v[e as usize];
-            if v0 != v1 {
-                at.entry(v0).or_default().push(e);
-                at.entry(v1).or_default().push(e);
-            }
+        let [v0, v1] = body.e_v[e as usize];
+        if v0 == v1 {
+            continue;
+        }
+        for v in [v0, v1] {
+            *all.entry(v).or_default() += 1;
+        }
+        if let Some(convex) = bend(e) {
+            at.entry((v0, convex)).or_default().push(e);
+            at.entry((v1, convex)).or_default().push(e);
         }
     }
-    let mut corners: Vec<(u32, Vec<u32>)> =
-        at.into_iter().filter(|(_, met)| met.len() == 2).collect();
-    corners.sort_by_key(|(v, _)| *v);
+    let mut corners: Vec<(Corner, Vec<u32>)> = at
+        .into_iter()
+        // Two inside edges with a third blended edge between them are not
+        // this corner: what the third makes of it is not known here.
+        .filter(|((v, convex), met)| met.len() == 2 && (*convex || all[v] == 2))
+        .collect();
+    corners.sort_by_key(|(corner, _)| *corner);
     let mut tools = Vec::new();
-    for (v, met) in corners {
+    for ((v, convex), met) in corners {
         let (e1, e2) = (met[0], met[1]);
-        // The face both edges bound, and the way its boundary runs
-        // through the corner: in along one edge, out along the other.
-        let faces = |e: u32| [body.h_face(2 * e), body.h_face(2 * e + 1)];
-        let Some(shared) = faces(e1).into_iter().find(|f| faces(e2).contains(f)) else {
-            continue;
-        };
-        let on = |e: u32| {
-            if body.h_face(2 * e) == shared {
-                2 * e
-            } else {
-                2 * e + 1
-            }
-        };
-        let (h1, h2) = (on(e1), on(e2));
-        let (arriving, leaving) = if body.h_dest(h1) == v && body.h_origin(h2) == v {
-            (h1, h2)
-        } else if body.h_dest(h2) == v && body.h_origin(h1) == v {
-            (h2, h1)
-        } else {
-            continue;
-        };
-        let normal = body.f_normal(shared, body.verts[v as usize]);
-        // Walking with the face on the left, a turn to the right is a
-        // corner that turns inwards.
-        if body.h_dir(arriving).cross(body.h_dir(leaving)).dot(normal) > -1.0e-9 {
+        if turns_inwards(body, v, e1, e2) != Some(true) {
             continue;
         }
-        // Each tool carried on past the corner.
+        // Each tool about the corner, carried on past it. Where the faces
+        // lean, what both take begins before the corner.
         let past = |e: u32| -> Option<Tool> {
             let [t0, t1] = body.e_t[e as usize];
             let span = if body.e_v[e as usize][1] == v {
-                [t1, t1 + reach]
+                [t1 - reach, t1 + reach]
             } else {
-                [t0 - reach, t0]
+                [t0 - reach, t0 + reach]
             };
             edge_tool_over(body, e, shape, span).ok()
         };
@@ -977,70 +1217,287 @@ fn inside_corner_tools(body: &Body, edges: &[u32], shape: Shape) -> Vec<(Tool, [
             tools.push((
                 Tool {
                     body: piece,
-                    add: false,
+                    add: !convex,
+                    reach: [0.0; 2],
                 },
                 [e1, e2],
+                v,
             ));
         }
     }
     tools
 }
 
-/// Corner pieces: where three rounded edges meet at a square outside corner,
-/// the rolling ball leaves a sphere. The piece is the corner cube minus that
-/// ball.
-fn corner_tools(body: &Body, edges: &[u32], radius: f64) -> Vec<(Tool, [u32; 3])> {
-    let mut at: HashMap<u32, Vec<(V3, u32)>> = HashMap::new();
+/// Two edges that meet at `v` and bound one flat face between them: whether
+/// the boundary of that face turns inwards there, as at the inside corner
+/// of an L seen from above. `None` when they bound no flat face together.
+fn turns_inwards(body: &Body, v: u32, e1: u32, e2: u32) -> Option<bool> {
+    // The face both edges bound, and the way its boundary runs through
+    // the corner: in along one edge, out along the other.
+    let faces = |e: u32| [body.h_face(2 * e), body.h_face(2 * e + 1)];
+    let shared = faces(e1)
+        .into_iter()
+        .find(|f| faces(e2).contains(f) && body.f_surface(*f).is_plane())?;
+    let on = |e: u32| {
+        if body.h_face(2 * e) == shared {
+            2 * e
+        } else {
+            2 * e + 1
+        }
+    };
+    let (h1, h2) = (on(e1), on(e2));
+    let (arriving, leaving) = if body.h_dest(h1) == v && body.h_origin(h2) == v {
+        (h1, h2)
+    } else if body.h_dest(h2) == v && body.h_origin(h1) == v {
+        (h2, h1)
+    } else {
+        return None;
+    };
+    let normal = body.f_normal(shared, body.verts[v as usize]);
+    // Walking with the face on the left, a turn to the right is a corner
+    // that turns inwards.
+    Some(body.h_dir(arriving).cross(body.h_dir(leaving)).dot(normal) < -1.0e-9)
+}
+
+const MIXED: &str = "an inside edge and an outside edge that meet at a corner cannot be blended \
+                     together yet; blend them one at a time, or leave one of them sharp";
+
+/// An inside edge and an outside edge that meet at a corner are not blended
+/// together: said before any tool is made, so that it is what is said.
+fn kinds_agree(body: &Body, picked: &[u32]) -> Result<(), String> {
+    let mut at: HashMap<u32, Option<bool>> = HashMap::new();
+    for &e in picked {
+        let [v0, v1] = body.e_v[e as usize];
+        if v0 == v1 {
+            continue;
+        }
+        let kind = convexity(body, e);
+        for v in [v0, v1] {
+            if at.insert(v, kind).is_some_and(|known| known != kind) {
+                return Err(MIXED.into());
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Every corner where blended edges meet has to be one this module knows
+/// how to finish. The tools of the edges that meet there are exact each on
+/// its own; what they make of the corner between them is only right where
+/// it has been worked out, and anywhere else the result would be a solid
+/// that looks like the blend asked for and is not. Such a corner is
+/// refused.
+///
+/// Known are: two edges that run on into each other smoothly; two edges of
+/// one kind, outside or inside, that bound a flat face between them, whose
+/// tools either overlap at the corner or have a piece to fill it; and three
+/// edges of one kind at a corner of three flat faces, with its piece.
+fn corners_finished(body: &Body, picked: &[u32], finished: &[u32]) -> Result<(), String> {
+    let mut at: HashMap<u32, Vec<u32>> = HashMap::new();
+    for &e in picked {
+        let [v0, v1] = body.e_v[e as usize];
+        if v0 != v1 {
+            at.entry(v0).or_default().push(e);
+            at.entry(v1).or_default().push(e);
+        }
+    }
+    let mut corners: Vec<(u32, Vec<u32>)> =
+        at.into_iter().filter(|(_, met)| met.len() > 1).collect();
+    corners.sort_by_key(|(v, _)| *v);
+    let straight = |e: u32| {
+        body.e_curve_ref(e).kind == CurveKind::Line
+            && body.f_surface(body.h_face(2 * e)).is_plane()
+            && body.f_surface(body.h_face(2 * e + 1)).is_plane()
+    };
+    for (v, met) in corners {
+        let kinds: Vec<Option<bool>> = met.iter().map(|&e| convexity(body, e)).collect();
+        if kinds.iter().any(|kind| *kind != kinds[0]) {
+            return Err(MIXED.into());
+        }
+        let known = match met.as_slice() {
+            &[e1, e2] => {
+                runs_on(body, v, e1, e2)
+                    || match turns_inwards(body, v, e1, e2) {
+                        // The tools stop short of each other: only the
+                        // piece between them makes the corner whole.
+                        Some(true) => straight(e1) && straight(e2) && finished.contains(&v),
+                        // The tools overlap, and what both take or both
+                        // fill is the corner.
+                        Some(false) => true,
+                        None => false,
+                    }
+            }
+            [_, _, _] => finished.contains(&v),
+            _ => false,
+        };
+        if !known {
+            return Err(
+                "blended edges meet at a corner of a kind that cannot be finished yet; leave one of the edges there sharp"
+                    .into(),
+            );
+        }
+    }
+    Ok(())
+}
+
+/// A vertex, and whether the blended edges gathered at it are outside edges.
+type Corner = (u32, bool);
+
+/// Corner pieces: where three rounded edges meet at a corner of three flat
+/// faces, the rolling ball comes to rest against all three and leaves a
+/// sphere. The piece is the corner out to where the ball touches, minus
+/// that ball: a cube at a square corner, a slanted box at any other.
+///
+/// At an outside corner, the corner of a box, the piece is of the body and
+/// is taken away. At an inside corner, the corner of a pocket, it is of the
+/// room the three faces enclose and is filled in. Without it the three
+/// rounds cross each other as three cylinders, which leaves more of an
+/// outside corner than the ball does, and less in an inside one.
+fn corner_tools(body: &Body, edges: &[u32], shape: Shape) -> Vec<(Tool, [u32; 3], u32)> {
+    let mut at: HashMap<Corner, Vec<(V3, u32)>> = HashMap::new();
     for &e in edges {
         let c = body.e_curve_ref(e);
         let straight = c.kind == CurveKind::Line
             && body.f_surface(body.h_face(2 * e)).is_plane()
             && body.f_surface(body.h_face(2 * e + 1)).is_plane();
-        if !straight || convexity(body, e) != Some(true) {
+        let Some(convex) = convexity(body, e).filter(|_| straight) else {
             continue;
-        }
+        };
         let [v0, v1] = body.e_v[e as usize];
-        at.entry(v0).or_default().push((c.f.x, e));
-        at.entry(v1).or_default().push((-c.f.x, e));
+        at.entry((v0, convex)).or_default().push((c.f.x, e));
+        at.entry((v1, convex)).or_default().push((-c.f.x, e));
     }
-    let mut corners: Vec<(u32, Vec<(V3, u32)>)> =
-        at.into_iter().filter(|(_, d)| d.len() == 3).collect();
-    corners.sort_by_key(|(v, _)| *v);
-    let mut tools = Vec::new();
-    for (v, met) in corners {
-        let d = [met[0].0, met[1].0, met[2].0];
-        let square = d[0].dot(d[1]).abs() < 1.0e-9
-            && d[1].dot(d[2]).abs() < 1.0e-9
-            && d[0].dot(d[2]).abs() < 1.0e-9;
-        if !square {
-            continue;
+    // A corner of three faces has three edges, and all of them are these.
+    let mut edges_at: HashMap<u32, usize> = HashMap::new();
+    for e in 0..body.edge_count() as u32 {
+        for v in body.e_v[e as usize] {
+            *edges_at.entry(v).or_default() += 1;
         }
-        if let Ok(piece) = corner_piece(body.verts[v as usize], d[0], d[1], d[2], radius) {
+    }
+    let mut corners: Vec<(Corner, Vec<(V3, u32)>)> = at
+        .into_iter()
+        .filter(|((v, _), d)| d.len() == 3 && edges_at[v] == 3)
+        .collect();
+    corners.sort_by_key(|(corner, _)| *corner);
+    let mut tools = Vec::new();
+    for ((v, convex), met) in corners {
+        let d = [met[0].0, met[1].0, met[2].0];
+        // The edges run along the piece either way: at an outside corner
+        // it is the body between them, at an inside corner the room.
+        let piece = match shape {
+            Shape::Round(radius) => corner_piece(body.verts[v as usize], d[0], d[1], d[2], radius),
+            Shape::Bevel(distance, None) => {
+                facet_piece(body.verts[v as usize], d[0], d[1], d[2], distance)
+            }
+            Shape::Bevel(_, Some(_)) => continue,
+        };
+        if let Ok(piece) = piece {
             tools.push((
                 Tool {
                     body: piece,
-                    add: false,
+                    add: !convex,
+                    reach: [0.0; 2],
                 },
                 [met[0].1, met[1].1, met[2].1],
+                v,
             ));
         }
     }
     tools
 }
 
-/// The cube with corner `v` and edges `r·a`, `r·b`, `r·c`, minus the ball of
-/// radius `r` about its far corner.
-fn corner_piece(v: V3, a: V3, b: V3, c: V3, r: f64) -> Result<Body, String> {
+/// Where three even bevels meet at a square corner, their three planes
+/// run together in a point half the bevel's distance in from each face.
+/// The corner is not left as that point: it is cut flat, through the three
+/// places where two of the bevels meet on a face. The piece is what lies
+/// between the point and that flat, a pyramid on a triangle.
+fn facet_piece(v: V3, a: V3, b: V3, c: V3, d: f64) -> Result<Body, String> {
+    let square = a.dot(b).abs() < 1.0e-9 && b.dot(c).abs() < 1.0e-9 && a.dot(c).abs() < 1.0e-9;
+    if !square {
+        return Err("bevels that meet at a corner that is not square are not supported yet".into());
+    }
+    let pts = [
+        v + (a + b + c) * (0.5 * d),
+        v + (a + b) * d,
+        v + (b + c) * d,
+        v + (c + a) * d,
+    ];
     let mut body = Body::new();
-    let s = v + (a + b + c) * r;
+    for p in pts {
+        body.add_vert(p);
+    }
+    let mut edge_of: HashMap<(u32, u32), u32> = HashMap::new();
+    for p in 0..4u32 {
+        for q in p + 1..4 {
+            edge_of.insert((p, q), body.add_line_edge(p, q));
+        }
+    }
+    let centre = (pts[0] + pts[1] + pts[2] + pts[3]) * 0.25;
+    for cycle in [[0u32, 1, 2], [0, 2, 3], [0, 3, 1], [1, 2, 3]] {
+        let [p, q, r] = cycle.map(|i| pts[i as usize]);
+        let mut normal = (q - p).cross(r - p).unit();
+        let mut order = cycle;
+        // Seen from outside the piece, its corners go round to the left.
+        if normal.dot(p - centre) < 0.0 {
+            normal = -normal;
+            order.reverse();
+        }
+        let hes: Vec<u32> = (0..3)
+            .map(|i| {
+                let (p, q) = (order[i], order[(i + 1) % 3]);
+                let e = edge_of[&(p.min(q), p.max(q))];
+                2 * e + u32::from(body.e_v[e as usize][0] != p)
+            })
+            .collect();
+        let surf = body.add_surf(Surface::plane(p, normal));
+        body.add_face(surf, true, &[hes]);
+    }
+    body.check()?;
+    Ok(body)
+}
+
+/// The corner at `v` between the unit directions `a`, `b` and `c` of its
+/// three edges, out to where a ball of radius `r` resting in it touches,
+/// minus that ball.
+///
+/// The ball's centre is `r` from each of the three faces. Each face is
+/// touched at one point; across each edge, the plane through the centre
+/// cuts the piece off where the round along that edge takes over, and the
+/// ball shows in it as an arc between two of the touching points. At a
+/// square corner all of this is the cube of side `r` minus the ball about
+/// its far corner.
+fn corner_piece(v: V3, a: V3, b: V3, c: V3, r: f64) -> Result<Body, String> {
+    let odd = || "rounds that meet at a corner of this shape are not supported yet".to_string();
+    // The face that holds two of the edges looks away from the third.
+    let away = |p: V3, q: V3, third: V3| -> Result<V3, String> {
+        let n = p.cross(q);
+        if n.len() < 1.0e-9 {
+            return Err(odd());
+        }
+        let n = n.unit();
+        Ok(if n.dot(third) > 0.0 { -n } else { n })
+    };
+    let (na, nb, nc) = (away(b, c, a)?, away(c, a, b)?, away(a, b, c)?);
+    // The point `r` inside all three faces.
+    let span = na.dot(nb.cross(nc));
+    if span.abs() < 1.0e-9 {
+        return Err(odd());
+    }
+    let x = (nb.cross(nc) + nc.cross(na) + na.cross(nb)) * (-r / span);
+    let s = v + x;
+    let (sa, sb, sc) = (x.dot(a), x.dot(b), x.dot(c));
+    if !(sa > TOL && sb > TOL && sc > TOL) {
+        return Err(odd());
+    }
+    let mut body = Body::new();
     let pts = [
         v,
-        v + a * r,
-        v + b * r,
-        v + c * r,
-        v + (a + b) * r,
-        v + (a + c) * r,
-        v + (b + c) * r,
+        v + a * sa,
+        v + b * sb,
+        v + c * sc,
+        s + nc * r,
+        s + nb * r,
+        s + na * r,
     ];
     let (iv, ia, ib, ic, iab, iac, ibc) = (0u32, 1u32, 2u32, 3u32, 4u32, 5u32, 6u32);
     for p in pts {
@@ -1064,15 +1521,12 @@ fn corner_piece(v: V3, a: V3, b: V3, c: V3, r: f64) -> Result<Body, String> {
     ] {
         line(&mut body, p, q);
     }
-    // Quarter great circles in the three inner faces.
-    for (p, q, normal) in [
-        (iab, iac, c.cross(b)),
-        (ibc, iab, a.cross(c)),
-        (iac, ibc, b.cross(a)),
-    ] {
-        let from = pts[p as usize] - s;
-        let curve = body.add_curve(Curve::circle(s, normal, from, r));
-        let e = body.add_edge(curve, 0.0, 0.5 * PI, p, q);
+    // Arcs of great circles in the three inner faces, from one touching
+    // point to the next.
+    for (p, q, from, to) in [(iab, iac, nc, nb), (ibc, iab, na, nc), (iac, ibc, nb, na)] {
+        let turn = from.dot(to).clamp(-1.0, 1.0).acos();
+        let curve = body.add_curve(Curve::circle(s, from.cross(to).unit(), from * r, r));
+        let e = body.add_edge(curve, 0.0, turn, p, q);
         edge_of.insert((p.min(q), p.max(q)), e);
     }
     let face = |body: &mut Body, cycle: &[u32], surf: Surface, sense: bool, outward: V3| {
@@ -1102,23 +1556,23 @@ fn corner_piece(v: V3, a: V3, b: V3, c: V3, r: f64) -> Result<Body, String> {
     face(
         &mut body,
         &[iv, ib, ibc, ic],
-        Surface::plane(v, -a),
+        Surface::plane(v, na),
         true,
-        -a,
+        na,
     );
     face(
         &mut body,
         &[iv, ic, iac, ia],
-        Surface::plane(v, -b),
+        Surface::plane(v, nb),
         true,
-        -b,
+        nb,
     );
     face(
         &mut body,
         &[iv, ia, iab, ib],
-        Surface::plane(v, -c),
+        Surface::plane(v, nc),
         true,
-        -c,
+        nc,
     );
     face(
         &mut body,
@@ -1144,7 +1598,7 @@ fn corner_piece(v: V3, a: V3, b: V3, c: V3, r: f64) -> Result<Body, String> {
     // The ball's surface, seen from outside the piece: its normal points at
     // the centre. Poles are kept away from the patch.
     let ball = Surface {
-        f: Frame::from_zx(s, a - b, -(a + b + c)),
+        f: Frame::from_zx(s, nb - na, na + nb + nc),
         ..Surface::sphere(s, r)
     };
     let centroid = (pts[4] + pts[5] + pts[6]) / 3.0;

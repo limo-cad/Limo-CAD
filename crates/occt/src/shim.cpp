@@ -3510,6 +3510,16 @@ static std::vector<gp_Pnt> points_inside(const TopoDS_Face& face) {
   return {};
 }
 
+double Kernel::weighed(std::uint64_t body_id) const {
+  auto found = impl_->bodies.find(body_id);
+  if (found == impl_->bodies.end()) {
+    throw std::runtime_error("the body to weigh is missing");
+  }
+  GProp_GProps properties;
+  BRepGProp::VolumePropertiesGK(found->second, properties, 1.0e-12, true, true);
+  return std::abs(properties.Mass());
+}
+
 rust::Vec<double> Kernel::face_marks(std::uint64_t body_id,
                                      const rust::Vec<std::uint32_t>& indices) const {
   auto found = impl_->bodies.find(body_id);

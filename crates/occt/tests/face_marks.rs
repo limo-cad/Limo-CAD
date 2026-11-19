@@ -188,13 +188,13 @@ fn the_faces_a_shell_opens() {
 
     let scene = limo.recompute(&with(stepped(), shell(&[&named], Vec::new())));
     assert!(scene.errors.is_empty(), "{:?}", scene.errors);
-    // The two kernels round the inside of the step a little differently
-    // where its corners turn, so they agree on the shell only nearly. Each
-    // has to agree with itself exactly, whichever way it found the face.
+    // The two kernels make the same shell of it, to the last figure:
+    // `corners.rs` is about that. And each agrees with itself, whichever
+    // way it found the face.
     let ours_hollow = held(&limo);
     let ours_faces = scene.bodies[0].faces.len();
     assert!(
-        (ours_hollow - hollow).abs() < 2.0e-3 * hollow,
+        (ours_hollow - hollow).abs() < 1.0e-8 * hollow,
         "{hollow} and {ours_hollow}"
     );
     let found = limo.feature_keys();
@@ -308,7 +308,10 @@ fn the_faces_a_shell_opens() {
     let scene = limo.recompute(&with(stepped(), shell(&[&named, &named_side], Vec::new())));
     assert!(scene.errors.is_empty(), "{:?}", scene.errors);
     let ours_twice = held(&limo);
-    assert!((ours_twice - open_twice).abs() < 2.0e-3 * open_twice);
+    assert!(
+        (ours_twice - open_twice).abs() < 1.0e-8 * open_twice,
+        "{open_twice} and {ours_twice}"
+    );
     assert!(ours_twice < ours_hollow - 100.0, "a second wall is gone");
     let scene = limo.recompute(&with(stepped(), shell(&[&counted, &counted_side], marks)));
     assert!(scene.errors.is_empty(), "{:?}", scene.errors);
@@ -419,8 +422,11 @@ fn the_cylinder_of_a_thread() {
     let scene = limo.recompute(&with(pin(), thread(&named, None, cylinder)));
     assert!(scene.errors.is_empty(), "{:?}", scene.errors);
     let ours_cut = held(&limo);
+    // The two threads are the same solid to a part in ten million: the
+    // flanks are helicoids on both kernels, and the reference kernel
+    // carries them as splines.
     assert!(
-        (ours_cut - cut).abs() < 2.0e-3 * cut,
+        (ours_cut - cut).abs() < 1.0e-6 * cut,
         "{cut} and {ours_cut}"
     );
     let named_mark = limo.feature_keys()[0].face_marks[0].clone();

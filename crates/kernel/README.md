@@ -93,10 +93,43 @@ four arms is walked out from it; four curves then end there, at a vertex.
 
 Fillets and chamfers ([`blend`](src/blend.rs)) are modelled as the solid
 they remove or add: a prism along a straight edge, a solid of revolution
-around a circular one, a sphere piece where three rounds meet. A picked
-edge is followed along its tangent chain, as a rolling ball would; a blend
-runs through an inside corner until it meets the next one, and ends on the
-surface of whatever face ends its edge. An edge of any other shape that
+around a circular one. A picked edge is followed along its tangent chain,
+as a rolling ball would.
+
+Along an edge a blend is exact with little effort. At its ends, at the
+corners where blends meet and at the far side of the faces it runs along
+it is not, and a blend put together wrongly in any of those places still
+makes a closed solid that looks like the one asked for. So each of them is
+either worked out or refused.
+
+A blend ends where its edge does, on the face that ends the edge. Square
+to the edge, that face ends the tool where the edge ends. Leaning, or
+round like the shaft a shoulder runs up against, it does not, and the tool
+is carried on past the end and cut off by that face's own surface. It is
+never carried on with nothing to stop it: past the end of its edge it is
+among whatever else stands there. An end on several faces at once, on a
+face that is neither flat nor a cylinder, or of an arc on anything but a
+flat face through the arc's own axis, is refused.
+
+Two blends on one flat face cross in a mitre. Each ends on the third face
+of the corner, as it would alone; where the face they share goes round the
+outside of the corner, as round the foot of a boss, a piece is added for
+what both would take if they ran on. Three rounds at a corner of three
+flat faces leave a ball resting against all three, at any angles; three
+even bevels at a square corner are cut flat between them. All of this
+holds for outside edges, where a blend takes material away, and for inside
+ones, where it fills in, and whether the faces stand square to each other
+or lean. Any other corner where blended edges meet is refused: an inside
+edge with an outside edge, three bevels at a corner that is not square,
+more than three edges.
+
+A blend covers a strip of each of its two faces, out to where it leaves
+the face. One wider than a face would run off its far side, and one with a
+boss or another blend in its strip would cut into that or be built over
+it. Both are refused. What a blend takes away may run over a hole in a
+flat face, which has nothing in it to take.
+
+An edge of any other shape that
 closes on itself (the rim where a rod is cut off on a slant, the saddle
 where one bore runs into another) is rounded by the ball's own surface:
 the pipe about the curve its centre follows, which is where the two faces
@@ -205,10 +238,10 @@ refused as a broken reference until the sketch is put on its face again.
 | Boolean union, cut, intersect, split body, combine | yes, for any pair of surfaces, where their curve crosses itself as well |
 | Holes: simple, counterbore, countersink, drill point | yes |
 | Threads, on a face or in a hole, to a depth or all the way, either hand: ISO metric (6g, 6H), Unified inch on its basic profile, and the rounded 30° form | yes, modelled exactly |
-| Fillet and chamfer on straight edges between flat faces and cylinders | yes, with mitres, sphere corners and inside corners |
+| Fillet and chamfer on straight edges between flat faces and cylinders | yes; with the ends, the corners and the widths described under blends above, exactly, and no others |
 | Fillet and chamfer on circular edges between flat faces, cylinders and cones about one axis | yes, along whole tangent chains |
 | Fillet on an edge of any shape that closes on itself, between planes, cylinders, cones, spheres and tori | yes, as the rolling ball's own surface |
-| Shell, and moving faces in or out | yes, while the faces keep their neighbours |
+| Shell, and moving faces in or out | yes, while the faces keep their neighbours; a wall is the thickness asked for at every corner or the shell is refused |
 | Rib, move, copy, mirror, linear and circular patterns | yes |
 | Section analysis, hidden-line drawings | yes, with the outlines of free-form skins, thread flanks and rounds |
 | Measurement, mass properties with moments of inertia, exact bounds | yes |
@@ -230,6 +263,12 @@ Not yet (each is refused by name, not approximated):
 - a ring cut along a curve that winds round both its axis and its tube;
 - tapers that would need a slanted cone, offsets that change which faces
   are neighbours, shells of free-form faces;
+- blends that meet at a corner other than those above: an inside edge
+  with an outside one (rounding every edge of a part that has both), three
+  bevels at a corner that is not square, more than three edges; a blend
+  that ends on a cone, a ball or a spline, or on two faces at once; a
+  blend wider than a face beside its edge, or with anything but a hole in
+  its way there;
 - the text snapshot of a body with a rolling-ball round can be written but
   not read back.
 
@@ -246,9 +285,11 @@ order it is meant to be taken on. This is the list to work down.
    revolution, of extrusion, offset) and its trimmed curves.
 2. **Blending without exceptions.** The rolling ball on open edges of any
    shape, between free-form faces, with a radius that varies along the
-   edge; blends where three or more of them meet at a vertex that is not a
-   box corner; a blend that runs off the end of its face or over a
-   neighbouring edge.
+   edge; the corner where an inside blend meets an outside one, which is
+   what rounding every edge of a real part comes down to; corners of more
+   than three edges, and of bevels at any angle; an end on a face of any
+   kind, or on several; a blend that runs off the end of its face or over
+   a neighbouring edge.
 3. **Offsets of anything.** Shells and thickened skins of free-form faces,
    offsets that change which faces are neighbours (a face that vanishes, a
    new one that appears), and taper as an operation on any face, slanted
@@ -311,7 +352,15 @@ an area of 126.124778 mm² here and 126.130980 mm² on the reference kernel.
 That face has a closed form, and it is the first number. The reference
 walks along its blends in steps and is a few parts in a hundred thousand
 off where one ends on a flat face; the lab remarks on such a face instead
-of failing it.
+of failing it. The face is one side of a slot, and the reference kernel
+has the other side, its mirror image, at 126.124777.
+
+What the lab shows is that the same bodies come out of every recipe, with
+the same flat faces. It weighs each body by the skin drawn of it, and two
+kernels do not facet a round face alike, so on a body with any curved face
+it allows two parts in a hundred. A fault of a few parts in ten thousand
+passes it. Exact agreement is another test's business: the corners table
+below, where both kernels' solids are weighed as solids.
 
 Beyond the recipes:
 
@@ -351,6 +400,38 @@ Beyond the recipes:
   digits: its spine the radius from both faces, the curves it touches
   along in them. Open CASCADE, asked to round the same edge of the same
   solid, fits a spline near it and comes within a part in ten thousand.
+- Blends and shells are weighed on both kernels
+  (`crates/occt/tests/corners.rs`): 123 shells, rounds and bevels on
+  plates with bosses and pockets of three to six sides, round ones, a D,
+  bosses whose sides lean and a bar pushed through the plate on a lean.
+  In 111 the two kernels agree to a part in a hundred million, and in 37
+  of those with a value worked out by hand as well. Three this kernel
+  builds, to the value worked out, where Open CASCADE gives up. Four it
+  refuses and says why. In five the two differ, and the value worked out
+  by hand is this kernel's. All five are on a boss made by a tapered
+  extrusion, whose sides Open CASCADE keeps as splines: on those it
+  squares two rounds off at the foot of a corner and rolls a patch of its
+  own between them, a tenth of a cubic millimetre less than the two run
+  into each other at a radius of 2, and it stops a blend on an upright
+  edge a little short under a boss that hangs over. On the leaning bar,
+  whose sides are flat on both kernels, the same blends agree.
+- Open CASCADE is weighed for this by integrating until twelve digits
+  stand. What its measure tool gives in one pass is out in the seventh
+  digit on a body with spline faces, which is more than some of the
+  differences looked for.
+- The values worked out by hand are held here too (`tests/shell.rs`,
+  `tests/blend.rs`), to ten digits. A wall is 2 thick at every corner of
+  its new side or the shell is not made. These tables exist because a
+  boss on a plate, hollowed, once came out six parts in ten thousand
+  heavy: two arcs of the wall stopped short of each other at each corner
+  of the boss, and left a cube of the wall's thickness standing there.
+  The comparison that should have caught it allowed two parts in a
+  thousand, because it weighed drawn skins. Looking for what else there
+  was of that kind found three more. A round carried on past the open end
+  of its edge cut into a second boss a millimetre further on. Two blends
+  at a corner ended square where the face beyond the corner leaned, a few
+  thousandths out. A blend wider than its face was cut straight through
+  whatever lay past it. All three are cases in those tests now.
 - Volume, area and centre of mass agree with closed forms to ten digits,
   moments of inertia with the textbook ones for a block, a rod, a ball and
   a ring, and across Booleans of solids in random poses the books balance

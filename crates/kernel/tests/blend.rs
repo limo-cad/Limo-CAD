@@ -1,3 +1,6 @@
+mod common;
+
+use common::integral;
 use limo_cad_kernel::blend::{chamfer, fillet};
 use limo_cad_kernel::make::{self, PSeg, Region, Seg};
 use limo_cad_kernel::math::*;
@@ -632,4 +635,573 @@ fn a_round_that_fills_where_a_rod_stands_on_a_slope() {
     sound(&filled);
     let (before, after) = (mass(&post).volume, mass(&filled).volume);
     assert!(after > before && after < before + 60.0, "{before} {after}");
+}
+
+/// A plate 40 by 25 by 10 with a boss 20 by 10 standing 10 high on it.
+fn boss_on_a_plate() -> Body {
+    let plate = make::block(V3::ZERO, v3(40.0, 25.0, 10.0)).unwrap();
+    let boss = make::block(v3(10.0, 8.0, 10.0), v3(30.0, 18.0, 20.0)).unwrap();
+    boolean(&plate, &boss, Op::Union).unwrap()
+}
+
+/// The plate with a pocket 20 by 10 and 6 deep in its top instead.
+fn pocketed_plate() -> Body {
+    let plate = make::block(V3::ZERO, v3(40.0, 25.0, 10.0)).unwrap();
+    let pocket = make::block(v3(10.0, 8.0, 4.0), v3(30.0, 18.0, 11.0)).unwrap();
+    boolean(&plate, &pocket, Op::Cut).unwrap()
+}
+
+/// The straight edge whose middle is at `m`.
+fn edge_at(body: &Body, m: V3) -> u32 {
+    let found = edges_where(body, |mid, _| (mid - m).len() < 1.0e-9);
+    assert_eq!(found.len(), 1, "edges with their middle at {m:?}");
+    found[0]
+}
+
+/// Whether what a body holds is `expected` to the last figure that can be
+/// asked of it. These bodies are flats, cylinders and balls, which are
+/// weighed exactly: a corner put together wrongly is out in the fourth or
+/// fifth figure, where the drawing of a round face would hide it.
+fn holds(body: &Body, expected: f64) {
+    let held = mass(body).volume;
+    assert!(
+        (held - expected).abs() <= 1.0e-10 * expected,
+        "holds {held:.9}, not {expected:.9}: {:+.9} out",
+        held - expected
+    );
+}
+
+/// What a round of radius 2 fills an inside edge with, or takes off an
+/// outside one, for each unit of the edge's length.
+const SLIVER: f64 = 4.0 - PI;
+
+/// Two rounds along the foot of a boss, round one of its corners. Each
+/// fills its own edge, and each stops where its edge does. Between their
+/// two ends is a corner neither has filled, and they run on into it until
+/// they cross: what is filled there is the corner cube less what lies
+/// inside either of the two cylinders. Left unfilled it is a notch the
+/// size of the radius, in a body that is otherwise sound.
+#[test]
+fn rounds_round_the_foot_of_a_boss_run_into_each_other() {
+    let body = boss_on_a_plate();
+    let crossing = 8.0 * (5.0 / 3.0 - 0.5 * PI);
+    let (right, back) = (
+        edge_at(&body, v3(30.0, 13.0, 10.0)),
+        edge_at(&body, v3(20.0, 18.0, 10.0)),
+    );
+    let two = fillet(&body, &[right, back], 2.0).unwrap();
+    two.check().unwrap();
+    holds(&two, 12000.0 + SLIVER * 30.0 + crossing);
+    assert_eq!(count(&two, SurfKind::Cylinder), 2);
+    // They meet along a mitre, as two rounds on outside edges do.
+    let mitres = |body: &Body| {
+        (0..body.edge_count() as u32)
+            .filter(|&e| body.e_curve_ref(e).kind == CurveKind::Ellipse)
+            .count()
+    };
+    assert_eq!(mitres(&two), 1);
+
+    let foot = edges_where(&body, |m, _| {
+        (m.z - 10.0).abs() < 1e-9 && m.x > 5.0 && m.x < 35.0 && m.y > 5.0 && m.y < 20.0
+    });
+    assert_eq!(foot.len(), 4);
+    let all = fillet(&body, &foot, 2.0).unwrap();
+    all.check().unwrap();
+    holds(&all, 12000.0 + SLIVER * 60.0 + 4.0 * crossing);
+    assert_eq!((count(&all, SurfKind::Cylinder), mitres(&all)), (4, 4));
+
+    // Bevels the same: two flats that run on and cross in a pyramid.
+    let broken = chamfer(&body, &[right, back], 2.0, None).unwrap();
+    broken.check().unwrap();
+    holds(&broken, 12000.0 + 2.0 * 30.0 + 8.0 / 3.0);
+}
+
+/// Three rounds in the corner of a pocket. A ball of the radius rests in
+/// the corner against all three walls, and what is filled there is the
+/// corner cube less the ball. Three cylinders crossing each other fill
+/// less: what lies inside all three of them is more than the ball.
+#[test]
+fn a_ball_rests_in_the_corner_of_a_pocket() {
+    let body = pocketed_plate();
+    let corner = [
+        edge_at(&body, v3(30.0, 13.0, 4.0)),
+        edge_at(&body, v3(20.0, 18.0, 4.0)),
+        edge_at(&body, v3(30.0, 18.0, 7.0)),
+    ];
+    let rounded = fillet(&body, &corner, 2.0).unwrap();
+    rounded.check().unwrap();
+    // Along each edge up to the corner cube, and in the cube.
+    holds(
+        &rounded,
+        8800.0 + SLIVER * (8.0 + 18.0 + 4.0) + 8.0 * (1.0 - PI / 6.0),
+    );
+    assert_eq!(
+        (
+            count(&rounded, SurfKind::Sphere),
+            count(&rounded, SurfKind::Cylinder)
+        ),
+        (1, 3)
+    );
+    // The two on the floor alone cross as they are, in a mitre.
+    let floor = fillet(&body, &corner[..2], 2.0).unwrap();
+    holds(
+        &floor,
+        8800.0 + SLIVER * 30.0 - 8.0 * (5.0 / 3.0 - 0.5 * PI),
+    );
+}
+
+/// The ball rests in a corner that is not square just the same: its centre
+/// is the radius from each of the three faces, wherever that puts it.
+#[test]
+fn a_ball_rests_in_a_corner_that_is_not_square() {
+    // A six-sided post, and one corner of its top.
+    let at = |i: usize| {
+        let a = TAU * i as f64 / 6.0 + 0.3;
+        v3(12.0 * a.cos(), 12.0 * a.sin(), 0.0)
+    };
+    let segs: Vec<Seg> = (0..6)
+        .map(|i| Seg::Line {
+            a: at(i),
+            b: at(i + 1),
+        })
+        .collect();
+    let post = make::extrude(&Region { loops: vec![segs] }, V3::Z, 0.0, 20.0).unwrap();
+    let up = v3(0.0, 0.0, 20.0);
+    let corner = [
+        edge_at(&post, (at(0) + at(1)) * 0.5 + up),
+        edge_at(&post, (at(1) + at(2)) * 0.5 + up),
+        edge_at(&post, at(1) + up * 0.5),
+    ];
+    let r = 2.0;
+    let rounded = fillet(&post, &corner, r).unwrap();
+    rounded.check().unwrap();
+    assert_eq!(count(&rounded, SurfKind::Sphere), 1);
+    let ball = (0..rounded.face_count() as u32)
+        .map(|f| *rounded.f_surface(f))
+        .find(|s| s.kind == SurfKind::Sphere)
+        .unwrap();
+    assert!((ball.r - r).abs() < 1e-12);
+    // Its centre: the radius below the top and inside the two walls.
+    let centre = ball.f.o;
+    assert!((20.0 - centre.z - r).abs() < 1e-9, "{centre:?}");
+    for i in [0, 1] {
+        let along = (at(i + 1) - at(i)).unit();
+        let inward = V3::Z.cross(along);
+        assert!(
+            ((centre - at(i)).dot(inward) - r).abs() < 1e-9,
+            "{centre:?}"
+        );
+    }
+    // And each round runs into it without a crease: the cylinders pass
+    // through the ball's centre.
+    for f in 0..rounded.face_count() as u32 {
+        let s = rounded.f_surface(f);
+        if s.kind == SurfKind::Cylinder {
+            let off = centre - s.f.o;
+            assert!((off - s.f.z * off.dot(s.f.z)).len() < 1e-9);
+        }
+    }
+}
+
+/// Three even bevels at a square corner run together in a point, and the
+/// corner is not left as that point: it is cut flat, through the three
+/// places where two of the bevels meet on a face.
+#[test]
+fn three_bevels_at_a_square_corner_are_cut_flat() {
+    let block = make::block(V3::ZERO, v3(40.0, 25.0, 10.0)).unwrap();
+    let corner = [
+        edge_at(&block, v3(40.0, 12.5, 10.0)),
+        edge_at(&block, v3(20.0, 25.0, 10.0)),
+        edge_at(&block, v3(40.0, 25.0, 5.0)),
+    ];
+    let d: f64 = 2.0;
+    let broken = chamfer(&block, &corner, d, None).unwrap();
+    broken.check().unwrap();
+    // Three prisms, less what any two share, plus what all three share,
+    // and the pyramid under the flat.
+    let taken = 0.5 * d * d * (25.0 + 40.0 + 10.0) - d.powi(3) + d.powi(3) / 4.0 + d.powi(3) / 12.0;
+    holds(&broken, 10000.0 - taken);
+    // Six faces of the block, three bevels and the flat between them.
+    assert_eq!(count(&broken, SurfKind::Plane), 10);
+    // In the corner of a pocket the same flat is filled in.
+    let pocket = pocketed_plate();
+    let inside = [
+        edge_at(&pocket, v3(30.0, 13.0, 4.0)),
+        edge_at(&pocket, v3(20.0, 18.0, 4.0)),
+        edge_at(&pocket, v3(30.0, 18.0, 7.0)),
+    ];
+    let filled = chamfer(&pocket, &inside, d, None).unwrap();
+    filled.check().unwrap();
+    let added = 0.5 * d * d * (10.0 + 20.0 + 6.0) - d.powi(3) + d.powi(3) / 4.0 + d.powi(3) / 12.0;
+    holds(&filled, 8800.0 + added);
+}
+
+/// A corner where blended edges meet is finished exactly or not at all.
+/// The tools of the edges are right each on its own; left to meet as they
+/// are at a corner nobody has worked out, they make a sound solid that is
+/// a tenth of the radius cubed away from the blend that was asked for.
+#[test]
+fn a_corner_that_cannot_be_finished_is_refused() {
+    let body = boss_on_a_plate();
+    // An outside edge and an inside edge: an upright of the boss and the
+    // foot it stands on.
+    let mixed = [
+        edge_at(&body, v3(30.0, 18.0, 15.0)),
+        edge_at(&body, v3(30.0, 13.0, 10.0)),
+    ];
+    for refused in [
+        fillet(&body, &mixed, 2.0),
+        chamfer(&body, &mixed, 2.0, None),
+    ] {
+        let said = refused.unwrap_err();
+        assert!(
+            said.contains("an inside edge and an outside edge"),
+            "{said}"
+        );
+    }
+    // Each of them alone is no trouble.
+    for one in mixed {
+        fillet(&body, &[one], 2.0).unwrap().check().unwrap();
+    }
+    // Three bevels at a corner that is not square.
+    let at = |i: usize| {
+        let a = TAU * i as f64 / 6.0 + 0.3;
+        v3(12.0 * a.cos(), 12.0 * a.sin(), 0.0)
+    };
+    let segs: Vec<Seg> = (0..6)
+        .map(|i| Seg::Line {
+            a: at(i),
+            b: at(i + 1),
+        })
+        .collect();
+    let post = make::extrude(&Region { loops: vec![segs] }, V3::Z, 0.0, 20.0).unwrap();
+    let up = v3(0.0, 0.0, 20.0);
+    let corner = [
+        edge_at(&post, (at(0) + at(1)) * 0.5 + up),
+        edge_at(&post, (at(1) + at(2)) * 0.5 + up),
+        edge_at(&post, at(1) + up * 0.5),
+    ];
+    let said = chamfer(&post, &corner, 2.0, None).unwrap_err();
+    assert!(said.contains("cannot be finished"), "{said}");
+    // Two of them cross as they are, and that is right.
+    chamfer(&post, &corner[..2], 2.0, None)
+        .unwrap()
+        .check()
+        .unwrap();
+}
+/// A boss on a plate 60 square and 10 thick. Its outline is 20 by 12 where
+/// it starts, on the underside of the plate, and smaller by `lean` of
+/// itself for every unit it rises: its sides lean in when `lean` is more
+/// than nothing and hang over when it is less. It ends 20 up.
+///
+/// Its two pairs of sides lean differently, the long sides less than the
+/// short ones, so that at a corner nothing is the mirror of anything.
+struct LeaningBoss {
+    lean: f64,
+}
+
+/// A blend's section beside a face that leans: how far out from the face
+/// it is, at a distance from the flat face it starts on.
+#[derive(Clone, Copy)]
+struct Beside {
+    /// How much further in the leaning face is for each unit of distance
+    /// from the flat one.
+    slope: f64,
+    /// The radius of a round, or the distance of a bevel.
+    size: f64,
+    round: bool,
+}
+
+impl Beside {
+    /// The distance from the flat face at which the blend runs out.
+    fn ends(&self) -> f64 {
+        let lean = self.slope.atan();
+        if self.round {
+            self.size / (0.25 * PI + 0.5 * lean).tan() * lean.cos()
+        } else {
+            self.size * lean.cos()
+        }
+    }
+
+    fn width(&self, h: f64) -> f64 {
+        if h >= self.ends() {
+            return 0.0;
+        }
+        let lean = self.slope.atan();
+        if self.round {
+            let r = self.size;
+            r / (0.25 * PI + 0.5 * lean).tan() + self.slope * h - (2.0 * r * h - h * h).sqrt()
+        } else {
+            self.size - h * ((1.0 + lean.sin()) / lean.cos() - self.slope)
+        }
+    }
+
+    /// The integral of `f(h) * width(h)` over the blend's height. For a
+    /// round the height is run through as `r (1 - cos a)`, which takes the
+    /// square root out of the end where the round starts.
+    fn over(&self, upto: f64, f: impl Fn(f64) -> f64) -> f64 {
+        let upto = upto.min(self.ends());
+        if self.round {
+            let r = self.size;
+            integral(0.0, (1.0 - upto / r).acos(), |a| {
+                let h = r * (1.0 - a.cos());
+                f(h) * self.width(h) * r * a.sin()
+            })
+        } else {
+            integral(0.0, upto, |h| f(h) * self.width(h))
+        }
+    }
+}
+
+impl LeaningBoss {
+    fn body(&self) -> Body {
+        let plate = make::block(v3(-30.0, -30.0, 0.0), v3(30.0, 30.0, 10.0)).unwrap();
+        let c = [
+            v3(-10.0, -6.0, 0.0),
+            v3(10.0, -6.0, 0.0),
+            v3(10.0, 6.0, 0.0),
+            v3(-10.0, 6.0, 0.0),
+        ];
+        let segs = (0..4)
+            .map(|i| Seg::Line {
+                a: c[i],
+                b: c[(i + 1) % 4],
+            })
+            .collect();
+        let region = Region { loops: vec![segs] };
+        let boss = make::taper(&region, V3::Z, 0.0, 20.0, V3::ZERO, -self.lean).unwrap();
+        boolean(&plate, &boss, Op::Union).unwrap()
+    }
+
+    /// Half the boss's length and half its width at height `z`.
+    fn half(&self, z: f64) -> (f64, f64) {
+        (10.0 * (1.0 - self.lean * z), 6.0 * (1.0 - self.lean * z))
+    }
+
+    /// The straight edge nearest a point: the dimensions of a leaning boss
+    /// are not round numbers.
+    fn edge(&self, body: &Body, near: V3) -> u32 {
+        (0..body.edge_count() as u32)
+            .filter(|&e| body.e_curve_ref(e).kind == CurveKind::Line)
+            .min_by(|&a, &b| {
+                (body.e_mid(a) - near)
+                    .len()
+                    .total_cmp(&(body.e_mid(b) - near).len())
+            })
+            .unwrap()
+    }
+
+    /// The edges of one corner: at the foot of the short side and of the
+    /// long side (`z` 10), or on top of them (`z` 20), and the upright
+    /// between the two.
+    fn corner(&self, body: &Body, z: f64) -> (u32, u32) {
+        let (a, b) = self.half(z);
+        (
+            self.edge(body, v3(a, 0.0, z)),
+            self.edge(body, v3(0.0, b, z)),
+        )
+    }
+
+    fn upright(&self, body: &Body) -> u32 {
+        let (a, b) = self.half(15.0);
+        self.edge(body, v3(a, b, 15.0))
+    }
+
+    /// What blends on the short side, the long side and both change, at
+    /// the foot (`top` false: they fill in) or on top (they take away).
+    /// Slice by slice a blend is a strip along its side, as wide as its
+    /// section is there, and two of them at a corner are two strips that
+    /// cross: at the foot the corner between them is filled as far out as
+    /// both reach, on top what both take is taken once.
+    fn changes(&self, top: bool, size: f64, round: bool) -> (f64, f64, f64) {
+        let (kx, ky) = (10.0 * self.lean, 6.0 * self.lean);
+        let (short, long) = (
+            Beside {
+                slope: kx,
+                size,
+                round,
+            },
+            Beside {
+                slope: ky,
+                size,
+                round,
+            },
+        );
+        // Half the boss's size at a distance from the plate or the top.
+        let at = |h: f64| {
+            if top {
+                self.half(20.0 - h)
+            } else {
+                self.half(10.0 + h)
+            }
+        };
+        let one = short.over(f64::MAX, |h| 2.0 * at(h).1);
+        let other = long.over(f64::MAX, |h| 2.0 * at(h).0);
+        let both = short.over(long.ends(), |h| long.width(h));
+        if top {
+            (-one, -other, -one - other + both)
+        } else {
+            (one, other, one + other + both)
+        }
+    }
+
+    /// What a blend on one upright edge takes: its section, for as long as
+    /// the edge is.
+    fn upright_takes(&self, size: f64, round: bool) -> f64 {
+        let (kx, ky) = (10.0 * self.lean, 6.0 * self.lean);
+        let between = PI - (kx * ky / ((1.0 + kx * kx) * (1.0 + ky * ky)).sqrt()).acos();
+        let section = if round {
+            size * size / (0.5 * between).tan() - 0.5 * (PI - between) * size * size
+        } else {
+            0.5 * size * size * between.sin()
+        };
+        section * 10.0 * (1.0 + kx * kx + ky * ky).sqrt()
+    }
+}
+
+/// A blend ends on the face that ends its edge, and that face may lean. At
+/// the foot of a boss whose sides lean, a round stops on the side next to
+/// it, further along its edge the higher up it is; where two meet at a
+/// corner, each stops on the other's side and they cross in between. All
+/// of it has a value that can be had slice by slice, for sides that lean
+/// in and for sides that hang over.
+#[test]
+fn blends_end_on_faces_that_lean() {
+    for lean in [1.0, -1.0] {
+        let boss = LeaningBoss {
+            lean: lean * 8.0f64.to_radians().tan() / 136.0f64.sqrt(),
+        };
+        let body = boss.body();
+        let whole = mass(&body).volume;
+        for (round, size) in [(true, 2.0), (false, 2.0)] {
+            let blend = |edges: &[u32]| {
+                let made = if round {
+                    fillet(&body, edges, size)
+                } else {
+                    chamfer(&body, edges, size, None)
+                }
+                .unwrap();
+                made.check().unwrap();
+                made
+            };
+            for top in [false, true] {
+                let (short, long) = boss.corner(&body, if top { 20.0 } else { 10.0 });
+                let (one, other, both) = boss.changes(top, size, round);
+                holds(&blend(&[short]), whole + one);
+                holds(&blend(&[long]), whole + other);
+                holds(&blend(&[short, long]), whole + both);
+            }
+            holds(
+                &blend(&[boss.upright(&body)]),
+                whole - boss.upright_takes(size, round),
+            );
+        }
+    }
+}
+
+/// A blend stops where its edge does. It is never carried on past the end
+/// of the edge with nothing to stop it: a second boss a millimetre from
+/// the first, in line with the edge, is not touched, and neither is a step
+/// that goes on below the edge's end.
+#[test]
+fn a_blend_stops_where_its_edge_does() {
+    let plate = make::block(V3::ZERO, v3(60.0, 40.0, 10.0)).unwrap();
+    let first = make::block(v3(5.0, 10.0, 10.0), v3(25.0, 30.0, 20.0)).unwrap();
+    for (gap, height) in [(1.0, 20.0), (1.0, 19.0), (0.0, 19.0)] {
+        let second = make::block(v3(25.0 + gap, 10.0, 10.0), v3(46.0, 30.0, height)).unwrap();
+        let body = boolean(
+            &boolean(&plate, &first, Op::Union).unwrap(),
+            &second,
+            Op::Union,
+        )
+        .unwrap();
+        let whole = mass(&body).volume;
+        let edge = edge_at(&body, v3(15.0, 10.0, 20.0));
+        let rounded = fillet(&body, &[edge], 2.0).unwrap();
+        rounded.check().unwrap();
+        holds(&rounded, whole - SLIVER * 20.0);
+        holds(
+            &chamfer(&body, &[edge], 2.0, None).unwrap(),
+            whole - 2.0 * 20.0,
+        );
+    }
+}
+
+/// A blend wider than a face beside its edge is refused. Carried out, it
+/// would run on past the far side of that face: off a plate thinner than
+/// the round and into the open, over the top of a step lower than it, or
+/// below the foot of one and into what the step stands on. Each of those
+/// is a closed solid, and none of them is a blend between the two faces.
+#[test]
+fn a_blend_wider_than_its_face_is_refused() {
+    let said = "too large for one of the faces beside its edge";
+    let thin = make::block(V3::ZERO, v3(20.0, 10.0, 1.0)).unwrap();
+    let edge = edge_at(&thin, v3(10.0, 0.0, 1.0));
+    assert!(fillet(&thin, &[edge], 2.0).unwrap_err().contains(said));
+    assert!(chamfer(&thin, &[edge], 2.0, None)
+        .unwrap_err()
+        .contains(said));
+    // As wide as the face is no wider than it.
+    holds(
+        &fillet(&thin, &[edge], 1.0).unwrap(),
+        200.0 - 0.25 * SLIVER * 20.0,
+    );
+
+    let block = make::block(V3::ZERO, v3(20.0, 10.0, 10.0)).unwrap();
+    let step = make::block(v3(0.0, 0.0, 10.0), v3(10.0, 10.0, 11.0)).unwrap();
+    let stepped = boolean(&block, &step, Op::Union).unwrap();
+    for z in [10.0, 11.0] {
+        let edge = edge_at(&stepped, v3(10.0, 5.0, z));
+        assert!(fillet(&stepped, &[edge], 2.0).unwrap_err().contains(said));
+        fillet(&stepped, &[edge], 0.5).unwrap().check().unwrap();
+    }
+    // Two rounds that would need the same strip of a face between them.
+    let bar = make::block(V3::ZERO, v3(20.0, 3.0, 10.0)).unwrap();
+    let (near, far) = (
+        edge_at(&bar, v3(10.0, 0.0, 10.0)),
+        edge_at(&bar, v3(10.0, 3.0, 10.0)),
+    );
+    assert!(fillet(&bar, &[near, far], 2.0).unwrap_err().contains(said));
+    holds(
+        &fillet(&bar, &[near, far], 1.5).unwrap(),
+        600.0 - 2.0 * 0.5625 * SLIVER * 20.0,
+    );
+}
+
+/// What a round takes away may run over a hole in one of its faces: there
+/// is nothing in the hole to take, and the round is cut through by it. A
+/// round that fills an inside edge may not: it would be built over the
+/// hole.
+#[test]
+fn a_round_runs_over_a_hole_but_is_not_built_over_one() {
+    let block = make::block(V3::ZERO, v3(20.0, 10.0, 10.0)).unwrap();
+    // A hole of radius 1 whose middle is 2 from the edge.
+    let drill = make::cylinder(v3(10.0, 2.0, -1.0), V3::Z, 1.0, 12.0).unwrap();
+    let holed = boolean(&block, &drill, Op::Cut).unwrap();
+    let whole = mass(&holed).volume;
+    let rounded = fillet(&holed, &[edge_at(&holed, v3(10.0, 0.0, 10.0))], 2.0).unwrap();
+    rounded.check().unwrap();
+    // The sliver all along the edge, less what of it was in the hole
+    // already: over half the hole's disc, the sliver's height.
+    let in_the_hole = integral(0.0, 0.5 * PI, |a| {
+        let u = a.sin();
+        2.0 * a.cos() * (2.0 - (4.0 - u * u).sqrt()) * a.cos()
+    });
+    let held = mass(&rounded).volume;
+    let expected = whole - SLIVER * 20.0 + in_the_hole;
+    assert!(
+        (held - expected).abs() < 1.0e-8 * expected,
+        "holds {held:.9}, not {expected:.9}"
+    );
+
+    // A hole as near the foot of a wall that stands on the block.
+    let wall = make::block(v3(0.0, 0.0, 10.0), v3(20.0, 3.0, 20.0)).unwrap();
+    let drill = make::cylinder(v3(10.0, 5.0, -1.0), V3::Z, 1.0, 12.0).unwrap();
+    let holed = boolean(&boolean(&block, &wall, Op::Union).unwrap(), &drill, Op::Cut).unwrap();
+    let foot = edge_at(&holed, v3(10.0, 3.0, 10.0));
+    let said = fillet(&holed, &[foot], 2.0).unwrap_err();
+    assert!(
+        said.contains("too large for one of the faces beside its edge"),
+        "{said}"
+    );
 }

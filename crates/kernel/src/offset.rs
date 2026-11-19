@@ -17,7 +17,14 @@
 //! Faces chosen as openings stay where they are in the copy, so the two
 //! coincide there and the Boolean leaves the wall open. Where the offset
 //! pulls two faces apart along an edge, the gap is closed by an arc about
-//! the original edge, as a wall of constant thickness needs.
+//! the original edge, as a wall of constant thickness needs; where two or
+//! three such arcs meet at a corner they run into each other, or into a
+//! ball about the corner.
+//!
+//! A wall is what it is by one property: every point of its new side is as
+//! far from the walls of the body as the wall is thick. The copy is held to
+//! that at each of its corners before it is used, and a shell that would
+//! come out thicker or thinner at one of them is refused.
 
 use crate::blend;
 use crate::boolean::{boolean, Op};
@@ -26,6 +33,7 @@ use crate::math::*;
 use crate::name::mix;
 use crate::ssi::{intersect, Ssi};
 use crate::topo::Body;
+use crate::trim::{classify, edge_closest, EdgeMesh, FaceTrim, PtClass};
 
 /// The same curve run the other way: `reversed.point(-t) == self.point(t)`.
 fn reversed(c: &Curve) -> Option<Curve> {
@@ -304,6 +312,75 @@ fn carried(body: &Body, f: u32, old: &Curve, at: [f64; 3], by: f64) -> Result<Cu
     }
 }
 
+/// How far `p` is from face `f` of a body, as the face is bounded.
+fn face_distance(body: &Body, trim: &FaceTrim, f: u32, p: V3) -> f64 {
+    let surface = body.f_surface(f);
+    let foot = surface.project(p);
+    if classify(body, trim, f, foot) != PtClass::Out {
+        return foot.dist(p);
+    }
+    body.face_hes(f)
+        .map(|h| edge_closest(body, h >> 1, p).1)
+        .fold(f64::INFINITY, f64::min)
+}
+
+/// Hold the new side of a wall to what makes it one: each of its corners
+/// is as far from the walls of the body as the wall is thick.
+///
+/// The faces of the copy are offsets, arcs and balls, which are that far
+/// from what they were made from by construction. What can go wrong is how
+/// they are put together at a corner: two arcs stopped short of each other,
+/// a face that is nearer some other wall than its own. Either shows at a
+/// corner of the copy, as a point too far from the walls or too near them.
+fn even_wall(body: &Body, open: &[u32], copy: &Body, thickness: f64) -> Result<(), String> {
+    const SAG: f64 = 0.05;
+    let rims = EdgeMesh::build(body, SAG, 16.0);
+    let walls: Vec<(u32, FaceTrim, Aabb)> = (0..body.face_count() as u32)
+        .filter(|f| !open.contains(f))
+        .map(|f| {
+            let trim = FaceTrim::build(body, &rims, f, SAG);
+            let reach = trim.bbox().grown(2.0 * thickness);
+            (f, trim, reach)
+        })
+        .collect();
+    // A corner of the body with nothing but openings round it stays where
+    // it is in the copy, and is no part of the wall's new side.
+    let mut walled = vec![false; body.verts.len()];
+    for h in 0..2 * body.edge_count() as u32 {
+        if !open.contains(&body.h_face(h)) {
+            walled[body.h_origin(h) as usize] = true;
+        }
+    }
+    let bare: Vec<V3> = (0..body.verts.len())
+        .filter(|&v| !walled[v])
+        .map(|v| body.verts[v])
+        .collect();
+    let slack = 1.0e-6 * (1.0 + thickness);
+    for &p in &copy.verts {
+        if bare.iter().any(|q| q.dist(p) < slack) {
+            continue;
+        }
+        // A wall much further off than the wall is thick is not the
+        // nearest, or the corner is wrong anyway.
+        let nearest = walls
+            .iter()
+            .filter(|(_, _, reach)| reach.contains(p))
+            .map(|(f, trim, _)| face_distance(body, trim, *f, p))
+            .fold(f64::INFINITY, f64::min);
+        if (nearest - thickness).abs() > slack {
+            return Err(format!(
+                "the wall would not be {thickness} thick at every corner of the body ({} at one of them); a corner of this kind is not supported yet",
+                if nearest.is_finite() {
+                    format!("{nearest:.4}")
+                } else {
+                    "more".to_string()
+                }
+            ));
+        }
+    }
+    Ok(())
+}
+
 /// Hollow a body out, leaving a wall of the given thickness. The faces in
 /// `open` are removed, so the hollow opens through them. The wall is taken
 /// from inside the body, or added around it when `inward` is false.
@@ -351,6 +428,7 @@ pub fn shell_as(
         copy = blend::fillet(&copy, &gaps, thickness)
             .map_err(|e| format!("the wall cannot be carried round a bend of the body: {e}"))?;
     }
+    even_wall(body, open, &copy, thickness)?;
     copy.retag(|from| mix(tag, from));
     let (result, room) = if inward {
         (boolean(body, &copy, Op::Cut)?, &copy)

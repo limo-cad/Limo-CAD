@@ -414,8 +414,10 @@ fn a_project_finished_on_one_kernel_opens_on_the_other() {
         let saved = made.project_snapshot().unwrap();
 
         // Opened on the other: the same face, and from here on under that
-        // kernel's own key. The two kernels round the inside of the step
-        // a little differently, so the shells agree only nearly.
+        // kernel's own key. The solids are the same to the last figure
+        // (`crates/occt/tests/corners.rs` weighs them); what is weighed
+        // here is the skin each kernel draws of its solid, and the two
+        // do not draw a round face with the same facets.
         let opened = on(second);
         ok(opened.project_load_snapshot(&saved));
         let again = weight(&opened);

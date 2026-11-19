@@ -121,7 +121,8 @@ fn parts_stay_valid_across_their_dimensions() {
                 corner,
                 rim,
                 boss_radius: lerp(10.0, 16.0, (i + j) % steps),
-                boss_height: lerp(4.0, 20.0, j),
+                // High enough for the round at its foot and the bevel on its top.
+                boss_height: lerp(5.0, 20.0, j),
                 bore_radius: lerp(3.0, 8.0, i),
                 counterbore_radius: lerp(3.5, 6.0, (2 * i + j) % steps),
                 ..Default::default()

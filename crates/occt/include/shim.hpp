@@ -69,6 +69,10 @@ class Kernel {
   rust::Vec<std::uint32_t> faces_through(std::uint64_t body_id,
                                          const rust::Vec<double>& points,
                                          double reach) const;
+  // What a body holds, integrated until twelve digits stand. The measure
+  // tool integrates once, which is quicker and is out in the seventh digit
+  // on a body with spline faces.
+  double weighed(std::uint64_t body_id) const;
   FfiMesh mesh(std::uint64_t body_id) const;
   FfiSectionGeometry section_geometry(std::uint64_t body_id,
                                      const FfiSectionOptions& options) const;

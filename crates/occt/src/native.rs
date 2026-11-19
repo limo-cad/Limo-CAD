@@ -288,6 +288,7 @@ mod ffi {
             reach: f64,
         ) -> Result<Vec<u32>>;
         fn face_marks(self: &Kernel, body_id: u64, indices: &Vec<u32>) -> Result<Vec<f64>>;
+        fn weighed(self: &Kernel, body_id: u64) -> Result<f64>;
         fn faces_through(
             self: &Kernel,
             body_id: u64,
@@ -765,6 +766,21 @@ impl OcctKernel {
         match &self.limo {
             Some(limo) => limo.feature_keys(),
             None => self.key_reports.iter().flatten().cloned().collect(),
+        }
+    }
+
+    /// What a body holds, to twelve digits: for holding one kernel against
+    /// the other. Open CASCADE integrates until that many stand, which the
+    /// measure tool does not wait for; on a body with spline faces its one
+    /// pass is out in the seventh digit. The Limo kernel weighs flats,
+    /// cylinders, cones, balls and rings in closed form.
+    pub fn weigh(&self, body: limo_cad_core::BodyId) -> Result<f64, String> {
+        match &self.limo {
+            Some(limo) => limo
+                .body(body.0)
+                .map(|found| limo_cad_kernel::props::mass(found).volume)
+                .ok_or_else(|| "the body to weigh is missing".to_string()),
+            None => self.inner.weighed(body.0).map_err(|e| e.to_string()),
         }
     }
 

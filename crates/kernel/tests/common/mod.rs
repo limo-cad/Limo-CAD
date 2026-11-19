@@ -58,3 +58,35 @@ pub fn volume(body: &Body) -> f64 {
         |linear: f64, angular: f64| tessellate(body, &TessOptions { linear, angular }).volume();
     (4.0 * at(0.0005, 0.02) - at(0.002, 0.04)) / 3.0
 }
+
+/// The integral of `f` from `a` to `b`: five-point Gauss rules on two
+/// hundred pieces, which is past the last figure of a double for the
+/// smooth things the tests integrate.
+pub fn integral(a: f64, b: f64, f: impl Fn(f64) -> f64) -> f64 {
+    const X: [f64; 5] = [
+        0.0,
+        0.538_469_310_105_683_1,
+        -0.538_469_310_105_683_1,
+        0.906_179_845_938_664,
+        -0.906_179_845_938_664,
+    ];
+    const W: [f64; 5] = [
+        0.568_888_888_888_888_9,
+        0.478_628_670_499_366_47,
+        0.478_628_670_499_366_47,
+        0.236_926_885_056_189_08,
+        0.236_926_885_056_189_08,
+    ];
+    let pieces = 200;
+    let step = (b - a) / pieces as f64;
+    (0..pieces)
+        .map(|i| {
+            let mid = a + (i as f64 + 0.5) * step;
+            (0..5)
+                .map(|k| W[k] * f(mid + 0.5 * step * X[k]))
+                .sum::<f64>()
+                * 0.5
+                * step
+        })
+        .sum()
+}

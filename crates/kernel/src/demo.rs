@@ -410,7 +410,7 @@ pub static PARTS: [Part; 4] = [
             dim("Corner radius", 4.5, 10.0, 6.0),
             dim("Rim radius", 0.0, 4.0, 2.5),
             dim("Boss diameter", 20.0, 32.0, 28.0),
-            dim("Boss height", 4.0, 20.0, 12.0),
+            dim("Boss height", 5.0, 20.0, 12.0),
             dim("Bore diameter", 6.0, 16.0, 14.0),
             dim("Counterbore diameter", 7.0, 12.0, 10.0),
         ],
