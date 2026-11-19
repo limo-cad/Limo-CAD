@@ -1767,6 +1767,9 @@ mod drawing_export_tests;
 mod print_layout_tests;
 
 #[cfg(all(test, feature = "native-occt"))]
+mod projection_tests;
+
+#[cfg(all(test, feature = "native-occt"))]
 mod tests {
     use super::*;
 

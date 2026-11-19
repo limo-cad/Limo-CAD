@@ -1,0 +1,23 @@
+; Associative sketch projection intent in model.json schema 17.
+; This describes JSON-compatible authored data, not a separate CBOR transport.
+; Existing project-snapshot.cddl retains its CBOR v1 envelope and opaque model_json.
+projection-source = { feature: uint .gt 0, entity: uint .gt 0 }
+projection-binding = { id: 1..65536, source: projection-source }
+projection-snapshot-members = (
+  ? projection_bindings: [*128 projection-binding],
+  ? projection_id_high_water: 0..65536
+)
+sketch-project-request = { sources: [1*128 projection-source] }
+sketch-projection-remove-request = { id: 1..65536 }
+; IDs and source pairs must be unique per sketch; high-water >= every binding ID.
+; Source must be an earlier, unsuppressed, valid sketch in the same document.
+; Sources resolve by feature/entity identity, never a name or a positional index.
+; Circular references require parallel planes. Splines use the existing bounded
+; 4..16 samples per span (2..250 fit points), at most 999 segments per curve,
+; preserving the existing profile segment-identity stride.
+; Derived geometry is read-only and absent from authored entity/DOF tables.
+; Missing sources retain intent and an error, remove cached geometry, and block
+; that sketch's profile catalog. Cached coordinates never repair a missing source.
+; Undo/Redo keep associations and never reuse retired projection identities.
+; Schema 16 and older reject disguised projection intent; schema 17 can read
+; previous project schemas. A schema 16 reader rejects schema 17 on its header.

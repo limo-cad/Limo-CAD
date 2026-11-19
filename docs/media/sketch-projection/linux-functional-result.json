@@ -1,0 +1,66 @@
+{
+  "confirm_undo_redo_remove": true,
+  "layouts": [
+    {
+      "client": {
+        "height": 434.28570556640625,
+        "width": 685.7142944335938,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "locale": "en",
+      "scale": 1.75
+    },
+    {
+      "client": {
+        "height": 434.28570556640625,
+        "width": 685.7142944335938,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "locale": "es",
+      "scale": 1.75
+    },
+    {
+      "client": {
+        "height": 434.28570556640625,
+        "width": 685.7142944335938,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "locale": "de",
+      "scale": 1.75
+    },
+    {
+      "client": {
+        "height": 434.28570556640625,
+        "width": 685.7142944335938,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "locale": "zh-CN",
+      "scale": 1.75
+    }
+  ],
+  "model_setup_and_reference_removal": "native control API and shared MCP",
+  "not_proven": [
+    "OS pointer delivery",
+    "Windows/macOS OS input",
+    "performance",
+    "solid-body edge projection"
+  ],
+  "os_input": "X11 XTEST on the exact owned child in private Xvfb",
+  "passed": true,
+  "preview_and_cancel_preserve_sketch": true,
+  "qualified_os_keys": [
+    "Tab",
+    "Shift+Tab",
+    "Enter",
+    "Escape"
+  ],
+  "recordings": [
+    "preview-cancel/saved-views.gif",
+    "confirm-history/saved-views.gif"
+  ],
+  "source_revision": "9ea82339d04aa89495b3256b9b93b7437c6bbc74"
+}

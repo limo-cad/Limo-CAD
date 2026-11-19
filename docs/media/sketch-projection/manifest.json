@@ -1,0 +1,172 @@
+{
+    "schema_version":  2,
+    "captured_revision":  "9ea82339d04aa89495b3256b9b93b7437c6bbc74",
+    "desktop_build":  {
+                          "channel":  "development",
+                          "modified":  false,
+                          "revision":  "9ea82339d04aa89495b3256b9b93b7437c6bbc74",
+                          "version":  "0.3.0-rc.3"
+                      },
+    "build_pair":  {
+                       "desktop":  {
+                                       "channel":  "development",
+                                       "modified":  false,
+                                       "revision":  "9ea82339d04aa89495b3256b9b93b7437c6bbc74",
+                                       "version":  "0.3.0-rc.3"
+                                   },
+                       "mcp":  {
+                                   "channel":  "development",
+                                   "modified":  false,
+                                   "revision":  "9ea82339d04aa89495b3256b9b93b7437c6bbc74",
+                                   "version":  "0.3.0-rc.3"
+                               },
+                       "status":  "matched"
+                   },
+    "platform":  "Ubuntu26.04/privateXvfb",
+    "run":  "https://github.com/limo-cad/Limo-CAD/actions/runs/42745011023",
+    "artifact_id":  13731610751,
+    "api_archive_digest":  "sha256:bf8bd76a6f937bb8ff6ec1f0f7e922e896b72f7a3f56a54fd55fc88d6a4eb856",
+    "archive_digest_recomputed":  false,
+    "input":  "OS XTEST Tab/Shift+Tab/Enter/Escape; setup and remaining actions through native control API/shared MCP",
+    "layout_physical_size":  [
+                                 1200,
+                                 760
+                             ],
+    "layout_scale":  1.75,
+    "clips":  [
+                  {
+                      "original":  "preview-cancel/saved-views.gif",
+                      "recording":  {
+                                        "capture_size":  [
+                                                             1360,
+                                                             860
+                                                         ],
+                                        "decoded_frames":  {
+                                                               "gif":  130,
+                                                               "video":  130
+                                                           },
+                                        "fps":  6,
+                                        "gif":  "saved-views.gif",
+                                        "gif_width":  1100,
+                                        "not_proven":  [
+                                                           "OS pointer delivery",
+                                                           "physical keyboard",
+                                                           "Windows/macOS qualification",
+                                                           "performance"
+                                                       ],
+                                        "scope":  "Continuous X11 capture of the owned native host; actions use the production control API",
+                                        "source_revision":  "9ea82339d04aa89495b3256b9b93b7437c6bbc74",
+                                        "stages":  [
+                                                       {
+                                                           "elapsed_ms":  2732,
+                                                           "state":  "00-target"
+                                                       },
+                                                       {
+                                                           "elapsed_ms":  15559,
+                                                           "state":  "01-preview"
+                                                       },
+                                                       {
+                                                           "elapsed_ms":  18361,
+                                                           "state":  "02-cancel"
+                                                       },
+                                                       {
+                                                           "elapsed_ms":  19561,
+                                                           "state":  "cancel-preserved-readable"
+                                                       },
+                                                       {
+                                                           "elapsed_ms":  20761,
+                                                           "state":  "cancel-preserved-ending"
+                                                       }
+                                                   ],
+                                        "video":  "saved-views.mp4"
+                                    },
+                      "published":  "preview-cancel.gif"
+                  },
+                  {
+                      "original":  "confirm-history/saved-views.gif",
+                      "recording":  {
+                                        "capture_size":  [
+                                                             1360,
+                                                             860
+                                                         ],
+                                        "decoded_frames":  {
+                                                               "gif":  217,
+                                                               "video":  217
+                                                           },
+                                        "fps":  6,
+                                        "gif":  "saved-views.gif",
+                                        "gif_width":  1100,
+                                        "not_proven":  [
+                                                           "OS pointer delivery",
+                                                           "physical keyboard",
+                                                           "Windows/macOS qualification",
+                                                           "performance"
+                                                       ],
+                                        "scope":  "Continuous X11 capture of the owned native host; actions use the production control API",
+                                        "source_revision":  "9ea82339d04aa89495b3256b9b93b7437c6bbc74",
+                                        "stages":  [
+                                                       {
+                                                           "elapsed_ms":  15991,
+                                                           "state":  "03-confirmed"
+                                                       },
+                                                       {
+                                                           "elapsed_ms":  18832,
+                                                           "state":  "04-undo"
+                                                       },
+                                                       {
+                                                           "elapsed_ms":  21601,
+                                                           "state":  "05-redo"
+                                                       },
+                                                       {
+                                                           "elapsed_ms":  32165,
+                                                           "state":  "06-references"
+                                                       },
+                                                       {
+                                                           "elapsed_ms":  35123,
+                                                           "state":  "07-removed"
+                                                       }
+                                                   ],
+                                        "video":  "saved-views.mp4"
+                                    },
+                      "published":  "confirm-history.gif"
+                  }
+              ],
+    "files":  [
+                  {
+                      "name":  "01-preview.png",
+                      "bytes":  757127,
+                      "sha256":  "ba3ca17e17e9d06ad14abbf02f71b433272e2115d20a7874c98ef9c1e93b74b6"
+                  },
+                  {
+                      "name":  "confirm-history.gif",
+                      "bytes":  3534597,
+                      "sha256":  "f0bdaa7c2cdb2c6f763ca91a15008cfa224ab5710e2daebd4d2f90e359dfb4ee"
+                  },
+                  {
+                      "name":  "locale-de-minimum.png",
+                      "bytes":  245644,
+                      "sha256":  "e6409934dbecad902ae2e3ba76a7cfe8de45c81b0321c46f5755d577cd251aa1"
+                  },
+                  {
+                      "name":  "locale-en-minimum.png",
+                      "bytes":  236394,
+                      "sha256":  "ee012acc022b923876a4bbc69128a82b3dd5a280f37ce628374a828802e5518b"
+                  },
+                  {
+                      "name":  "locale-es-minimum.png",
+                      "bytes":  244229,
+                      "sha256":  "a4504d045c1820bbac716fdcac2672a7b00e6895e7247313b045c06482987a31"
+                  },
+                  {
+                      "name":  "locale-zh-CN-minimum.png",
+                      "bytes":  228230,
+                      "sha256":  "1fe225a7dbd4388ffeee0cd4d1355e21dc4793d7f017fd21d0e4e2eb70a443dd"
+                  },
+                  {
+                      "name":  "preview-cancel.gif",
+                      "bytes":  3103616,
+                      "sha256":  "a69355fb9620b714c932f8981bc6de7892b716cd775e495172fad2d93b9a80b8"
+                  }
+              ],
+    "binary_bytes":  8349837
+}

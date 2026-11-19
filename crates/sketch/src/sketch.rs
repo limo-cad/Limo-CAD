@@ -63,6 +63,10 @@ impl std::error::Error for SolveError {}
 /// for undo/redo. Cheap at sketch scale and exact by construction.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SketchSnapshot {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) projection_bindings: Vec<crate::projection::ProjectionBinding>,
+    #[serde(default, skip_serializing_if = "is_zero_projection_id")]
+    projection_id_high_water: u32,
     #[serde(default, serialize_with = "serialize_constraint_map")]
     offset_sides: HashMap<ConstraintId, f64>,
     #[serde(default)]
@@ -87,6 +91,10 @@ pub struct SketchSnapshot {
     next_constraint: u64,
 }
 
+fn is_zero_projection_id(id: &u32) -> bool {
+    *id == 0
+}
+
 /// Hash seeds change when saved sketches are loaded into another document or
 /// MCP reader. Keep model exports byte-stable without changing solver lookup
 /// storage or the schema used by existing archives.
@@ -98,8 +106,31 @@ fn serialize_constraint_map<S: serde::Serializer, V: Serialize>(
 }
 
 impl SketchSnapshot {
+    pub(crate) fn refresh_projection_edges(
+        &mut self,
+        resolved: &BTreeMap<u32, crate::dto::ProjectedEdgeDto>,
+    ) {
+        self.reference_edges.retain(|edge| edge.id < (1 << 41));
+        self.reference_edges.extend(
+            self.projection_bindings
+                .iter()
+                .filter_map(|binding| resolved.get(&binding.id))
+                .cloned(),
+        );
+    }
     pub(crate) fn set_reference_edges(&mut self, edges: &[crate::dto::ProjectedEdgeDto]) {
+        let explicit: Vec<_> = self
+            .reference_edges
+            .iter()
+            .filter(|edge| {
+                self.projection_bindings
+                    .iter()
+                    .any(|binding| binding.edge_id() == edge.edge_id)
+            })
+            .cloned()
+            .collect();
         self.reference_edges = edges.to_vec();
+        self.reference_edges.extend(explicit);
     }
     /// Refresh saved support-edge midpoint targets without discarding an
     /// active session's undo/redo history. Every historical state must use
@@ -116,6 +147,8 @@ impl SketchSnapshot {
 /// entities (structural coincident, see [`Entity`]).
 #[derive(Debug, Clone, Default)]
 pub struct Sketch {
+    pub(crate) projection_bindings: Vec<crate::projection::ProjectionBinding>,
+    pub(crate) projection_id_high_water: u32,
     offset_sides: HashMap<ConstraintId, f64>,
     reference_edges: Vec<crate::dto::ProjectedEdgeDto>,
     entities: Vec<(EntityId, Entity)>,
@@ -142,7 +175,28 @@ pub struct Sketch {
 
 impl Sketch {
     pub(crate) fn set_reference_edges(&mut self, edges: &[crate::dto::ProjectedEdgeDto]) {
+        let explicit = self.projection_edges();
         self.reference_edges = edges.to_vec();
+        self.reference_edges.extend(explicit);
+    }
+
+    pub(crate) fn projection_edges(&self) -> Vec<crate::dto::ProjectedEdgeDto> {
+        self.projection_edges_iter().cloned().collect()
+    }
+
+    pub(crate) fn projection_edges_iter(
+        &self,
+    ) -> impl Iterator<Item = &crate::dto::ProjectedEdgeDto> {
+        self.reference_edges.iter().filter(|edge| {
+            self.projection_bindings
+                .iter()
+                .any(|binding| binding.edge_id() == edge.edge_id)
+        })
+    }
+
+    pub(crate) fn replace_projection_edges(&mut self, edges: &[crate::dto::ProjectedEdgeDto]) {
+        self.reference_edges.retain(|edge| edge.id < (1 << 41));
+        self.reference_edges.extend_from_slice(edges);
     }
 
     pub(crate) fn reference_edge(&self, edge: EdgeId) -> Option<&crate::dto::ProjectedEdgeDto> {
@@ -913,6 +967,8 @@ impl Sketch {
 
     pub fn snapshot(&self) -> SketchSnapshot {
         SketchSnapshot {
+            projection_bindings: self.projection_bindings.clone(),
+            projection_id_high_water: self.projection_id_high_water,
             offset_sides: self.offset_sides.clone(),
             reference_edges: self.reference_edges.clone(),
             entities: self.entities.clone(),
@@ -933,6 +989,10 @@ impl Sketch {
     }
 
     pub fn restore(&mut self, snapshot: SketchSnapshot) {
+        self.projection_bindings = snapshot.projection_bindings;
+        self.projection_id_high_water = self
+            .projection_id_high_water
+            .max(snapshot.projection_id_high_water);
         self.offset_sides = snapshot.offset_sides;
         self.reference_edges = snapshot.reference_edges;
         self.entities = snapshot.entities;
@@ -1010,6 +1070,25 @@ impl SketchSnapshot {
     /// admitted into a live sketch session.
     pub(crate) fn validate(&self) -> Result<(), String> {
         use std::collections::HashSet;
+
+        let mut projection_ids = HashSet::new();
+        let mut projection_sources = std::collections::BTreeSet::new();
+        if self.projection_bindings.len() > crate::projection::MAX_PROJECTIONS
+            || self.projection_id_high_water > crate::projection::MAX_PROJECTION_ID
+        {
+            return Err("projection budget exceeded".into());
+        }
+        for binding in &self.projection_bindings {
+            if binding.id == 0
+                || binding.id > self.projection_id_high_water
+                || binding.source.feature.0 == 0
+                || binding.source.entity.0 == 0
+                || !projection_ids.insert(binding.id)
+                || !projection_sources.insert(binding.source)
+            {
+                return Err("invalid or duplicate sketch projection reference".into());
+            }
+        }
 
         let mut entity_ids = HashSet::new();
         for (id, entity) in &self.entities {

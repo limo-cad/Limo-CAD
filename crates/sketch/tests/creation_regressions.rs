@@ -363,6 +363,7 @@ fn rectangle_does_not_round_acquired_boundary_back_to_the_grid() {
                 true,
             );
             s.set_projected_edges(vec![ProjectedEdgeDto {
+                origin: Default::default(),
                 id: 1 << 40,
                 edge_id: limo_cad_core::EdgeId(1),
                 points: vec![v(0.0, 10.1), v(20.0, 10.1)],

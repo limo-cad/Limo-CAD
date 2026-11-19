@@ -233,6 +233,7 @@ mod tests {
         ];
         let mut edges: Vec<_> = (0..4)
             .map(|i| ProjectedEdgeDto {
+                origin: Default::default(),
                 id: (1 << 40) + i as u64,
                 edge_id: EdgeId(i as u64 + 1),
                 points: vec![corners[i], corners[(i + 1) % 4]],

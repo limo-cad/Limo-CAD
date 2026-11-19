@@ -331,7 +331,8 @@ pub struct SketchDto {
     /// external snap references while editing a face-hosted sketch.
     #[serde(default)]
     pub reference_midpoints: Vec<ReferenceMidpointDto>,
-    /// Boundary edges of the support face, projected into sketch coordinates.
+    /// Read-only support boundaries and explicit sketch associations, projected
+    /// into sketch coordinates. `origin` distinguishes their profile roles.
     ///
     /// History-stage external references, saved so dependent features can
     /// replay before a kernel scene exists. Refreshed from stable edge ids
@@ -368,13 +369,37 @@ pub struct ReferenceMidpointDto {
     pub position: Vec2,
 }
 
-/// One support-face boundary edge projected into a face-hosted sketch.
+/// Why a read-only curve is present in the sketch.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ProjectedEdgeOrigin {
+    /// Passive perimeter supplied by the support face; cannot form a profile alone.
+    #[default]
+    SupportBoundary,
+    /// An association explicitly created with Project; can form profiles and holes.
+    ExplicitProjection,
+}
+
+impl ProjectedEdgeOrigin {
+    fn is_support_boundary(&self) -> bool {
+        *self == Self::SupportBoundary
+    }
+}
+
+/// One support-face boundary or explicit sketch projection.
 ///
 /// The polyline is the projected tessellation of the body edge; `circle`
 /// carries the exact analytic curve when the edge is circular, so the solid
 /// kernel receives one arc instead of the tessellation chords.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ProjectedEdgeDto {
+    /// Missing on older DTOs and persisted support boundaries. Explicit intent
+    /// is rebuilt from projection bindings rather than inferred from an ID range.
+    #[serde(
+        default,
+        skip_serializing_if = "ProjectedEdgeOrigin::is_support_boundary"
+    )]
+    pub origin: ProjectedEdgeOrigin,
     /// Reserved id. Derived segment ids are `id * SEGMENTS_PER_CURVE + index`,
     /// which keeps them above every authored segment id so a piece shared with
     /// authored geometry keeps the authored entity's identity.

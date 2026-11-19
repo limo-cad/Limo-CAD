@@ -149,6 +149,17 @@ pub fn handle_read_only(manager: &SketchManager, method: &str, payload: &str) ->
         _ => {}
     }
     Some(match method {
+        "sketch_projection_preview" => {
+            with_payload(payload, |source| manager.projection_preview(source))
+        }
+        "sketch_projection_sources" => match manager.projection_sources() {
+            Ok(value) => ok_json(value),
+            Err(error) => err_json(error.to_string()),
+        },
+        "sketch_projections" => match manager.sketch_projections() {
+            Ok(value) => ok_json(value),
+            Err(error) => err_json(error.to_string()),
+        },
         "document" => ok_json(manager.document_dto()),
         "project_export_model" if payload.is_empty() || payload == "null" => {
             to_json(manager.export_project_model())
@@ -358,6 +369,19 @@ pub fn handle_viewport_preview(
 /// Dispatch one engine call. Unknown methods and malformed payloads yield
 /// an error envelope, never a panic.
 pub fn handle(manager: &mut SketchManager, method: &str, payload: &str) -> String {
+    if method == "sketch_project" {
+        return with_payload(payload, |request| manager.project_curves(request));
+    }
+    if method == "sketch_projection_remove" {
+        #[derive(serde::Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct Remove {
+            id: u32,
+        }
+        return with_payload(payload, |request: Remove| {
+            manager.remove_projection(request.id)
+        });
+    }
     if viewport_creation(method) || viewport_preview(method) {
         if let Some(value) = viewport_payload(payload) {
             return dispatch_viewport(manager, method, value);
