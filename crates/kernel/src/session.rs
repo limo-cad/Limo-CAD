@@ -19,7 +19,7 @@ use limo_cad_solid::{
     KernelPlanarFaceSourceDto, KernelProfileDto, KernelSceneDto, KernelTransformDto,
     PlanarFaceSignatureDto, Point3Dto, RecomputePlanDto, SweepOrientation, SweepTransition,
 };
-use limo_cad_solid::{DisplayMeshWarningDto, EdgeMarkDto, FinishEdgesDto};
+use limo_cad_solid::{DisplayMeshWarningDto, EdgeMarkDto, FaceMarkDto, FeatureKeysDto};
 
 use crate::blend;
 use crate::boolean::{boolean, Op};
@@ -31,7 +31,7 @@ use crate::props::planar_props;
 use crate::tess::{edge_polyline, tessellate, Mesh, TessOptions};
 use crate::thread;
 use crate::topo::Body;
-use crate::trim::{EdgeMesh, FaceTrim};
+use crate::trim::{classify, EdgeMesh, FaceTrim, PtClass};
 
 /// A body value with the identity of its geometry.
 #[derive(Clone)]
@@ -53,11 +53,11 @@ pub struct Kernel {
     pub options: TessOptions,
     /// Jobs actually executed by the last recompute (the rest were reused).
     pub last_applied_jobs: usize,
-    /// What each job of `history` made of the edges it was given, for the
-    /// jobs that are given edges: see [`Kernel::finish_edges`].
-    reports: Vec<Option<FinishEdgesDto>>,
+    /// What each job of `history` made of the edges or faces it was given,
+    /// for the jobs that are given any: see [`Kernel::feature_keys`].
+    reports: Vec<Option<FeatureKeysDto>>,
     /// The report of the job being applied.
-    report: Option<FinishEdgesDto>,
+    report: Option<FeatureKeysDto>,
 }
 
 impl Default for Kernel {
@@ -144,11 +144,12 @@ impl Kernel {
         Ok(found)
     }
 
-    /// What the last recompute made of the edges of each fillet and chamfer:
-    /// every edge it rounded or cut, by its name here and by its mark. A
-    /// feature whose keys were written by the reference kernel was found by
-    /// its marks, and this says what its edges are called here.
-    pub fn finish_edges(&self) -> Vec<FinishEdgesDto> {
+    /// What the last recompute made of the edges of each fillet and chamfer,
+    /// and of the faces of each shell and external thread: every one of
+    /// them by its name here and by its mark. A feature whose keys were
+    /// written by the reference kernel was found by its marks, and this
+    /// says what its edges or faces are called here.
+    pub fn feature_keys(&self) -> Vec<FeatureKeysDto> {
         self.reports.iter().flatten().cloned().collect()
     }
 
@@ -539,8 +540,24 @@ impl Kernel {
                     return Err("external thread parameters are malformed".into());
                 }
                 let names = Names::of(&target);
-                let f = named_face(&names, &j.face_key)?
-                    .ok_or("referenced external-thread cylinder no longer exists")?;
+                let (found, report) = feature_faces(
+                    &target,
+                    &names,
+                    std::slice::from_ref(&j.face_key),
+                    j.face_mark.as_slice(),
+                    j.feature_id,
+                    "referenced external-thread cylinder no longer exists",
+                )?;
+                // One cylinder, one face. Where the other kernel had one
+                // face and this one has several, which of them the thread
+                // was meant for is not something to guess.
+                let [f] = found[..] else {
+                    return Err(
+                        "the cylinder of this External Thread is more than one face on this kernel; reselect the face on the feature input body"
+                            .into(),
+                    );
+                };
+                self.report = Some(report);
                 let surface = *target.f_surface(f);
                 if surface.kind != SurfKind::Cylinder {
                     return Err("External Thread requires a cylindrical face".into());
@@ -829,14 +846,15 @@ impl Kernel {
             KernelJobDto::Shell(j) => {
                 let target = self.get(j.target_body_id, "Shell target")?;
                 let names = Names::of(&target);
-                let open = j
-                    .face_keys
-                    .iter()
-                    .map(|key| {
-                        named_face(&names, key)?
-                            .ok_or_else(|| "referenced Shell face no longer exists".to_string())
-                    })
-                    .collect::<Result<Vec<u32>, String>>()?;
+                let (open, report) = feature_faces(
+                    &target,
+                    &names,
+                    &j.face_keys,
+                    &j.face_marks,
+                    j.feature_id,
+                    "referenced Shell face no longer exists",
+                )?;
+                self.report = Some(report);
                 let result =
                     crate::offset::shell_as(&target, &open, j.thickness, j.inward, feature)
                         .map_err(|e| format!("Shell: {e}"))?;
@@ -1561,13 +1579,9 @@ fn finish_edges(
     keys: &[String],
     marks: &[EdgeMarkDto],
     feature: FeatureId,
-) -> Result<(Vec<u32>, FinishEdgesDto), String> {
+) -> Result<(Vec<u32>, FeatureKeysDto), String> {
     let mut edges: Vec<u32> = Vec::with_capacity(keys.len());
-    let mut report = FinishEdgesDto {
-        feature_id: feature,
-        edge_keys: Vec::new(),
-        edge_marks: Vec::new(),
-    };
+    let mut report = FeatureKeysDto::of(feature);
     for (at, key) in keys.iter().enumerate() {
         let mark = marks
             .get(at)
@@ -1634,29 +1648,105 @@ fn finish_edges(
     Ok((once, report))
 }
 
-/// The face a job names, if the body still has it.
+/// How finely the rim of a face is drawn to tell what lies inside it.
+/// Close to the rim the exact curve decides, so this only has to keep a
+/// narrow face from being lost between two chords.
+const MARK_SAG: f64 = 0.05;
+
+/// A mark for face `f`: up to five points of it, each as far inside its
+/// rim as a point of it is to be found, and none of them a point that the
+/// exact rim would put outside.
+fn face_mark_of(body: &Body, rims: &EdgeMesh, f: u32) -> Vec<Point3Dto> {
+    let trim = FaceTrim::build(body, rims, f, MARK_SAG);
+    trim.interior_points()
+        .into_iter()
+        .map(|(q, _)| trim.point(q))
+        .filter(|&p| classify(body, &trim, f, p) == PtClass::In)
+        .take(5)
+        .map(dto)
+        .collect()
+}
+
+/// The faces of a body that the point `p` lies on.
+fn faces_through(body: &Body, rims: &EdgeMesh, p: V3) -> Vec<u32> {
+    (0..body.face_count() as u32)
+        .filter(|&f| {
+            body.f_surface(f).sdist(p).abs() < MARK_REACH
+                && classify(body, &FaceTrim::build(body, rims, f, MARK_SAG), f, p) != PtClass::Out
+        })
+        .collect()
+}
+
+/// The faces of a body that a shell or an external thread is to work on,
+/// and what to tell the host of them.
 ///
-/// A count (`face:7`) is how the reference kernel names a face, by its
-/// place among the faces of the body as that kernel built it. The face that
-/// stands at the same count here is as a rule another one, so a count is
-/// refused and never followed: a shell opened at the wrong face, or a
-/// thread cut on the wrong shaft, would look like a model that worked.
-fn named_face(names: &Names, key: &str) -> Result<Option<u32>, String> {
-    let counted = key
-        .strip_prefix("face:")
-        .is_some_and(|count| !count.is_empty() && count.bytes().all(|b| b.is_ascii_digit()));
-    if counted {
-        return Err(format!(
-            "Face reference '{key}' was written by the other kernel; reselect the face on the feature input body"
-        ));
+/// It is for faces what [`finish_edges`] is for edges. A key written here
+/// is a name, and is looked up as one; `gone` is what to say when the body
+/// no longer has a face of that name. A count (`face:7`) is how the
+/// reference kernel names a face, by its place among the faces of the body
+/// as that kernel built it. The face that stands at the same count here is
+/// as a rule another one, and a shell opened at the wrong face, or a thread
+/// cut on the wrong shaft, would look like a model that worked. So a count
+/// is never followed: the face is whatever the points of its mark lie on,
+/// and with no mark it is refused. That may be more than one face, where
+/// this kernel cuts in two what the other keeps whole, and it may be a
+/// face larger than the one chosen, where it is the other way about.
+fn feature_faces(
+    body: &Body,
+    names: &Names,
+    keys: &[String],
+    marks: &[FaceMarkDto],
+    feature: FeatureId,
+    gone: &str,
+) -> Result<(Vec<u32>, FeatureKeysDto), String> {
+    let rims = EdgeMesh::build(body, MARK_SAG, 16.0);
+    let mut faces: Vec<u32> = Vec::with_capacity(keys.len());
+    for (at, key) in keys.iter().enumerate() {
+        if follows(key) {
+            let f = names.face(key).ok_or_else(|| gone.to_string())?;
+            if !faces.contains(&f) {
+                faces.push(f);
+            }
+            continue;
+        }
+        let mark = marks
+            .get(at)
+            .filter(|mark| marks.len() == keys.len() && !mark.points.is_empty())
+            .ok_or_else(|| {
+                format!(
+                    "Face reference '{key}' was written by the other kernel and carries no mark to find it by; reselect the face on the feature input body"
+                )
+            })?;
+        for point in &mark.points {
+            let through = faces_through(body, &rims, p3(point));
+            if through.is_empty() {
+                return Err(
+                    "referenced face no longer exists where it was marked; reselect the face on the feature input body"
+                        .into(),
+                );
+            }
+            // One face chosen twice is still one face.
+            for f in through {
+                if !faces.contains(&f) {
+                    faces.push(f);
+                }
+            }
+        }
     }
-    Ok(names.face(key))
+    let mut report = FeatureKeysDto::of(feature);
+    for &f in &faces {
+        report.face_keys.push(names.faces[f as usize].clone());
+        report.face_marks.push(FaceMarkDto {
+            points: face_mark_of(body, &rims, f),
+        });
+    }
+    Ok((faces, report))
 }
 
 /// Whether this kernel follows a key by itself: anything but a count of the
-/// reference kernel's.
+/// reference kernel's, of edges or of faces.
 fn follows(key: &str) -> bool {
-    !limo_cad_solid::is_counted_edge_key(key)
+    !(limo_cad_solid::is_counted_edge_key(key) || limo_cad_solid::is_counted_face_key(key))
 }
 
 fn xform(t: &KernelTransformDto) -> Result<Xform, String> {

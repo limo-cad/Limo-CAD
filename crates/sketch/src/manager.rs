@@ -4415,11 +4415,11 @@ impl SketchManager {
         queries
     }
 
-    /// Take down what the kernel made of the edges of the fillets and
-    /// chamfers it has just replayed: see
-    /// [`limo_cad_solid::SolidDocument::note_finish_edges`].
-    pub fn note_finish_edges(&mut self, found: &[limo_cad_solid::FinishEdgesDto]) {
-        self.solids.note_finish_edges(found);
+    /// Take down what the kernel made of the edges and faces the features
+    /// it has just replayed were given: see
+    /// [`limo_cad_solid::SolidDocument::note_feature_keys`].
+    pub fn note_feature_keys(&mut self, found: &[limo_cad_solid::FeatureKeysDto]) {
+        self.solids.note_feature_keys(found);
     }
 
     /// Internal native-host commit: the set must come from the same kernel

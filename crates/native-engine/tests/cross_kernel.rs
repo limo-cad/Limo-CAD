@@ -5,7 +5,8 @@
 //! body, the Limo kernel names an edge after the faces it lies between.
 //! Beside every key the project also keeps a mark, a few points of the
 //! edge, and a kernel that meets a key in the other's language finds the
-//! edge by its mark and from then on calls it by a name of its own.
+//! edge by its mark and from then on calls it by a name of its own. A
+//! shell and an external thread keep faces the same way.
 //!
 //! The kernel is chosen per process, by an environment variable or, when
 //! that names none, by the application itself, and the choice is read each
@@ -173,17 +174,118 @@ fn underside(h: &NativeEngineHost) -> limo_cad_core::FaceId {
         .id
 }
 
-/// Take every edge mark out of a project model, which leaves it as a
-/// release from before there were marks saved it. Says how many it took.
+/// Take every mark out of a project model, which leaves it as a release
+/// from before there were marks saved it. Says how many features it took
+/// them from.
 fn forget_marks(model: &mut Value) -> usize {
     match model {
         Value::Object(fields) => {
-            usize::from(fields.remove("edge_marks").is_some())
-                + fields.values_mut().map(forget_marks).sum::<usize>()
+            let marked = ["edge_marks", "face_marks", "face_mark"]
+                .into_iter()
+                .filter(|kind| fields.remove(*kind).is_some())
+                .count();
+            marked + fields.values_mut().map(forget_marks).sum::<usize>()
         }
         Value::Array(items) => items.iter_mut().map(forget_marks).sum(),
         _ => 0,
     }
+}
+
+/// The one shell or thread of a project, as the project model has it.
+fn body_feature(h: &NativeEngineHost) -> Value {
+    let features = model(h)["body_features"].clone();
+    assert_eq!(features.as_array().map_or(0, Vec::len), 1, "{features}");
+    features[0].clone()
+}
+
+/// The keys of the faces the one shell opens, and how many marks it
+/// carries for them.
+fn opened_faces(h: &NativeEngineHost) -> (Vec<String>, usize) {
+    let shell = body_feature(h);
+    let keys = shell["face_keys"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|key| key.as_str().unwrap().to_string())
+        .collect();
+    (keys, shell["face_marks"].as_array().map_or(0, Vec::len))
+}
+
+fn counted_face(key: &str) -> bool {
+    key.strip_prefix("face:")
+        .is_some_and(|rest| !rest.is_empty() && rest.bytes().all(|b| b.is_ascii_digit()))
+}
+
+/// A pin 16 high on the origin, and how thick it is.
+fn pin(h: &NativeEngineHost) -> (limo_cad_core::FaceId, f64) {
+    ok(h.engine_call("begin_sketch", r#"{"type":"origin_plane","plane":"xy"}"#));
+    ok(h.engine_call("set_grid_snap", r#"{"enabled":false}"#));
+    ok(h.engine_call(
+        "add_circle",
+        r#"{"mode":"center_diameter","p1":{"x":0,"y":0},"p2":{"x":4,"y":0},"ctrl_held":true}"#,
+    ));
+    ok(h.engine_call("end_sketch", ""));
+    ok(h.solid_extrude(&json!({"sketch_name":"Sketch1","profile_indices":[0],"extent":{"type":"distance","distance":16.},"taper_angle_deg":0.,"flip":false,"operation":"new_body","target_body_ids":[]}).to_string()));
+    let scene = h.solid_scene_snapshot();
+    let side = scene.bodies[0]
+        .faces
+        .iter()
+        .find(|f| f.cylinder.is_some())
+        .expect("the side of the pin");
+    (side.id, 2.0 * side.cylinder.unwrap().radius)
+}
+
+/// A block 40 by 24 by 10 about the origin, and on its top face a sketch
+/// with a round boss 6 high built from it.
+fn bossed(h: &NativeEngineHost) {
+    ok(h.engine_call("begin_sketch", r#"{"type":"origin_plane","plane":"xy"}"#));
+    ok(h.engine_call("set_grid_snap", r#"{"enabled":false}"#));
+    let pts = [(-20., -12.), (20., -12.), (20., 12.), (-20., 12.)];
+    for i in 0..pts.len() {
+        let (a, b) = (pts[i], pts[(i + 1) % pts.len()]);
+        ok(h.engine_call(
+            "add_line",
+            &json!({"from":{"x":a.0,"y":a.1},"to_raw":{"x":b.0,"y":b.1},"ctrl_held":true})
+                .to_string(),
+        ));
+    }
+    ok(h.engine_call("end_sketch", ""));
+    ok(h.solid_extrude(&block_of(10.)["extrude"].to_string()));
+    let top = h.solid_scene_snapshot().bodies[0]
+        .faces
+        .iter()
+        .find(|f| {
+            f.plane
+                .is_some_and(|p| p.normal[2] > 0.9 && (p.origin[2] - 10.).abs() < 1e-6)
+        })
+        .expect("the top of the block")
+        .id;
+    ok(h.engine_call(
+        "begin_sketch",
+        &json!({"type":"planar_face","face_id":top}).to_string(),
+    ));
+    ok(h.engine_call(
+        "add_circle_locked",
+        &json!({"mode":"center_diameter","anchor":{"x":0,"y":0},"edge_hint":{"x":4,"y":0},
+            "diameter_mm":8.,"ctrl_held":true})
+        .to_string(),
+    ));
+    ok(h.engine_call("end_sketch", ""));
+    ok(h.solid_extrude(&json!({"sketch_name":"Sketch2","profile_indices":[0],"operation":"join","extent":{"type":"distance","distance":6.},"taper_angle_deg":0.,"flip":false,"target_body_ids":[1]}).to_string()));
+}
+
+/// The block of [`bossed`] at another height, as an edit of its extrude.
+fn block_of(height: f64) -> Value {
+    json!({"extrude":{"sketch_name":"Sketch1","profile_indices":[0],
+        "extent":{"type":"distance","distance":height},"taper_angle_deg":0.,"flip":false,
+        "operation":"new_body","target_body_ids":[]}})
+}
+
+/// Make the block of [`bossed`] that high; the reply, whatever it is.
+fn raise(h: &NativeEngineHost, height: f64) -> Value {
+    let mut edit = block_of(height);
+    edit["feature_id"] = model(h)["extrudes"][0]["feature_id"].clone();
+    serde_json::from_str(&h.solid_edit_extrude(&edit.to_string())).unwrap()
 }
 
 /// The keys of the one fillet and the one chamfer, and how many marks each
@@ -289,11 +391,12 @@ fn a_project_finished_on_one_kernel_opens_on_the_other() {
     assert!(!counted(key), "{key}");
     assert_eq!(fillet["edge_marks"].as_array().map_or(0, Vec::len), 1);
 
-    // What does not cross yet: a face. A shell keeps the faces it opens by
-    // key alone, with no mark, and here the face at the same count is again
-    // another face. Neither kernel guesses: the shell is refused with a
-    // word on what to do, and the body is left solid.
+    // Faces cross the same way. A shell keeps the faces it opens by key
+    // and by mark, and on this body the face at the same count in the
+    // other kernel's list is another face: before faces had marks, the
+    // body was hollowed out through that one and nothing said so.
     for (first, second) in [("occt", "limo"), ("limo", "occt")] {
+        let native = |kernel: &str, key: &str| counted_face(key) == (kernel == "occt");
         let made = on(first);
         stepped(&made);
         let solid = weight(&made);
@@ -302,23 +405,197 @@ fn a_project_finished_on_one_kernel_opens_on_the_other() {
             &json!({"type":"shell","request":{"body_id":1,"face_ids":[open],"thickness":2.,"inward":true}})
                 .to_string(),
         ));
-        assert!(weight(&made) < 0.6 * solid, "{first} did not hollow it");
+        let hollow = weight(&made);
+        assert!(hollow < 0.6 * solid, "{first} did not hollow it");
+        // The kernel that made it has said where the face is.
+        let (made_keys, made_marks) = opened_faces(&made);
+        assert!(made_keys.iter().all(|k| native(first, k)), "{made_keys:?}");
+        assert_eq!((made_keys.len(), made_marks), (1, 1));
         let saved = made.project_snapshot().unwrap();
+
+        // Opened on the other: the same face, and from here on under that
+        // kernel's own key. The two kernels round the inside of the step
+        // a little differently, so the shells agree only nearly.
         let opened = on(second);
         ok(opened.project_load_snapshot(&saved));
-        let errors = opened.solid_scene_snapshot().errors.clone();
-        assert_eq!(errors.len(), 1, "{errors:?}");
+        let again = weight(&opened);
         assert!(
-            errors[0].message.contains("reselect the face"),
-            "{second} says {:?}",
-            errors[0].message
+            (again - hollow).abs() < 2.0e-3 * hollow,
+            "{first} made {hollow}, {second} makes {again}"
         );
-        let left = enclosed(&opened);
+        let (opened_keys, opened_marks) = opened_faces(&opened);
         assert!(
-            (left - solid).abs() < 1.0e-6 * solid,
-            "{second} left {left} of {solid}"
+            opened_keys.iter().all(|k| native(second, k)),
+            "{opened_keys:?}"
         );
+        assert_eq!((opened_keys.len(), opened_marks), (1, 1));
+
+        // It is an ordinary shell there: its wall can be made thicker.
+        let shell = body_feature(&opened);
+        ok(opened.solid_edit_body_feature(
+            &json!({"feature_id":shell["feature_id"],"feature":{"type":"shell","request":{
+                "body_id":1,"face_ids":shell["face_ids"],"thickness":3.,"inward":true}}})
+            .to_string(),
+        ));
+        let thicker = weight(&opened);
+        assert!(thicker > again + 100.0, "{again} then {thicker}");
+        assert_eq!(opened_faces(&opened), (opened_keys, 1));
+
+        // And back again on the first, thicker wall and all.
+        let back = on(first);
+        ok(back.project_load_snapshot(&opened.project_snapshot().unwrap()));
+        let returned = weight(&back);
+        assert!(
+            (returned - thicker).abs() < 2.0e-3 * thicker,
+            "{second} made {thicker}, {first} makes {returned}"
+        );
+        assert!(opened_faces(&back).0.iter().all(|k| native(first, k)));
     }
+
+    // The cylinder an external thread is cut on, likewise.
+    for (first, second) in [("occt", "limo"), ("limo", "occt")] {
+        let native = |kernel: &str, key: &str| counted_face(key) == (kernel == "occt");
+        let made = on(first);
+        let (side, across) = pin(&made);
+        let blank = weight(&made);
+        let pitch = if across < 6.0 { 0.7 } else { 1.25 };
+        let request = limo_cad_solid::BodyFeatureRequestDto::ExternalThread(
+            limo_cad_solid::ExternalThreadRequest {
+                body_id: limo_cad_core::BodyId(1),
+                face_id: side,
+                thread: limo_cad_solid::HoleThreadDto {
+                    standard: limo_cad_solid::HoleThreadStandard::IsoMetric,
+                    series: limo_cad_solid::HoleThreadSeries::MetricCoarse,
+                    designation: format!("M{across} x {pitch} - 6g"),
+                    class: "6g".to_string(),
+                    nominal_diameter: across,
+                    pitch,
+                    threads_per_inch: None,
+                    hand: limo_cad_solid::HoleThreadHand::Right,
+                    depth: Some(6.0),
+                    representation: limo_cad_solid::HoleThreadRepresentation::Modeled,
+                    tap_drill_designation: None,
+                    rounded_profile: None,
+                },
+                flip: false,
+            },
+        );
+        ok(made.solid_body_feature(&serde_json::to_string(&request).unwrap()));
+        let cut = weight(&made);
+        assert!(
+            cut < blank - 1.0e-2,
+            "{first} cut no thread: {blank} then {cut}"
+        );
+        let thread = body_feature(&made);
+        assert!(
+            native(first, thread["face_key"].as_str().unwrap()),
+            "{thread}"
+        );
+        assert_eq!(
+            thread["face_mark"]["points"].as_array().map_or(0, Vec::len),
+            5
+        );
+
+        let opened = on(second);
+        ok(opened.project_load_snapshot(&made.project_snapshot().unwrap()));
+        let again = weight(&opened);
+        assert!(
+            (again - cut).abs() < 2.0e-3 * cut,
+            "{first} cut it to {cut}, {second} to {again}"
+        );
+        let thread = body_feature(&opened);
+        assert!(
+            native(second, thread["face_key"].as_str().unwrap()),
+            "{thread}"
+        );
+        assert_eq!(
+            thread["face_mark"]["points"].as_array().map_or(0, Vec::len),
+            5
+        );
+
+        let back = on(first);
+        ok(back.project_load_snapshot(&opened.project_snapshot().unwrap()));
+        let returned = weight(&back);
+        assert!(
+            (returned - cut).abs() < 1.0e-6 * cut,
+            "{cut} then {returned}"
+        );
+        assert!(native(
+            first,
+            body_feature(&back)["face_key"].as_str().unwrap()
+        ));
+    }
+
+    // A shell older than marks: its face by Open CASCADE's count alone.
+    // On the Limo kernel Open CASCADE reads the count, as for the round
+    // above, and the shell opens where it was put.
+    let made = on("occt");
+    stepped(&made);
+    let open = underside(&made);
+    ok(made.solid_body_feature(
+        &json!({"type":"shell","request":{"body_id":1,"face_ids":[open],"thickness":2.,"inward":true}})
+            .to_string(),
+    ));
+    let hollow = weight(&made);
+    let exported = ok(made.engine_call("project_export_model", ""));
+    let mut old: Value = serde_json::from_str(exported.as_str().unwrap()).unwrap();
+    assert_eq!(forget_marks(&mut old), 1);
+    let opened = on("limo");
+    ok(opened.project_load(&serde_json::to_string(&old.to_string()).unwrap()));
+    let again = weight(&opened);
+    assert!(
+        (again - hollow).abs() < 2.0e-3 * hollow,
+        "made as {hollow}, opened as {again}"
+    );
+    let (keys_there, marks_there) = opened_faces(&opened);
+    assert!(
+        keys_there.iter().all(|k| !counted_face(k)),
+        "{keys_there:?}"
+    );
+    assert_eq!(marks_there, 1);
+
+    // A sketch drawn on a face. It keeps its own plane, so what is built
+    // from it is the same on either kernel. A project made on Open CASCADE
+    // goes to the Limo kernel, is edited there below the sketch, and comes
+    // back and is edited again: each kernel takes the edit, and makes of
+    // it what the other does.
+    let made = on("occt");
+    bossed(&made);
+    let first = weight(&made);
+    let there = on("limo");
+    ok(there.project_load_snapshot(&made.project_snapshot().unwrap()));
+    assert!((weight(&there) - first).abs() < 2.0e-3 * first);
+    assert_eq!(raise(&there, 14.)["ok"], true);
+    let taller = weight(&there);
+    assert!(taller > first + 3000.0, "{first} then {taller}");
+    let back = on("occt");
+    ok(back.project_load_snapshot(&there.project_snapshot().unwrap()));
+    assert!((weight(&back) - taller).abs() < 2.0e-3 * taller);
+    assert_eq!(raise(&made, 14.)["ok"], true);
+    assert!((weight(&made) - weight(&back)).abs() < 1.0e-6 * taller);
+    assert_eq!(raise(&back, 10.)["ok"], true);
+    assert!((weight(&back) - first).abs() < 1.0e-6 * first);
+
+    // The other way has a limit. The sketch is tied to its face by the
+    // face's id, and Open CASCADE cannot follow an id the Limo kernel
+    // wrote: a project made there opens the same, but a feature below the
+    // sketch cannot be edited until the sketch is put on its face again.
+    // It says so and changes nothing.
+    let made = on("limo");
+    bossed(&made);
+    let first = weight(&made);
+    let there = on("occt");
+    ok(there.project_load_snapshot(&made.project_snapshot().unwrap()));
+    assert!((weight(&there) - first).abs() < 2.0e-3 * first);
+    let refused = raise(&there, 14.);
+    assert_eq!(refused["ok"], false, "{refused}");
+    assert!(
+        refused["error"]
+            .as_str()
+            .is_some_and(|error| error.contains("broken reference")),
+        "{refused}"
+    );
+    assert!((weight(&there) - first).abs() < 2.0e-3 * first);
 
     // Who chooses. With no kernel named in the environment the choice is
     // the application's own, which is what its Settings save for the next

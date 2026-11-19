@@ -287,6 +287,13 @@ mod ffi {
             points: &Vec<f64>,
             reach: f64,
         ) -> Result<Vec<u32>>;
+        fn face_marks(self: &Kernel, body_id: u64, indices: &Vec<u32>) -> Result<Vec<f64>>;
+        fn faces_through(
+            self: &Kernel,
+            body_id: u64,
+            points: &Vec<f64>,
+            reach: f64,
+        ) -> Result<Vec<u32>>;
         fn mesh(self: &Kernel, body_id: u64) -> Result<FfiMesh>;
         fn section_geometry(
             self: &Kernel,
@@ -335,9 +342,9 @@ pub struct OcctKernel {
     /// Only a fully successful replay may seed the next append. The jobs
     /// include all resolved geometry inputs, not just feature IDs/revisions.
     successful_jobs: Option<Vec<KernelJobDto>>,
-    /// What each applied job made of the edges it was given, for the jobs
-    /// that are given edges: see [`OcctKernel::finish_edges`].
-    finish_reports: Vec<Option<limo_cad_solid::FinishEdgesDto>>,
+    /// What each applied job made of the edges or faces it was given, for
+    /// the jobs that are given any: see [`OcctKernel::feature_keys`].
+    key_reports: Vec<Option<limo_cad_solid::FeatureKeysDto>>,
     support_cache: BTreeMap<(usize, limo_cad_core::FaceId), bool>,
     /// Exact projection is independent of paper styling and export format.
     /// Full requests include authoritative occurrence poses and section intent.
@@ -616,7 +623,7 @@ impl OcctKernel {
             limo: limo.then(|| Box::new(limo_cad_kernel::Kernel::new())),
             geometry_owner,
             successful_jobs: None,
-            finish_reports: Vec::new(),
+            key_reports: Vec::new(),
             support_cache: BTreeMap::new(),
             projection_cache: Mutex::new(VecDeque::new()),
             #[cfg(test)]
@@ -749,14 +756,15 @@ impl OcctKernel {
             .collect())
     }
 
-    /// What the last replay made of the edges of each fillet and chamfer:
-    /// every edge it rounded or cut, by the key this kernel knows it by and
-    /// by its mark. A project finished on the other kernel is found by its
-    /// marks, and this says what its edges are called here.
-    pub fn finish_edges(&self) -> Vec<limo_cad_solid::FinishEdgesDto> {
+    /// What the last replay made of the edges of each fillet and chamfer,
+    /// and of the faces of each shell and external thread: every one of
+    /// them by the key this kernel knows it by and by its mark. A project
+    /// finished on the other kernel is found by its marks, and this says
+    /// what its edges and faces are called here.
+    pub fn feature_keys(&self) -> Vec<limo_cad_solid::FeatureKeysDto> {
         match &self.limo {
-            Some(limo) => limo.finish_edges(),
-            None => self.finish_reports.iter().flatten().cloned().collect(),
+            Some(limo) => limo.feature_keys(),
+            None => self.key_reports.iter().flatten().cloned().collect(),
         }
     }
 
@@ -997,12 +1005,12 @@ impl OcctKernel {
             self.last_applied_jobs = 0;
         }
         let mut errors = plan.errors.clone();
-        self.finish_reports.truncate(reused);
+        self.key_reports.truncate(reused);
         for (index, job) in plan.jobs.iter().enumerate().skip(reused) {
-            // A fillet or chamfer whose edges the Limo kernel named is
-            // found by the marks of those edges, and goes on under the
-            // counts this kernel knows them by.
-            let (job, report) = match finish_by_count(&pinned, job) {
+            // A feature whose edges or faces the Limo kernel named is
+            // found by their marks, and goes on under the counts this
+            // kernel knows them by.
+            let (job, report) = match by_count(&pinned, job) {
                 Ok(found) => found,
                 Err(error) => {
                     errors.push(KernelFeatureErrorDto {
@@ -1034,7 +1042,7 @@ impl OcctKernel {
                 });
                 break;
             }
-            self.finish_reports.push(report);
+            self.key_reports.push(report);
             if queries.iter().any(|(at, _)| *at == index) {
                 let keys = pinned
                     .as_ref()
@@ -2714,6 +2722,133 @@ fn same_prefix(done: &[KernelJobDto], asked: &[KernelJobDto]) -> bool {
         .all(|(a, b)| a.same_work(b, |key| key.contains(':')))
 }
 
+/// A job as this kernel can follow it, and what to tell the host of the
+/// edges or faces it was given.
+type ByCount<'j> = Result<
+    (
+        std::borrow::Cow<'j, KernelJobDto>,
+        Option<limo_cad_solid::FeatureKeysDto>,
+    ),
+    OcctError,
+>;
+
+/// See [`finish_by_count`] for the jobs that are given edges and
+/// [`faces_by_count`] for those that are given faces. Any other job is
+/// followed as it is.
+fn by_count<'j>(kernel: &ffi::Kernel, job: &'j KernelJobDto) -> ByCount<'j> {
+    match job {
+        KernelJobDto::Fillet(_) | KernelJobDto::Chamfer(_) => finish_by_count(kernel, job),
+        KernelJobDto::Shell(_) | KernelJobDto::ExternalThread(_) => faces_by_count(kernel, job),
+        _ => Ok((std::borrow::Cow::Borrowed(job), None)),
+    }
+}
+
+/// A shell or an external thread as this kernel can follow it, and what to
+/// tell the host of its faces.
+///
+/// This kernel knows a face by its place in the list of its body's faces.
+/// A key the Limo kernel wrote is a name instead, which says nothing here:
+/// the face is then whatever the points of its mark lie on, and the job
+/// goes on under the counts of what was found. That may be more than one
+/// face, where this kernel cuts in two what the other keeps whole.
+fn faces_by_count<'j>(kernel: &ffi::Kernel, job: &'j KernelJobDto) -> ByCount<'j> {
+    use limo_cad_solid::{FaceMarkDto, FeatureKeysDto, Point3Dto};
+    use std::borrow::Cow;
+    let (body, keys, marks): (_, &[String], &[FaceMarkDto]) = match job {
+        KernelJobDto::Shell(j) => (j.target_body_id, &j.face_keys, &j.face_marks),
+        KernelJobDto::ExternalThread(j) => (
+            j.target_body_id,
+            std::slice::from_ref(&j.face_key),
+            j.face_mark.as_slice(),
+        ),
+        _ => return Ok((Cow::Borrowed(job), None)),
+    };
+    let mut counted: Vec<String> = Vec::with_capacity(keys.len());
+    let mut foreign = false;
+    for (at, key) in keys.iter().enumerate() {
+        // Anything with a colon in it is this kernel's own to judge, a
+        // malformed key of its own included.
+        if key.contains(':') {
+            counted.push(key.clone());
+            continue;
+        }
+        foreign = true;
+        let mark = marks
+            .get(at)
+            .filter(|mark| marks.len() == keys.len() && !mark.points.is_empty())
+            .ok_or_else(|| {
+                OcctError(format!(
+                    "Face reference '{key}' was written by the other kernel and carries no mark to find it by; reselect the face on the feature input body"
+                ))
+            })?;
+        let points: Vec<f64> = mark.points.iter().flat_map(|p| [p.x, p.y, p.z]).collect();
+        let through = kernel
+            .faces_through(body.0, &points, MARK_REACH)
+            .map_err(|error| OcctError(error.to_string()))?;
+        let mut rest = through.as_slice();
+        while let Some((&many, tail)) = rest.split_first() {
+            let many = many as usize;
+            if many == 0 || tail.len() < many {
+                return Err(OcctError(
+                    "referenced face no longer exists where it was marked; reselect the face on the feature input body"
+                        .into(),
+                ));
+            }
+            for index in &tail[..many] {
+                let key = format!("face:{index}");
+                if !counted.contains(&key) {
+                    counted.push(key);
+                }
+            }
+            rest = &tail[many..];
+        }
+    }
+    // One cylinder, one face. Where the other kernel had one face and
+    // this one has several, which of them the thread was meant for is
+    // not something to guess.
+    if foreign && matches!(job, KernelJobDto::ExternalThread(_)) && counted.len() != 1 {
+        return Err(OcctError(
+            "the cylinder of this External Thread is more than one face on this kernel; reselect the face on the feature input body"
+                .into(),
+        ));
+    }
+    // Where each of them is now, for the way back. A face that is not
+    // there any more is for the job itself to say.
+    let report = topology_indices(&counted, "face")
+        .ok()
+        .and_then(|indices| kernel.face_marks(body.0, &indices).ok())
+        .filter(|flat| !counted.is_empty() && flat.len() == 15 * counted.len())
+        .map(|flat| FeatureKeysDto {
+            face_keys: counted.clone(),
+            face_marks: flat
+                .chunks(15)
+                .map(|face| FaceMarkDto {
+                    points: face
+                        .chunks(3)
+                        .map(|p| Point3Dto {
+                            x: p[0],
+                            y: p[1],
+                            z: p[2],
+                        })
+                        .collect(),
+                })
+                .collect(),
+            ..FeatureKeysDto::of(job.feature_id())
+        });
+    if !foreign {
+        return Ok((Cow::Borrowed(job), report));
+    }
+    let mut found = job.clone();
+    match &mut found {
+        KernelJobDto::Shell(j) => j.face_keys = counted,
+        KernelJobDto::ExternalThread(j) => {
+            j.face_key = counted.into_iter().next().unwrap_or_default();
+        }
+        _ => unreachable!(),
+    }
+    Ok((Cow::Owned(found), report))
+}
+
 /// A fillet or chamfer as this kernel can follow it, and what to tell the
 /// host of its edges.
 ///
@@ -2723,17 +2858,8 @@ fn same_prefix(done: &[KernelJobDto], asked: &[KernelJobDto]) -> bool {
 /// the job goes on under the counts of what was found. That may be more
 /// than one edge, where this kernel cuts in two what the other keeps
 /// whole.
-fn finish_by_count<'j>(
-    kernel: &ffi::Kernel,
-    job: &'j KernelJobDto,
-) -> Result<
-    (
-        std::borrow::Cow<'j, KernelJobDto>,
-        Option<limo_cad_solid::FinishEdgesDto>,
-    ),
-    OcctError,
-> {
-    use limo_cad_solid::{is_counted_edge_key, EdgeMarkDto, FinishEdgesDto, Point3Dto};
+fn finish_by_count<'j>(kernel: &ffi::Kernel, job: &'j KernelJobDto) -> ByCount<'j> {
+    use limo_cad_solid::{is_counted_edge_key, EdgeMarkDto, FeatureKeysDto, Point3Dto};
     use std::borrow::Cow;
     let (body, keys, marks) = match job {
         KernelJobDto::Fillet(j) => (j.target_body_id, &j.edge_keys, &j.edge_marks),
@@ -2786,8 +2912,7 @@ fn finish_by_count<'j>(
         .ok()
         .and_then(|indices| kernel.edge_marks(body.0, &indices).ok())
         .filter(|flat| flat.len() == 15 * counted.len())
-        .map(|flat| FinishEdgesDto {
-            feature_id: job.feature_id(),
+        .map(|flat| FeatureKeysDto {
             edge_keys: counted.clone(),
             edge_marks: flat
                 .chunks(15)
@@ -2802,6 +2927,7 @@ fn finish_by_count<'j>(
                         .collect(),
                 })
                 .collect(),
+            ..FeatureKeysDto::of(job.feature_id())
         });
     if !foreign {
         return Ok((Cow::Borrowed(job), report));
@@ -2816,32 +2942,42 @@ fn finish_by_count<'j>(
 }
 
 /// A project saved before there were marks names the edges of its fillets
-/// and chamfers by Open CASCADE's count and by nothing else. A count means
-/// nothing to the Limo kernel, which refuses it rather than round whatever
-/// edge stands at that count in its own list.
+/// and chamfers, and the faces of its shells and external threads, by Open
+/// CASCADE's count and by nothing else. A count means nothing to the Limo
+/// kernel, which refuses it rather than round whatever edge, or open
+/// whatever face, stands at that count in its own list.
 ///
 /// Open CASCADE is at hand, though, and it can read its own counts. For a
 /// plan with such a job it replays the history once and says where each of
-/// those edges is; the plan comes back with that written in as the marks,
-/// and the Limo kernel finds the edges there. It then reports its own names
-/// for them and the host keeps those, so the reference is asked when such
-/// a project is first opened on the Limo kernel, and not again once the
-/// project has been saved from there.
+/// those edges and faces is; the plan comes back with that written in as
+/// the marks, and the Limo kernel finds them there. It then reports its own
+/// names for them and the host keeps those, so the reference is asked when
+/// such a project is first opened on the Limo kernel, and not again once
+/// the project has been saved from there.
 ///
 /// `None` when no job needs it, and when the reference cannot replay the
 /// plan at all. A feature the reference could not reach stays unmarked,
 /// and is refused.
 fn marked_by_the_reference(plan: &RecomputePlanDto) -> Option<RecomputePlanDto> {
-    use limo_cad_solid::{is_counted_edge_key, EdgeMarkDto};
-    fn unmarked(keys: &[String], marks: &[EdgeMarkDto]) -> bool {
+    use limo_cad_solid::{is_counted_edge_key, is_counted_face_key, EdgeMarkDto, FaceMarkDto};
+    fn edges_ask(keys: &[String], marks: &[EdgeMarkDto]) -> bool {
         keys.iter().enumerate().any(|(at, key)| {
             is_counted_edge_key(key) && !(marks.len() == keys.len() && !marks[at].points.is_empty())
         })
     }
+    fn faces_ask(keys: &[String], marks: &[FaceMarkDto]) -> bool {
+        keys.iter().enumerate().any(|(at, key)| {
+            is_counted_face_key(key) && !(marks.len() == keys.len() && !marks[at].points.is_empty())
+        })
+    }
     fn asks(job: &KernelJobDto) -> bool {
         match job {
-            KernelJobDto::Fillet(j) => unmarked(&j.edge_keys, &j.edge_marks),
-            KernelJobDto::Chamfer(j) => unmarked(&j.edge_keys, &j.edge_marks),
+            KernelJobDto::Fillet(j) => edges_ask(&j.edge_keys, &j.edge_marks),
+            KernelJobDto::Chamfer(j) => edges_ask(&j.edge_keys, &j.edge_marks),
+            KernelJobDto::Shell(j) => faces_ask(&j.face_keys, &j.face_marks),
+            KernelJobDto::ExternalThread(j) => {
+                faces_ask(std::slice::from_ref(&j.face_key), j.face_mark.as_slice())
+            }
             _ => false,
         }
     }
@@ -2851,21 +2987,44 @@ fn marked_by_the_reference(plan: &RecomputePlanDto) -> Option<RecomputePlanDto> 
     so_far.jobs.truncate(last + 1);
     let mut reference = OcctKernel::on(false).ok()?;
     reference.recompute_untimed(&so_far, &[]).ok()?;
-    let found = reference.finish_edges();
+    let found = reference.feature_keys();
     let mut marked = plan.clone();
     for job in marked.jobs.iter_mut().filter(|job| asks(job)) {
         let feature = job.feature_id();
-        let (keys, marks) = match job {
-            KernelJobDto::Fillet(j) => (&j.edge_keys, &mut j.edge_marks),
-            KernelJobDto::Chamfer(j) => (&j.edge_keys, &mut j.edge_marks),
-            _ => continue,
+        let Some(report) = found.iter().find(|report| report.feature_id == feature) else {
+            continue;
         };
-        if let Some(report) = found.iter().find(|report| {
-            report.feature_id == feature
-                && report.edge_keys == *keys
-                && report.edge_marks.len() == keys.len()
-        }) {
-            *marks = report.edge_marks.clone();
+        // Only what the reference found under the very keys the job has.
+        let edges = |keys: &[String]| {
+            (report.edge_keys == keys && report.edge_marks.len() == keys.len())
+                .then(|| report.edge_marks.clone())
+        };
+        let faces = |keys: &[String]| {
+            (report.face_keys == keys && report.face_marks.len() == keys.len())
+                .then(|| report.face_marks.clone())
+        };
+        match job {
+            KernelJobDto::Fillet(j) => {
+                if let Some(marks) = edges(&j.edge_keys) {
+                    j.edge_marks = marks;
+                }
+            }
+            KernelJobDto::Chamfer(j) => {
+                if let Some(marks) = edges(&j.edge_keys) {
+                    j.edge_marks = marks;
+                }
+            }
+            KernelJobDto::Shell(j) => {
+                if let Some(marks) = faces(&j.face_keys) {
+                    j.face_marks = marks;
+                }
+            }
+            KernelJobDto::ExternalThread(j) => {
+                if let Some(marks) = faces(std::slice::from_ref(&j.face_key)) {
+                    j.face_mark = marks.into_iter().next();
+                }
+            }
+            _ => {}
         }
     }
     Some(marked)
@@ -3170,6 +3329,7 @@ mod tests {
                 feature_id: FeatureId(3),
                 target_body_id: BodyId(1),
                 face_keys: vec![face, "face:4294967296".into()],
+                face_marks: Vec::new(),
                 thickness: 0.5,
                 inward: true,
             }),
@@ -6184,6 +6344,7 @@ mod tests {
                         feature_id: FeatureId(3),
                         target_body_id: BodyId(1),
                         face_key: face_key.clone(),
+                        face_mark: None,
                         cylinder,
                         thread: HoleThreadDto {
                             standard: HoleThreadStandard::IsoMetric,
@@ -6289,6 +6450,7 @@ mod tests {
                         feature_id: FeatureId(3),
                         target_body_id: BodyId(1),
                         face_key,
+                        face_mark: None,
                         cylinder,
                         thread: HoleThreadDto {
                             standard: HoleThreadStandard::IsoMetric,
@@ -6436,6 +6598,7 @@ mod tests {
                         feature_id: FeatureId(3),
                         target_body_id: BodyId(1),
                         face_key: shaft_face.key.clone(),
+                        face_mark: None,
                         cylinder,
                         thread: HoleThreadDto {
                             standard: HoleThreadStandard::IsoMetric,

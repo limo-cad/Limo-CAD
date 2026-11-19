@@ -891,15 +891,47 @@ impl EdgeMarkDto {
     }
 }
 
-/// What a kernel made of the edges of one fillet or chamfer: each edge it
-/// rounded or cut, by its own key for it and by its mark. A feature whose
-/// keys came from the other kernel is rewritten from this, so that from
-/// then on it is followed by name like any other.
+/// Where a face is, for a kernel that cannot read the key another kernel
+/// gave it: a few points of the face, each well inside its rim.
+///
+/// It is to a face what [`EdgeMarkDto`] is to an edge. One kernel counts
+/// the faces of a body and the other names them, so the faces a shell
+/// opens, or the cylinder a thread is cut on, are known to both only by
+/// where they are: the face, or the faces, that these points lie on.
+///
+/// A mark is not made from a drawing of the face. A place between the
+/// corners of a triangle is on the face only where the face is flat; the
+/// kernel that has just followed the key says where the face is instead.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct FaceMarkDto {
+    pub points: Vec<Point3Dto>,
+}
+
+/// What a kernel made of the edges or the faces one feature was given:
+/// each of them by the kernel's own key for it and by its mark. A fillet
+/// or a chamfer is given edges; a shell or an external thread is given
+/// faces. A feature whose keys came from the other kernel is rewritten
+/// from this, so that from then on it is followed like any other.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct FinishEdgesDto {
+pub struct FeatureKeysDto {
     pub feature_id: FeatureId,
     pub edge_keys: Vec<String>,
     pub edge_marks: Vec<EdgeMarkDto>,
+    pub face_keys: Vec<String>,
+    pub face_marks: Vec<FaceMarkDto>,
+}
+
+impl FeatureKeysDto {
+    /// A report with nothing in it yet.
+    pub fn of(feature_id: FeatureId) -> FeatureKeysDto {
+        FeatureKeysDto {
+            feature_id,
+            edge_keys: Vec::new(),
+            edge_marks: Vec::new(),
+            face_keys: Vec::new(),
+            face_marks: Vec::new(),
+        }
+    }
 }
 
 /// Whether a key is in the form the reference kernel writes: `edge:` and
@@ -907,6 +939,13 @@ pub struct FinishEdgesDto {
 /// colon in them.
 pub fn is_counted_edge_key(key: &str) -> bool {
     key.strip_prefix("edge:")
+        .is_some_and(|rest| !rest.is_empty() && rest.bytes().all(|b| b.is_ascii_digit()))
+}
+
+/// The same for a face: `face:` and a count. The Limo kernel writes names
+/// that begin with `f` and have no colon in them.
+pub fn is_counted_face_key(key: &str) -> bool {
+    key.strip_prefix("face:")
         .is_some_and(|rest| !rest.is_empty() && rest.bytes().all(|b| b.is_ascii_digit()))
 }
 
@@ -1157,6 +1196,11 @@ pub enum BodyFeatureDefinitionDto {
         body_id: BodyId,
         face_id: FaceId,
         face_key: String,
+        /// Where that face is, for the kernel that did not write the key:
+        /// see [`FaceMarkDto`]. None until a kernel has followed the key,
+        /// and in a project from before there were marks.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        face_mark: Option<FaceMarkDto>,
         cylinder: CylindricalSurfaceDto,
         thread: HoleThreadDto,
         flip: bool,
@@ -1168,6 +1212,9 @@ pub enum BodyFeatureDefinitionDto {
         face_ids: Vec<FaceId>,
         #[serde(default)]
         face_keys: Vec<String>,
+        /// Where each of those faces is: one for each key, or none at all.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        face_marks: Vec<FaceMarkDto>,
         thickness: f64,
         inward: bool,
     },
@@ -1454,6 +1501,9 @@ pub struct KernelShellJobDto {
     pub feature_id: FeatureId,
     pub target_body_id: BodyId,
     pub face_keys: Vec<String>,
+    /// See [`FaceMarkDto`]. Read only for a key the kernel cannot follow.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub face_marks: Vec<FaceMarkDto>,
     pub thickness: f64,
     pub inward: bool,
 }
@@ -1533,6 +1583,9 @@ pub struct KernelExternalThreadJobDto {
     pub target_body_id: BodyId,
     /// Stable OCCT topology lookup captured from the selected face.
     pub face_key: String,
+    /// See [`FaceMarkDto`]. Read only for a key the kernel cannot follow.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub face_mark: Option<FaceMarkDto>,
     /// Exact analytic fallback used for validation and browser replay.
     pub cylinder: CylindricalSurfaceDto,
     pub thread: HoleThreadDto,
@@ -1567,10 +1620,11 @@ impl KernelJobDto {
     ///
     /// The marks beside the keys of a fillet or chamfer say where its
     /// edges were when last looked at, and are written afresh after every
-    /// replay. A kernel that follows every key of the job never reads
-    /// them, and to it two jobs that differ only in their marks are one
-    /// job. A kernel that has to find an edge by its mark is another
-    /// matter: there the mark is what is asked.
+    /// replay; so do those beside the faces of a shell or a thread. A
+    /// kernel that follows every key of the job never reads them, and to
+    /// it two jobs that differ only in their marks are one job. A kernel
+    /// that has to find an edge or a face by its mark is another matter:
+    /// there the mark is what is asked.
     pub fn same_work(&self, other: &Self, follows: impl Fn(&str) -> bool) -> bool {
         match (self, other) {
             (Self::Fillet(a), Self::Fillet(b)) if a.edge_keys.iter().all(|k| follows(k)) => {
@@ -1581,6 +1635,16 @@ impl KernelJobDto {
             (Self::Chamfer(a), Self::Chamfer(b)) if a.edge_keys.iter().all(|k| follows(k)) => {
                 let mut b = b.clone();
                 b.edge_marks.clone_from(&a.edge_marks);
+                *a == b
+            }
+            (Self::Shell(a), Self::Shell(b)) if a.face_keys.iter().all(|k| follows(k)) => {
+                let mut b = b.clone();
+                b.face_marks.clone_from(&a.face_marks);
+                *a == b
+            }
+            (Self::ExternalThread(a), Self::ExternalThread(b)) if follows(&a.face_key) => {
+                let mut b = b.clone();
+                b.face_mark.clone_from(&a.face_mark);
                 *a == b
             }
             _ => self == other,
@@ -1912,5 +1976,55 @@ mod edge_mark_tests {
         assert_eq!(back.edge_marks, marked.edge_marks);
         assert!(is_counted_edge_key("edge:12") && !is_counted_edge_key("edge:"));
         assert!(!is_counted_edge_key("e1f-2a") && !is_counted_edge_key("edge:broken"));
+    }
+
+    #[test]
+    fn the_faces_of_a_shell_and_a_thread_are_marked_as_edges_are() {
+        // A project from before there were marks reads, and is written as
+        // it was read.
+        let old = r#"{"type":"shell","feature_id":4,"name":"Shell1","body_id":1,
+            "face_ids":[9],"face_keys":["face:5"],"thickness":2.0,"inward":true}"#;
+        let definition: BodyFeatureDefinitionDto = serde_json::from_str(old).unwrap();
+        let BodyFeatureDefinitionDto::Shell { face_marks, .. } = &definition else {
+            panic!("a shell");
+        };
+        assert!(face_marks.is_empty());
+        assert!(!serde_json::to_string(&definition)
+            .unwrap()
+            .contains("face_mark"));
+
+        let mark = FaceMarkDto {
+            points: vec![at(1.0, 2.0, 3.0)],
+        };
+        let shell = |keys: &[&str], marks: Vec<FaceMarkDto>| {
+            KernelJobDto::Shell(KernelShellJobDto {
+                feature_id: FeatureId(4),
+                target_body_id: BodyId(1),
+                face_keys: keys.iter().map(|k| k.to_string()).collect(),
+                face_marks: marks,
+                thickness: 2.0,
+                inward: true,
+            })
+        };
+        let (plain, marked) = (
+            shell(&["face:5"], Vec::new()),
+            shell(&["face:5"], vec![mark.clone()]),
+        );
+        // The kernel that counts follows the count and never reads the
+        // mark; the kernel that names has only the mark to go by.
+        let counts = |key: &str| is_counted_edge_key(key) || is_counted_face_key(key);
+        assert!(plain.same_work(&marked, counts));
+        assert!(!plain.same_work(&marked, |key| !counts(key)));
+        assert_ne!(plain, marked);
+        // Another face is another job to either.
+        assert!(!plain.same_work(&shell(&["face:6"], Vec::new()), counts));
+        let back: KernelJobDto =
+            serde_json::from_str(&serde_json::to_string(&marked).unwrap()).unwrap();
+        assert_eq!(back, marked);
+        assert!(is_counted_face_key("face:12") && !is_counted_face_key("face:"));
+        assert!(!is_counted_face_key("fc7664e4f83e328b4") && !is_counted_face_key("edge:3"));
+        assert!(!is_counted_edge_key("face:3"));
+        let empty = FeatureKeysDto::of(FeatureId(4));
+        assert!(empty.edge_keys.is_empty() && empty.face_keys.is_empty());
     }
 }

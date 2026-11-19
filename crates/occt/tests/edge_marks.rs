@@ -104,7 +104,7 @@ fn an_edge_chosen_on_one_kernel_is_found_on_the_other() {
     let weighed = limo_cad_kernel::props::mass(limo.body(1).unwrap()).volume;
     assert!((weighed - rounded()).abs() < 1e-9, "{weighed}");
     // It says what the edge is called here, and where it is.
-    let found = limo.finish_edges();
+    let found = limo.feature_keys();
     assert_eq!(found.len(), 1);
     assert_eq!(found[0].edge_keys, vec![named.clone()]);
     assert_eq!(found[0].edge_marks[0].points.len(), 5);
@@ -130,7 +130,7 @@ fn an_edge_chosen_on_one_kernel_is_found_on_the_other() {
         .unwrap();
     let weighed = measured.selections[0].volume.unwrap();
     assert!((weighed - rounded()).abs() < 1e-6, "{weighed}");
-    let found = reference.finish_edges();
+    let found = reference.feature_keys();
     assert_eq!(found.len(), 1);
     assert_eq!(found[0].edge_keys, vec![counted.clone()]);
 
@@ -222,7 +222,7 @@ fn an_edge_chosen_on_one_kernel_is_found_on_the_other() {
         "{axis:?}"
     );
     // And from here on it goes by the name the Limo kernel gives it.
-    let found = carried.finish_edges();
+    let found = carried.feature_keys();
     assert_eq!(found.len(), 1);
     assert_eq!(found[0].edge_keys, vec![named]);
     assert_eq!(found[0].edge_marks[0].points.len(), 5);

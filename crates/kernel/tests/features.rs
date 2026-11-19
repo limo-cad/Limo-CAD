@@ -566,6 +566,7 @@ fn a_tray_hollowed_through_the_session() {
         feature_id: FeatureId(2),
         target_body_id: BodyId(1),
         face_keys: vec![top],
+        face_marks: Vec::new(),
         thickness: 1.0,
         inward: true,
     });
@@ -617,6 +618,7 @@ fn thread_on(kernel: &mut Kernel, radius: f64, thread: HoleThreadDto, flip: bool
         feature_id: FeatureId(2),
         target_body_id: BodyId(1),
         face_key: face.key.clone(),
+        face_mark: None,
         cylinder: face.cylinder.unwrap(),
         thread,
         flip,

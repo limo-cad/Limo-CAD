@@ -147,40 +147,49 @@ merges it; an edge is named after the two faces it lies between. So:
 ## One project, two kernels
 
 Open CASCADE knows an edge by its place in the list of a body's edges
-(`edge:7`); this kernel knows it by name. Neither can read the other's
-keys, so a fillet or chamfer also keeps a *mark* for each of its edges: a
-few points of the edge, none of them an end.
+(`edge:7`) and a face by its place among the faces (`face:5`); this kernel
+knows both by name. Neither can read the other's keys, so a feature that
+is given edges or faces also keeps a *mark* for each of them. A fillet or
+chamfer keeps, for each edge, a few points of the edge, none of them an
+end. A shell keeps, for each face it opens, a few points of the face, each
+well inside its rim; an external thread keeps the same for the cylinder it
+is cut on.
 
-- A kernel that meets a key in the other's language finds the edge, or
-  the edges, that pass through the points of its mark. It then tells the
-  host what it calls them, and the project carries on under those keys:
-  on this kernel that means by name, like any feature made here.
-- After every replay each kernel says where the edges of every fillet and
-  chamfer are now, so the marks follow the model as it is edited.
+- A kernel that meets a key in the other's language finds the edge or
+  face, or the several of them, that the points of its mark lie on. It
+  then tells the host what it calls them, and the project carries on
+  under those keys: on this kernel that means by name, like any feature
+  made here.
+- After every replay each kernel says where the edges and faces of each
+  of these features are now, so the marks follow the model as it is
+  edited. A face has no mark until then: unlike an edge, it cannot be
+  marked from the way it is drawn.
 - A key in a kernel's own language is followed exactly as before. The mark
   is not read, and a change of mark alone is not a change of the job.
 - A mark that points at nothing finds nothing: the feature asks for its
-  edge to be chosen again. No other edge is taken in its place.
-- A count with no mark beside it is refused here, and so is a face given
-  by its count. The edge or face that stands at the same count in this
-  kernel's list is as a rule another one, even on a plain block, and a
-  round on the wrong edge looks like a model that worked.
+  edge or face to be chosen again. No other is taken in its place.
+- A count with no mark beside it is refused here. The edge or face that
+  stands at the same count in this kernel's list is as a rule another
+  one, even on a plain block, and a round on the wrong edge, or a shell
+  opened at the wrong face, looks like a model that worked.
 
-A project with a round and a chamfer on rims that go right round is made
-on either kernel, opened on the other, edited there and opened on the
-first again (`crates/native-engine/tests/cross_kernel.rs`).
+A project with a round and a chamfer on rims that go right round, one
+with a shell, and one with a thread on a pin are each made on either
+kernel, opened on the other, and opened on the first again
+(`crates/native-engine/tests/cross_kernel.rs`).
 
 A project saved before there were marks has only counts. Inside Limo CAD
 it still opens on this kernel: Open CASCADE replays the history once, says
-where the edges it counts are, and this kernel finds them there and names
-them. That happens the first time such a project is opened here and not
-again.
+where the edges and faces it counts are, and this kernel finds them there
+and names them. That happens the first time such a project is opened here
+and not again.
 
-Faces do not cross yet. A shell keeps the faces it opens, and an external
-thread its cylinder, by key alone. Opened on the other kernel such a
-feature is refused, with a message to choose the face again, and the rest
-of the project is built. A sketch on a face is not affected: it finds its
-face by where the face is and what it measures.
+A sketch drawn on a face keeps its own plane, so what is built from it is
+the same on either kernel, and a project made on Open CASCADE comes here
+and goes back with its sketches still on their faces. A sketch drawn on a
+face here is tied to it by an id only this kernel can follow: on Open
+CASCADE the project opens the same, but an edit below that sketch is
+refused as a broken reference until the sketch is put on its face again.
 
 ## What it models
 
@@ -263,9 +272,7 @@ order it is meant to be taken on. This is the list to work down.
 9. **History on names alone.** Deleting anywhere already works here by
    name. The same for rolling back and editing in the middle of a history,
    and for sketches on faces, would let the host drop the bookkeeping it
-   keeps for a kernel that counts. And marks for faces, as edges have
-   them, so that a shell or a thread made on one kernel opens on the
-   other instead of asking for its face again.
+   keeps for a kernel that counts.
 10. **Proof.** Random pairs of free-form solids in the stress run beside
     the analytic ones, STEP files from other systems read in bulk, and the
     differential lab over more than the bundled recipes.

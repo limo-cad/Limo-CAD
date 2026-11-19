@@ -420,33 +420,45 @@ is the one place that asks which road to take.
 A project is not tied to the kernel it was made on. A fillet or chamfer
 keeps its edges by key, in the language of the kernel that wrote them
 (`edge:7` on OCCT, a name on Limo), and beside each key a mark: a few
-points of the edge (`EdgeMarkDto` in `crates/solid`). A kernel that meets
-a key it cannot follow finds the edge through the points of its mark, and
-after every replay reports what it calls the edges of each fillet and
-chamfer and where they are now (`OcctKernel::finish_edges`). The host
-writes that back into the features (`SolidDocument::note_finish_edges`), so
-a project opened on the other kernel is in that kernel's own keys from the
-first replay on, and its marks follow the model as it is edited. A key in
-a kernel's own language is followed exactly as before: the mark is not
-read, and two jobs that differ only in their marks are the same work
+points of the edge (`EdgeMarkDto` in `crates/solid`). A shell keeps the
+faces it opens the same way, and an external thread the cylinder it is cut
+on: by key (`face:5`, or a name) and by a mark of a few points well inside
+the face (`FaceMarkDto`). A kernel that meets a key it cannot follow finds
+the edge or face through the points of its mark, and after every replay
+reports what it calls the edges and faces of each of these features and
+where they are now (`OcctKernel::feature_keys`). The host writes that back
+into the features (`SolidDocument::note_feature_keys`), so a project opened
+on the other kernel is in that kernel's own keys from the first replay on,
+and its marks follow the model as it is edited. A key in a kernel's own
+language is followed exactly as before: the mark is not read, and two jobs
+that differ only in their marks are the same work
 (`KernelJobDto::same_work`), so nothing is replayed for a mark's sake.
 `crates/native-engine/tests/cross_kernel.rs` takes a project there and
-back, both ways round.
+back, both ways round; `crates/occt/tests/edge_marks.rs` and
+`face_marks.rs` do the same at the kernels themselves.
+
+A mark for an edge can be read off the edge as it is drawn. A mark for a
+face cannot: a place between the corners of a triangle is on the face only
+where the face is flat. So a face has no mark until a kernel has followed
+its key, which is the replay that makes the feature.
 
 A key in the other kernel's language with no mark beside it is refused,
-never followed: the edge at the same count in the other kernel's list is as
-a rule a different edge. Every project saved by a release older than marks
-has such keys, so the adapter carries those over when the Limo kernel is
-running: OCCT replays the history once, says where the edges it counts are
-(`marked_by_the_reference` in `crates/occt/src/native.rs`), and the Limo
-kernel finds them there and gives them names the host then keeps.
+never followed: the edge or face at the same count in the other kernel's
+list is as a rule a different one. Every project saved by a release older
+than marks has such keys, so the adapter carries those over when the Limo
+kernel is running: OCCT replays the history once, says where the edges and
+faces it counts are (`marked_by_the_reference` in
+`crates/occt/src/native.rs`), and the Limo kernel finds them there and
+gives them names the host then keeps.
 
-Faces do not cross yet. A shell keeps the faces it opens, and an external
-thread its cylinder, by key alone, and there is no mark to find them by. A
-project with such a feature opens on the other kernel with that feature
-refused and a message to choose the face again; nothing is guessed. A
-sketch on a face is not affected: it finds its face by where the face is
-and what it measures, on either kernel.
+A sketch drawn on a face keeps its own plane, so what is built from it is
+the same on either kernel, and a feature extruded from a face finds that
+face by where it is and what it measures. A project made on OCCT goes to
+the Limo kernel and back with its sketches still tied to their faces. The
+other way has a limit: the tie is the face's id, and OCCT cannot follow an
+id the Limo kernel wrote, so in a project made on the Limo kernel it
+refuses an edit below such a sketch as a broken reference until the sketch
+is put on its face again.
 
 [The kernel's README](../crates/kernel/README.md) covers its design, how
 names survive edits, what it models, the differential lab against OCCT and

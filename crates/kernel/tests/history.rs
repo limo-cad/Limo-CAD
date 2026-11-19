@@ -398,23 +398,56 @@ fn names_are_unique_and_a_count_is_not_taken_for_one() {
         refused.errors
     );
     assert!(!has_round(&refused.bodies[0], 37.0, 3.0, 3.0));
-    let mut opened = jobs;
-    opened.push(KernelJobDto::Shell(limo_cad_solid::KernelShellJobDto {
-        feature_id: FeatureId(3),
-        target_body_id: BodyId(1),
-        face_keys: vec!["face:0".into()],
-        thickness: 1.0,
-        inward: true,
-    }));
-    let refused = run(&mut kernel, opened);
+    let shell = |key: &str, marks: Vec<limo_cad_solid::FaceMarkDto>| {
+        KernelJobDto::Shell(limo_cad_solid::KernelShellJobDto {
+            feature_id: FeatureId(3),
+            target_body_id: BodyId(1),
+            face_keys: vec![key.to_string()],
+            face_marks: marks,
+            thickness: 1.0,
+            inward: true,
+        })
+    };
+    let with = |last: KernelJobDto| {
+        let mut all = jobs.clone();
+        all.push(last);
+        all
+    };
+    let refused = run(&mut kernel, with(shell("face:0", Vec::new())));
     assert!(
-        refused.errors[0]
-            .message
-            .contains("written by the other kernel"),
+        refused.errors[0].message.contains("carries no mark"),
         "{:?}",
         refused.errors
     );
     assert_eq!(refused.bodies[0].faces.len(), nf);
+
+    // With a mark the count is not read at all: the face is the one the
+    // points of the mark lie on. Here the mark is this kernel's own, for
+    // the face the plate lies on, and the shell it opens is the shell that
+    // face's name opens, whatever the count says.
+    let underneath = scene
+        .faces
+        .iter()
+        .find(|f| {
+            f.plane
+                .is_some_and(|p| p.normal[2] < -0.5 && p.origin[2].abs() < 1.0e-9)
+        })
+        .expect("the face underneath")
+        .key
+        .clone();
+    let by_name = body(&run(&mut kernel, with(shell(&underneath, Vec::new())))).clone();
+    let said = kernel.feature_keys();
+    assert_eq!(said.len(), 1);
+    assert_eq!(said[0].face_keys, vec![underneath.clone()]);
+    let mark = said[0].face_marks[0].clone();
+    assert_eq!(mark.points.len(), 5);
+    assert!(mark.points.iter().all(|p| p.z.abs() < 1.0e-9));
+    for count in ["face:0", "face:3", "face:999"] {
+        let by_mark = body(&run(&mut kernel, with(shell(count, vec![mark.clone()])))).clone();
+        assert_eq!(by_mark.faces.len(), by_name.faces.len(), "{count}");
+        assert_eq!(by_mark.positions, by_name.positions, "{count}");
+        assert_eq!(kernel.feature_keys()[0].face_keys, vec![underneath.clone()]);
+    }
 }
 
 /// The point where a round rim starts is a vertex of the model, and stays

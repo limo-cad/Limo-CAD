@@ -59,6 +59,16 @@ class Kernel {
   rust::Vec<std::uint32_t> edges_through(std::uint64_t body_id,
                                          const rust::Vec<double>& points,
                                          double reach) const;
+  // Points to know faces of a body by: five to a face, each well inside
+  // its rim, for each face by its place in the body's list of faces.
+  // Nothing at all when one of the faces has no inside to speak of.
+  rust::Vec<double> face_marks(std::uint64_t body_id,
+                               const rust::Vec<std::uint32_t>& indices) const;
+  // For each point (x, y, z in a row) the faces of a body that it lies on,
+  // to within `reach`: how many, then which.
+  rust::Vec<std::uint32_t> faces_through(std::uint64_t body_id,
+                                         const rust::Vec<double>& points,
+                                         double reach) const;
   FfiMesh mesh(std::uint64_t body_id) const;
   FfiSectionGeometry section_geometry(std::uint64_t body_id,
                                      const FfiSectionOptions& options) const;

@@ -1723,21 +1723,28 @@ impl SolidDocument {
 
         Ok(match request {
             BodyFeatureRequestDto::ExternalThread(request) => {
-                let (face_key, cylinder) = match existing {
+                // A face chosen anew has no mark yet: the kernel that
+                // follows its key says where it is. The same face keeps
+                // the mark it has.
+                let (face_key, face_mark, cylinder) = match existing {
                     Some(BodyFeatureDefinitionDto::ExternalThread {
                         body_id,
                         face_id,
                         face_key,
+                        face_mark,
                         cylinder,
                         ..
                     }) if *body_id == request.body_id && *face_id == request.face_id => {
-                        (face_key.clone(), *cylinder)
+                        (face_key.clone(), face_mark.clone(), *cylinder)
                     }
-                    _ => resolve_cylindrical_face_source(
-                        &self.scene,
-                        request.body_id,
-                        request.face_id,
-                    )?,
+                    _ => {
+                        let (face_key, cylinder) = resolve_cylindrical_face_source(
+                            &self.scene,
+                            request.body_id,
+                            request.face_id,
+                        )?;
+                        (face_key, None, cylinder)
+                    }
                 };
                 validate_external_thread(&request.thread, cylinder.radius * 2.0)?;
                 BodyFeatureDefinitionDto::ExternalThread {
@@ -1746,6 +1753,7 @@ impl SolidDocument {
                     body_id: request.body_id,
                     face_id: request.face_id,
                     face_key,
+                    face_mark,
                     cylinder,
                     thread: request.thread,
                     flip: request.flip,
@@ -1756,13 +1764,38 @@ impl SolidDocument {
                 if request.face_ids.is_empty() {
                     return Err(SolidError::EmptySelection);
                 }
-                let face_keys = face_keys_for(&self.scene, request.body_id, &request.face_ids)?;
+                // The same faces keep the keys and marks they have: the
+                // scene shows the body as later features left it, and the
+                // faces this shell opened are not in it to be looked up.
+                let kept = match existing {
+                    Some(BodyFeatureDefinitionDto::Shell {
+                        body_id,
+                        face_ids,
+                        face_keys,
+                        face_marks,
+                        ..
+                    }) if *body_id == request.body_id
+                        && *face_ids == request.face_ids
+                        && face_keys.len() == face_ids.len() =>
+                    {
+                        Some((face_keys.clone(), face_marks.clone()))
+                    }
+                    _ => None,
+                };
+                let (face_keys, face_marks) = match kept {
+                    Some(kept) => kept,
+                    None => (
+                        face_keys_for(&self.scene, request.body_id, &request.face_ids)?,
+                        Vec::new(),
+                    ),
+                };
                 BodyFeatureDefinitionDto::Shell {
                     feature_id,
                     name,
                     body_id: request.body_id,
                     face_ids: request.face_ids,
                     face_keys,
+                    face_marks,
                     thickness: request.thickness.abs(),
                     inward: request.inward,
                 }
@@ -2106,57 +2139,114 @@ impl SolidDocument {
     }
 
     /// Take down what a kernel made of the edges of each fillet and
-    /// chamfer it has just replayed.
+    /// chamfer it has just replayed, and of the faces of each shell and
+    /// external thread.
     ///
-    /// The marks are written afresh, so that they say where the edges are
-    /// now and not where they were when first chosen. And a feature whose
-    /// keys the kernel could not follow, because the other kernel wrote
-    /// them, gets the keys this kernel found the same edges under: from
-    /// here on it is followed by name like any feature made here, and it
-    /// keeps its marks for the way back.
-    pub fn note_finish_edges(&mut self, found: &[FinishEdgesDto]) {
+    /// The marks are written afresh, so that they say where the edges and
+    /// faces are now and not where they were when first chosen. And a
+    /// feature whose keys the kernel could not follow, because the other
+    /// kernel wrote them, gets the keys this kernel found the same edges
+    /// or faces under: from here on it is followed like any feature made
+    /// here, and it keeps its marks for the way back.
+    pub fn note_feature_keys(&mut self, found: &[FeatureKeysDto]) {
         for report in found {
-            if report.edge_keys.is_empty() || report.edge_keys.len() != report.edge_marks.len() {
-                continue;
+            self.note_edges(report);
+            self.note_faces(report);
+        }
+    }
+
+    fn note_edges(&mut self, report: &FeatureKeysDto) {
+        if report.edge_keys.is_empty() || report.edge_keys.len() != report.edge_marks.len() {
+            return;
+        }
+        let rewrite = |body_id: BodyId,
+                       ids: &mut Vec<EdgeId>,
+                       keys: &mut Vec<String>,
+                       marks: &mut Vec<EdgeMarkDto>| {
+            if *keys != report.edge_keys {
+                *ids = report
+                    .edge_keys
+                    .iter()
+                    .map(|key| stable::edge_id(body_id, key))
+                    .collect();
+                *keys = report.edge_keys.clone();
             }
-            let rewrite = |body_id: BodyId,
-                           ids: &mut Vec<EdgeId>,
-                           keys: &mut Vec<String>,
-                           marks: &mut Vec<EdgeMarkDto>| {
-                if *keys != report.edge_keys {
-                    *ids = report
-                        .edge_keys
+            *marks = report.edge_marks.clone();
+        };
+        if let Some(d) = self
+            .fillets
+            .iter_mut()
+            .find(|d| d.feature_id == report.feature_id)
+        {
+            rewrite(
+                d.body_id,
+                &mut d.edge_ids,
+                &mut d.edge_keys,
+                &mut d.edge_marks,
+            );
+        }
+        if let Some(d) = self
+            .chamfers
+            .iter_mut()
+            .find(|d| d.feature_id == report.feature_id)
+        {
+            rewrite(
+                d.body_id,
+                &mut d.edge_ids,
+                &mut d.edge_keys,
+                &mut d.edge_marks,
+            );
+        }
+    }
+
+    fn note_faces(&mut self, report: &FeatureKeysDto) {
+        if report.face_keys.is_empty() || report.face_keys.len() != report.face_marks.len() {
+            return;
+        }
+        let Some(definition) = self.body_features.iter_mut().find(|definition| {
+            matches!(
+                definition,
+                BodyFeatureDefinitionDto::Shell { feature_id, .. }
+                | BodyFeatureDefinitionDto::ExternalThread { feature_id, .. }
+                    if *feature_id == report.feature_id
+            )
+        }) else {
+            return;
+        };
+        match definition {
+            BodyFeatureDefinitionDto::Shell {
+                body_id,
+                face_ids,
+                face_keys,
+                face_marks,
+                ..
+            } => {
+                if *face_keys != report.face_keys {
+                    *face_ids = report
+                        .face_keys
                         .iter()
-                        .map(|key| stable::edge_id(body_id, key))
+                        .map(|key| stable::face_id(*body_id, key))
                         .collect();
-                    *keys = report.edge_keys.clone();
+                    *face_keys = report.face_keys.clone();
                 }
-                *marks = report.edge_marks.clone();
-            };
-            if let Some(d) = self
-                .fillets
-                .iter_mut()
-                .find(|d| d.feature_id == report.feature_id)
-            {
-                rewrite(
-                    d.body_id,
-                    &mut d.edge_ids,
-                    &mut d.edge_keys,
-                    &mut d.edge_marks,
-                );
+                *face_marks = report.face_marks.clone();
             }
-            if let Some(d) = self
-                .chamfers
-                .iter_mut()
-                .find(|d| d.feature_id == report.feature_id)
-            {
-                rewrite(
-                    d.body_id,
-                    &mut d.edge_ids,
-                    &mut d.edge_keys,
-                    &mut d.edge_marks,
-                );
+            // A thread is cut on one face, and a kernel that found more
+            // than one where it was marked has refused it already.
+            BodyFeatureDefinitionDto::ExternalThread {
+                body_id,
+                face_id,
+                face_key,
+                face_mark,
+                ..
+            } if report.face_keys.len() == 1 => {
+                if *face_key != report.face_keys[0] {
+                    *face_id = stable::face_id(*body_id, &report.face_keys[0]);
+                    *face_key = report.face_keys[0].clone();
+                }
+                *face_mark = Some(report.face_marks[0].clone());
             }
+            _ => {}
         }
     }
 
@@ -3367,6 +3457,7 @@ fn make_jobs(
                     feature_id,
                     body_id,
                     face_key,
+                    face_mark,
                     cylinder,
                     thread,
                     flip,
@@ -3378,6 +3469,7 @@ fn make_jobs(
                         feature_id: *feature_id,
                         target_body_id: *body_id,
                         face_key: face_key.clone(),
+                        face_mark: face_mark.clone(),
                         cylinder: *cylinder,
                         thread: thread.clone(),
                         flip: *flip,
@@ -3387,6 +3479,7 @@ fn make_jobs(
                     feature_id,
                     body_id,
                     face_keys,
+                    face_marks,
                     thickness,
                     inward,
                     ..
@@ -3400,6 +3493,7 @@ fn make_jobs(
                         feature_id: *feature_id,
                         target_body_id: *body_id,
                         face_keys: face_keys.clone(),
+                        face_marks: face_marks.clone(),
                         thickness: *thickness,
                         inward: *inward,
                     }));
