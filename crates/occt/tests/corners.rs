@@ -116,6 +116,30 @@ fn dee() -> KernelProfileDto {
     }
 }
 
+/// A disc of radius 10 with a slice off it at `x = 4`: the end of a shaft
+/// with a flat on it. Its arc and its straight side meet at two corners.
+fn sliced() -> KernelProfileDto {
+    let half = 84.0f64.sqrt();
+    KernelProfileDto {
+        profile_index: 0,
+        points: vec![at(4.0, -half, 0.0), at(4.0, half, 0.0), at(-10.0, 0.0, 0.0)],
+        curves: vec![
+            KernelCurveDto::Line {
+                entity_id: 1,
+                start: at(4.0, -half, 0.0),
+                end: at(4.0, half, 0.0),
+            },
+            KernelCurveDto::Arc {
+                entity_id: 2,
+                start: at(4.0, half, 0.0),
+                mid: at(-10.0, 0.0, 0.0),
+                end: at(4.0, -half, 0.0),
+            },
+        ],
+        holes: Vec::new(),
+    }
+}
+
 fn extruded(
     feature: u64,
     profile: KernelProfileDto,
@@ -803,6 +827,31 @@ fn rounds_and_bevels_meet_at_a_corner_as_the_reference_makes_them() {
         Same,
     );
 
+    // A disc with a slice off it. Round its top the arc and the straight
+    // edge do not run on into each other: the arc's round is cut off by
+    // the flat, which misses the arc's axis, and the straight edge's by
+    // the round side. Slice by slice the two rounds together are the
+    // outline less the outline moved in by as much as a round's section
+    // is wide there.
+    let slice_base = || vec![wide(), boss(sliced())];
+    let beyond = |of: f64, at: f64| of * of * (at / of).acos() - at * (of * of - at * at).sqrt();
+    let within = |w: f64| PI * (10.0 - w).powi(2) - beyond(10.0 - w, 4.0 - w);
+    let taken = integral(0.0, 0.5 * PI, |a| {
+        (within(0.0) - within(r * (1.0 - a.sin()))) * r * a.sin()
+    });
+    check(
+        "slice of a disc: round the top",
+        slice_base(),
+        &|s: &KernelSceneDto| round(level(s, 20.0)),
+        Exactly(36000.0 + 10.0 * within(0.0) - taken),
+    );
+    check(
+        "slice of a disc: bevel the top",
+        slice_base(),
+        &|s: &KernelSceneDto| bevel(level(s, 20.0)),
+        Same,
+    );
+
     // Bevels. Two cross as two rounds do; three at a square corner are cut
     // flat, through the three places where two of them meet on a face.
     check(
@@ -879,6 +928,27 @@ fn rounds_and_bevels_meet_at_a_corner_as_the_reference_makes_them() {
         stepped(),
         &|s: &KernelSceneDto| round(every(s)),
         Refused(said),
+    );
+    // Round the foot of the slice of a disc. There the plate goes round
+    // the outside of the two corners, and the piece that belongs between
+    // an arc's round and a straight edge's is not made yet.
+    check(
+        "slice of a disc: round the foot",
+        slice_base(),
+        &|s: &KernelSceneDto| {
+            round(
+                level(s, 10.0)
+                    .into_iter()
+                    .filter(|k| {
+                        let e = s.bodies[0].edges.iter().find(|e| &e.key == k).unwrap();
+                        e.points
+                            .iter()
+                            .all(|p| p.x.abs() < 20.0 && p.y.abs() < 20.0)
+                    })
+                    .collect(),
+            )
+        },
+        Refused("corner of a kind that cannot be finished"),
     );
     // Three bevels at a corner that is not square.
     let pts = sided(6, 12.0);

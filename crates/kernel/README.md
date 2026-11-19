@@ -107,9 +107,13 @@ to the edge, that face ends the tool where the edge ends. Leaning, or
 round like the shaft a shoulder runs up against, it does not, and the tool
 is carried on past the end and cut off by that face's own surface. It is
 never carried on with nothing to stop it: past the end of its edge it is
-among whatever else stands there. An end on several faces at once, on a
-face that is neither flat nor a cylinder, or of an arc on anything but a
-flat face through the arc's own axis, is refused.
+among whatever else stands there. An arc's tool ends where the arc does on
+a flat face through the arc's own axis. Any other flat face cuts it off as
+it does a straight edge's, as round the end of a shaft with a flat on it,
+or pares it at that end alone where the arc comes round to the same flat
+again, as the rim of a boss does that ends on both walls of a slot. An end
+on several faces at once, or on a face that is neither flat nor, for a
+straight edge, a cylinder, is refused.
 
 Two blends on one flat face cross in a mitre. Each ends on the third face
 of the corner, as it would alone; where the face they share goes round the
@@ -331,21 +335,21 @@ target/release/examples/lab --server mcp-server/target/release/limo-cad-mcp --al
 ```
 
 All 39 bundled recipes give the same solids on both kernels. Over them the
-time spent in the kernel falls from 34.4 s to 1.86 s, 19 times less; per
-recipe the factor runs from 7 to 50. (Apple silicon, release builds, kernel
+time spent in the kernel falls from 34.8 s to 1.89 s, 18 times less; per
+recipe the factor runs from 6 to 47. (Apple silicon, release builds, kernel
 time only.)
 
 | Recipe | Open CASCADE | Limo | Factor |
 |---|---:|---:|---:|
-| `d-screw-vise` (30 bodies, two 41-turn threads) | 17,498 ms | 814 ms | 21× |
-| `vertical-axis-turbine` (27 bodies) | 8,123 ms | 611 ms | 13× |
-| `d-screw-vise-fit` | 4,049 ms | 110 ms | 37× |
-| `garden-bench` (20 bodies) | 2,549 ms | 196 ms | 13× |
-| `show-me-external-thread` | 1,036 ms | 38 ms | 28× |
-| `extrude-basics` | 102.1 ms | 10.1 ms | 10× |
-| `fillet-basics` | 14.0 ms | 2.0 ms | 7× |
-| `show-me-shell` | 12.8 ms | 0.37 ms | 35× |
-| `show-me-rectangular-pattern` | 14.4 ms | 0.29 ms | 50× |
+| `d-screw-vise` (30 bodies, two 41-turn threads) | 17,708 ms | 821 ms | 22× |
+| `vertical-axis-turbine` (27 bodies) | 8,209 ms | 621 ms | 13× |
+| `d-screw-vise-fit` | 4,087 ms | 111 ms | 37× |
+| `garden-bench` (20 bodies) | 2,556 ms | 209 ms | 12× |
+| `show-me-external-thread` | 1,046 ms | 38 ms | 28× |
+| `extrude-basics` | 103.7 ms | 10.9 ms | 10× |
+| `fillet-basics` | 14.3 ms | 2.3 ms | 6× |
+| `show-me-shell` | 13.4 ms | 0.39 ms | 35× |
+| `show-me-rectangular-pattern` | 14.1 ms | 0.30 ms | 47× |
 
 Two recipes are reported as *match, nearly*: one flat face of one body has
 an area of 126.124778 mm² here and 126.130980 mm² on the reference kernel.
@@ -353,7 +357,9 @@ That face has a closed form, and it is the first number. The reference
 walks along its blends in steps and is a few parts in a hundred thousand
 off where one ends on a flat face; the lab remarks on such a face instead
 of failing it. The face is one side of a slot, and the reference kernel
-has the other side, its mirror image, at 126.124777.
+has the other side, its mirror image, at 126.124777. Integrating its odd
+face until ten digits stand gives the same 126.130980: it is the face that
+is out, not the measuring of it.
 
 What the lab shows is that the same bodies come out of every recipe, with
 the same flat faces. It weighs each body by the skin drawn of it, and two
@@ -401,13 +407,13 @@ Beyond the recipes:
   along in them. Open CASCADE, asked to round the same edge of the same
   solid, fits a spline near it and comes within a part in ten thousand.
 - Blends and shells are weighed on both kernels
-  (`crates/occt/tests/corners.rs`): 123 shells, rounds and bevels on
+  (`crates/occt/tests/corners.rs`): 126 shells, rounds and bevels on
   plates with bosses and pockets of three to six sides, round ones, a D,
-  bosses whose sides lean and a bar pushed through the plate on a lean.
-  In 111 the two kernels agree to a part in a hundred million, and in 37
-  of those with a value worked out by hand as well. Three this kernel
-  builds, to the value worked out, where Open CASCADE gives up. Four it
-  refuses and says why. In five the two differ, and the value worked out
+  a disc with a slice off it, bosses whose sides lean and a bar pushed
+  through the plate on a lean. In 113 the two kernels agree to a part in
+  a hundred million, and in 38 of those with a value worked out by hand
+  as well. Three this kernel builds, to the value worked out, where Open
+  CASCADE gives up. Five it refuses and says why. In five the two differ, and the value worked out
   by hand is this kernel's. All five are on a boss made by a tapered
   extrusion, whose sides Open CASCADE keeps as splines: on those it
   squares two rounds off at the foot of a corner and rolls a patch of its

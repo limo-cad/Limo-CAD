@@ -34,7 +34,13 @@ impl Client {
             .env("LIMO_CAD_KERNEL_TIMING", timing)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::null())
+            // What the kernel says of its decisions is worth reading when
+            // it has been asked to say it.
+            .stderr(if std::env::var_os("LIMO_CAD_KERNEL_TRACE").is_some() {
+                Stdio::inherit()
+            } else {
+                Stdio::null()
+            })
             .spawn()
             .expect("could not start the Limo CAD MCP server");
         let input = child.stdin.take().unwrap();

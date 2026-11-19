@@ -1205,3 +1205,133 @@ fn a_round_runs_over_a_hole_but_is_not_built_over_one() {
         "{said}"
     );
 }
+
+/// A boss the shape of a disc with a slice off it, as the end of a shaft
+/// with a flat on it is. Round its top there are two edges, an arc and a
+/// straight one, and neither runs on into the other. The arc ends on the
+/// flat, which does not pass through the arc's axis, so its round is not
+/// ended where the arc ends but cut off by the flat, as the round of a
+/// straight edge is by a face that leans; and the straight edge's round
+/// is cut off by the round side.
+///
+/// Slice by slice each round is a strip along its edge inside the outline,
+/// and both together are the outline less the outline moved in.
+#[test]
+fn an_arc_ends_on_a_flat_that_misses_its_axis() {
+    let (radius, flat, r) = (10.0f64, 4.0f64, 2.0f64);
+    let half = (radius * radius - flat * flat).sqrt();
+    let plate = make::block(v3(-30.0, -30.0, 0.0), v3(30.0, 30.0, 10.0)).unwrap();
+    let outline = vec![
+        Seg::Line {
+            a: v3(flat, -half, 0.0),
+            b: v3(flat, half, 0.0),
+        },
+        Seg::Arc {
+            a: v3(flat, half, 0.0),
+            m: v3(-radius, 0.0, 0.0),
+            b: v3(flat, -half, 0.0),
+        },
+    ];
+    let boss = make::extrude(
+        &Region {
+            loops: vec![outline],
+        },
+        V3::Z,
+        10.0,
+        20.0,
+    )
+    .unwrap();
+    let body = boolean(&plate, &boss, Op::Union).unwrap();
+    let whole = mass(&body).volume;
+    let on_top = |kind: CurveKind| -> u32 {
+        let found: Vec<u32> = (0..body.edge_count() as u32)
+            .filter(|&e| {
+                body.e_curve_ref(e).kind == kind && (body.e_mid(e).z - 20.0).abs() < 1.0e-9
+            })
+            .collect();
+        assert_eq!(found.len(), 1);
+        found[0]
+    };
+    let (arc, straight) = (on_top(CurveKind::Circle), on_top(CurveKind::Line));
+    // What of a disc of radius `of` lies beyond the line `x = at`.
+    let beyond = |of: f64, at: f64| of * of * (at / of).acos() - at * (of * of - at * at).sqrt();
+    // The outline moved in by `w`, all round or on one side only.
+    let within = |round: f64, straight: f64| {
+        let of = radius - round;
+        PI * of * of - beyond(of, flat - straight)
+    };
+    // A round's strip is as wide, at depth `h` under the top, as its
+    // section is there.
+    let taken = |strip: &dyn Fn(f64) -> f64| {
+        integral(0.0, 0.5 * PI, |a| strip(r * (1.0 - a.sin())) * r * a.sin())
+    };
+    for (edges, strip) in [
+        (
+            vec![arc],
+            &(|w: f64| within(0.0, 0.0) - within(w, 0.0)) as &dyn Fn(f64) -> f64,
+        ),
+        (vec![straight], &|w: f64| within(0.0, 0.0) - within(0.0, w)),
+        (vec![arc, straight], &|w: f64| {
+            within(0.0, 0.0) - within(w, w)
+        }),
+    ] {
+        let rounded = fillet(&body, &edges, r).unwrap();
+        rounded.check().unwrap();
+        holds(&rounded, whole - taken(strip));
+    }
+}
+
+/// The rim of a round boss with a narrow slot cut into it is an arc that
+/// ends on both walls of the slot. Neither wall passes through the boss's
+/// axis, and the arc comes round to each wall's own flat again on the far
+/// side of the boss, so a wall cannot cut through the whole of the round:
+/// it pares it at the end that is on it. Slice by slice the round is a
+/// ring inside the boss's outline, less what of that ring the slot has
+/// taken already.
+///
+/// Wherever the slot is cut the round is the same. Opposite the seam of
+/// the boss's side the rim is two arcs, each of which reaches the other
+/// wall's flat at its far end; at the seam it is one arc of nearly a full
+/// turn, whose middle is on the far side of both walls.
+#[test]
+fn a_rim_that_ends_on_both_walls_of_a_slot() {
+    let (radius, gap, r) = (18.5f64, 0.6f64, 0.5f64);
+    let plate = make::block(v3(-30.0, -30.0, 0.0), v3(30.0, 30.0, 10.0)).unwrap();
+    let boss = make::cylinder(v3(0.0, 0.0, 10.0), V3::Z, radius, 14.0).unwrap();
+    let whole = boolean(&plate, &boss, Op::Union).unwrap();
+    // What of a disc of radius `of` lies in the slot's width, on one side
+    // of the middle.
+    let in_the_slot = |of: f64| gap * (of * of - gap * gap).sqrt() + of * of * (gap / of).asin();
+    let ring = |w: f64| {
+        PI * (radius * radius - (radius - w) * (radius - w))
+            - (in_the_slot(radius) - in_the_slot(radius - w))
+    };
+    let round_takes = integral(0.0, 0.5 * PI, |a| ring(r * (1.0 - a.sin())) * r * a.sin());
+    // A bevel's section is as wide as it is deep.
+    let bevel_takes = integral(0.0, r, |h| ring(r - h));
+    for (lo, hi) in [
+        (v3(-gap, -25.0, 10.0), v3(gap, -10.0, 30.0)),
+        (v3(-gap, 10.0, 10.0), v3(gap, 25.0, 30.0)),
+        (v3(-25.0, -gap, 10.0), v3(-10.0, gap, 30.0)),
+        (v3(10.0, -gap, 10.0), v3(25.0, gap, 30.0)),
+    ] {
+        let slot = make::block(lo, hi).unwrap();
+        let body = boolean(&whole, &slot, Op::Cut).unwrap();
+        let held = mass(&body).volume;
+        let rim: Vec<u32> = (0..body.edge_count() as u32)
+            .filter(|&e| {
+                let c = body.e_curve_ref(e);
+                c.kind == CurveKind::Circle
+                    && (c.r - radius).abs() < 1.0e-9
+                    && (c.f.o.z - 24.0).abs() < 1.0e-9
+            })
+            .collect();
+        assert!(!rim.is_empty());
+        let rounded = fillet(&body, &rim, r).unwrap();
+        rounded.check().unwrap();
+        holds(&rounded, held - round_takes);
+        let cut = chamfer(&body, &rim, r, None).unwrap();
+        cut.check().unwrap();
+        holds(&cut, held - bevel_takes);
+    }
+}

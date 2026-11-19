@@ -48,6 +48,9 @@ struct Tool {
     /// the face of the edge's first half-edge first. Zero where that is not
     /// one distance all along.
     reach: [f64; 2],
+    /// Where it leaves them, from the point of the edge the tool starts
+    /// at: the two far corners of its section there.
+    rails: [V3; 2],
 }
 
 /// Round the given edges with a constant radius.
@@ -158,7 +161,7 @@ fn apply(
     for &e in &picked {
         let own = edge_tool_over(body, e, shape, body.e_t[e as usize])?;
         reaches.insert(e, own.reach);
-        let (span, ends) = carried(body, e, &picked, own.reach[0].max(own.reach[1]))?;
+        let (span, ends) = carried(body, e, &picked, &own)?;
         let mut tool = if span == body.e_t[e as usize] {
             own
         } else {
@@ -370,8 +373,8 @@ const NO_END: &str = "one of these edges ends on a face, or on several, that a b
                       be ended on; leave that edge sharp";
 
 /// The stretch of its curve that the tool for an edge covers, and what the
-/// tool is cut off with at its ends. `width` is how far the blend reaches
-/// across the edge.
+/// tool is cut off with at its ends. `own` is the tool over the edge's own
+/// stretch, for how far it reaches across the edge and where.
 ///
 /// A blend ends where its edge does, on the face that ends the edge, and
 /// nowhere else. Square to the edge, that face ends the tool where the
@@ -392,24 +395,42 @@ const NO_END: &str = "one of these edges ends on a face, or on several, that a b
 /// [`corners_finished`]). The pieces of a chain meet end to end, and where
 /// three blends meet the corner piece is made to fit tools that end square.
 ///
+/// An arc's tool ends where the arc does on a flat face through the arc's
+/// own axis, and is cut off by any other flat face as a straight edge's
+/// is. An arc can come round to the flat that ends it a second time, which
+/// a straight edge cannot, and where it does the flat does not cut through
+/// the whole of its tool: it pares it at the one end. Which side of the
+/// flat is kept is told by the way the edge comes to it, not by where the
+/// edge's middle is.
+///
 /// An end that is none of these is refused: several faces at once, a face
-/// of a kind no tool is cut off by yet, an arc that ends on anything but a
-/// flat face through its own axis.
+/// of a kind no tool is cut off by yet, an arc that ends on a face that is
+/// not flat.
 fn carried(
     body: &Body,
     e: u32,
     picked: &[u32],
-    width: f64,
+    own: &Tool,
 ) -> Result<([f64; 2], Vec<End>), String> {
     let [t0, t1] = body.e_t[e as usize];
     let c = body.e_curve_ref(e);
     if body.e_closed(e) || convexity(body, e).is_none() {
         return Ok(([t0, t1], Vec::new()));
     }
+    let width = own.reach[0].max(own.reach[1]);
     let middle = c.point(0.5 * (t0 + t1));
     let size = body.bbox().diagonal() + 8.0 * width + 1.0;
     let mut span = [t0, t1];
     let mut ends = Vec::new();
+    let refused = |at: V3, why: &str| -> Result<([f64; 2], Vec<End>), String> {
+        if crate::diag::trace() {
+            eprintln!(
+                "blend: no end for the {:?} edge through {middle:?} at {at:?}: {why}",
+                c.kind
+            );
+        }
+        Err(NO_END.into())
+    };
     for (k, (t, away)) in [(t0, -1.0), (t1, 1.0)].into_iter().enumerate() {
         let v = body.e_v[e as usize][k];
         let others: Vec<u32> = picked
@@ -422,71 +443,178 @@ fn carried(
             [] | [_] => {}
             _ => continue,
         }
-        let s = match ending(body, e, v) {
-            Ending::Nothing => continue,
-            Ending::Face(s) => s,
-            Ending::Several => return Err(NO_END.into()),
-        };
         // The way the edge runs on past this end.
         let onward = c.deriv(t).unit() * away;
         let p = c.point(t);
+        let s = match ending(body, e, v) {
+            Ending::Nothing => continue,
+            Ending::Face(s) => s,
+            Ending::Several => return refused(p, "faces of several surfaces end it"),
+        };
         let solid = match (c.kind, s.kind) {
-            // A flat face through the axis of an arc ends its tool where
-            // the arc ends.
-            (CurveKind::Circle, SurfKind::Plane)
-                if s.f.z.dot(c.f.z).abs() < 1.0e-9 && s.sdist(c.f.o).abs() < 10.0 * TOL =>
-            {
-                continue
+            (CurveKind::Line | CurveKind::Circle, SurfKind::Plane) => {
+                // The side of the face the edge comes to it from is the
+                // side the tool keeps. An arc of more than half a turn has
+                // its middle on the other.
+                let along = s.f.z.dot(onward);
+                if along.abs() < 1.0e-6 {
+                    return refused(p, "the face that ends it runs along it");
+                }
+                let keep = -along.signum();
+                // How far past the face the blend's two rails are where
+                // the edge ends: short of it when less than nothing. The
+                // section lies between them and the edge.
+                let past = [0, 1].map(|i| {
+                    let rail = match c.kind {
+                        CurveKind::Circle => turned(own.rails[i], c.f.z, t - t0),
+                        _ => own.rails[i],
+                    };
+                    -keep * s.sdist(p + rail)
+                });
+                let short = past.iter().any(|d| *d < -1.0e-9);
+                let over = past[0].max(past[1]);
+                // Square to the edge all across the tool, the face ends
+                // it where the edge ends.
+                if !short && over < 1.0e-9 {
+                    continue;
+                }
+                let far = c.point(if k == 0 { t1 } else { t0 });
+                let twin = s.sdist(far).abs() < 10.0 * TOL;
+                if c.kind == CurveKind::Line {
+                    // A flat face cuts through the whole of a straight
+                    // edge's tool at once.
+                    if short {
+                        // Carried on until the whole section is past it.
+                        let square = along.abs();
+                        if square < 0.05 {
+                            return refused(p, "the face that ends it runs along it");
+                        }
+                        let lean = (1.0 - square * square).max(0.0).sqrt() / square;
+                        span[k] = t + away * (width * lean * 1.5 + width);
+                    }
+                    side_of(&s, keep > 0.0, size)?
+                } else if short {
+                    // An arc may come round to the same flat again, as a
+                    // rim does that ends on both walls of a slot. The
+                    // flat can cut through the whole of its tool only if
+                    // all of the arc but this end keeps clear of it, or
+                    // this end and the other where both are on it.
+                    let clear = (0..=64).all(|i| {
+                        let u = t0 + (t1 - t0) * i as f64 / 64.0;
+                        (u - t).abs() * c.r < 3.0 * width
+                            || (twin && (t0 + t1 - t - u).abs() * c.r < 3.0 * width)
+                            || s.sdist(c.point(u)) * keep > width
+                    });
+                    if !clear {
+                        return refused(p, "the flat that ends it comes near it elsewhere");
+                    }
+                    // Carried on round the arc until the whole section is
+                    // past the face, and never all the way round.
+                    let room = TAU - (t1 - t0) - 0.1;
+                    let step = width / c.r;
+                    let Some(more) = (1..=12)
+                        .map(|i| step * i as f64)
+                        .take_while(|more| *more < 0.5 * room)
+                        .find(|more| s.sdist(c.point(t + away * more)) * keep < -width)
+                    else {
+                        return refused(p, "the flat that ends it is not passed soon enough");
+                    };
+                    span[k] = t + away * more;
+                    side_of(&s, keep > 0.0, size)?
+                } else {
+                    // All of the tool reaches the face and some of it is
+                    // past it. That is pared off at this end, by a slab
+                    // thin enough to touch nothing else of the tool.
+                    let depth = 2.0 * over + 100.0 * TOL;
+                    let reach = 4.0 * width + over;
+                    let off = s.sdist(far).abs();
+                    let aside = ((far - p).len2() - off * off).max(0.0).sqrt();
+                    if off < 4.0 * depth && aside < 2.0 * reach {
+                        return refused(p, "the flat that ends it is too near its other end");
+                    }
+                    slab_past(&s, p, keep > 0.0, reach, depth)?
+                }
             }
-            // A flat face square to a straight edge likewise.
-            (CurveKind::Line, SurfKind::Plane) if s.f.z.cross(onward).len() < 1.0e-9 => continue,
-            (CurveKind::Line, SurfKind::Plane | SurfKind::Cylinder) => {
+            (CurveKind::Line, SurfKind::Cylinder) => {
                 // Far enough that the whole section is past the face.
-                let normal = s.normal(p);
-                let square = normal.dot(onward).abs();
+                let square = s.normal(p).dot(onward).abs();
                 if square < 0.05 {
-                    return Err(NO_END.into());
+                    return refused(p, "the face that ends it runs along it");
                 }
                 let more = width * ((1.0 - square * square).max(0.0).sqrt() / square) * 1.5 + width;
                 span[k] = t + away * more;
-                let outside = s.sdist(middle) > 0.0;
-                if s.sdist(middle).abs() < 10.0 * TOL {
-                    return Err(NO_END.into());
+                let side = s.sdist(middle);
+                if side.abs() < 10.0 * TOL {
+                    return refused(p, "the face that ends it passes through its middle");
                 }
-                if s.kind == SurfKind::Plane {
-                    let towards = if outside { s.f.z } else { -s.f.z };
-                    let f = Frame::from_z(s.f.o, towards);
-                    let corner = |x: f64, y: f64| s.f.o + f.x * (x * size) + f.y * (y * size);
-                    let q = [
-                        corner(-1.0, -1.0),
-                        corner(1.0, -1.0),
-                        corner(1.0, 1.0),
-                        corner(-1.0, 1.0),
-                    ];
-                    let segs = (0..4)
-                        .map(|i| Seg::Line {
-                            a: q[i],
-                            b: q[(i + 1) % 4],
-                        })
-                        .collect();
-                    End {
-                        solid: make::extrude(&Region { loops: vec![segs] }, towards, 0.0, size)
-                            .map_err(|_| NO_END.to_string())?,
-                        keep_inside: true,
-                    }
-                } else {
-                    End {
-                        solid: make::cylinder(s.f.o - s.f.z * size, s.f.z, s.r, 2.0 * size)
-                            .map_err(|_| NO_END.to_string())?,
-                        keep_inside: !outside,
-                    }
+                End {
+                    solid: make::cylinder(s.f.o - s.f.z * size, s.f.z, s.r, 2.0 * size)
+                        .map_err(|_| NO_END.to_string())?,
+                    keep_inside: side <= 0.0,
                 }
             }
-            _ => return Err(NO_END.into()),
+            _ => return refused(p, &format!("a {:?} ends it", s.kind)),
         };
         ends.push(solid);
     }
     Ok((span, ends))
+}
+
+/// `v` turned about the unit vector `axis` by `angle`.
+fn turned(v: V3, axis: V3, angle: f64) -> V3 {
+    let (sin, cos) = angle.sin_cos();
+    v * cos + axis.cross(v) * sin + axis * (axis.dot(v) * (1.0 - cos))
+}
+
+/// A thin slab on the far side of a flat face, about the point `at` of it:
+/// what a tool that reaches a little past the face there is pared down by.
+/// `outside` says which side of the face the tool keeps.
+fn slab_past(s: &Surface, at: V3, outside: bool, reach: f64, depth: f64) -> Result<End, String> {
+    let away = if outside { -s.f.z } else { s.f.z };
+    let f = Frame::from_z(at, away);
+    let corner = |x: f64, y: f64| at + f.x * (x * reach) + f.y * (y * reach);
+    let q = [
+        corner(-1.0, -1.0),
+        corner(1.0, -1.0),
+        corner(1.0, 1.0),
+        corner(-1.0, 1.0),
+    ];
+    let segs = (0..4)
+        .map(|i| Seg::Line {
+            a: q[i],
+            b: q[(i + 1) % 4],
+        })
+        .collect();
+    Ok(End {
+        solid: make::extrude(&Region { loops: vec![segs] }, away, 0.0, depth)
+            .map_err(|_| NO_END.to_string())?,
+        keep_inside: false,
+    })
+}
+
+/// All of space on one side of a flat face, as far as `size` reaches: what
+/// a tool keeps of itself when that face ends it.
+fn side_of(s: &Surface, outside: bool, size: f64) -> Result<End, String> {
+    let towards = if outside { s.f.z } else { -s.f.z };
+    let f = Frame::from_z(s.f.o, towards);
+    let corner = |x: f64, y: f64| s.f.o + f.x * (x * size) + f.y * (y * size);
+    let q = [
+        corner(-1.0, -1.0),
+        corner(1.0, -1.0),
+        corner(1.0, 1.0),
+        corner(-1.0, 1.0),
+    ];
+    let segs = (0..4)
+        .map(|i| Seg::Line {
+            a: q[i],
+            b: q[(i + 1) % 4],
+        })
+        .collect();
+    Ok(End {
+        solid: make::extrude(&Region { loops: vec![segs] }, towards, 0.0, size)
+            .map_err(|_| NO_END.to_string())?,
+        keep_inside: true,
+    })
 }
 
 /// The way into face `f` from a point of its boundary: across half-edge
@@ -647,7 +775,7 @@ fn edge_tool_over(body: &Body, e: u32, shape: Shape, span: [f64; 2]) -> Result<T
     let (s1, s2) = (body.f_surface(f1), body.f_surface(f2));
     let c = *body.e_curve_ref(e);
     let [t0, t1] = span;
-    let (tool, reach) = match (c.kind, s1.kind, s2.kind) {
+    let (tool, reach, rails) = match (c.kind, s1.kind, s2.kind) {
         (CurveKind::Line, SurfKind::Plane, SurfKind::Plane) => {
             let d = c.f.x;
             let p = c.point(t0);
@@ -678,6 +806,7 @@ fn edge_tool_over(body: &Body, e: u32, shape: Shape, span: [f64; 2]) -> Result<T
             (
                 make::extrude(&Region { loops: vec![segs] }, d, 0.0, t1 - t0)?,
                 [reach1, reach2],
+                [a1 - p, a2 - p],
             )
         }
         (
@@ -763,6 +892,7 @@ fn edge_tool_over(body: &Body, e: u32, shape: Shape, span: [f64; 2]) -> Result<T
             (
                 make::extrude(&Region { loops: vec![segs] }, d, 0.0, t1 - t0)?,
                 [q1.len(), q2.len()],
+                [lift(q1) - p, lift(q2) - p],
             )
         }
         (
@@ -821,9 +951,11 @@ fn edge_tool_over(body: &Body, e: u32, shape: Shape, span: [f64; 2]) -> Result<T
                 None => lp.push(PSeg::Line { a: a1, b: a2 }),
             }
             lp.push(PSeg::Line { a: a2, b: corner });
+            let from_edge = |a: V2| c.f.o + radial * a.x + axis * a.y - p0;
             (
                 make::revolve(&[lp], c.f.o, axis, radial, t1 - t0)?,
                 [reach1, reach2],
+                [from_edge(a1), from_edge(a2)],
             )
         }
         // Any other edge that closes on itself is rounded by rolling the
@@ -854,6 +986,7 @@ fn edge_tool_over(body: &Body, e: u32, shape: Shape, span: [f64; 2]) -> Result<T
         body: tool,
         add: !convex,
         reach,
+        rails,
     })
 }
 
@@ -1142,6 +1275,7 @@ fn rim_tool(body: &Body, e: u32, radius: f64, convex: bool) -> Result<Tool, Stri
         body: tool,
         add: !convex,
         reach: [0.0; 2],
+        rails: [V3::ZERO; 2],
     })
 }
 
@@ -1219,6 +1353,7 @@ fn inside_corner_tools(body: &Body, edges: &[u32], shape: Shape) -> Vec<(Tool, [
                     body: piece,
                     add: !convex,
                     reach: [0.0; 2],
+                    rails: [V3::ZERO; 2],
                 },
                 [e1, e2],
                 v,
@@ -1255,8 +1390,10 @@ fn turns_inwards(body: &Body, v: u32, e1: u32, e2: u32) -> Option<bool> {
     };
     let normal = body.f_normal(shared, body.verts[v as usize]);
     // Walking with the face on the left, a turn to the right is a corner
-    // that turns inwards.
-    Some(body.h_dir(arriving).cross(body.h_dir(leaving)).dot(normal) < -1.0e-9)
+    // that turns inwards. The way an edge arrives is the way it runs at
+    // the corner, which for an arc is not the way it set out.
+    let arrives = -body.h_dir(arriving ^ 1);
+    Some(arrives.cross(body.h_dir(leaving)).dot(normal) < -1.0e-9)
 }
 
 const MIXED: &str = "an inside edge and an outside edge that meet at a corner cannot be blended \
@@ -1397,6 +1534,7 @@ fn corner_tools(body: &Body, edges: &[u32], shape: Shape) -> Vec<(Tool, [u32; 3]
                     body: piece,
                     add: !convex,
                     reach: [0.0; 2],
+                    rails: [V3::ZERO; 2],
                 },
                 [met[0].1, met[1].1, met[2].1],
                 v,
