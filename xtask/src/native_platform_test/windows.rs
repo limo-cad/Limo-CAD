@@ -192,7 +192,8 @@ impl Driver {
         };
         self.record("computer-control", &receipt)?;
         ensure!(
-            matches!(receipt["status"].as_str(), Some("input_sent" | "focused")),
+            matches!(receipt["status"].as_str(), Some("input_sent" | "focused"))
+                || (focus && super::keyboard::exposure_requested(observed, &receipt)),
             "OS input did not complete; inspect its receipt and do not retry blindly: {receipt}"
         );
         Ok(receipt)
@@ -225,6 +226,7 @@ impl Driver {
             "target_kind":observed["target_kind"],
             "window_handle":observed["window_handle"],
             "main_window_handle":observed["main_window_handle"],
+            "native_caption_focus":observed["native_caption_focus"],
             "harness_pid":std::process::id(),
             "worker_pid":self.client.borrow().process_id(),
             "foreground_window_handle":hwnd.0 as usize,
