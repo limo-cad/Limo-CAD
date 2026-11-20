@@ -1238,11 +1238,10 @@ fn windows_sdks_and_consumers_share_their_pinned_compilers() {
     let action = workflow(".github/actions/setup-windows-occt/action.yml");
     let (_, step) = named_step(&action["runs"], "Detect MSVC toolset").unwrap();
     let detect = step["run"].as_str().unwrap();
+    let version_pattern = Regex::new(r"^\d+\.\d+\.\d+\s*$").unwrap();
     for architecture in ["arm64", "x64"] {
         let pin = format!("native/occt-overlay/triplets/msvc-{architecture}-version.txt");
-        assert!(Regex::new(r"^\d+\.\d+\.\d+\s*$")
-            .unwrap()
-            .is_match(&read(&pin)));
+        assert!(version_pattern.is_match(&read(&pin)));
         let triplet = read(&format!(
             "native/occt-overlay/triplets/{architecture}-windows.cmake"
         ));
