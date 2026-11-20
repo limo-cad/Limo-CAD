@@ -75,15 +75,8 @@ jobs:
         run: |
           $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
           $installPath = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
-          Import-Module "$installPath\Common7\Tools\Microsoft.VisualStudio.DevShell.dll"
-          Enter-VsDevShell -VsInstallPath $installPath -SkipAutomaticLocation -DevCmdArguments '-arch=x64'
-          $toolset = (Get-Content (Join-Path $installPath 'VC/Auxiliary/Build/Microsoft.VCToolsVersion.default.txt') -Raw).Trim()
-          if ($toolset -ne $env:SDK_TOOLSET) { throw "SDK/compiler mismatch: SDK $env:SDK_TOOLSET, runner $toolset" }
-          if (-not (Test-Path -LiteralPath "$env:OCCT_ROOT/include/opencascade/Standard.hxx")) { throw 'SDK headers are missing' }
-          $env:Path = "$env:OCCT_ROOT/bin;$env:Path"
-          foreach ($name in @('PATH', 'INCLUDE', 'LIB', 'LIBPATH')) {
-            "$name=$([Environment]::GetEnvironmentVariable($name))" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          }
+          if ([string]::IsNullOrWhiteSpace($installPath)) { throw 'Visual Studio C++ Build Tools were not found' }
+          & ./scripts/ci/enter-windows-sdk.ps1 -InstallationRoot $installPath -Toolset $env:SDK_TOOLSET
 
       - name: Qualify downloaded Windows SDK
         if: inputs.platform == 'windows'

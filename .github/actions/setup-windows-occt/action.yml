@@ -47,6 +47,8 @@ runs:
           # Read the same pin as the vcpkg triplet; never label a default-toolset
           # build with the pinned compiler's cache key.
           $versionFile = Join-Path $env:GITHUB_WORKSPACE 'native/occt-overlay/triplets/msvc-arm64-version.txt'
+        } elseif ($env:VCPKG_TRIPLET -eq 'x64-windows') {
+          $versionFile = Join-Path $env:GITHUB_WORKSPACE 'native/occt-overlay/triplets/msvc-x64-version.txt'
         }
         $toolset = (Get-Content -LiteralPath $versionFile -Raw).Trim()
         if ($toolset -notmatch '^\d+\.\d+\.\d+(\.\d+)?$') { throw "Invalid MSVC toolset version: $toolset" }
