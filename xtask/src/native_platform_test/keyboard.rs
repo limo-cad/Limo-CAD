@@ -1,6 +1,52 @@
 //! Refocus an observed owned window before a key, without retrying input.
 use anyhow::{ensure, Result};
 use serde_json::{json, Value};
+use std::time::{Duration, Instant};
+
+/// Only this receipt permits waiting for exposure: it explicitly sent no input.
+/// A denial, partial click or failed exposure must never become an input retry.
+pub(super) fn exposure_requested(observed: &Value, receipt: &Value) -> bool {
+    receipt["status"] == "not_focused"
+        && receipt["action"] == "focus"
+        && receipt["method"] == "nonactivating_window_exposure"
+        && receipt["owner"] == observed["owner"]
+        && receipt["exposure_requested"] == true
+        && receipt["input_sent"] == false
+        && receipt["foreground_verified"] == false
+        && receipt["observation_consumed"] == true
+}
+
+fn wait_for_exposed_target(
+    original: &Value,
+    observe: &mut impl FnMut() -> Result<Value>,
+    timeout: Duration,
+) -> Result<Value> {
+    let deadline = Instant::now() + timeout;
+    let mut previous_token = original["observation"].as_str().map(str::to_owned);
+    loop {
+        let fresh = observe()?;
+        require_same_target(original, &fresh)?;
+        let token = fresh["observation"].as_str();
+        ensure!(
+            token.is_some() && token != previous_token.as_deref(),
+            "CAD exposure requires a fresh observation; no further focus or key was sent"
+        );
+        ensure!(
+            Instant::now() < deadline,
+            "CAD exposure did not settle within {timeout:?}; no further focus or key was sent"
+        );
+        let foreground = fresh["foreground"]
+            .as_bool()
+            .ok_or_else(|| anyhow::anyhow!("Owned observation omitted foreground state"))?;
+        if foreground || fresh["native_caption_focus"]["available"] == true {
+            // This only permits a new focus request. The production route still
+            // revalidates the caption, ownership and foreground before input.
+            return Ok(fresh);
+        }
+        previous_token = token.map(str::to_owned);
+        std::thread::sleep(Duration::from_millis(100));
+    }
+}
 
 pub(super) fn focus_target(
     mut observe: impl FnMut() -> Result<Value>,
@@ -15,7 +61,14 @@ fn activate_target(
     observe: &mut impl FnMut() -> Result<Value>,
     send: &mut impl FnMut(&Value, Value) -> Result<Value>,
 ) -> Result<(Value, Value)> {
-    let receipt = send(observed, json!({"action":"focus"}))?;
+    let mut receipt = send(observed, json!({"action":"focus"}))?;
+    if exposure_requested(observed, &receipt) {
+        // Exposure changes Z-order asynchronously and consumes the observation.
+        // Poll read-only state, then allow one focus attempt with a fresh proof.
+        // Never loop over focus requests or repeat a possibly inserted click.
+        let exposed = wait_for_exposed_target(observed, observe, Duration::from_secs(10))?;
+        receipt = send(&exposed, json!({"action":"focus"}))?;
+    }
     ensure!(
         receipt["status"] == "focused" && receipt["owner"] == observed["owner"],
         "Owned CAD activation did not complete; no key was sent: {receipt}"
@@ -163,6 +216,146 @@ mod tests {
 
     fn focused() -> Result<Value> {
         Ok(json!({"status":"focused","owner":observation(false, "old")["owner"]}))
+    }
+
+    fn exposure() -> Value {
+        // The ARM package runner's receipt after Windows Search kept foreground.
+        json!({"status":"not_focused","action":"focus",
+            "method":"nonactivating_window_exposure",
+            "owner":observation(false, "old")["owner"],"exposure_requested":true,
+            "input_sent":false,"foreground_verified":false,"observation_consumed":true})
+    }
+
+    fn exposed(token: &str) -> Value {
+        let mut observed = observation(false, token);
+        observed["native_caption_focus"] = json!({"available":true});
+        observed
+    }
+
+    #[test]
+    fn queued_exposure_waits_for_a_fresh_caption_before_one_focus_and_one_key() {
+        let (result, calls) = exercise(
+            vec![
+                observation(false, "old"),
+                observation(false, "still-covered"),
+                exposed("exposed"),
+                observation(true, "activated"),
+            ],
+            vec![
+                Ok(exposure()),
+                focused(),
+                Ok(json!({"status":"input_sent"})),
+            ],
+        );
+        assert!(result.is_ok(), "{result:?}");
+        assert_eq!(
+            calls,
+            vec![
+                json!({"action":"observe"}),
+                json!({"action":"focus","observation":"old"}),
+                json!({"action":"observe"}),
+                json!({"action":"observe"}),
+                json!({"action":"focus","observation":"exposed"}),
+                json!({"action":"observe"}),
+                json!({"action":"key","key":"Ctrl+V","observation":"activated"}),
+            ]
+        );
+    }
+
+    #[test]
+    fn exposure_can_settle_to_foreground_without_a_caption_proof() {
+        let (result, calls) = exercise(
+            vec![
+                observation(false, "old"),
+                observation(true, "ready"),
+                observation(true, "activated"),
+            ],
+            vec![
+                Ok(exposure()),
+                focused(),
+                Ok(json!({"status":"input_sent"})),
+            ],
+        );
+        assert!(result.is_ok(), "{result:?}");
+        assert_eq!(calls[3], json!({"action":"focus","observation":"ready"}));
+        assert_eq!(calls[5]["observation"], "activated");
+    }
+
+    #[test]
+    fn refused_or_ambiguous_exposure_does_not_continue() {
+        for (field, replacement) in [
+            ("status", json!("input_incomplete")),
+            ("action", json!("key")),
+            ("method", json!("verified_native_caption_click")),
+            ("owner", json!({"pid":92})),
+            ("exposure_requested", json!(false)),
+            ("input_sent", json!(true)),
+            ("foreground_verified", json!(true)),
+            ("observation_consumed", json!(false)),
+            ("input_sent", Value::Null),
+        ] {
+            let mut receipt = exposure();
+            receipt[field] = replacement;
+            let (result, calls) = exercise(vec![observation(false, "old")], vec![Ok(receipt)]);
+            assert!(result.is_err(), "{field}");
+            assert_eq!(calls.len(), 2, "{field}: {calls:?}");
+        }
+    }
+
+    #[test]
+    fn changed_owner_or_reused_observation_after_exposure_never_receives_input() {
+        for (pointer, replacement) in [
+            ("/owner/pid", json!(92)),
+            ("/owner/process_instance_id", json!("replaced")),
+            ("/owner/session_id", json!("replaced")),
+            ("/owner/document_id", json!("another-tab")),
+            ("/owner/window_id", json!("other")),
+            ("/owner/generation", json!(8)),
+            ("/window_handle", json!(33)),
+            ("/target_kind", json!("native_dialog")),
+            ("/observation", json!("old")),
+            ("/observation", Value::Null),
+            ("/foreground", Value::Null),
+        ] {
+            let mut fresh = exposed("fresh");
+            *fresh.pointer_mut(pointer).unwrap() = replacement;
+            let (result, calls) =
+                exercise(vec![observation(false, "old"), fresh], vec![Ok(exposure())]);
+            assert!(result.is_err(), "{pointer}");
+            assert_eq!(calls.len(), 3, "{pointer}: {calls:?}");
+        }
+    }
+
+    #[test]
+    fn another_exposure_or_partial_focus_is_not_retried() {
+        for receipt in [
+            Ok(exposure()),
+            Ok(json!({"status":"input_incomplete","input_may_have_been_inserted":true})),
+            Err(anyhow::anyhow!("Caption moved before focus")),
+        ] {
+            let (result, calls) = exercise(
+                vec![observation(false, "old"), exposed("fresh")],
+                vec![Ok(exposure()), receipt],
+            );
+            assert!(result.is_err());
+            assert_eq!(calls.len(), 4);
+            assert_eq!(calls[3], json!({"action":"focus","observation":"fresh"}));
+        }
+    }
+
+    #[test]
+    fn exposure_wait_stops_at_its_deadline() {
+        let mut calls = 0;
+        let result = wait_for_exposed_target(
+            &observation(false, "old"),
+            &mut || {
+                calls += 1;
+                Ok(observation(false, &format!("waiting-{calls}")))
+            },
+            Duration::from_millis(1),
+        );
+        assert!(result.unwrap_err().to_string().contains("did not settle"));
+        assert!((1..=2).contains(&calls));
     }
 
     #[test]
