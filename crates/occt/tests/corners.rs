@@ -921,10 +921,132 @@ fn rounds_and_bevels_meet_at_a_corner_as_the_reference_makes_them() {
         Same,
     );
 
-    // What cannot be finished exactly is refused. An inside edge and an
-    // outside edge that meet: the reference kernel blends the corner
-    // between them with a patch of its own, and the two tools left as they
-    // are make a solid a tenth of the radius cubed away from that.
+    // Where an inside edge meets outside ones, or an outside edge inside
+    // ones: the foot of the boss at one of its corners, the rim of the
+    // pocket at one of its. Rounded all three, the corner is the round of
+    // the odd edge and then one round along what the other two have
+    // become, with the arc between them that the first round leaves: a
+    // quarter of a ring there, between two straight rounds. Round a
+    // quarter turn of radius `R` a round fills a quarter of a ring from `R`
+    // to `R + w` at each depth.
+    let squared = r3 * (5.0 / 3.0 - PI / 2.0);
+    let quarter = 0.25 * PI * (2.0 * r * sliver(r) + squared);
+    check(
+        "an upright of the boss and both edges of its foot",
+        stepped(),
+        &|s: &KernelSceneDto| {
+            round(vec![
+                edge(s, [30.0, 18.0, 15.0]),
+                edge(s, [30.0, 13.0, 10.0]),
+                edge(s, [20.0, 18.0, 10.0]),
+            ])
+        },
+        Exactly(12000.0 - sliver(r) * 10.0 + sliver(r) * 26.0 + quarter),
+    );
+    check(
+        "a corner edge of the pocket and both edges of its rim",
+        pocketed(),
+        &|s: &KernelSceneDto| {
+            round(vec![
+                edge(s, [30.0, 18.0, 7.0]),
+                edge(s, [30.0, 13.0, 10.0]),
+                edge(s, [20.0, 18.0, 10.0]),
+            ])
+        },
+        Exactly(8800.0 + sliver(r) * 6.0 - sliver(r) * 26.0 - quarter),
+    );
+    // Every edge of each. A box loses a sliver along what is left of each
+    // edge between its corners, and at each corner a cube less the eighth
+    // of a ball that rests in it.
+    let ball = (1.0 - PI / 6.0) * r3;
+    let plate = 4.0 * sliver(r) * (36.0 + 21.0 + 6.0) + 8.0 * ball;
+    // Round the boss's foot or the pocket's rim, corners rounded.
+    let round_about = (60.0 - (8.0 - 2.0 * PI) * r) * sliver(r) + PI * squared;
+    // The four edges of a rectangle 20 by 10 and its four corners.
+    let outline_of_it = sliver(r) * (2.0 * 16.0 + 2.0 * 6.0) + 4.0 * ball;
+    check(
+        "every edge of a boss on a plate",
+        stepped(),
+        &|s: &KernelSceneDto| round(every(s)),
+        Exactly(12000.0 - plate - outline_of_it - 4.0 * sliver(r) * (10.0 - r) + round_about),
+    );
+    check(
+        "every edge of a pocketed block",
+        pocketed(),
+        &|s: &KernelSceneDto| round(every(s)),
+        Exactly(8800.0 - plate + outline_of_it + 4.0 * sliver(r) * (6.0 - r) - round_about),
+    );
+    // A boss of six sides: the corners are not square, and the ring at
+    // each turns a sixth of the way round.
+    {
+        let pts = sided(6, 12.0);
+        let mid = |i: usize, z: f64| {
+            let (a, b) = (pts[i % 6], pts[(i + 1) % 6]);
+            [0.5 * (a.0 + b.0), 0.5 * (a.1 + b.1), z]
+        };
+        check(
+            "6 sides: the uprights and the whole foot",
+            vec![wide(), boss(outline(&sided(6, 12.0)))],
+            &|s: &KernelSceneDto| {
+                round(
+                    (0..6)
+                        .flat_map(|i| [edge(s, mid(i, 10.0)), edge(s, [pts[i].0, pts[i].1, 15.0])])
+                        .collect(),
+                )
+            },
+            Same,
+        );
+    }
+
+    // A plate with a boss and a pocket: the boss's corners go round before
+    // its foot, the pocket's before its rim, all in the one feature.
+    check(
+        "every edge of a plate with a boss and a pocket",
+        vec![
+            wide(),
+            boss(rectangle(-20.0, -5.0, -10.0, 10.0)),
+            extruded(
+                3,
+                rectangle(5.0, 20.0, -10.0, 10.0),
+                ExtrudeOperation::Cut,
+                4.0,
+                10.0,
+                0.0,
+            ),
+        ],
+        &|s: &KernelSceneDto| round(every(s)),
+        Same,
+    );
+    // A stair of three steps. Along the two inside corners between its
+    // steps the edges are inside ones, and each meets two outside edges on
+    // either cheek of the stair.
+    check(
+        "every edge of a stair",
+        vec![extruded(
+            1,
+            outline(&[
+                (0.0, 0.0),
+                (30.0, 0.0),
+                (30.0, 10.0),
+                (20.0, 10.0),
+                (20.0, 20.0),
+                (10.0, 20.0),
+                (10.0, 30.0),
+                (0.0, 30.0),
+            ]),
+            ExtrudeOperation::NewBody,
+            0.0,
+            20.0,
+            0.0,
+        )],
+        &|s: &KernelSceneDto| round(every(s)),
+        Same,
+    );
+
+    // With one of the two left sharp the corner is not that one. The
+    // reference kernel blends it with a patch of its own; rounded one
+    // after the other, odd edge first, the two kernels make the same of
+    // it, and the second round runs on through the first.
     let said = "an inside edge and an outside edge that meet at a corner";
     check(
         "the rim and the wall of a pocket",
@@ -948,11 +1070,26 @@ fn rounds_and_bevels_meet_at_a_corner_as_the_reference_makes_them() {
         },
         Refused(said),
     );
-    check(
-        "every edge of a boss on a plate",
-        stepped(),
-        &|s: &KernelSceneDto| round(every(s)),
-        Refused(said),
+    let rounded = |feature: u64, keys: Vec<String>| {
+        KernelJobDto::Fillet(KernelFilletJobDto {
+            feature_id: FeatureId(feature),
+            target_body_id: BodyId(1),
+            edge_keys: keys,
+            edge_marks: Vec::new(),
+            radius: r,
+            tangent_chain: false,
+        })
+    };
+    judge(
+        "an upright edge of the boss, then its foot",
+        staged(
+            stepped(),
+            &[
+                &|s: &KernelSceneDto| rounded(8, vec![edge(s, [30.0, 18.0, 15.0])]),
+                &|s: &KernelSceneDto| rounded(9, vec![edge(s, [30.0, 12.0, 10.0])]),
+            ],
+        ),
+        Exactly(12000.0 - sliver(r) * 10.0 + sliver(r) * 26.0 + quarter),
     );
     // Round the foot of the slice of a disc. There the plate goes round
     // the outside of the two corners, and the piece that belongs between

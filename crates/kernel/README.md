@@ -123,9 +123,22 @@ flat faces leave a ball resting against all three, at any angles; three
 even bevels at a square corner are cut flat between them. All of this
 holds for outside edges, where a blend takes material away, and for inside
 ones, where it fills in, and whether the faces stand square to each other
-or lean. Any other corner where blended edges meet is refused: an inside
-edge with an outside edge, three bevels at a corner that is not square,
-more than three edges.
+or lean.
+
+Where an inside edge meets two outside ones at a corner, or an outside edge
+two inside ones, as at the rim of a pocket and the foot of a boss, and all
+three are rounded, the corner is what a ball makes of it that rolls along
+the two and round the third. That is the round of the odd edge, and then
+one round along what the other two have become: a chain, with the arc
+between them that the first round leaves on the face it ends on. The
+rounds are made in that order, each of them one that is made anyway, and
+the corner comes out as a piece of a ring between two straight rounds.
+Rounding every edge of a part with bosses and pockets comes down to this.
+
+Any other corner where blended edges meet is refused: an inside edge with
+an outside edge where the third edge of the corner is left sharp or the
+blend is a bevel, three bevels at a corner that is not square, more than
+three edges.
 
 A blend covers a strip of each of its two faces, out to where it leaves
 the face. One wider than a face would run off its far side, and one with a
@@ -268,8 +281,9 @@ Not yet (each is refused by name, not approximated):
 - tapers that would need a slanted cone, offsets that change which faces
   are neighbours, shells of free-form faces;
 - blends that meet at a corner other than those above: an inside edge
-  with an outside one (rounding every edge of a part that has both), three
-  bevels at a corner that is not square, more than three edges; a blend
+  with an outside one where the third edge of the corner is left sharp,
+  or bevelled; three bevels at a corner that is not square; more than
+  three edges; a blend
   that ends on a cone, a ball or a spline, or on two faces at once; a
   blend wider than a face beside its edge, or with anything but a hole in
   its way there;
@@ -289,8 +303,8 @@ order it is meant to be taken on. This is the list to work down.
    revolution, of extrusion, offset) and its trimmed curves.
 2. **Blending without exceptions.** The rolling ball on open edges of any
    shape, between free-form faces, with a radius that varies along the
-   edge; the corner where an inside blend meets an outside one, which is
-   what rounding every edge of a real part comes down to; corners of more
+   edge; the corner where an inside blend meets an outside one with the
+   third edge left sharp, and the same corner bevelled; corners of more
    than three edges, and of bevels at any angle; an end on a face of any
    kind, or on several; a blend that runs off the end of its face or over
    a neighbouring edge.
@@ -337,21 +351,21 @@ target/release/examples/lab --server mcp-server/target/release/limo-cad-mcp --al
 ```
 
 All 39 bundled recipes give the same solids on both kernels. Over them the
-time spent in the kernel falls from 34.6 s to 1.89 s, 18 times less; per
-recipe the factor runs from 6 to 48. (Apple silicon, release builds, kernel
+time spent in the kernel falls from 34.5 s to 1.87 s, 18 times less; per
+recipe the factor runs from 6 to 43. (Apple silicon, release builds, kernel
 time only.)
 
 | Recipe | Open CASCADE | Limo | Factor |
 |---|---:|---:|---:|
-| `d-screw-vise` (30 bodies, two 41-turn threads) | 17,559 ms | 817 ms | 21× |
-| `vertical-axis-turbine` (27 bodies) | 8,202 ms | 626 ms | 13× |
-| `d-screw-vise-fit` | 4,026 ms | 109 ms | 37× |
-| `garden-bench` (20 bodies) | 2,553 ms | 212 ms | 12× |
-| `show-me-external-thread` | 1,046 ms | 38 ms | 28× |
-| `extrude-basics` | 102.3 ms | 11.1 ms | 9× |
-| `fillet-basics` | 14.0 ms | 2.2 ms | 6× |
-| `show-me-shell` | 12.9 ms | 0.37 ms | 35× |
-| `show-me-rectangular-pattern` | 13.9 ms | 0.29 ms | 48× |
+| `d-screw-vise` (30 bodies, two 41-turn threads) | 17,499 ms | 818 ms | 21× |
+| `vertical-axis-turbine` (27 bodies) | 8,151 ms | 606 ms | 13× |
+| `d-screw-vise-fit` | 4,052 ms | 109 ms | 37× |
+| `garden-bench` (20 bodies) | 2,538 ms | 204 ms | 12× |
+| `show-me-external-thread` | 1,050 ms | 38 ms | 28× |
+| `extrude-basics` | 102.0 ms | 10.9 ms | 9× |
+| `fillet-basics` | 14.1 ms | 2.2 ms | 6× |
+| `show-me-shell` | 13.0 ms | 0.37 ms | 35× |
+| `show-me-rectangular-pattern` | 13.7 ms | 0.32 ms | 43× |
 
 The recipes make 127 bodies between them. Ninety hold the same on both
 kernels to the last digit weighed, and thirty-four more the same to a part
@@ -419,14 +433,15 @@ Beyond the recipes:
   along in them. Open CASCADE, asked to round the same edge of the same
   solid, fits a spline near it and comes within a part in ten thousand.
 - Blends and shells are weighed on both kernels
-  (`crates/occt/tests/corners.rs`): 129 shells, rounds, bevels and a
+  (`crates/occt/tests/corners.rs`): 136 shells, rounds, bevels and a
   thread, on plates with bosses and pockets of three to six sides, round
   ones, a D, a disc with a slice off it, a boss with a slotted rim, a
-  bracket, bosses whose sides lean and a bar pushed through the plate on
-  a lean. In 115 the two kernels agree to a part in a hundred million,
-  and in 40 of those with a value worked out by hand as well. Three this
-  kernel builds, to the value worked out, where Open CASCADE gives up.
-  Five it refuses and says why. In six the two differ, and the value worked
+  bracket, a stair, bosses whose sides lean and a bar pushed through the
+  plate on a lean, with every edge of several of them rounded at once.
+  In 123 the two kernels agree to a part in a hundred million, and in 45
+  of those with a value worked out by hand as well. Three this kernel
+  builds, to the value worked out, where Open CASCADE gives up. Four it
+  refuses and says why. In six the two differ, and the value worked
   out by hand is this kernel's. One is the thread. The other five are on
   a boss made by a tapered extrusion, whose sides Open CASCADE keeps as
   splines: on those it

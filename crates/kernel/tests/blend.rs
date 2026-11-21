@@ -1399,3 +1399,94 @@ fn a_round_all_the_way_round_a_bracket() {
         whole - (straight * sliver_of(r) + inside + outside - 2.0 * squared),
     );
 }
+
+/// Where an inside edge meets outside ones, or an outside edge inside
+/// ones: the foot of a boss at one of its corners, the rim of a pocket at
+/// one of its. Rounded all three, the corner is what a ball makes of it
+/// that rolls along the two edges of one kind and round the third. It is
+/// the round of the odd edge, and then one round along what the other two
+/// have become, with the arc between them that the first round leaves on
+/// the face it ends on: a quarter of a ring there, between two straight
+/// rounds.
+///
+/// Along a straight edge a round takes or fills a sliver for each unit of
+/// length. Round a quarter turn of radius `R` it fills a quarter of a ring
+/// from `R` to `R + w` at each depth, where `w` is as wide as its section
+/// is there.
+#[test]
+fn an_inside_round_meets_outside_ones_at_a_corner() {
+    let r = 2.0f64;
+    // What the width of a round, squared, comes to over its depth.
+    let squared = r.powi(3) * (5.0 / 3.0 - 0.5 * PI);
+    let quarter = 0.25 * PI * (2.0 * r * SLIVER + squared);
+    let tori = |body: &Body| count(body, SurfKind::Torus);
+
+    // One corner of the boss: its upright and the two edges of its foot.
+    let boss = boss_on_a_plate();
+    let corner = [
+        v3(30.0, 18.0, 15.0),
+        v3(30.0, 13.0, 10.0),
+        v3(20.0, 18.0, 10.0),
+    ]
+    .map(|m| edge_at(&boss, m));
+    let rounded = fillet(&boss, &corner, r).unwrap();
+    sound(&rounded);
+    holds(
+        &rounded,
+        12000.0 - SLIVER * 10.0 + SLIVER * (8.0 + 18.0) + quarter,
+    );
+    assert_eq!(tori(&rounded), 1);
+    // In whatever order they are picked.
+    let turned = fillet(&boss, &[corner[1], corner[2], corner[0]], r).unwrap();
+    holds(&turned, mass(&rounded).volume);
+
+    // The same corner of a pocket: the edge down its corner and the two
+    // edges of its rim.
+    let pocket = pocketed_plate();
+    let corner = [
+        v3(30.0, 18.0, 7.0),
+        v3(30.0, 13.0, 10.0),
+        v3(20.0, 18.0, 10.0),
+    ]
+    .map(|m| edge_at(&pocket, m));
+    let rounded = fillet(&pocket, &corner, r).unwrap();
+    sound(&rounded);
+    holds(
+        &rounded,
+        8800.0 + SLIVER * 6.0 - SLIVER * (8.0 + 18.0) - quarter,
+    );
+    assert_eq!(tori(&rounded), 1);
+
+    // Every edge of each. A box loses a sliver along what is left of each
+    // edge between its corners, and at each corner a cube less the eighth
+    // of a ball that rests in it.
+    let ball = (1.0 - PI / 6.0) * r.powi(3);
+    let plate = 4.0 * SLIVER * (36.0 + 21.0 + 6.0) + 8.0 * ball;
+    // Round the boss's foot or the pocket's rim, corners rounded.
+    let round_about = (60.0 - (8.0 - TAU) * r) * SLIVER + PI * squared;
+    // The four edges of a rectangle 20 by 10 and its four corners.
+    let rectangle = SLIVER * (2.0 * 16.0 + 2.0 * 6.0) + 4.0 * ball;
+    let every = |body: &Body| -> Vec<u32> { (0..body.edge_count() as u32).collect() };
+    let rounded = fillet(&boss, &every(&boss), r).unwrap();
+    sound(&rounded);
+    holds(
+        &rounded,
+        12000.0 - plate - rectangle - 4.0 * SLIVER * (10.0 - r) + round_about,
+    );
+    assert_eq!(tori(&rounded), 4);
+    let rounded = fillet(&pocket, &every(&pocket), r).unwrap();
+    sound(&rounded);
+    holds(
+        &rounded,
+        8800.0 - plate + rectangle + 4.0 * SLIVER * (6.0 - r) - round_about,
+    );
+    assert_eq!(tori(&rounded), 4);
+
+    // With one of the two left sharp the corner is not this one, and bevels
+    // are not rounds.
+    let said = "an inside edge and an outside edge";
+    assert!(fillet(&pocket, &corner[..2], r).unwrap_err().contains(said));
+    assert!(chamfer(&pocket, &corner, r, None)
+        .unwrap_err()
+        .contains(said));
+}

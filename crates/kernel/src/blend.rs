@@ -9,6 +9,9 @@
 //! would take if they ran on. Where three meet at a square corner a
 //! spherical corner piece completes the rolling ball. All of this holds for
 //! edges that take material away and for edges that are filled in alike.
+//! Where an edge of one kind meets two of the other and all three are
+//! rounded, the rounds are made in turn, the odd edge first: the other two
+//! are then one chain through the arc its round leaves.
 //!
 //! A tool ends on the face that ends its edge, cut off by that face's own
 //! surface where the face is not square to the edge, and is never carried
@@ -144,6 +147,67 @@ fn apply(
     // An angled chamfer is measured from one face of each edge; which face
     // that is further along a chain is not tracked yet, so it stays on the
     // picked edges.
+    if !matches!(shape, Shape::Bevel(_, Some(_))) {
+        chain(body, &mut picked);
+    }
+    // Where an inside edge meets outside ones, or an outside edge inside
+    // ones, the blends are made in turn: see [`turns`].
+    let turns = turns(body, &picked, shape)?;
+    if turns.len() == 1 {
+        return apply_once(body, &picked, shape, tag);
+    }
+    let mut result = body.clone();
+    for (n, turn) in turns.iter().enumerate() {
+        // The edges of this turn as the turns before it have left them,
+        // and which edge each of those was.
+        let mut now: Vec<u32> = Vec::new();
+        let mut was: HashMap<u32, u32> = HashMap::new();
+        for &e in turn {
+            let left = if n == 0 {
+                vec![e]
+            } else {
+                left_of(body, e, &result)
+            };
+            if left.is_empty() {
+                return Err(
+                    "blending the edges that meet one of these leaves nothing of it; use a \
+                     smaller size, or leave that edge sharp"
+                        .into(),
+                );
+            }
+            for x in left {
+                was.insert(x, e);
+                now.push(x);
+            }
+        }
+        // An edge a turn runs on into that an earlier turn made, the arc a
+        // round leaves on the face it ends on, is named after the two
+        // faces it lies between.
+        let so_far = result.clone();
+        let named = |x: u32| match was.get(&x) {
+            Some(&e) => tag(e),
+            None => {
+                let (a, b) = (
+                    so_far.f_tag[so_far.h_face(2 * x) as usize],
+                    so_far.f_tag[so_far.h_face(2 * x + 1) as usize],
+                );
+                mix(0x7u64, mix(a.min(b), a.max(b)))
+            }
+        };
+        result = apply_once(&result, &now, shape, &named)?;
+    }
+    Ok(result)
+}
+
+/// Blend edges that can all be blended at once: no inside edge among them
+/// meets an outside one.
+fn apply_once(
+    body: &Body,
+    picked: &[u32],
+    shape: Shape,
+    tag: &dyn Fn(u32) -> u64,
+) -> Result<Body, String> {
+    let mut picked = picked.to_vec();
     if !matches!(shape, Shape::Bevel(_, Some(_))) {
         chain(body, &mut picked);
     }
@@ -1396,8 +1460,148 @@ fn turns_inwards(body: &Body, v: u32, e1: u32, e2: u32) -> Option<bool> {
     Some(arrives.cross(body.h_dir(leaving)).dot(normal) < -1.0e-9)
 }
 
-const MIXED: &str = "an inside edge and an outside edge that meet at a corner cannot be blended \
-                     together yet; blend them one at a time, or leave one of them sharp";
+const MIXED: &str =
+    "an inside edge and an outside edge that meet at a corner are rounded together \
+                     only where the corner has three edges and all three are rounded; blend them \
+                     one at a time, or leave one of them sharp";
+
+/// The order to blend the picked edges in: one turn if no inside edge
+/// among them meets an outside one, as is usual.
+///
+/// At a corner of three edges two are of one kind and one of the other:
+/// two inside edges round the foot of a boss and the outside edge up its
+/// corner, or two outside edges round the rim of a pocket and the inside
+/// edge down its corner. Rounded all three, the corner is what a ball
+/// makes of it that rolls along the two and round the third: it leaves the
+/// first of the two where the round of the odd edge begins, turns with
+/// that round about its axis, and comes down on the second. That is the
+/// round of the odd edge, and then the round of what the two have become:
+/// one chain, with the arc between them that the odd edge's round leaves
+/// on the face it ends on. Taken in that order each round is one this
+/// module makes anyway, along a straight edge and round a circular one,
+/// and nothing has to be made for the corner itself.
+///
+/// So the odd edge of every such corner goes a turn before the other two.
+/// Edges of one kind that meet go in one turn, because they finish their
+/// corner between them. A corner where an inside edge meets an outside one
+/// and that is not such a corner is refused: more or fewer than three
+/// edges, one of the three left sharp, bevels.
+fn turns(body: &Body, picked: &[u32], shape: Shape) -> Result<Vec<Vec<u32>>, String> {
+    let mut at: HashMap<u32, Vec<usize>> = HashMap::new();
+    for (i, &e) in picked.iter().enumerate() {
+        let [v0, v1] = body.e_v[e as usize];
+        if v0 != v1 {
+            at.entry(v0).or_default().push(i);
+            at.entry(v1).or_default().push(i);
+        }
+    }
+    let outside: Vec<Option<bool>> = picked.iter().map(|&e| convexity(body, e)).collect();
+    // An edge with no bend in it is not blended at all, and is told so
+    // where its tool would be made.
+    if outside.iter().any(Option::is_none)
+        || at
+            .values()
+            .all(|met| met.iter().all(|&i| outside[i] == outside[met[0]]))
+    {
+        return Ok(vec![picked.to_vec()]);
+    }
+    // How many edges of the body, picked or not, meet at each vertex.
+    let mut edges_at: HashMap<u32, usize> = HashMap::new();
+    for e in 0..body.edge_count() {
+        let [v0, v1] = body.e_v[e];
+        *edges_at.entry(v0).or_default() += 1;
+        if v1 != v0 {
+            *edges_at.entry(v1).or_default() += 1;
+        }
+    }
+    // Edges that go in one turn, as sets with one of their number to stand
+    // for each.
+    let mut stands: Vec<usize> = (0..picked.len()).collect();
+    fn of(stands: &mut [usize], mut i: usize) -> usize {
+        while stands[i] != i {
+            stands[i] = stands[stands[i]];
+            i = stands[i];
+        }
+        i
+    }
+    // Which edge has to go before which.
+    let mut first: Vec<(usize, usize)> = Vec::new();
+    let mut corners: Vec<(u32, Vec<usize>)> = at.into_iter().collect();
+    corners.sort_by_key(|(v, _)| *v);
+    for (v, met) in corners {
+        if met.iter().all(|&i| outside[i] == outside[met[0]]) {
+            for &i in &met[1..] {
+                let (a, b) = (of(&mut stands, met[0]), of(&mut stands, i));
+                stands[a] = b;
+            }
+            continue;
+        }
+        if !matches!(shape, Shape::Round(_)) || met.len() != 3 || edges_at[&v] != 3 {
+            return Err(MIXED.into());
+        }
+        // Two of one kind and the odd one.
+        let odd = (0..3)
+            .find(|&k| {
+                outside[met[k]] != outside[met[(k + 1) % 3]]
+                    && outside[met[k]] != outside[met[(k + 2) % 3]]
+            })
+            .ok_or(MIXED)?;
+        let (one, other) = (met[(odd + 1) % 3], met[(odd + 2) % 3]);
+        let (a, b) = (of(&mut stands, one), of(&mut stands, other));
+        stands[a] = b;
+        first.push((met[odd], one));
+    }
+    // The turn of each set: one after the latest set that has to go before
+    // it. A ring of sets each waiting for the next has no order.
+    let mut turn = vec![0usize; picked.len()];
+    for round in 0..=picked.len() {
+        let mut moved = false;
+        for &(before, after) in &first {
+            let (a, b) = (of(&mut stands, before), of(&mut stands, after));
+            if turn[b] < turn[a] + 1 {
+                turn[b] = turn[a] + 1;
+                moved = true;
+            }
+        }
+        if !moved {
+            break;
+        }
+        if round == picked.len() {
+            return Err(MIXED.into());
+        }
+    }
+    let last = (0..picked.len())
+        .map(|i| turn[of(&mut stands, i)])
+        .max()
+        .unwrap_or(0);
+    Ok((0..=last)
+        .map(|n| {
+            (0..picked.len())
+                .filter(|&i| turn[of(&mut stands, i)] == n)
+                .map(|i| picked[i])
+                .collect()
+        })
+        .collect())
+}
+
+/// What is left of edge `e` of the body `before` in the body `now`, which
+/// was made of it by blending other edges: the edges of `now` that lie
+/// along `e` and bend the way it does.
+fn left_of(before: &Body, e: u32, now: &Body) -> Vec<u32> {
+    let kind = before.e_curve_ref(e).kind;
+    let outside = convexity(before, e);
+    (0..now.edge_count() as u32)
+        .filter(|&x| {
+            let c = now.e_curve_ref(x);
+            let [t0, t1] = now.e_t[x as usize];
+            c.kind == kind
+                && convexity(now, x) == outside
+                && [t0, 0.5 * (t0 + t1), t1]
+                    .into_iter()
+                    .all(|t| edge_closest(before, e, c.point(t)).1 < 10.0 * TOL)
+        })
+        .collect()
+}
 
 /// An inside edge and an outside edge that meet at a corner are not blended
 /// together: said before any tool is made, so that it is what is said.
