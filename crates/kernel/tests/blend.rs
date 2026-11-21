@@ -8,15 +8,11 @@ use limo_cad_kernel::props::mass;
 use limo_cad_kernel::tess::{tessellate, TessOptions};
 use limo_cad_kernel::{boolean, Body, CurveKind, Op, SurfKind};
 
+/// What a body holds, weighed as a solid. The drawn skin of a round body
+/// holds a little less or more than the body does, and a comparison loose
+/// enough to pass that passes a body that is wrong as well.
 fn volume(body: &Body) -> f64 {
-    tessellate(
-        body,
-        &TessOptions {
-            linear: 0.0005,
-            angular: 0.02,
-        },
-    )
-    .volume()
+    mass(body).volume
 }
 
 fn close(actual: f64, expected: f64, rel: f64) {
@@ -49,7 +45,7 @@ fn one_rounded_edge() {
     assert_eq!(edge.len(), 1);
     let r = fillet(&block, &edge, 2.0).unwrap();
     assert_eq!((r.face_count(), count(&r, SurfKind::Cylinder)), (7, 1));
-    close(volume(&r), 21600.0 - (4.0 - PI) * 60.0, 1e-5);
+    close(volume(&r), 21600.0 - (4.0 - PI) * 60.0, 1e-10);
 }
 
 #[test]
@@ -67,7 +63,7 @@ fn rounded_top_rim_has_mitred_corners() {
     // Removed: four spandrel prisms, counting each corner overlap once.
     let r3 = 8.0;
     let removed = (4.0 - PI) * 180.0 - 4.0 * r3 * (5.0 / 3.0 - 0.5 * PI);
-    close(volume(&r), 21600.0 - removed, 1e-5);
+    close(volume(&r), 21600.0 - removed, 1e-10);
     r.check().unwrap();
 }
 
@@ -85,7 +81,7 @@ fn every_edge_rounded_gives_spherical_corners() {
         + 2.0 * rad * (a * b + b * c + a * c)
         + PI * rad * rad * (a + b + c)
         + 4.0 / 3.0 * PI * rad * rad * rad;
-    close(volume(&r), exact, 2e-4);
+    close(volume(&r), exact, 1e-10);
 }
 
 #[test]
@@ -136,7 +132,7 @@ fn inside_corner_is_filled() {
     assert_eq!(inside.len(), 1);
     let r = fillet(&bracket, &inside, 4.0).unwrap();
     assert_eq!(count(&r, SurfKind::Cylinder), 1);
-    close(volume(&r), base + (16.0 - PI * 4.0) * 20.0, 1e-5);
+    close(volume(&r), base + (16.0 - PI * 4.0) * 20.0, 1e-10);
 }
 
 #[test]
@@ -160,16 +156,16 @@ fn rims_of_a_boss_and_a_hole() {
     let ring =
         |square_centre: f64, disc_centre: f64| TAU * (4.0 * square_centre - PI * disc_centre);
     let offset = 8.0 / (3.0 * PI);
-    close(volume(&r), base - ring(7.0, 6.0 + offset), 2e-4);
+    close(volume(&r), base - ring(7.0, 6.0 + offset), 1e-10);
     // Foot of the boss: a concave rim is filled.
     let r = fillet(&body, &rim(&body, 10.0), 2.0).unwrap();
     assert_eq!(count(&r, SurfKind::Torus), 1);
-    close(volume(&r), base + ring(9.0, 10.0 - offset), 2e-4);
+    close(volume(&r), base + ring(9.0, 10.0 - offset), 1e-10);
     // A bevelled rim is a cone.
     let r = chamfer(&body, &rim(&body, 22.0), 1.5, None).unwrap();
     assert_eq!(count(&r, SurfKind::Cone), 1);
     let ring = 0.5 * 1.5 * 1.5 * TAU * (8.0 - 0.5);
-    close(volume(&r), base - ring, 2e-4);
+    close(volume(&r), base - ring, 1e-10);
 }
 
 #[test]
@@ -197,7 +193,7 @@ fn revolved_profiles() {
     };
     let washer = make::revolve(&[rect(4.0, 10.0, 0.0, 3.0)], V3::ZERO, V3::Z, V3::X, TAU).unwrap();
     assert_eq!((washer.face_count(), washer.edge_count()), (4, 4));
-    close(volume(&washer), PI * (100.0 - 16.0) * 3.0, 2e-4);
+    close(volume(&washer), PI * (100.0 - 16.0) * 3.0, 1e-10);
     // A quarter turn adds two flat ends.
     let quarter = make::revolve(
         &[rect(4.0, 10.0, 0.0, 3.0)],
@@ -208,11 +204,11 @@ fn revolved_profiles() {
     )
     .unwrap();
     assert_eq!(quarter.face_count(), 6);
-    close(volume(&quarter), 0.25 * PI * (100.0 - 16.0) * 3.0, 2e-4);
+    close(volume(&quarter), 0.25 * PI * (100.0 - 16.0) * 3.0, 1e-10);
     // Cone to a point.
     let cone = make::lathe(V3::ZERO, V3::Z, &[(0.0, 0.0), (6.0, 0.0), (0.0, 9.0)]).unwrap();
     assert_eq!(cone.face_count(), 2);
-    close(volume(&cone), PI * 36.0 * 9.0 / 3.0, 2e-4);
+    close(volume(&cone), PI * 36.0 * 9.0 / 3.0, 1e-10);
     // Half disc revolved: a sphere with no edges at all.
     let ball = make::revolve(
         &[vec![
@@ -234,7 +230,7 @@ fn revolved_profiles() {
     )
     .unwrap();
     assert_eq!((ball.face_count(), ball.edge_count()), (1, 0));
-    close(volume(&ball), 4.0 / 3.0 * PI * 125.0, 5e-4);
+    close(volume(&ball), 4.0 / 3.0 * PI * 125.0, 1e-10);
     // Ring torus from a revolved circle.
     let torus = make::revolve(
         &[vec![PSeg::Circle {
@@ -248,7 +244,7 @@ fn revolved_profiles() {
     )
     .unwrap();
     assert_eq!((torus.face_count(), torus.edge_count()), (1, 0));
-    close(volume(&torus), 2.0 * PI * PI * 10.0 * 9.0, 5e-4);
+    close(volume(&torus), 2.0 * PI * PI * 10.0 * 9.0, 1e-10);
 }
 
 fn assert_sound(body: &Body) {
@@ -289,8 +285,8 @@ fn straight_edges_between_a_flat_and_a_cylinder() {
     let turn = (2.0 / x0).atan();
     let corner = 0.5 * 400.0 * turn - 0.5 * x0 * 2.0 - 0.5 * 4.0 * (0.5 * PI + turn);
     // The rod's own chord error is in both volumes and drops out.
-    close(volume(&half) - volume(&rounded), 2.0 * corner * 30.0, 1e-2);
-    close(volume(&rounded), before - 2.0 * corner * 30.0, 1e-4);
+    close(volume(&half) - volume(&rounded), 2.0 * corner * 30.0, 1e-10);
+    close(volume(&rounded), before - 2.0 * corner * 30.0, 1e-10);
     assert_eq!(count(&rounded, SurfKind::Cylinder), 3);
     // Nothing sharp is left along the rod.
     assert!(seams(&rounded).is_empty());
@@ -299,7 +295,11 @@ fn straight_edges_between_a_flat_and_a_cylinder() {
     let bevelled = chamfer(&half, &edges, 2.0, None).unwrap();
     assert_sound(&bevelled);
     let corner = 0.5 * 400.0 * 0.1 - 0.5 * 18.0 * 20.0 * 0.1_f64.sin();
-    close(volume(&half) - volume(&bevelled), 2.0 * corner * 30.0, 1e-2);
+    close(
+        volume(&half) - volume(&bevelled),
+        2.0 * corner * 30.0,
+        1e-10,
+    );
 
     // A round as wide as the rod does not fit.
     assert!(fillet(&half, &edges, 12.0).is_err());
@@ -320,7 +320,7 @@ fn a_ridge_and_a_groove_along_a_plate() {
     let x0 = (144.0_f64 - 4.0).sqrt();
     let turn = (2.0 / x0).atan();
     let corner = 0.5 * x0 * 2.0 - 0.5 * 100.0 * turn - 0.5 * 4.0 * (0.5 * PI - turn);
-    close(volume(&filled) - volume(&ridge), 2.0 * corner * 40.0, 1e-2);
+    close(volume(&filled) - volume(&ridge), 2.0 * corner * 40.0, 1e-10);
     assert!(seams(&filled).is_empty());
 
     // A half-round groove: its rims stand proud, and a round takes them
@@ -1334,4 +1334,68 @@ fn a_rim_that_ends_on_both_walls_of_a_slot() {
         cut.check().unwrap();
         holds(&cut, held - bevel_takes);
     }
+}
+
+/// A bracket bent from a strip: an L 32 by 44 and 8 thick, 40 wide. Its
+/// bend is rounded 4 inside, the corners of its two ends 3, and then a
+/// round of 0.6 is run along the rim of its two flat sides. The picked
+/// edges run on through the rounded corners of the ends and across them,
+/// so the round goes all the way round the inside of the bracket in one
+/// chain and all the way round the outside in another, which turns two
+/// square corners where the back meets the base.
+///
+/// Along a straight edge a round takes a sliver for each unit of length.
+/// Inside a quarter turn of radius `R` it takes a quarter of a ring from
+/// `R - w` to `R` at each depth, and outside one a quarter of a ring from
+/// `R` to `R + w`. At a square corner two of them take the corner once.
+#[test]
+fn a_round_all_the_way_round_a_bracket() {
+    let corners = [
+        v3(0.0, 0.0, 0.0),
+        v3(32.0, 0.0, 0.0),
+        v3(32.0, 8.0, 0.0),
+        v3(8.0, 8.0, 0.0),
+        v3(8.0, 44.0, 0.0),
+        v3(0.0, 44.0, 0.0),
+    ];
+    let strip = (0..6)
+        .map(|i| Seg::Line {
+            a: corners[i],
+            b: corners[(i + 1) % 6],
+        })
+        .collect();
+    let bent = make::extrude(&Region { loops: vec![strip] }, V3::Z, 0.0, 40.0).unwrap();
+    let bend = fillet(&bent, &[edge_at(&bent, v3(8.0, 8.0, 20.0))], 4.0).unwrap();
+    let ends = [
+        v3(32.0, 4.0, 0.0),
+        v3(32.0, 4.0, 40.0),
+        v3(4.0, 44.0, 0.0),
+        v3(4.0, 44.0, 40.0),
+    ]
+    .map(|m| edge_at(&bend, m));
+    let body = fillet(&bend, &ends, 3.0).unwrap();
+    let sliver_of = |r: f64| (1.0 - 0.25 * PI) * r * r;
+    holds(
+        &body,
+        40.0 * (32.0 * 8.0 + 36.0 * 8.0) + sliver_of(4.0) * 40.0 - 4.0 * sliver_of(3.0) * 8.0,
+    );
+    let whole = mass(&body).volume;
+
+    // One edge of each run is enough to pick, and the rest follow: the
+    // base and the back of the outside, which meet at the square corners,
+    // and the inside.
+    let rim =
+        [v3(14.5, 0.0, 0.0), v3(0.0, 20.5, 0.0), v3(20.5, 8.0, 0.0)].map(|m| edge_at(&body, m));
+    let r = 0.6;
+    let rounded = fillet(&body, &rim, r).unwrap();
+    rounded.check().unwrap();
+    // What the width of a round, squared, comes to over its depth.
+    let squared = r.powi(3) * (5.0 / 3.0 - 0.5 * PI);
+    let straight = 2.0 * (41.0 + 29.0 + 17.0 + 29.0) + 4.0 * 34.0;
+    let inside = 8.0 * 0.25 * PI * (6.0 * sliver_of(r) - squared);
+    let outside = 2.0 * 0.25 * PI * (8.0 * sliver_of(r) + squared);
+    holds(
+        &rounded,
+        whole - (straight * sliver_of(r) + inside + outside - 2.0 * squared),
+    );
 }

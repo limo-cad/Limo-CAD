@@ -151,7 +151,7 @@ fn a_plane_cuts_a_drilled_plate() {
     let through = cut(&plate, v3(20.0, 0.0, 0.0), V3::X, None, 0.01).unwrap();
     let kept = through.kept.unwrap();
     kept.check().unwrap();
-    assert!((volume(&kept) - 0.5 * volume(&plate)).abs() < 1e-4 * volume(&plate));
+    assert!((volume(&kept) - 0.5 * volume(&plate)).abs() < 1e-10 * volume(&plate));
     assert_eq!(through.outlines.len(), 2);
     for line in &through.outlines {
         let around: f64 = line.windows(2).map(|w| w[0].dist(w[1])).sum();

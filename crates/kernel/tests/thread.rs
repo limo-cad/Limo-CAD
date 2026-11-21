@@ -309,6 +309,41 @@ fn a_rounded_thread_and_its_nut() {
     let taken = mass(&rod).volume - mass(&screw).volume;
     assert!(taken > 0.0);
     assert!((taken - mass(&boolean(&rod, &groove, Op::Intersect).unwrap()).volume).abs() < 1.0e-6);
+    // The groove is cut off square at both ends of the rod, and its tooth
+    // is the same above its own middle as below. So it takes what the
+    // tooth takes turned once round the axis, for every turn and part of
+    // a turn the rod is long. The tooth is worked out here from the form's
+    // own numbers: flanks at fifteen degrees through a quarter of the
+    // pitch at mid height, a round at the root and one at the crest.
+    let (lo, hi, lean) = (0.5 * minor, 0.5 * major, PI / 12.0);
+    let reach = radius * (1.0 / lean.cos() - lean.tan());
+    let narrow = 0.25 * pitch - 0.5 * (hi - lo) * lean.tan() - reach;
+    let wide = 0.25 * pitch + 0.5 * (hi - lo) * lean.tan() + reach;
+    // Half the tooth's width at each distance from the axis, taken along
+    // the round at the root, the flank and the round at the crest in turn.
+    let from = lean.sin().acos();
+    let root = integral(0.0, from, |a| {
+        let rho = lo + radius - radius * a.cos();
+        2.0 * (narrow + radius * a.sin()) * rho * radius * a.sin()
+    });
+    let (start, end) = (
+        lo + radius * (1.0 - lean.sin()),
+        hi - radius * (1.0 - lean.sin()),
+    );
+    let flank = integral(start, end, |rho| {
+        2.0 * (narrow + radius * lean.cos() + (rho - start) * lean.tan()) * rho
+    });
+    let crest = integral(0.0, from, |a| {
+        let rho = hi - radius + radius * a.cos();
+        2.0 * (wide - radius * a.sin()) * rho * radius * a.sin()
+    });
+    let once = TAU * (root + flank + crest);
+    let turns = 30.0 / pitch;
+    assert!(
+        (taken - turns * once).abs() < 1.0e-9 * taken,
+        "the screw's groove takes {taken:.9}, not {:.9}",
+        turns * once
+    );
 
     // The nut: a block bored to the minor diameter, with a little room.
     let (clearance, axial) = (0.15, 0.2);

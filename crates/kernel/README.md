@@ -325,8 +325,10 @@ order it is meant to be taken on. This is the list to work down.
 ## Measured
 
 `examples/lab.rs` runs every bundled recipe through the real headless
-server once per kernel and compares the solids: body count, volume, bounds,
-number and area of planar faces.
+server once per kernel and compares the solids: how many bodies, what each
+holds, its bounds, the number and area of its flat faces. What a body
+holds is asked of the kernel that made it, which weighs it as a solid, and
+the two have to agree on it to a part in a hundred million.
 
 ```sh
 cargo build --release --manifest-path mcp-server/Cargo.toml
@@ -335,38 +337,48 @@ target/release/examples/lab --server mcp-server/target/release/limo-cad-mcp --al
 ```
 
 All 39 bundled recipes give the same solids on both kernels. Over them the
-time spent in the kernel falls from 34.8 s to 1.89 s, 18 times less; per
-recipe the factor runs from 6 to 47. (Apple silicon, release builds, kernel
+time spent in the kernel falls from 34.6 s to 1.89 s, 18 times less; per
+recipe the factor runs from 6 to 48. (Apple silicon, release builds, kernel
 time only.)
 
 | Recipe | Open CASCADE | Limo | Factor |
 |---|---:|---:|---:|
-| `d-screw-vise` (30 bodies, two 41-turn threads) | 17,708 ms | 821 ms | 22× |
-| `vertical-axis-turbine` (27 bodies) | 8,209 ms | 621 ms | 13× |
-| `d-screw-vise-fit` | 4,087 ms | 111 ms | 37× |
-| `garden-bench` (20 bodies) | 2,556 ms | 209 ms | 12× |
+| `d-screw-vise` (30 bodies, two 41-turn threads) | 17,559 ms | 817 ms | 21× |
+| `vertical-axis-turbine` (27 bodies) | 8,202 ms | 626 ms | 13× |
+| `d-screw-vise-fit` | 4,026 ms | 109 ms | 37× |
+| `garden-bench` (20 bodies) | 2,553 ms | 212 ms | 12× |
 | `show-me-external-thread` | 1,046 ms | 38 ms | 28× |
-| `extrude-basics` | 103.7 ms | 10.9 ms | 10× |
-| `fillet-basics` | 14.3 ms | 2.3 ms | 6× |
-| `show-me-shell` | 13.4 ms | 0.39 ms | 35× |
-| `show-me-rectangular-pattern` | 14.1 ms | 0.30 ms | 47× |
+| `extrude-basics` | 102.3 ms | 11.1 ms | 9× |
+| `fillet-basics` | 14.0 ms | 2.2 ms | 6× |
+| `show-me-shell` | 12.9 ms | 0.37 ms | 35× |
+| `show-me-rectangular-pattern` | 13.9 ms | 0.29 ms | 48× |
 
-Two recipes are reported as *match, nearly*: one flat face of one body has
-an area of 126.124778 mm² here and 126.130980 mm² on the reference kernel.
-That face has a closed form, and it is the first number. The reference
-walks along its blends in steps and is a few parts in a hundred thousand
-off where one ends on a flat face; the lab remarks on such a face instead
-of failing it. The face is one side of a slot, and the reference kernel
-has the other side, its mirror image, at 126.124777. Integrating its odd
-face until ten digits stand gives the same 126.130980: it is the face that
-is out, not the measuring of it.
+The recipes make 127 bodies between them. Ninety hold the same on both
+kernels to the last digit weighed, and thirty-four more the same to a part
+in a hundred million. Three do not, and in all three it is the reference
+kernel that is out. Each has been worked out by hand:
 
-What the lab shows is that the same bodies come out of every recipe, with
-the same flat faces. It weighs each body by the skin drawn of it, and two
-kernels do not facet a round face alike, so on a body with any curved face
-it allows two parts in a hundred. A fault of a few parts in ten thousand
-passes it. Exact agreement is another test's business: the corners table
-below, where both kernels' solids are weighed as solids.
+- A threaded rod (`show-me-external-thread`) holds 0.00012 mm³ less here.
+  The flanks of a thread are screw surfaces, and the reference fits
+  splines to them. What the groove takes has a value that can be worked
+  out, and it is this kernel's to ten digits.
+- The motor mount of the turbine, one body in two recipes, holds
+  0.0021 mm³ more here. Its rim has a slot cut into it, and the round on
+  that rim takes the 6.134232 mm³ worked out for such a rim; the reference
+  takes more, at one wall of the slot. That wall is a flat face of
+  126.124778 mm² here and 126.130980 on the reference, which has the
+  other wall of the same slot, its mirror image, at 126.124777.
+
+The lab knows these three by name and fails a recipe for any other
+difference. Recipes with one of them are reported as *match, nearly*.
+
+The differences that stay within a part in a hundred million were followed
+to the features they come from as well: `crates/occt/examples/part.rs`
+makes a recipe's bodies again a feature at a time on both kernels and says
+where the two first hold different amounts. They are holes drilled across
+round faces, rounds run through corners, and threads. One of each kind was
+worked out by hand: the value is this kernel's to nine digits or more, and
+the reference is out by up to a ten-thousandth of a cubic millimetre.
 
 Beyond the recipes:
 
@@ -407,15 +419,17 @@ Beyond the recipes:
   along in them. Open CASCADE, asked to round the same edge of the same
   solid, fits a spline near it and comes within a part in ten thousand.
 - Blends and shells are weighed on both kernels
-  (`crates/occt/tests/corners.rs`): 126 shells, rounds and bevels on
-  plates with bosses and pockets of three to six sides, round ones, a D,
-  a disc with a slice off it, bosses whose sides lean and a bar pushed
-  through the plate on a lean. In 113 the two kernels agree to a part in
-  a hundred million, and in 38 of those with a value worked out by hand
-  as well. Three this kernel builds, to the value worked out, where Open
-  CASCADE gives up. Five it refuses and says why. In five the two differ, and the value worked out
-  by hand is this kernel's. All five are on a boss made by a tapered
-  extrusion, whose sides Open CASCADE keeps as splines: on those it
+  (`crates/occt/tests/corners.rs`): 129 shells, rounds, bevels and a
+  thread, on plates with bosses and pockets of three to six sides, round
+  ones, a D, a disc with a slice off it, a boss with a slotted rim, a
+  bracket, bosses whose sides lean and a bar pushed through the plate on
+  a lean. In 115 the two kernels agree to a part in a hundred million,
+  and in 40 of those with a value worked out by hand as well. Three this
+  kernel builds, to the value worked out, where Open CASCADE gives up.
+  Five it refuses and says why. In six the two differ, and the value worked
+  out by hand is this kernel's. One is the thread. The other five are on
+  a boss made by a tapered extrusion, whose sides Open CASCADE keeps as
+  splines: on those it
   squares two rounds off at the foot of a corner and rolls a patch of its
   own between them, a tenth of a cubic millimetre less than the two run
   into each other at a radius of 2, and it stops a blend on an upright
@@ -426,7 +440,12 @@ Beyond the recipes:
   digit on a body with spline faces, which is more than some of the
   differences looked for.
 - The values worked out by hand are held here too (`tests/shell.rs`,
-  `tests/blend.rs`), to ten digits. A wall is 2 thick at every corner of
+  `tests/blend.rs`), to ten digits. Every test of this kernel that holds
+  a body against a value now weighs the solid. Forty-four of them used to
+  weigh a drawing of it, and allowed up to a part in a hundred for that.
+  Weighed as solids, all forty-four hold to a part in ten thousand
+  million with no change to the kernel; for two, the value they were held
+  against had to be worked out more closely first. A wall is 2 thick at every corner of
   its new side or the shell is not made. These tables exist because a
   boss on a plate, hollowed, once came out six parts in ten thousand
   heavy: two arcs of the wall stopped short of each other at each corner
@@ -497,6 +516,7 @@ Tests (5,400 lines) and examples are not in the kernel's.
 | `LIMO_CAD_KERNEL_PICTURES=<dir>` | Draw the triangulation of every curved face as an SVG |
 | `LIMO_CAD_KERNEL_PROFILE=1` | Print the stage timings of every Boolean |
 | `LIMO_CAD_KERNEL_TIMING=<file>` | Append the kernel time of every recompute (set on the host) |
+| `LIMO_CAD_KERNEL_WEIGH=<file>` | After a recompute that finds this file empty, write what every body holds, weighed as a solid, and leave the plan that made the bodies beside it (set on the host; the lab uses it) |
 
 A captured failure becomes a regression test by copying the two `.body`
 files into `tests/fixtures`. `lab --verbose` lists, for a body that

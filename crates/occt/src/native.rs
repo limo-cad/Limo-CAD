@@ -534,6 +534,23 @@ fn kernel_timing_log() -> Option<&'static std::path::Path> {
     .as_deref()
 }
 
+/// Opt-in proof of the kernels against each other: `LIMO_CAD_KERNEL_WEIGH=
+/// <file>`. A recompute that finds that file there and empty writes into
+/// it what every body holds, a line to a body: its number and its volume
+/// as [`OcctKernel::weigh`] gives it. Beside it, as `<file>.plan.json`, it
+/// leaves the plan that made those bodies, for anyone who wants to make
+/// them again a feature at a time. Whoever wants the bodies weighed empties
+/// the file and asks for a recompute. Unset in normal use.
+fn kernel_weigh_log() -> Option<&'static std::path::Path> {
+    static LOG: std::sync::OnceLock<Option<std::path::PathBuf>> = std::sync::OnceLock::new();
+    LOG.get_or_init(|| {
+        std::env::var_os("LIMO_CAD_KERNEL_WEIGH")
+            .filter(|value| !value.is_empty())
+            .map(std::path::PathBuf::from)
+    })
+    .as_deref()
+}
+
 const LIMO_SERVICE_UNAVAILABLE: &str =
     "This operation still runs on Open CASCADE and is not available with the Limo kernel yet";
 
@@ -925,6 +942,34 @@ impl OcctKernel {
     }
 
     pub fn recompute_with_supports(
+        &mut self,
+        plan: &RecomputePlanDto,
+        queries: &[limo_cad_solid::HistorySupportQuery],
+    ) -> Result<(KernelSceneDto, BTreeSet<limo_cad_core::FeatureId>), OcctError> {
+        let result = self.recompute_timed(plan, queries);
+        if let (Some(asked), Ok((scene, _))) = (kernel_weigh_log(), &result) {
+            let wanted = std::fs::metadata(asked).is_ok_and(|file| file.len() == 0);
+            if wanted && scene.errors.is_empty() {
+                let lines: String = scene
+                    .bodies
+                    .iter()
+                    .map(|body| match self.weigh(body.body_id) {
+                        Ok(held) => format!("{}\t{held:.17e}\n", body.body_id.0),
+                        Err(why) => format!("{}\t{why}\n", body.body_id.0),
+                    })
+                    .collect();
+                let _ = std::fs::write(asked, lines);
+                if let Ok(plan) = serde_json::to_vec(plan) {
+                    let mut beside = asked.as_os_str().to_owned();
+                    beside.push(".plan.json");
+                    let _ = std::fs::write(beside, plan);
+                }
+            }
+        }
+        result
+    }
+
+    fn recompute_timed(
         &mut self,
         plan: &RecomputePlanDto,
         queries: &[limo_cad_solid::HistorySupportQuery],

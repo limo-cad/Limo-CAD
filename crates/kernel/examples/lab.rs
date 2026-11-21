@@ -1,16 +1,32 @@
 //! Differential kernel lab.
 //!
 //! Runs construction scripts through the real headless Limo CAD server once
-//! per kernel and compares the resulting solids: body count, volume, bounds
-//! and face make-up. Kernel time is read from the adapter's opt-in timing
-//! log, so sketch solving and transport are excluded.
+//! per kernel and compares the resulting solids: how many bodies, what
+//! each holds, its bounds and the make-up of its faces. Kernel time is read
+//! from the adapter's opt-in timing log, so sketch solving and transport
+//! are excluded.
+//!
+//! What a body holds is asked of the kernel that made it, which weighs it
+//! as a solid (`LIMO_CAD_KERNEL_WEIGH`, see the adapter). The two kernels
+//! have to agree on it to a part in a hundred million. Where they are known
+//! not to and the reference kernel is the one that is out, the body is in
+//! [`KNOWN`] with where the right value is worked out; any other difference
+//! fails the recipe. The drawn skin of a body is compared as well, but two
+//! kernels do not facet a round face alike, and that comparison can only
+//! show that they made something alike.
 //!
 //! ```sh
 //! cargo run --release -p limo-cad-kernel --example lab -- \
 //!     --server mcp-server/target/release/limo-cad-mcp fillet-basics extrude-basics
 //! cargo run --release -p limo-cad-kernel --example lab -- --server <bin> --all
 //! ```
+//!
+//! `--plans <dir>` keeps the plan every recipe ends in on each kernel. The
+//! adapter's `part` example makes a recipe's bodies again from those, a
+//! feature at a time on both kernels, and says at which feature the two
+//! first hold different amounts.
 
+use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, Command, Stdio};
@@ -27,11 +43,12 @@ struct Client {
 }
 
 impl Client {
-    fn start(server: &Path, kernel: &str, timing: &Path) -> Client {
+    fn start(server: &Path, kernel: &str, timing: &Path, weigh: &Path) -> Client {
         let mut child = Command::new(server)
             .arg("--headless")
             .env("LIMO_CAD_KERNEL", kernel)
             .env("LIMO_CAD_KERNEL_TIMING", timing)
+            .env("LIMO_CAD_KERNEL_WEIGH", weigh)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             // What the kernel says of its decisions is worth reading when
@@ -130,6 +147,9 @@ impl Drop for Client {
 struct BodySummary {
     id: u64,
     volume: f64,
+    /// What the body holds, weighed as a solid by the kernel that made it,
+    /// where it could be.
+    held: Option<f64>,
     lo: [f64; 3],
     hi: [f64; 3],
     triangles: usize,
@@ -232,10 +252,12 @@ struct Run {
     wall: Duration,
 }
 
-fn run(server: &Path, kernel: &str, script: &Script, scratch: &Path) -> Run {
+fn run(server: &Path, kernel: &str, script: &Script, scratch: &Path, keep: Option<&Path>) -> Run {
     let timing = scratch.join(format!("timing-{kernel}-{}.tsv", std::process::id()));
     let _ = std::fs::remove_file(&timing);
-    let mut client = Client::start(server, kernel, &timing);
+    let weigh = scratch.join(format!("weigh-{kernel}-{}.tsv", std::process::id()));
+    let _ = std::fs::remove_file(&weigh);
+    let mut client = Client::start(server, kernel, &timing, &weigh);
     let started = Instant::now();
     let arguments = match script {
         Script::Recipe(id) => json!({"action":"script","recipe":id,"mode":"fast","validate":true}),
@@ -250,10 +272,41 @@ fn run(server: &Path, kernel: &str, script: &Script, scratch: &Path) -> Run {
     let ran = client.call("cad_interface", arguments);
     let wall = started.elapsed();
     let scene = client.call("solid_scene", json!({}));
+    // What the script took of the kernel's time, before anything is asked
+    // of it on the lab's own account.
+    let spent = std::fs::read_to_string(&timing).unwrap_or_default();
+    // Every body weighed as a solid: the server's kernel does that after a
+    // recompute that finds this file empty.
+    let mut held: HashMap<u64, f64> = HashMap::new();
+    if ran.is_ok() && std::fs::write(&weigh, b"").is_ok() {
+        let _ = client.call("solid_recompute", json!({}));
+        for line in std::fs::read_to_string(&weigh).unwrap_or_default().lines() {
+            let mut fields = line.split('\t');
+            if let (Some(Ok(id)), Some(Ok(volume))) = (
+                fields.next().map(str::parse::<u64>),
+                fields.next().map(str::parse::<f64>),
+            ) {
+                held.insert(id, volume);
+            }
+        }
+    }
+    // The plan that made the bodies, kept for whoever wants to make them
+    // again a feature at a time and see where the kernels part.
+    let mut plan = weigh.as_os_str().to_owned();
+    plan.push(".plan.json");
+    if let Some(keep) = keep {
+        let _ = std::fs::create_dir_all(keep);
+        let _ = std::fs::copy(
+            &plan,
+            keep.join(format!("{}.{kernel}.plan.json", script.name())),
+        );
+    }
+    let _ = std::fs::remove_file(&plan);
+    let _ = std::fs::remove_file(&weigh);
     drop(client);
     let mut kernel_ns = 0;
     let mut recomputes = 0;
-    for line in std::fs::read_to_string(&timing).unwrap_or_default().lines() {
+    for line in spent.lines() {
         if let Some(ns) = line
             .rsplit('\t')
             .next()
@@ -275,7 +328,11 @@ fn run(server: &Path, kernel: &str, script: &Script, scratch: &Path) -> Run {
                 .filter_map(|e| e["message"].as_str().map(str::to_owned))
                 .collect();
             if errors.is_empty() {
-                Ok(summarise(&scene))
+                let mut bodies = summarise(&scene);
+                for body in &mut bodies {
+                    body.held = held.get(&body.id).copied();
+                }
+                Ok(bodies)
             } else {
                 Err(errors.join("; "))
             }
@@ -328,9 +385,42 @@ fn describe((area, at, detail): &Flat) -> String {
     )
 }
 
+/// Bodies the two kernels are known not to hold the same amount of, where
+/// it is the reference kernel that is out: the recipe, the body, what this
+/// kernel holds more than the reference does, and why. Each has been worked
+/// out by hand, and the working is a test.
+const KNOWN: &[(&str, u64, f64, &str)] = &[
+    (
+        "show-me-external-thread",
+        1,
+        -0.000_116,
+        "the reference fits splines to the flanks of a thread; what the groove takes is worked \
+         out in a_thread_takes_what_its_groove_holds (crates/occt/tests/corners.rs)",
+    ),
+    (
+        "turbine-fit-coupons",
+        16,
+        0.002_095,
+        "the round on the slotted rim takes the 6.134232 worked out for such a rim in \
+         a_rim_that_ends_on_both_walls_of_a_slot (tests/blend.rs); the reference takes more",
+    ),
+    (
+        "vertical-axis-turbine",
+        78,
+        0.002_095,
+        "the round on the slotted rim takes the 6.134232 worked out for such a rim in \
+         a_rim_that_ends_on_both_walls_of_a_slot (tests/blend.rs); the reference takes more",
+    ),
+];
+
 /// Differences between the reference and candidate scenes, empty when they
-/// agree within tessellation error, and remarks on what agrees only nearly.
-fn compare(reference: &[BodySummary], candidate: &[BodySummary]) -> (Vec<String>, Vec<String>) {
+/// agree, and remarks on what agrees only nearly or differs for a reason
+/// that is known.
+fn compare(
+    recipe: &str,
+    reference: &[BodySummary],
+    candidate: &[BodySummary],
+) -> (Vec<String>, Vec<String>) {
     let mut issues = Vec::new();
     let mut notes = Vec::new();
     if reference.len() != candidate.len() {
@@ -342,6 +432,27 @@ fn compare(reference: &[BodySummary], candidate: &[BodySummary]) -> (Vec<String>
         return (issues, notes);
     }
     for (r, c) in reference.iter().zip(candidate) {
+        // Weighed as solids, the two have to hold the same to a part in a
+        // hundred million. This is the test of whether the kernels made
+        // the same thing; the rest of what follows compares drawings of
+        // it, which can only show that they made something alike.
+        if let (Some(theirs), Some(mine)) = (r.held, c.held) {
+            if (theirs - mine).abs() > 1.0e-8 * theirs.abs().max(1.0) {
+                let said = format!(
+                    "body {} holds {mine:.6} where the reference holds {theirs:.6}: {:+.6}, {:+.1e} of it",
+                    r.id,
+                    mine - theirs,
+                    (mine - theirs) / theirs
+                );
+                let known = KNOWN.iter().find(|(name, body, more, _)| {
+                    *name == recipe && *body == r.id && (mine - theirs - more).abs() < 5.0e-6
+                });
+                match known {
+                    Some((.., why)) => notes.push(format!("{said}; {why}")),
+                    None => issues.push(said),
+                }
+            }
+        }
         let scale = r.volume.abs().max(1.0);
         // Both meshes approximate curved faces from the inside or outside by
         // the display tolerance; planar bodies agree to rounding.
@@ -418,18 +529,20 @@ fn main() {
     let mut scripts: Vec<Script> = Vec::new();
     let mut all = false;
     let mut verbose = false;
+    let mut plans: Option<PathBuf> = None;
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--server" => server = args.next().map(PathBuf::from),
             "--all" => all = true,
             "--verbose" => verbose = true,
+            "--plans" => plans = args.next().map(PathBuf::from),
             other if other.ends_with(".jsonc") => scripts.push(Script::File(PathBuf::from(other))),
             other => scripts.push(Script::Recipe(other.to_owned())),
         }
     }
     let Some(server) = server else {
-        eprintln!("usage: lab --server <limo-cad-mcp> [--all] [--verbose] [recipe-id | script.limo.jsonc]...");
+        eprintln!("usage: lab --server <limo-cad-mcp> [--all] [--verbose] [--plans <dir>] [recipe-id | script.limo.jsonc]...");
         std::process::exit(2);
     };
     if all {
@@ -451,7 +564,7 @@ fn main() {
     let (mut same, mut different, mut unsupported, mut skipped) = (0, 0, 0, 0);
     let (mut occt_total, mut limo_total) = (0u128, 0u128);
     for script in &scripts {
-        let reference = run(&server, "occt", script, &scratch);
+        let reference = run(&server, "occt", script, &scratch, plans.as_deref());
         let name = script.name();
         let Ok(expected) = &reference.outcome else {
             skipped += 1;
@@ -472,7 +585,7 @@ fn main() {
             );
             continue;
         };
-        let candidate = run(&server, "limo", script, &scratch);
+        let candidate = run(&server, "limo", script, &scratch, plans.as_deref());
         let occt_ms = reference.kernel_ns as f64 / 1.0e6;
         let limo_ms = candidate.kernel_ns as f64 / 1.0e6;
         let mut remarks = Vec::new();
@@ -482,7 +595,7 @@ fn main() {
                 format!("limo: {}", error.lines().next().unwrap_or(""))
             }
             Ok(actual) => {
-                let (issues, notes) = compare(expected, actual);
+                let (issues, notes) = compare(&name, expected, actual);
                 if issues.is_empty() {
                     same += 1;
                     occt_total += reference.kernel_ns;
@@ -522,8 +635,11 @@ fn main() {
             if let Ok(actual) = &candidate.outcome {
                 for (r, c) in expected.iter().zip(actual) {
                     println!(
-                        "    body {}: volume {:.3} / {:.3}, faces {} / {}, edges {} / {}, triangles {} / {}",
-                        r.id, r.volume, c.volume, r.faces, c.faces, r.edges, c.edges, r.triangles, c.triangles
+                        "    body {}: holds {} / {}, drawn {:.3} / {:.3}, faces {} / {}, edges {} / {}, triangles {} / {}",
+                        r.id,
+                        r.held.map_or("?".to_owned(), |v| format!("{v:.9}")),
+                        c.held.map_or("?".to_owned(), |v| format!("{v:.9}")),
+                        r.volume, c.volume, r.faces, c.faces, r.edges, c.edges, r.triangles, c.triangles
                     );
                     for face in lonely(&r.flats, &c.flats) {
                         println!(

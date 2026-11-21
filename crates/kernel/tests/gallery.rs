@@ -96,7 +96,7 @@ fn rounded_box() {
         + 4.0 / 3.0 * PI * r * r * r;
     let actual = volume(&pebble);
     assert!(
-        (actual - expected).abs() < 1.0e-4 * expected,
+        (actual - expected).abs() < 1e-10 * expected,
         "{actual} vs {expected}"
     );
 }

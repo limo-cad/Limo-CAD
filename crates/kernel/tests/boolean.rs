@@ -1,17 +1,16 @@
+mod common;
+
+use common::integral;
 use limo_cad_kernel::make;
 use limo_cad_kernel::math::*;
 use limo_cad_kernel::tess::{tessellate, TessOptions};
 use limo_cad_kernel::{boolean, Body, Op, SurfKind};
 
-fn fine() -> TessOptions {
-    TessOptions {
-        linear: 0.0005,
-        angular: 0.02,
-    }
-}
-
+/// What a body holds, weighed as a solid. The drawn skin of a round body
+/// holds a little less or more than the body does, and a comparison loose
+/// enough to pass that passes a body that is wrong as well.
 fn volume(body: &Body) -> f64 {
-    tessellate(body, &fine()).volume()
+    limo_cad_kernel::props::mass(body).volume
 }
 
 fn bx(x0: f64, y0: f64, z0: f64, x1: f64, y1: f64, z1: f64) -> Body {
@@ -82,12 +81,12 @@ fn through_hole_and_blind_hole() {
     let r = boolean(&block, &drill, Op::Cut).unwrap();
     assert_eq!(r.face_count(), 7);
     assert_eq!(count(&r, SurfKind::Cylinder), 1);
-    close(volume(&r), 12000.0 - PI * 16.0 * 10.0, 1e-5);
+    close(volume(&r), 12000.0 - PI * 16.0 * 10.0, 1e-10);
 
     let blind = make::cylinder(v3(20.0, 15.0, 4.0), V3::Z, 4.0, 6.0).unwrap();
     let r = boolean(&block, &blind, Op::Cut).unwrap();
     assert_eq!(r.face_count(), 8);
-    close(volume(&r), 12000.0 - PI * 16.0 * 6.0, 1e-5);
+    close(volume(&r), 12000.0 - PI * 16.0 * 6.0, 1e-10);
 }
 
 #[test]
@@ -96,7 +95,7 @@ fn cylinder_boss_on_a_block() {
     let boss = make::cylinder(v3(20.0, 15.0, 10.0), V3::Z, 6.0, 8.0).unwrap();
     let r = boolean(&block, &boss, Op::Union).unwrap();
     assert_eq!(r.face_count(), 8);
-    close(volume(&r), 12000.0 + PI * 36.0 * 8.0, 1e-5);
+    close(volume(&r), 12000.0 + PI * 36.0 * 8.0, 1e-10);
 }
 
 #[test]
@@ -105,7 +104,7 @@ fn tube_from_coaxial_cylinders() {
     let inner = make::cylinder(V3::ZERO, V3::Z, 6.0, 20.0).unwrap();
     let tube = boolean(&outer, &inner, Op::Cut).unwrap();
     assert_eq!(tube.face_count(), 4);
-    close(volume(&tube), PI * (100.0 - 36.0) * 20.0, 2e-4);
+    close(volume(&tube), PI * (100.0 - 36.0) * 20.0, 1e-10);
 }
 
 #[test]
@@ -149,7 +148,7 @@ fn hole_through_an_edge_of_the_block() {
     // The drill axis sits on the block's vertical edge at x = y = 0.
     let drill = make::cylinder(v3(0.0, 0.0, -1.0), V3::Z, 5.0, 12.0).unwrap();
     let r = boolean(&block, &drill, Op::Cut).unwrap();
-    close(volume(&r), 4000.0 - 0.25 * PI * 25.0 * 10.0, 1e-5);
+    close(volume(&r), 4000.0 - 0.25 * PI * 25.0 * 10.0, 1e-10);
     assert_eq!(count(&r, SurfKind::Cylinder), 1);
     assert_eq!(r.face_count(), 7);
 }
@@ -169,18 +168,7 @@ fn chained_operations_stay_valid() {
     expected += 4.0 * 40.0 * 15.0;
     body.check().unwrap();
     assert_eq!(count(&body, SurfKind::Cylinder), 4);
-    close(volume(&body), expected, 1e-5);
-}
-
-/// Simpson integration of `f` over `[a, b]`.
-fn integrate(f: impl Fn(f64) -> f64, a: f64, b: f64) -> f64 {
-    let n = 20_000;
-    let h = (b - a) / n as f64;
-    let mut sum = f(a) + f(b);
-    for i in 1..n {
-        sum += f(a + h * i as f64) * if i % 2 == 1 { 4.0 } else { 2.0 };
-    }
-    sum * h / 3.0
+    close(volume(&body), expected, 1e-10);
 }
 
 #[test]
@@ -191,12 +179,14 @@ fn cross_drilled_shaft() {
     let r = boolean(&shaft, &drill, Op::Cut).unwrap();
     // Wall, two caps and the bore; the wall now has two holes in it.
     assert_eq!((r.face_count(), count(&r, SurfKind::Cylinder)), (4, 2));
-    let removed = integrate(
-        |y| 4.0 * (100.0 - y * y).sqrt() * (9.0 - y * y).max(0.0).sqrt(),
-        -3.0,
-        3.0,
-    );
-    close(volume(&r), PI * 100.0 * 40.0 - removed, 2e-4);
+    // At a distance `y` off the shaft's axis the hole is as long as the
+    // shaft's chord there and as high as its own. Across the hole `y` is
+    // taken as 3 sin(a), which takes the root out of both ends.
+    let removed = integral(-0.5 * PI, 0.5 * PI, |a| {
+        let y = 3.0 * a.sin();
+        2.0 * (100.0 - y * y).sqrt() * 6.0 * a.cos() * 3.0 * a.cos()
+    });
+    close(volume(&r), PI * 100.0 * 40.0 - removed, 1e-10);
     r.check().unwrap();
 }
 
@@ -207,17 +197,19 @@ fn drill_breaking_out_of_the_side() {
     let shaft = make::cylinder(v3(0.0, 0.0, -20.0), V3::Z, 10.0, 40.0).unwrap();
     let drill = make::cylinder(v3(-15.0, 8.0, 0.0), V3::X, 4.0, 30.0).unwrap();
     let r = boolean(&shaft, &drill, Op::Cut).unwrap();
-    // Chord of the shaft at offset y, weighted by the drill's width there.
-    let removed = integrate(
-        |y| {
-            let chord = 2.0 * (100.0 - y * y).max(0.0).sqrt();
-            let width = 2.0 * (16.0 - (y - 8.0) * (y - 8.0)).max(0.0).sqrt();
-            chord * width
-        },
-        4.0,
-        10.0,
-    );
-    close(volume(&r), PI * 100.0 * 40.0 - removed, 5e-4);
+    // Chord of the shaft at offset y, weighted by the drill's width there,
+    // from the drill's near side at 4 to the shaft's flank at 10. Each end
+    // has a root in it: the near one is taken out by going round the drill
+    // (y = 8 + 4 sin a), the far one by going round the shaft (y = 10 sin a).
+    let chord = |y: f64| 2.0 * (100.0 - y * y).max(0.0).sqrt();
+    let width = |y: f64| 2.0 * (16.0 - (y - 8.0) * (y - 8.0)).max(0.0).sqrt();
+    let near = integral(-0.5 * PI, (-0.25f64).asin(), |a| {
+        chord(8.0 + 4.0 * a.sin()) * 8.0 * a.cos() * 4.0 * a.cos()
+    });
+    let far = integral(0.7f64.asin(), 0.5 * PI, |a| {
+        20.0 * a.cos() * width(10.0 * a.sin()) * 10.0 * a.cos()
+    });
+    close(volume(&r), PI * 100.0 * 40.0 - (near + far), 1e-10);
     r.check().unwrap();
 }
 

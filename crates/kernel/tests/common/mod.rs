@@ -51,12 +51,12 @@ pub fn count(body: &Body, kind: SurfKind) -> usize {
         .count()
 }
 
-/// Volume to compare with closed forms. The chord error of a mesh falls with
-/// the square of its step, so two meshes extrapolate it away.
+/// What a body holds, to compare with a value worked out by hand: weighed
+/// as a solid. The drawn skin of a round body holds a little less or more
+/// than the body does, and a comparison loose enough to pass that passes a
+/// body that is wrong as well.
 pub fn volume(body: &Body) -> f64 {
-    let at =
-        |linear: f64, angular: f64| tessellate(body, &TessOptions { linear, angular }).volume();
-    (4.0 * at(0.0005, 0.02) - at(0.002, 0.04)) / 3.0
+    limo_cad_kernel::props::mass(body).volume
 }
 
 /// The integral of `f` from `a` to `b`: five-point Gauss rules on two

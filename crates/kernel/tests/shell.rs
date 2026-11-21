@@ -35,12 +35,12 @@ fn a_block_grows_and_shrinks_face_by_face() {
     // Every face out by 2: still a block, 4 larger each way.
     let grown = offset_faces(&block, &[2.0; 6]).unwrap();
     assert_sound(&grown);
-    assert!((volume(&grown) - 44.0 * 34.0 * 14.0).abs() < 1e-6);
+    assert!((volume(&grown) - 44.0 * 34.0 * 14.0).abs() < 1e-7);
     // Only the top, down by 3.
     let mut by = [0.0; 6];
     by[facing(&block, V3::Z) as usize] = -3.0;
     let lower = offset_faces(&block, &by).unwrap();
-    assert!((volume(&lower) - 40.0 * 30.0 * 7.0).abs() < 1e-6);
+    assert!((volume(&lower) - 40.0 * 30.0 * 7.0).abs() < 1e-7);
     // Faces and edges keep their places.
     assert_eq!(lower.face_count(), 6);
     assert_eq!(lower.e_v, block.e_v);
@@ -63,7 +63,7 @@ fn curved_faces_keep_their_kind() {
     let rounded = |w: f64, h: f64, r: f64| w * h - (4.0 - PI) * r * r;
     let before = (rounded(40.0, 30.0, 6.0) - PI * 16.0) * 10.0;
     assert!(
-        (volume(&plate) - before).abs() < 1e-5 * before,
+        (volume(&plate) - before).abs() < 1e-10 * before,
         "{} vs {before}",
         volume(&plate)
     );
@@ -73,7 +73,7 @@ fn curved_faces_keep_their_kind() {
     assert_sound(&thinner);
     let after = (rounded(38.0, 28.0, 5.0) - PI * 25.0) * 8.0;
     assert!(
-        (volume(&thinner) - after).abs() < 1e-5 * after,
+        (volume(&thinner) - after).abs() < 1e-10 * after,
         "{} vs {after}",
         volume(&thinner)
     );
@@ -98,7 +98,7 @@ fn a_tray_is_hollowed_from_its_top() {
     for (wall, inside) in [(1.0, 30.0 * 22.0 * 11.0), (2.0, 28.0 * 20.0 * 10.0)] {
         let tray = shell(&blank, &[top], wall, true).unwrap();
         assert_sound(&tray);
-        assert!((volume(&tray) - (32.0 * 24.0 * 12.0 - inside)).abs() < 1e-6);
+        assert!((volume(&tray) - (32.0 * 24.0 * 12.0 - inside)).abs() < 1e-7);
         // Five faces outside, five inside, and the rim.
         assert_eq!(tray.face_count(), 11);
         assert_eq!(count(&tray, SurfKind::Plane), 11);
@@ -116,7 +116,7 @@ fn a_cup_and_a_tube() {
     assert_sound(&cup);
     let exact = PI * (100.0 * 20.0 - 8.5 * 8.5 * 18.5);
     assert!(
-        (volume(&cup) - exact).abs() < 1e-3 * exact,
+        (volume(&cup) - exact).abs() < 1e-10 * exact,
         "{}",
         volume(&cup)
     );
@@ -124,7 +124,7 @@ fn a_cup_and_a_tube() {
     let tube = shell(&rod, &[top, bottom], 1.5, true).unwrap();
     assert_sound(&tube);
     let exact = PI * (100.0 - 8.5 * 8.5) * 20.0;
-    assert!((volume(&tube) - exact).abs() < 1e-3 * exact);
+    assert!((volume(&tube) - exact).abs() < 1e-10 * exact);
     assert_eq!(tube.face_count(), 4);
 }
 
@@ -152,7 +152,7 @@ fn the_wall_goes_round_an_inside_corner() {
     assert_sound(&hollowed);
     let hollow = (36.0 * 11.0 + 16.0 * 15.0 + (4.0 - PI)) * 8.0;
     assert!(
-        (volume(&hollowed) - (9000.0 - hollow)).abs() < 1e-3,
+        (volume(&hollowed) - (9000.0 - hollow)).abs() < 1e-7,
         "{}",
         volume(&hollowed)
     );
@@ -169,7 +169,7 @@ fn a_wall_added_outside_is_rounded_where_it_turns() {
     // of the four bottom corners.
     let wall = 2.0 * (4.0 * 200.0 + 400.0) + PI * 120.0 + 4.0 * PI * 8.0 / 6.0;
     assert!(
-        (volume(&skin) - wall).abs() < 1e-3 * wall,
+        (volume(&skin) - wall).abs() < 1e-10 * wall,
         "{}",
         volume(&skin)
     );

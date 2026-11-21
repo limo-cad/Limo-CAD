@@ -136,7 +136,7 @@ fn tapered_extrusions() {
     let top = 400.0 * (1.0 + rate * 10.0).powi(2);
     let body = built(vec![extrude(rectangle(20.0, 20.0, 0.0), 10.0, 10.0)]);
     let exact = 10.0 / 3.0 * (400.0 + top + (400.0 * top).sqrt());
-    assert!((volume(&body) - exact).abs() < 1e-6, "{}", volume(&body));
+    assert!((volume(&body) - exact).abs() < 1e-7, "{}", volume(&body));
     assert_eq!(count(&body, SurfKind::Plane), 6);
 
     // A disc narrows to a cone.
@@ -144,7 +144,7 @@ fn tapered_extrusions() {
     let r1 = 10.0 - 10.0 * 20.0_f64.to_radians().tan();
     let exact = PI * 10.0 / 3.0 * (100.0 + 10.0 * r1 + r1 * r1);
     assert!(
-        (volume(&body) - exact).abs() < 1e-4 * exact,
+        (volume(&body) - exact).abs() < 1e-10 * exact,
         "{}",
         volume(&body)
     );
@@ -164,7 +164,7 @@ fn a_loft_through_three_rectangles() {
         12.0 / 6.0 * (a.0 * a.1 + (a.0 + b.0) * (a.1 + b.1) + b.0 * b.1)
     };
     let exact = slice((20.0, 16.0), (16.0, 12.0)) + slice((16.0, 12.0), (10.0, 8.0));
-    assert!((volume(&body) - exact).abs() < 1e-6, "{}", volume(&body));
+    assert!((volume(&body) - exact).abs() < 1e-7, "{}", volume(&body));
     assert_eq!(body.face_count(), 10);
     assert_eq!(count(&body, SurfKind::Plane), 10);
 
@@ -218,7 +218,7 @@ fn a_loft_through_circles_and_one_with_a_twist() {
     )]);
     let exact = PI * 10.0 / 3.0 * (100.0 + 60.0 + 36.0) + PI * 36.0 * 10.0;
     assert!(
-        (volume(&body) - exact).abs() < 1e-4 * exact,
+        (volume(&body) - exact).abs() < 1e-10 * exact,
         "{}",
         volume(&body)
     );
@@ -298,7 +298,7 @@ fn a_rod_swept_along_two_arcs() {
     // Pappus: the disc's area times the length its middle travels.
     let exact = PI * 4.0 * (PI * 20.0);
     assert!(
-        (volume(&body) - exact).abs() < 1e-4 * exact,
+        (volume(&body) - exact).abs() < 1e-10 * exact,
         "{}",
         volume(&body)
     );
@@ -314,7 +314,7 @@ fn a_rod_swept_along_two_arcs() {
         }
     }
     let again = built(vec![sweep(circle(2.0, 0.0), backwards)]);
-    assert!((volume(&again) - exact).abs() < 1e-4 * exact);
+    assert!((volume(&again) - exact).abs() < 1e-10 * exact);
 }
 
 #[test]
@@ -339,7 +339,7 @@ fn a_bar_swept_along_a_line_and_a_bend() {
     let body = built(vec![sweep(rectangle(8.0, 6.0, 0.0), path.clone())]);
     let exact = 48.0 * (15.0 + 0.5 * PI * 30.0);
     assert!(
-        (volume(&body) - exact).abs() < 1e-4 * exact,
+        (volume(&body) - exact).abs() < 1e-10 * exact,
         "{}",
         volume(&body)
     );
@@ -573,7 +573,7 @@ fn a_tray_hollowed_through_the_session() {
     let scene = run(&mut kernel, vec![blank, shell]);
     assert!(scene.errors.is_empty(), "{:?}", scene.errors);
     let tray = kernel.body(1).unwrap();
-    assert!((volume(tray) - (32.0 * 24.0 * 12.0 - 30.0 * 22.0 * 11.0)).abs() < 1e-6);
+    assert!((volume(tray) - (32.0 * 24.0 * 12.0 - 30.0 * 22.0 * 11.0)).abs() < 1e-7);
     // Inside and outside of each wall have different names.
     let mut names: Vec<&str> = scene.bodies[0]
         .faces
@@ -760,7 +760,7 @@ fn tapped_holes_on_the_edge_and_the_corner_of_a_plate() {
         let taken =
             limo_cad_kernel::props::volume(&plain) - limo_cad_kernel::props::volume(&tapped);
         assert!(
-            (taken - part * whole).abs() < 1.0e-6 * whole,
+            (taken - part * whole).abs() < 1e-10 * whole,
             "at {x}, {y}: the thread takes {taken}, {part} of {whole}"
         );
     }

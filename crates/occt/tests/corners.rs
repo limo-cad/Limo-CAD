@@ -25,8 +25,11 @@
 use limo_cad_core::{BodyId, FeatureId};
 use limo_cad_occt::OcctKernel;
 use limo_cad_solid::{
-    ExtrudeOperation, KernelChamferJobDto, KernelCurveDto, KernelExtrudeJobDto, KernelFilletJobDto,
+    iso_metric_grade6_envelope, ExtrudeOperation, HoleThreadDto, HoleThreadHand,
+    HoleThreadRepresentation, HoleThreadSeries, HoleThreadStandard, KernelChamferJobDto,
+    KernelCurveDto, KernelExternalThreadJobDto, KernelExtrudeJobDto, KernelFilletJobDto,
     KernelJobDto, KernelProfileDto, KernelSceneDto, KernelShellJobDto, Point3Dto, RecomputePlanDto,
+    ThreadFit,
 };
 use std::f64::consts::PI;
 
@@ -312,33 +315,51 @@ fn bevel(keys: Vec<String>) -> KernelJobDto {
 /// What a kernel made of a case: what the body holds, or why not.
 type Made = Result<f64, String>;
 
+/// Build `base` on both kernels, then one feature after another, each as
+/// the kernel is told to make it of its own scene so far. The reference
+/// kernel first.
+fn staged(
+    base: Vec<KernelJobDto>,
+    stages: &[&dyn Fn(&KernelSceneDto) -> KernelJobDto],
+) -> (Made, Made) {
+    let mut reference = OcctKernel::new().unwrap();
+    let theirs = (|| {
+        let mut jobs = base.clone();
+        let mut scene = reference.recompute(&plan(jobs.clone())).unwrap();
+        assert!(scene.errors.is_empty(), "{:?}", scene.errors);
+        for stage in stages {
+            jobs.push(stage(&scene));
+            scene = reference.recompute(&plan(jobs.clone())).unwrap();
+            if let Some(error) = scene.errors.first() {
+                return Err(error.message.clone());
+            }
+        }
+        Ok(reference.weigh(BodyId(1)).unwrap())
+    })();
+    let mut limo = limo_cad_kernel::Kernel::new();
+    let ours = (|| {
+        let mut jobs = base.clone();
+        let mut scene = limo.recompute(&plan(jobs.clone()));
+        assert!(scene.errors.is_empty(), "{:?}", scene.errors);
+        for stage in stages {
+            jobs.push(stage(&scene));
+            scene = limo.recompute(&plan(jobs.clone()));
+            if let Some(error) = scene.errors.first() {
+                return Err(error.message.clone());
+            }
+        }
+        Ok(limo_cad_kernel::props::mass(limo.body(1).unwrap()).volume)
+    })();
+    (theirs, ours)
+}
+
 /// Build `base` on both kernels, then the feature each is told to make of
-/// its own scene. The reference kernel first.
+/// its own scene.
 fn both(
     base: Vec<KernelJobDto>,
     feature: &dyn Fn(&KernelSceneDto) -> KernelJobDto,
 ) -> (Made, Made) {
-    let mut reference = OcctKernel::new().unwrap();
-    let theirs = reference.recompute(&plan(base.clone())).unwrap();
-    assert!(theirs.errors.is_empty(), "{:?}", theirs.errors);
-    let mut limo = limo_cad_kernel::Kernel::new();
-    let ours = limo.recompute(&plan(base.clone()));
-    assert!(ours.errors.is_empty(), "{:?}", ours.errors);
-    let mut jobs = base.clone();
-    jobs.push(feature(&theirs));
-    let scene = reference.recompute(&plan(jobs)).unwrap();
-    let theirs = match scene.errors.first() {
-        Some(error) => Err(error.message.clone()),
-        None => Ok(reference.weigh(BodyId(1)).unwrap()),
-    };
-    let mut jobs = base;
-    jobs.push(feature(&ours));
-    let scene = limo.recompute(&plan(jobs));
-    let ours = match scene.errors.first() {
-        Some(error) => Err(error.message.clone()),
-        None => Ok(limo_cad_kernel::props::mass(limo.body(1).unwrap()).volume),
-    };
-    (theirs, ours)
+    staged(base, &[feature])
 }
 
 /// What the Limo kernel is to make of a case.
@@ -368,7 +389,11 @@ fn check(
     feature: &dyn Fn(&KernelSceneDto) -> KernelJobDto,
     wanted: Wanted,
 ) {
-    let (theirs, ours) = both(base, feature);
+    judge(name, both(base, feature), wanted);
+}
+
+/// Hold what the two kernels made of a case against what was wanted of it.
+fn judge(name: &str, (theirs, ours): (Made, Made), wanted: Wanted) {
     let near = |a: f64, b: f64| (a - b).abs() <= CLOSE * b.abs();
     match wanted {
         Same | Exactly(_) => {
@@ -1375,4 +1400,240 @@ fn a_blend_stops_where_its_edge_does() {
             Exactly(whole - 2.0 * 20.0),
         );
     }
+}
+
+/// The rim of a round boss with a narrow slot cut into it is an arc that
+/// ends on both walls of the slot, and comes round to each wall's flat
+/// again on the far side of the boss. Slice by slice a round on it is a
+/// ring inside the boss's outline, less what of that ring the slot has
+/// taken already.
+#[test]
+fn a_rim_ends_on_both_walls_of_a_slot() {
+    let (radius, gap, r) = (18.5f64, 0.6f64, 0.5f64);
+    let base = || {
+        vec![
+            wide(),
+            extruded(2, circle(radius), ExtrudeOperation::Join, 0.0, 24.0, 0.0),
+            extruded(
+                3,
+                rectangle(-gap, gap, -25.0, -10.0),
+                ExtrudeOperation::Cut,
+                20.0,
+                30.0,
+                0.0,
+            ),
+        ]
+    };
+    // What of a disc of radius `of` lies in the slot's width, on one side
+    // of the middle.
+    let in_the_slot = |of: f64| gap * (of * of - gap * gap).sqrt() + of * of * (gap / of).asin();
+    let ring = |w: f64| {
+        PI * (radius * radius - (radius - w) * (radius - w))
+            - (in_the_slot(radius) - in_the_slot(radius - w))
+    };
+    // The slot is 4 deep and ends square, 10 from the middle.
+    let slot = 4.0 * (in_the_slot(radius) - 2.0 * gap * 10.0);
+    let whole = 36000.0 + 14.0 * PI * radius * radius - slot;
+    let rim = |s: &KernelSceneDto| -> Vec<String> {
+        s.bodies[0]
+            .edges
+            .iter()
+            .filter(|e| {
+                e.circle.is_some_and(|c| (c.radius - radius).abs() < 1e-9)
+                    && e.points.iter().all(|p| (p.z - 24.0).abs() < 1e-9)
+            })
+            .map(|e| e.key.clone())
+            .collect()
+    };
+    check(
+        "slotted rim, rounded",
+        base(),
+        &|s: &KernelSceneDto| {
+            KernelJobDto::Fillet(KernelFilletJobDto {
+                feature_id: FeatureId(9),
+                target_body_id: BodyId(1),
+                edge_keys: rim(s),
+                edge_marks: Vec::new(),
+                radius: r,
+                tangent_chain: false,
+            })
+        },
+        Exactly(whole - integral(0.0, 0.5 * PI, |a| ring(r * (1.0 - a.sin())) * r * a.sin())),
+    );
+}
+
+/// A thread cut on a rod. Its groove is one tooth wound round the rod's
+/// axis and cut off square at both ends of the thread. The tooth is the
+/// same above its own middle as below, so what the groove takes is what
+/// the tooth takes turned once round the axis, as many times as the thread
+/// has turns, whatever part of a turn is left over. A class that keeps the
+/// crest under the rod's surface has the rod turned down to it first.
+///
+/// The flanks of the groove are screw surfaces. This kernel has them as
+/// such; the reference kernel fits splines to them, and its thread holds a
+/// ten-thousandth of a cubic millimetre more than the groove leaves.
+#[test]
+fn a_thread_takes_what_its_groove_holds() {
+    let (radius, long, depth, pitch) = (4.0f64, 14.0f64, 10.0f64, 1.25f64);
+    let limits = iso_metric_grade6_envelope(2.0 * radius, pitch, ThreadFit::External).unwrap();
+    let (inner, middle, outer) = (
+        0.5 * limits.modeled_minor,
+        0.5 * limits.modeled_pitch,
+        0.5 * limits.modeled_major,
+    );
+    // Half the tooth's width where it is narrowest, at its root: a quarter
+    // of the pitch on the pitch diameter, and flanks at thirty degrees.
+    let slope = (PI / 6.0).tan();
+    let narrow = 0.25 * pitch - (middle - inner) * slope;
+    // The tooth turned once round the axis, out to the crest.
+    let once = 4.0
+        * PI
+        * (0.5 * narrow * (outer * outer - inner * inner)
+            + slope
+                * ((outer.powi(3) - inner.powi(3)) / 3.0
+                    - 0.5 * inner * (outer * outer - inner * inner)));
+    // The rod is turned down a ten-thousandth of a millimetre past where
+    // the thread ends, as both kernels are told to.
+    let past = (1.0e-4 * pitch).max(1.0e-4);
+    let turned = PI * (radius * radius - outer * outer) * (depth + past);
+    let exact = PI * radius * radius * long - depth / pitch * once - turned;
+    check(
+        "M8 thread on a rod",
+        vec![extruded(
+            1,
+            circle(radius),
+            ExtrudeOperation::NewBody,
+            0.0,
+            long,
+            0.0,
+        )],
+        &|s: &KernelSceneDto| {
+            let face = s.bodies[0]
+                .faces
+                .iter()
+                .find(|f| f.cylinder.is_some())
+                .expect("the rod's side");
+            KernelJobDto::ExternalThread(KernelExternalThreadJobDto {
+                feature_id: FeatureId(9),
+                target_body_id: BodyId(1),
+                face_key: face.key.clone(),
+                face_mark: None,
+                cylinder: face.cylinder.unwrap(),
+                thread: HoleThreadDto {
+                    standard: HoleThreadStandard::IsoMetric,
+                    series: HoleThreadSeries::MetricCoarse,
+                    designation: "M8 x 1.25 - 6g".to_string(),
+                    class: "6g".to_string(),
+                    nominal_diameter: 2.0 * radius,
+                    pitch,
+                    threads_per_inch: None,
+                    hand: HoleThreadHand::Right,
+                    depth: Some(depth),
+                    representation: HoleThreadRepresentation::Modeled,
+                    tap_drill_designation: None,
+                    rounded_profile: None,
+                },
+                flip: false,
+            })
+        },
+        Unlike(exact, 0.000_116),
+    );
+}
+
+/// A bracket bent from a strip: an L 32 by 44 and 8 thick, 40 wide. Its
+/// bend is rounded 4 inside, the corners of its two ends 3, and then a
+/// round of 0.6 is run along the rim of its two flat sides. The picked
+/// edges run on through the rounded corners of the ends and across them,
+/// so the round goes all the way round the inside of the bracket in one
+/// chain and all the way round the outside in another, which turns two
+/// square corners where the back meets the base.
+///
+/// Along a straight edge a round takes a sliver for each unit of length.
+/// Inside a quarter turn of radius `R` it takes a quarter of a ring from
+/// `R - w` to `R` at each depth, and outside one a quarter of a ring from
+/// `R` to `R + w`. At a square corner two of them take the corner once.
+#[test]
+fn a_round_all_the_way_round_a_bracket() {
+    let strip = outline(&[
+        (0.0, 0.0),
+        (32.0, 0.0),
+        (32.0, 8.0),
+        (8.0, 8.0),
+        (8.0, 44.0),
+        (0.0, 44.0),
+    ]);
+    let rounded = |feature: u64, keys: Vec<String>, radius: f64| {
+        KernelJobDto::Fillet(KernelFilletJobDto {
+            feature_id: FeatureId(feature),
+            target_body_id: BodyId(1),
+            edge_keys: keys,
+            edge_marks: Vec::new(),
+            radius,
+            tangent_chain: false,
+        })
+    };
+    // The arcs of the bend on the two flat sides.
+    let bends = |s: &KernelSceneDto| -> Vec<String> {
+        s.bodies[0]
+            .edges
+            .iter()
+            .filter(|e| {
+                e.circle.is_some_and(|c| (c.radius - 4.0).abs() < 1e-9)
+                    && e.points
+                        .iter()
+                        .all(|p| p.z.abs() < 1e-9 || (p.z - 40.0).abs() < 1e-9)
+            })
+            .map(|e| e.key.clone())
+            .collect()
+    };
+    let (r, sliver_of) = (0.6f64, |r: f64| (1.0 - PI / 4.0) * r * r);
+    // What the width of a round, squared, comes to over its depth.
+    let squared = r.powi(3) * (5.0 / 3.0 - PI / 2.0);
+    let whole =
+        40.0 * (32.0 * 8.0 + 36.0 * 8.0) + sliver_of(4.0) * 40.0 - 4.0 * sliver_of(3.0) * 8.0;
+    let straight = 2.0 * (41.0 + 29.0 + 17.0 + 29.0) + 4.0 * 34.0;
+    let inside = 8.0 * 0.25 * PI * (6.0 * sliver_of(r) - squared);
+    let outside = 2.0 * 0.25 * PI * (8.0 * sliver_of(r) + squared);
+    let taken = straight * sliver_of(r) + inside + outside - 2.0 * squared;
+    judge(
+        "bracket, rounded all the way round",
+        staged(
+            vec![extruded(
+                1,
+                strip,
+                ExtrudeOperation::NewBody,
+                0.0,
+                40.0,
+                0.0,
+            )],
+            &[
+                &|s: &KernelSceneDto| rounded(2, vec![edge(s, [8.0, 8.0, 20.0])], 4.0),
+                &|s: &KernelSceneDto| {
+                    rounded(
+                        3,
+                        vec![
+                            edge(s, [32.0, 4.0, 0.0]),
+                            edge(s, [32.0, 4.0, 40.0]),
+                            edge(s, [4.0, 44.0, 0.0]),
+                            edge(s, [4.0, 44.0, 40.0]),
+                        ],
+                        3.0,
+                    )
+                },
+                &|s: &KernelSceneDto| {
+                    let mut keys = bends(s);
+                    for z in [0.0, 40.0] {
+                        keys.extend([
+                            edge(s, [0.0, 20.5, z]),
+                            edge(s, [14.5, 0.0, z]),
+                            edge(s, [20.5, 8.0, z]),
+                            edge(s, [8.0, 26.5, z]),
+                        ]);
+                    }
+                    rounded(4, keys, r)
+                },
+            ],
+        ),
+        Exactly(whole - taken),
+    );
 }
