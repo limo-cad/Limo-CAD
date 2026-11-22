@@ -796,6 +796,13 @@ fn release_sbom_gates_reject_omitted_inventories_bypassed_scans_and_unsigned_pub
 // the executable steps and their failure conditions remain the actual template.
 fn mcp_acceptance_workflow(source: &Value, acceptance: &Value) -> Result<Value> {
     let producer = executable_job(source, "prepare-windows-sdk")?;
+    let (test_index, compiler_tests) = named_step(producer, "Test shared SDK compiler selection")?;
+    requires_command(compiler_tests, "./scripts/ci/enter-windows-sdk.test.ps1")?;
+    let (sdk_index, _) = named_step(producer, "Set up cached OpenCASCADE SDK once")?;
+    ensure!(
+        compiler_tests["if"].is_null() && test_index < sdk_index,
+        "exercise compiler selection before preparing the shared SDK"
+    );
     ensure!(
         producer["outputs"]["sdk-artifact-id"].as_str()
             == Some("${{ steps.artifact.outputs.artifact-id }}")
@@ -833,7 +840,9 @@ fn mcp_acceptance_workflow(source: &Value, acceptance: &Value) -> Result<Value> 
             && compatibility["env"]["SDK_TOOLSET"].as_str() == Some("${{ inputs.sdk-toolset }}")
             && compatibility["run"]
                 .as_str()
-                .is_some_and(|run| { run.contains("if ($toolset -ne $env:SDK_TOOLSET) { throw") }),
+                .is_some_and(|run| {
+                    run.contains("& ./scripts/ci/enter-windows-sdk.ps1 -InstallationRoot $installPath -Toolset $env:SDK_TOOLSET")
+                }),
         "reject an SDK from a different compiler"
     );
     let (qualification_index, qualification) =
@@ -1219,33 +1228,36 @@ fn sdk_cache_keys_keep_all_abi_inputs_and_arm_runner_is_default_branch_only() {
 }
 
 #[test]
-fn windows_arm_sdk_and_consumers_share_the_pinned_compiler() {
+fn windows_sdks_and_consumers_share_their_pinned_compilers() {
     let config: serde_json::Value =
         serde_json::from_str(&read("vcpkg-configuration.json")).unwrap();
     assert_eq!(
         config["overlay-triplets"],
         serde_json::json!(["native/occt-overlay/triplets"])
     );
-    let pin = "native/occt-overlay/triplets/msvc-arm64-version.txt";
-    assert!(Regex::new(r"^\d+\.\d+\.\d+\s*$")
-        .unwrap()
-        .is_match(&read(pin)));
-    let triplet = read("native/occt-overlay/triplets/arm64-windows.cmake");
-    for setting in [
-        "set(VCPKG_TARGET_ARCHITECTURE arm64)",
-        "set(VCPKG_CRT_LINKAGE dynamic)",
-        "set(VCPKG_LIBRARY_LINKAGE dynamic)",
-        "set(VCPKG_PLATFORM_TOOLSET v143)",
-        "file(STRINGS \"${CMAKE_CURRENT_LIST_DIR}/msvc-arm64-version.txt\"\n    VCPKG_PLATFORM_TOOLSET_VERSION LIMIT_COUNT 1)",
-        "set(VCPKG_HASH_ADDITIONAL_FILES \"${CMAKE_CURRENT_LIST_DIR}/msvc-arm64-version.txt\")",
-    ] {
-        assert!(triplet.contains(setting), "missing ARM64 ABI setting: {setting}");
-    }
     let action = workflow(".github/actions/setup-windows-occt/action.yml");
     let (_, step) = named_step(&action["runs"], "Detect MSVC toolset").unwrap();
     let detect = step["run"].as_str().unwrap();
-    assert!(detect.contains(pin));
-    assert!(detect.contains("$env:VCPKG_TRIPLET -eq 'arm64-windows'"));
+    let version_pattern = Regex::new(r"^\d+\.\d+\.\d+\s*$").unwrap();
+    for architecture in ["arm64", "x64"] {
+        let pin = format!("native/occt-overlay/triplets/msvc-{architecture}-version.txt");
+        assert!(version_pattern.is_match(&read(&pin)));
+        let triplet = read(&format!(
+            "native/occt-overlay/triplets/{architecture}-windows.cmake"
+        ));
+        for setting in [
+            format!("set(VCPKG_TARGET_ARCHITECTURE {architecture})"),
+            "set(VCPKG_CRT_LINKAGE dynamic)".into(),
+            "set(VCPKG_LIBRARY_LINKAGE dynamic)".into(),
+            "set(VCPKG_PLATFORM_TOOLSET v143)".into(),
+            format!("file(STRINGS \"${{CMAKE_CURRENT_LIST_DIR}}/msvc-{architecture}-version.txt\"\n    VCPKG_PLATFORM_TOOLSET_VERSION LIMIT_COUNT 1)"),
+            format!("set(VCPKG_HASH_ADDITIONAL_FILES \"${{CMAKE_CURRENT_LIST_DIR}}/msvc-{architecture}-version.txt\")"),
+        ] {
+            assert!(triplet.contains(&setting), "missing {architecture} ABI setting: {setting}");
+        }
+        assert!(detect.contains(&pin));
+        assert!(detect.contains(&format!("$env:VCPKG_TRIPLET -eq '{architecture}-windows'")));
+    }
     assert!(detect.contains("-vcvars_ver=$toolset"));
     assert!(detect.contains("Required MSVC compiler is missing"));
     assert!(detect.contains("(Get-Command cl.exe -ErrorAction Stop).Source -ine $compiler"));
