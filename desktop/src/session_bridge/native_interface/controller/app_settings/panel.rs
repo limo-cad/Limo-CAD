@@ -2,7 +2,7 @@ use super::*;
 use preferences::locale::{code, native_name, translate, SUPPORTED};
 
 const ABOUT_MIN_HEIGHT: f32 = 94.;
-const OPTIONS_HEIGHT: f32 = 634.;
+const OPTIONS_HEIGHT: f32 = 790.;
 
 pub(super) fn paint(
     world: &mut World,
@@ -494,6 +494,67 @@ pub(super) fn paint(
         t("appearance.gpuStockRemovalDescription"),
         10.,
     );
+    text(
+        world,
+        settings,
+        "settings-kernel",
+        680.,
+        18.,
+        t("appearance.kernel"),
+        11.,
+    );
+    let cell = (inner - 8.) / 2.;
+    for (index, (value, key)) in [
+        (KernelPreference::Occt, "settings-kernel-occt"),
+        (KernelPreference::Limo, "settings-kernel-limo"),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        button(
+            world,
+            camera,
+            settings,
+            key,
+            kernel_name(locale, value),
+            None,
+            Command::Kernel(value),
+            rect(
+                16. + index as f32 * (cell + 8.),
+                706. - ABOUT_MIN_HEIGHT,
+                cell,
+                32.,
+            ),
+            Some(effective.kernel == value),
+            true,
+        )?;
+        settings.widgets.parent(world, key, content);
+    }
+    text(
+        world,
+        settings,
+        "settings-kernel-hint",
+        744.,
+        48.,
+        t("appearance.kernelDescription"),
+        10.,
+    );
+    // The choice above is the saved one. What builds the solids in this
+    // window was settled when the application started.
+    let running = kernel_status(
+        locale,
+        KernelPreference::running(),
+        limo_cad_occt::kernel_named_in_environment().is_some(),
+    );
+    text(
+        world,
+        settings,
+        "settings-kernel-running",
+        796.,
+        32.,
+        &running,
+        10.,
+    );
     let units = match services.engine.document_units() {
         limo_cad_core::UnitSystem::Mm => "mm",
         limo_cad_core::UnitSystem::Cm => "cm",
@@ -503,7 +564,7 @@ pub(super) fn paint(
         world,
         settings,
         "settings-units",
-        680.,
+        836.,
         22.,
         &t("appearance.documentUnits").replace("{unit}", units),
         11.,
@@ -615,6 +676,9 @@ pub(super) fn paint(
             world,
             &scales.iter().map(String::as_str).collect::<Vec<_>>(),
         );
+        settings
+            .widgets
+            .radio_group(world, &["settings-kernel-occt", "settings-kernel-limo"]);
         let root = settings.widgets.entity("settings-card").unwrap();
         let header = settings.widgets.entity("settings-header").unwrap();
         for key in [
@@ -635,6 +699,34 @@ pub(super) fn paint(
         interface_shell::dialogs::attach(world, root, header, Vec2::new(400., 260.));
     }
     Ok(())
+}
+
+fn kernel_name(locale: Locale, kernel: KernelPreference) -> &'static str {
+    translate(
+        locale,
+        match kernel {
+            KernelPreference::Occt => "appearance.kernelOcct",
+            KernelPreference::Limo => "appearance.kernelLimo",
+        },
+    )
+}
+
+/// What Settings says is running: the kernel this window builds on, and
+/// whether the environment rather than the saved choice put it there.
+pub(super) fn kernel_status(
+    locale: Locale,
+    running: KernelPreference,
+    by_environment: bool,
+) -> String {
+    translate(
+        locale,
+        if by_environment {
+            "appearance.kernelRunningEnvironment"
+        } else {
+            "appearance.kernelRunning"
+        },
+    )
+    .replace("{kernel}", kernel_name(locale, running))
 }
 
 #[allow(clippy::too_many_arguments)]

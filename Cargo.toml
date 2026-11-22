@@ -13,6 +13,7 @@ members = [
     "crates/session-storage",
     "crates/session-publication",
     "crates/solid",
+    "crates/kernel-session",
     "crates/occt",
     "crates/native-engine",
     "crates/export",
@@ -38,6 +39,9 @@ cxx-build = "1.0.205"
 earcutr = "0.5.0"
 flate2 = { version = "1.1.10", default-features = false }
 js-sys = "0.3.106"
+# The Limo kernel, from its own repository. Every crate here that uses it
+# takes this revision; see docs/DEVELOPMENT.md for working on both at once.
+limo-cad-kernel = { git = "https://github.com/limo-cad/limo-kernel", rev = "068cb4415547ae24fe94f3bfe2d9e5160672a64a" }
 png = "0.18.1"
 regex = "1.13.1"
 roxmltree = "0.21.1"

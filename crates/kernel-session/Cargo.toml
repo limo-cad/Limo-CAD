@@ -1,0 +1,15 @@
+[package]
+name = "limo-cad-kernel-session"
+version.workspace = true
+edition.workspace = true
+description = "The Limo kernel behind Limo CAD's solid contract: a recompute plan in, an evaluated scene out"
+license = "LGPL-2.1-or-later"
+repository.workspace = true
+
+[dependencies]
+limo-cad-core = { path = "../core" }
+limo-cad-kernel.workspace = true
+limo-cad-solid = { path = "../solid" }
+
+[dev-dependencies]
+serde_json.workspace = true

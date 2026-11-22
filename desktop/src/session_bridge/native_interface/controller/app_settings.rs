@@ -1,7 +1,8 @@
 //! Application preferences shared with the release shell; never document data.
 use super::*;
 use crate::app_preferences::{
-    self as preferences, Effective, Locale, Observer, Preferences, Store, ThemePreference,
+    self as preferences, Effective, KernelPreference, Locale, Observer, Preferences, Store,
+    ThemePreference,
 };
 use crate::native_viewport::{localization, ui};
 use chrome::{rect, Widgets};
@@ -45,6 +46,8 @@ pub(crate) enum Command {
     ResetSpeed,
     InterfaceSize(u8),
     GpuStock(bool),
+    /// Saved for the next start; the running kernel is left as it is.
+    Kernel(KernelPreference),
     Scroll(i32),
     Retry,
     Close,
@@ -146,6 +149,9 @@ fn merge(target: &mut Preferences, patch: &Preferences) {
     }
     if let Some(scale) = patch.ui_scale {
         target.ui_scale = Some(scale);
+    }
+    if let Some(kernel) = patch.kernel {
+        target.kernel = Some(kernel);
     }
 }
 
@@ -307,6 +313,10 @@ pub(crate) fn reduce(
                 },
                 Command::GpuStock(enabled) => Preferences {
                     gpu_stock_removal: Some(enabled),
+                    ..default()
+                },
+                Command::Kernel(kernel) => Preferences {
+                    kernel: Some(kernel),
                     ..default()
                 },
                 Command::Retry => Preferences::default(),

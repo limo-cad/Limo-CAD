@@ -72,6 +72,42 @@ pub(crate) enum Locale {
     De,
 }
 
+/// The kernel that builds the solids. It is taken up once, when the
+/// application starts, so a saved change waits for the next start: see
+/// [`choose_saved_kernel`].
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum KernelPreference {
+    /// Open CASCADE.
+    #[default]
+    Occt,
+    /// Limo CAD's own kernel, which is still experimental.
+    Limo,
+}
+
+impl KernelPreference {
+    /// The kernel this process builds its solids on, whatever is saved for
+    /// the next start.
+    pub(crate) fn running() -> Self {
+        if limo_cad_occt::limo_kernel_selected() {
+            Self::Limo
+        } else {
+            Self::Occt
+        }
+    }
+}
+
+/// Hand the saved choice of kernel to the engine. Call it once, before the
+/// first document: a document keeps the kernel it was opened on. Preferences
+/// that cannot be read leave Open CASCADE in place, and Settings reports
+/// them when it opens. `LIMO_CAD_KERNEL` still decides when it names a
+/// kernel.
+pub(crate) fn choose_saved_kernel(store: Result<Store, String>) -> KernelPreference {
+    let saved = store.map_or(KernelPreference::default(), |store| store.kernel());
+    limo_cad_occt::choose_limo_kernel(saved == KernelPreference::Limo);
+    saved
+}
+
 /// Only persisted, explicit choices. None also means "leave unchanged" in a
 /// patch; Reset is an explicit System/default-speed choice, not field deletion.
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
@@ -87,6 +123,8 @@ pub(crate) struct Preferences {
     pub ui_scale: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub gpu_stock_removal: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kernel: Option<KernelPreference>,
 }
 
 impl Preferences {
@@ -97,6 +135,7 @@ impl Preferences {
             six_dof_speed: self.six_dof_speed.unwrap_or(DEFAULT_SIX_DOF_SPEED),
             ui_scale: self.ui_scale.map(snap_ui_scale).unwrap_or(DEFAULT_UI_SCALE),
             gpu_stock_removal: self.gpu_stock_removal.unwrap_or(true),
+            kernel: self.kernel.unwrap_or_default(),
         }
     }
 
@@ -122,6 +161,9 @@ impl Preferences {
         if patch.ui_scale.is_some() {
             self.ui_scale = patch.ui_scale;
         }
+        if patch.kernel.is_some() {
+            self.kernel = patch.kernel;
+        }
     }
 }
 
@@ -132,6 +174,9 @@ pub(crate) struct Effective {
     pub six_dof_speed: f64,
     pub ui_scale: f64,
     pub gpu_stock_removal: bool,
+    /// The saved choice, which is not always the kernel that is running:
+    /// see [`KernelPreference::running`].
+    pub kernel: KernelPreference,
 }
 
 pub(crate) fn snap_ui_scale(value: f64) -> f64 {
@@ -185,6 +230,8 @@ struct Stored {
     ui_scale: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     gpu_stock_removal: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    kernel: Option<KernelPreference>,
     #[serde(flatten)]
     extra: BTreeMap<String, serde_json::Value>,
 }
@@ -198,6 +245,7 @@ impl Default for Stored {
             six_dof_speed: None,
             ui_scale: None,
             gpu_stock_removal: None,
+            kernel: None,
             extra: BTreeMap::new(),
         }
     }
@@ -211,6 +259,7 @@ impl Stored {
             six_dof_speed: self.six_dof_speed,
             ui_scale: self.ui_scale.map(snap_ui_scale),
             gpu_stock_removal: self.gpu_stock_removal,
+            kernel: self.kernel,
         }
     }
 
@@ -266,6 +315,15 @@ impl Store {
 
     pub(crate) fn patch(&self, patch: Preferences) -> Result<Preferences, String> {
         self.update(patch.normalized())
+    }
+
+    /// The saved choice of kernel: Open CASCADE when none is saved, and
+    /// when the preferences cannot be read.
+    pub(crate) fn kernel(&self) -> KernelPreference {
+        self.read()
+            .ok()
+            .and_then(|saved| saved.kernel)
+            .unwrap_or_default()
     }
 
     fn read_stored(&self) -> Result<Stored, String> {
@@ -330,6 +388,7 @@ impl Store {
         stored.six_dof_speed = after.six_dof_speed;
         stored.ui_scale = after.ui_scale;
         stored.gpu_stock_removal = after.gpu_stock_removal;
+        stored.kernel = after.kernel;
         stored.validate()?;
         let bytes = serde_json::to_vec_pretty(&stored)
             .map_err(|error| format!("Cannot serialize application preferences: {error}"))?;

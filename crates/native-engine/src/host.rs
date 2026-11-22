@@ -193,6 +193,7 @@ pub struct ResolvedDrawingProjection {
 
 mod drawing_snapshot;
 mod finish_deletion;
+mod named_deletion;
 #[path = "sketch_history.rs"]
 mod sketch_history;
 pub use drawing_snapshot::{
@@ -966,6 +967,9 @@ impl NativeEngineHost {
     }
 
     pub fn solid_delete_feature(&self, payload: &str) -> String {
+        if self.kernel_names_survive_edits() {
+            return self.delete_by_name(payload);
+        }
         if let Some(result) = self.delete_finish_with_survivor_proof(payload) {
             return result;
         }
@@ -1551,6 +1555,12 @@ impl NativeEngineHost {
             &verified,
         ) {
             Ok(update) => {
+                // Where the edges of every fillet and chamfer are now, and
+                // the faces of every shell and thread, and what this
+                // kernel calls them: a project finished on the other
+                // kernel has just been found by its marks.
+                let found = inner.kernel.feature_keys();
+                inner.manager.note_feature_keys(&found);
                 inner.sketch_history_view = None;
                 inner.geometry_revision = inner.geometry_revision.wrapping_add(1);
                 inner.record_geometry_commit(&session_id);

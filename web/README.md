@@ -14,5 +14,10 @@ file/storage/dialog services and a geometry-service connection. The planned firs
 host offloads geometry to native Rust/OCCT through the shared native-engine host.
 An optional in-browser kernel requires an OCCT WASM port; that port is separate
 from the native-service approach. Neither complete browser path is shipped yet.
+
+The [Limo kernel](https://github.com/limo-cad/limo-kernel) needs no port: it is
+plain Rust and already runs in a browser for the features it covers. `./demo.sh`
+in its repository builds a self-contained page that models its sample parts
+live. It is not wired into this engine facade yet.
 The native MCP and inbox/heartbeat bridge remain Rust-owned desktop services and
 do not load frontend assets.

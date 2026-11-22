@@ -50,6 +50,29 @@ class Kernel {
   std::unique_ptr<Kernel> drawing_snapshot(const rust::Vec<std::uint64_t>& body_ids) const;
   rust::Vec<FfiBodyGeneration> body_generations() const;
   rust::Vec<std::uint64_t> planar_face_keys() const;
+  // Points to know edges of a body by: five to an edge, none of them an
+  // end, for each edge by its place in the body's list of edges.
+  rust::Vec<double> edge_marks(std::uint64_t body_id,
+                               const rust::Vec<std::uint32_t>& indices) const;
+  // For each point (x, y, z in a row) the edges of a body that pass within
+  // `reach` of it: how many, then which.
+  rust::Vec<std::uint32_t> edges_through(std::uint64_t body_id,
+                                         const rust::Vec<double>& points,
+                                         double reach) const;
+  // Points to know faces of a body by: five to a face, each well inside
+  // its rim, for each face by its place in the body's list of faces.
+  // Nothing at all when one of the faces has no inside to speak of.
+  rust::Vec<double> face_marks(std::uint64_t body_id,
+                               const rust::Vec<std::uint32_t>& indices) const;
+  // For each point (x, y, z in a row) the faces of a body that it lies on,
+  // to within `reach`: how many, then which.
+  rust::Vec<std::uint32_t> faces_through(std::uint64_t body_id,
+                                         const rust::Vec<double>& points,
+                                         double reach) const;
+  // What a body holds, integrated until twelve digits stand. The measure
+  // tool integrates once, which is quicker and is out in the seventh digit
+  // on a body with spline faces.
+  double weighed(std::uint64_t body_id) const;
   FfiMesh mesh(std::uint64_t body_id) const;
   FfiSectionGeometry section_geometry(std::uint64_t body_id,
                                      const FfiSectionOptions& options) const;

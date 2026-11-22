@@ -280,6 +280,21 @@ mod ffi {
         ) -> Result<UniquePtr<Kernel>>;
         fn body_generations(self: &Kernel) -> Result<Vec<FfiBodyGeneration>>;
         fn planar_face_keys(self: &Kernel) -> Result<Vec<u64>>;
+        fn edge_marks(self: &Kernel, body_id: u64, indices: &Vec<u32>) -> Result<Vec<f64>>;
+        fn edges_through(
+            self: &Kernel,
+            body_id: u64,
+            points: &Vec<f64>,
+            reach: f64,
+        ) -> Result<Vec<u32>>;
+        fn face_marks(self: &Kernel, body_id: u64, indices: &Vec<u32>) -> Result<Vec<f64>>;
+        fn weighed(self: &Kernel, body_id: u64) -> Result<f64>;
+        fn faces_through(
+            self: &Kernel,
+            body_id: u64,
+            points: &Vec<f64>,
+            reach: f64,
+        ) -> Result<Vec<u32>>;
         fn mesh(self: &Kernel, body_id: u64) -> Result<FfiMesh>;
         fn section_geometry(
             self: &Kernel,
@@ -320,10 +335,17 @@ unsafe impl Send for ffi::Kernel {}
 
 pub struct OcctKernel {
     inner: UniquePtr<ffi::Kernel>,
+    /// Limo CAD's own kernel, when it is the one selected: see
+    /// [`limo_kernel_selected`]. It then evaluates every recompute; `inner`
+    /// stays empty.
+    limo: Option<Box<limo_cad_kernel_session::Kernel>>,
     geometry_owner: u64,
     /// Only a fully successful replay may seed the next append. The jobs
     /// include all resolved geometry inputs, not just feature IDs/revisions.
     successful_jobs: Option<Vec<KernelJobDto>>,
+    /// What each applied job made of the edges or faces it was given, for
+    /// the jobs that are given any: see [`OcctKernel::feature_keys`].
+    key_reports: Vec<Option<limo_cad_solid::FeatureKeysDto>>,
     support_cache: BTreeMap<(usize, limo_cad_core::FaceId), bool>,
     /// Exact projection is independent of paper styling and export format.
     /// Full requests include authoritative occurrence poses and section intent.
@@ -351,6 +373,9 @@ impl DetachedMeasurementKernel {
         selections: &[crate::measurement::ResolvedMeasurementSelection],
     ) -> Result<crate::measurement::MeasurementReport, OcctError> {
         use crate::measurement::{MeasurementProperties, MeasurementReport};
+        if let Some(limo) = &self.0.limo {
+            return limo_measure(limo, selections);
+        }
         let selections = selections
             .iter()
             .map(|s| ffi::FfiMeasurementSelection {
@@ -469,7 +494,83 @@ impl std::fmt::Debug for OcctKernel {
     }
 }
 
+/// What the application chose for itself: see [`choose_limo_kernel`].
+static LIMO_KERNEL_CHOSEN: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+/// The modelling kernel is chosen per process. `LIMO_CAD_KERNEL` decides
+/// when it names one: `limo` selects Limo CAD's own analytic kernel, anything
+/// else Open CASCADE. When it names none the application's own choice
+/// stands, and that is Open CASCADE unless [`choose_limo_kernel`] said
+/// otherwise.
+pub fn limo_kernel_selected() -> bool {
+    kernel_named_in_environment().unwrap_or_else(|| LIMO_KERNEL_CHOSEN.load(Ordering::Relaxed))
+}
+
+/// What `LIMO_CAD_KERNEL` says, if it says anything: true for the Limo
+/// kernel. A variable that is set but empty says nothing.
+pub fn kernel_named_in_environment() -> Option<bool> {
+    let named = std::env::var_os("LIMO_CAD_KERNEL").filter(|value| !value.is_empty())?;
+    Some(named.eq_ignore_ascii_case("limo"))
+}
+
+/// The application's own choice of kernel, for a process whose environment
+/// names none. It is made once, before the first kernel: a document keeps
+/// the kernel it was opened on, and the kernels a document makes on the side
+/// to try a change out have to be of the same kind as its own.
+pub fn choose_limo_kernel(limo: bool) {
+    LIMO_KERNEL_CHOSEN.store(limo, Ordering::Relaxed);
+}
+
+/// Opt-in kernel benchmarking: `LIMO_CAD_KERNEL_TIMING=<file>` appends one
+/// line per recompute. Unset in normal use.
+fn kernel_timing_log() -> Option<&'static std::path::Path> {
+    static LOG: std::sync::OnceLock<Option<std::path::PathBuf>> = std::sync::OnceLock::new();
+    LOG.get_or_init(|| {
+        std::env::var_os("LIMO_CAD_KERNEL_TIMING")
+            .filter(|value| !value.is_empty())
+            .map(std::path::PathBuf::from)
+    })
+    .as_deref()
+}
+
+/// Opt-in proof of the kernels against each other: `LIMO_CAD_KERNEL_WEIGH=
+/// <file>`. A recompute that finds that file there and empty writes into
+/// it what every body holds, a line to a body: its number and its volume
+/// as [`OcctKernel::weigh`] gives it. Beside it, as `<file>.plan.json`, it
+/// leaves the plan that made those bodies, for anyone who wants to make
+/// them again a feature at a time. Whoever wants the bodies weighed empties
+/// the file and asks for a recompute. Unset in normal use.
+fn kernel_weigh_log() -> Option<&'static std::path::Path> {
+    static LOG: std::sync::OnceLock<Option<std::path::PathBuf>> = std::sync::OnceLock::new();
+    LOG.get_or_init(|| {
+        std::env::var_os("LIMO_CAD_KERNEL_WEIGH")
+            .filter(|value| !value.is_empty())
+            .map(std::path::PathBuf::from)
+    })
+    .as_deref()
+}
+
+const LIMO_SERVICE_UNAVAILABLE: &str =
+    "This operation still runs on Open CASCADE and is not available with the Limo kernel yet";
+
 impl OcctKernel {
+    /// True when Limo CAD's own kernel evaluates this document.
+    pub fn uses_limo_kernel(&self) -> bool {
+        self.limo.is_some()
+    }
+
+    /// Exact OCCT shapes behind the read-only services (drawings, sections,
+    /// interference, measurement, STEP).
+    fn shapes(&self) -> Result<&ffi::Kernel, OcctError> {
+        if self.limo.is_some() {
+            return Err(OcctError(LIMO_SERVICE_UNAVAILABLE.into()));
+        }
+        self.inner
+            .as_ref()
+            .ok_or_else(|| OcctError("OCCT kernel was released".into()))
+    }
+
     pub(crate) fn section_geometry(
         &self,
         request: &crate::section_review::SectionReviewRequest,
@@ -482,8 +583,11 @@ impl OcctKernel {
         retain_unintersected: bool,
     ) -> Result<crate::section_review::SectionGeometry, OcctError> {
         request.validate().map_err(OcctError)?;
+        if let Some(limo) = &self.limo {
+            return limo_section_geometry(limo, request, retain_unintersected);
+        }
         let raw = self
-            .inner
+            .shapes()?
             .section_geometry(
                 request.body_id.0,
                 &ffi::FfiSectionOptions {
@@ -517,6 +621,11 @@ impl OcctKernel {
         })
     }
     pub fn new() -> Result<Self, OcctError> {
+        Self::on(limo_kernel_selected())
+    }
+
+    /// A kernel of the kind asked for, whatever the process has selected.
+    fn on(limo: bool) -> Result<Self, OcctError> {
         static NEXT_GEOMETRY_OWNER: AtomicU64 = AtomicU64::new(1);
         let geometry_owner = NEXT_GEOMETRY_OWNER
             .try_update(Ordering::Relaxed, Ordering::Relaxed, |owner| {
@@ -529,8 +638,10 @@ impl OcctKernel {
         }
         Ok(Self {
             inner,
+            limo: limo.then(|| Box::new(limo_cad_kernel_session::Kernel::new())),
             geometry_owner,
             successful_jobs: None,
+            key_reports: Vec::new(),
             support_cache: BTreeMap::new(),
             projection_cache: Mutex::new(VecDeque::new()),
             #[cfg(test)]
@@ -552,11 +663,16 @@ impl OcctKernel {
         &self,
         ids: &[limo_cad_core::BodyId],
     ) -> Result<DetachedDrawingKernel, OcctError> {
-        let ids = ids.iter().map(|id| id.0).collect();
+        let ids: Vec<u64> = ids.iter().map(|id| id.0).collect();
+        if let Some(limo) = &self.limo {
+            // Bodies of the Limo kernel are plain shared values: a
+            // snapshot is another kernel holding the same ones.
+            let mut result = Self::new()?;
+            result.limo = Some(Box::new(limo.snapshot(&ids)));
+            return Ok(DetachedDrawingKernel(result));
+        }
         let inner = self
-            .inner
-            .as_ref()
-            .ok_or_else(|| OcctError("OCCT kernel was released".into()))?
+            .shapes()?
             .drawing_snapshot(&ids)
             .map_err(|error| OcctError(error.to_string()))?;
         let mut result = Self::new()?;
@@ -597,6 +713,13 @@ impl OcctKernel {
     }
 
     pub fn active_body_ids(&self) -> Result<Vec<limo_cad_core::BodyId>, OcctError> {
+        if let Some(limo) = &self.limo {
+            return Ok(limo
+                .body_ids()
+                .into_iter()
+                .map(limo_cad_core::BodyId)
+                .collect());
+        }
         let kernel = self
             .inner
             .as_ref()
@@ -616,6 +739,21 @@ impl OcctKernel {
     pub fn body_geometry_identities(
         &self,
     ) -> Result<BTreeMap<limo_cad_core::BodyId, crate::KernelBodyGeometryIdentity>, OcctError> {
+        if let Some(limo) = &self.limo {
+            return Ok(limo
+                .generations()
+                .into_iter()
+                .map(|(id, generation)| {
+                    (
+                        limo_cad_core::BodyId(id),
+                        crate::KernelBodyGeometryIdentity {
+                            kernel_owner: self.geometry_owner,
+                            generation,
+                        },
+                    )
+                })
+                .collect());
+        }
         let generations = self
             .inner
             .as_ref()
@@ -636,10 +774,41 @@ impl OcctKernel {
             .collect())
     }
 
+    /// What the last replay made of the edges of each fillet and chamfer,
+    /// and of the faces of each shell and external thread: every one of
+    /// them by the key this kernel knows it by and by its mark. A project
+    /// finished on the other kernel is found by its marks, and this says
+    /// what its edges and faces are called here.
+    pub fn feature_keys(&self) -> Vec<limo_cad_solid::FeatureKeysDto> {
+        match &self.limo {
+            Some(limo) => limo.feature_keys(),
+            None => self.key_reports.iter().flatten().cloned().collect(),
+        }
+    }
+
+    /// What a body holds, to twelve digits: for holding one kernel against
+    /// the other. Open CASCADE integrates until that many stand, which the
+    /// measure tool does not wait for; on a body with spline faces its one
+    /// pass is out in the seventh digit. The Limo kernel weighs flats,
+    /// cylinders, cones, balls and rings in closed form.
+    pub fn weigh(&self, body: limo_cad_core::BodyId) -> Result<f64, String> {
+        match &self.limo {
+            Some(limo) => limo
+                .body(body.0)
+                .map(|found| limo_cad_kernel::props::mass(found).volume)
+                .ok_or_else(|| "the body to weigh is missing".to_string()),
+            None => self.inner.weighed(body.0).map_err(|e| e.to_string()),
+        }
+    }
+
     /// Proofs belong only to this returned scene/transaction. Failed replay
     /// produces none; cached answers survive only an identical job prefix.
     pub fn completed_jobs_match(&self, plan: &RecomputePlanDto) -> bool {
-        plan.errors.is_empty() && self.successful_jobs.as_ref() == Some(&plan.jobs)
+        plan.errors.is_empty()
+            && self
+                .successful_jobs
+                .as_ref()
+                .is_some_and(|jobs| jobs.len() == plan.jobs.len() && same_prefix(jobs, &plan.jobs))
     }
 
     /// Bounded deletion proof: resolve the final finish at its original input,
@@ -661,6 +830,76 @@ impl OcctKernel {
             return Err(OcctError(
                 "Delete remap currently requires the final two solid jobs".into(),
             ));
+        }
+        if let Some(limo) = &self.limo {
+            // The Limo kernel names an edge after the faces it lies
+            // between, not after its place in a list. The finish that
+            // stays is replayed on the history without the deleted one
+            // and finds its edges by the names it already has; an edge
+            // the deleted finish made is gone, and the replay says so.
+            let mut consumer = jobs[at + 1].clone();
+            let consumer_id = consumer.feature_id();
+            let (target, keys) = match &consumer {
+                KernelJobDto::Fillet(j) => (j.target_body_id, j.edge_keys.clone()),
+                KernelJobDto::Chamfer(j) => (j.target_body_id, j.edge_keys.clone()),
+                _ => {
+                    return Err(OcctError(
+                        "Delete remap requires an edge finish consumer".into(),
+                    ))
+                }
+            };
+            let removed_target = match &jobs[at] {
+                KernelJobDto::Fillet(j) => Some(j.target_body_id),
+                KernelJobDto::Chamfer(j) => Some(j.target_body_id),
+                _ => None,
+            };
+            if removed_target != Some(target) {
+                return Err(OcctError(
+                    "Delete remap requires two consecutive finishes on one body".into(),
+                ));
+            }
+            let mut replay = limo_cad_kernel_session::Kernel::new();
+            replay.options = limo.options;
+            let mut next = jobs[..at].to_vec();
+            let failed = |scene: &KernelSceneDto| {
+                scene
+                    .errors
+                    .first()
+                    .map(|error| OcctError(format!("Feature {}: {}", consumer_id.0, error.message)))
+            };
+            let before = replay.recompute(&RecomputePlanDto {
+                transaction_id: 0,
+                jobs: next.clone(),
+                errors: vec![],
+            });
+            if let Some(error) = failed(&before) {
+                return Err(error);
+            }
+            let keys = replay.edge_names(target.0, &keys).map_err(|_| {
+                OcctError(format!(
+                    "Feature {}: Delete remap: consumed/generated/modified edge has no \
+                     unchanged prefix survivor; reselect support",
+                    consumer_id.0
+                ))
+            })?;
+            match &mut consumer {
+                KernelJobDto::Fillet(j) => j.edge_keys = keys.clone(),
+                KernelJobDto::Chamfer(j) => j.edge_keys = keys.clone(),
+                _ => unreachable!(),
+            }
+            next.push(consumer);
+            let after = replay.recompute(&RecomputePlanDto {
+                transaction_id: 0,
+                jobs: next.clone(),
+                errors: vec![],
+            });
+            if let Some(error) = failed(&after) {
+                return Err(error);
+            }
+            let mut branch = Self::new()?;
+            branch.limo = Some(Box::new(replay));
+            branch.successful_jobs = Some(next);
+            return Ok((branch, consumer_id, keys));
         }
         let mut branch = Self::new()?;
         for job in &jobs[..at] {
@@ -707,6 +946,80 @@ impl OcctKernel {
         plan: &RecomputePlanDto,
         queries: &[limo_cad_solid::HistorySupportQuery],
     ) -> Result<(KernelSceneDto, BTreeSet<limo_cad_core::FeatureId>), OcctError> {
+        let result = self.recompute_timed(plan, queries);
+        if let (Some(asked), Ok((scene, _))) = (kernel_weigh_log(), &result) {
+            let wanted = std::fs::metadata(asked).is_ok_and(|file| file.len() == 0);
+            if wanted && scene.errors.is_empty() {
+                let lines: String = scene
+                    .bodies
+                    .iter()
+                    .map(|body| match self.weigh(body.body_id) {
+                        Ok(held) => format!("{}\t{held:.17e}\n", body.body_id.0),
+                        Err(why) => format!("{}\t{why}\n", body.body_id.0),
+                    })
+                    .collect();
+                let _ = std::fs::write(asked, lines);
+                if let Ok(plan) = serde_json::to_vec(plan) {
+                    let mut beside = asked.as_os_str().to_owned();
+                    beside.push(".plan.json");
+                    let _ = std::fs::write(beside, plan);
+                }
+            }
+        }
+        result
+    }
+
+    fn recompute_timed(
+        &mut self,
+        plan: &RecomputePlanDto,
+        queries: &[limo_cad_solid::HistorySupportQuery],
+    ) -> Result<(KernelSceneDto, BTreeSet<limo_cad_core::FeatureId>), OcctError> {
+        let Some(log) = kernel_timing_log() else {
+            return self.recompute_untimed(plan, queries);
+        };
+        let started = std::time::Instant::now();
+        let result = self.recompute_untimed(plan, queries);
+        let elapsed = started.elapsed().as_nanos();
+        // One line per recompute: kernel, jobs, feature errors, nanoseconds.
+        if let Ok(mut file) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(log)
+        {
+            use std::io::Write as _;
+            let errors = result
+                .as_ref()
+                .map_or(usize::MAX, |(scene, _)| scene.errors.len());
+            let _ = writeln!(
+                file,
+                "{}\t{}\t{errors}\t{elapsed}",
+                if self.limo.is_some() { "limo" } else { "occt" },
+                plan.jobs.len(),
+            );
+        }
+        result
+    }
+
+    fn recompute_untimed(
+        &mut self,
+        plan: &RecomputePlanDto,
+        queries: &[limo_cad_solid::HistorySupportQuery],
+    ) -> Result<(KernelSceneDto, BTreeSet<limo_cad_core::FeatureId>), OcctError> {
+        if let Some(limo) = &mut self.limo {
+            // A project older than marks is carried over by the kernel that
+            // wrote it: see `marked_by_the_reference`.
+            let marked = marked_by_the_reference(plan);
+            let (scene, verified) =
+                limo.recompute_with_supports(marked.as_ref().unwrap_or(plan), queries);
+            self.projection_cache.get_mut().unwrap().clear();
+            self.support_cache.clear();
+            self.successful_jobs = scene.errors.is_empty().then(|| plan.jobs.clone());
+            #[cfg(test)]
+            {
+                self.last_applied_jobs = limo.last_applied_jobs;
+            }
+            return Ok((scene, verified));
+        }
         let queries = queries
             .iter()
             .filter_map(|query| {
@@ -717,12 +1030,19 @@ impl OcctKernel {
             })
             .collect::<Vec<_>>();
         let previous = self.successful_jobs.take();
-        if !plan.errors.is_empty() || previous.as_ref() != Some(&plan.jobs) {
+        let unchanged = previous
+            .as_ref()
+            .is_some_and(|jobs| jobs.len() == plan.jobs.len() && same_prefix(jobs, &plan.jobs));
+        if !plan.errors.is_empty() || !unchanged {
             self.projection_cache.get_mut().unwrap().clear();
         }
         let mut reused = previous
             .as_ref()
-            .filter(|jobs| plan.errors.is_empty() && plan.jobs.starts_with(jobs))
+            .filter(|jobs| {
+                plan.errors.is_empty()
+                    && jobs.len() <= plan.jobs.len()
+                    && same_prefix(jobs, &plan.jobs)
+            })
             .map_or(0, Vec::len);
         if queries.iter().any(|(index, query)| {
             *index < reused && !self.support_cache.contains_key(&(*index, query.face_id))
@@ -746,7 +1066,22 @@ impl OcctKernel {
             self.last_applied_jobs = 0;
         }
         let mut errors = plan.errors.clone();
+        self.key_reports.truncate(reused);
         for (index, job) in plan.jobs.iter().enumerate().skip(reused) {
+            // A feature whose edges or faces the Limo kernel named is
+            // found by their marks, and goes on under the counts this
+            // kernel knows them by.
+            let (job, report) = match by_count(&pinned, job) {
+                Ok(found) => found,
+                Err(error) => {
+                    errors.push(KernelFeatureErrorDto {
+                        feature_id: job.feature_id(),
+                        message: error.to_string(),
+                    });
+                    break;
+                }
+            };
+            let job = job.as_ref();
             let ffi_job = match to_ffi_job(job) {
                 Ok(job) => job,
                 Err(error) => {
@@ -768,6 +1103,7 @@ impl OcctKernel {
                 });
                 break;
             }
+            self.key_reports.push(report);
             if queries.iter().any(|(at, _)| *at == index) {
                 let keys = pinned
                     .as_ref()
@@ -828,6 +1164,9 @@ impl OcctKernel {
             serde_json::to_string(&request.thread_metadata).map_err(|error| {
                 OcctError(format!("could not serialize STEP thread metadata: {error}"))
             })?;
+        if let Some(limo) = &self.limo {
+            return limo_export_step(limo, request, &thread_metadata_json);
+        }
         let mut thread_metadata_hex = String::with_capacity(thread_metadata_json.len() * 2);
         for byte in thread_metadata_json.bytes() {
             write!(&mut thread_metadata_hex, "{byte:02x}")
@@ -881,9 +1220,7 @@ impl OcctKernel {
                 }
             }
         }
-        self.inner
-            .as_ref()
-            .ok_or_else(|| OcctError("OCCT kernel was released".to_string()))?
+        self.shapes()?
             .export_step(&body_ids, &thread_metadata_hex, &occurrence_placements_hex)
             .map_err(|error| OcctError(error.to_string()))
     }
@@ -947,6 +1284,9 @@ impl OcctKernel {
         {
             return Ok(projection.clone());
         }
+        if let Some(limo) = &self.limo {
+            return limo_drawing_projection(limo, request);
+        }
         // These buffers belong to the native HLR call, not cache lookup.
         // A retained projection must not copy every occurrence pose and body
         // ID merely to discard those buffers on the read-only hit path.
@@ -965,9 +1305,7 @@ impl OcctKernel {
         self.projection_calculations
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let raw = self
-            .inner
-            .as_ref()
-            .ok_or_else(|| OcctError("OCCT kernel was released".to_string()))?
+            .shapes()?
             .drawing_projection(
                 &body_ids,
                 &occurrences,
@@ -1038,10 +1376,11 @@ impl OcctKernel {
         a: PlacedBodyQueryDto,
         b: PlacedBodyQueryDto,
     ) -> Result<ExactInterferenceResultDto, OcctError> {
+        if let Some(limo) = &self.limo {
+            return limo_exact_interference(limo, &a, &b);
+        }
         let raw = self
-            .inner
-            .as_ref()
-            .ok_or_else(|| OcctError("OCCT kernel was released".to_string()))?
+            .shapes()?
             .exact_interference(
                 &ffi::FfiBodyPlacement {
                     body_id: a.body_id.0,
@@ -1076,10 +1415,10 @@ impl OcctKernel {
         &self,
         request: &MeshExportRequest,
     ) -> Result<Vec<TriangleMesh>, OcctError> {
-        let kernel = self
-            .inner
-            .as_ref()
-            .ok_or_else(|| OcctError("OCCT kernel was released".to_string()))?;
+        if let Some(limo) = &self.limo {
+            return limo_tessellate_bodies(limo, request);
+        }
+        let kernel = self.shapes()?;
         let available = kernel.body_ids();
         if available.is_empty() {
             return Err(OcctError(
@@ -1140,6 +1479,578 @@ impl OcctKernel {
         limo_cad_export::ExportFacade::export_3mf(&meshes, appearances, request)
             .map_err(|error| OcctError(error.to_string()))
     }
+}
+
+/// The line drawing of a view, made by the Limo kernel: edges and outlines
+/// sorted into what the eye sees and what is behind something, and the
+/// outlines of the material a cutting plane goes through.
+/// The Limo kernel's exact bodies as an AP242 STEP file: the selected
+/// bodies as they are, or one placed copy for every occurrence.
+fn limo_export_step(
+    limo: &limo_cad_kernel_session::Kernel,
+    request: &StepExportRequest,
+    thread_metadata_json: &str,
+) -> Result<Vec<u8>, OcctError> {
+    use limo_cad_kernel::{v3, Body, Xform, V3};
+    let fail = |message: &str| OcctError(message.to_string());
+    if limo.body_ids().is_empty() {
+        return Err(fail("there are no active bodies to export"));
+    }
+    let mut parts: Vec<(String, Body)> = Vec::new();
+    if !request.occurrences.is_empty() {
+        for occurrence in &request.occurrences {
+            let body = limo
+                .body(occurrence.body_id.0)
+                .ok_or_else(|| fail("assembly STEP occurrence references a missing body"))?;
+            if occurrence
+                .translation
+                .iter()
+                .chain(occurrence.rotation.iter())
+                .any(|value| !value.is_finite())
+            {
+                return Err(OcctError(format!(
+                    "STEP occurrence {} has a non-finite placement",
+                    occurrence.occurrence_id
+                )));
+            }
+            let [x, y, z] = occurrence.translation;
+            let pose =
+                Xform::rigid(v3(x, y, z), occurrence.rotation, V3::ZERO).ok_or_else(|| {
+                    OcctError(format!(
+                        "STEP occurrence {} has a degenerate rotation",
+                        occurrence.occurrence_id
+                    ))
+                })?;
+            let name = if occurrence.name.is_empty() {
+                format!("Body{}", occurrence.body_id.0)
+            } else {
+                occurrence.name.clone()
+            };
+            parts.push((name, body.transformed(&pose)));
+        }
+    } else {
+        let ids: Vec<u64> = if request.body_ids.is_empty() {
+            limo.body_ids()
+        } else {
+            request.body_ids.iter().map(|id| id.0).collect()
+        };
+        for id in ids {
+            let body = limo
+                .body(id)
+                .ok_or_else(|| fail("selected STEP export body is missing"))?;
+            parts.push((format!("Body{id}"), body.clone()));
+        }
+    }
+    // Thread callouts travel in the header, as with the reference kernel.
+    let mut description = String::from("Limo CAD AP242");
+    if thread_metadata_json.len() > 2 {
+        description.push_str("; LIMO_CAD_THREAD_METADATA_V1_HEX=");
+        for byte in thread_metadata_json.bytes() {
+            write!(&mut description, "{byte:02x}")
+                .map_err(|error| OcctError(format!("could not encode STEP metadata: {error}")))?;
+        }
+    }
+    let borrowed: Vec<(String, &Body)> = parts.iter().map(|(n, b)| (n.clone(), b)).collect();
+    Ok(limo_cad_kernel::step::write(&borrowed, &description).into_bytes())
+}
+
+/// Read-only measurements of one or two selections of the Limo kernel's
+/// bodies: what each is, and how they stand to each other.
+fn limo_measure(
+    limo: &limo_cad_kernel_session::Kernel,
+    selections: &[crate::measurement::ResolvedMeasurementSelection],
+) -> Result<crate::measurement::MeasurementReport, OcctError> {
+    use crate::measurement::{MeasurementProperties, MeasurementReport};
+    use limo_cad_kernel::near::{gap, Part};
+    use limo_cad_kernel::{props, v3, Body, CurveKind, SurfKind, Xform, V3};
+    let fail = |message: &str| OcctError(message.to_string());
+    if selections.is_empty() || selections.len() > 2 {
+        return Err(fail("Measure requires one or two selections"));
+    }
+    /// What a selection points along, for angles: a straight edge, the
+    /// normal of a flat face, the axis of a whole circle or of an arc.
+    #[derive(Clone, Copy, PartialEq)]
+    enum Along {
+        Nothing,
+        Line,
+        Plane,
+        Circle,
+        Arc,
+    }
+    struct Seen {
+        body: Body,
+        kind: u8,
+        index: u32,
+        point: V3,
+        along: Along,
+        direction: V3,
+        centre: V3,
+        radius: f64,
+    }
+    let mut seen: Vec<Seen> = Vec::new();
+    let mut properties: Vec<MeasurementProperties> = Vec::new();
+    for selection in selections {
+        let source = limo
+            .body(selection.body_id.0)
+            .ok_or_else(|| fail("Measurement body is missing"))?;
+        let [x, y, z] = selection.translation;
+        let pose = Xform::rigid(v3(x, y, z), selection.rotation, V3::ZERO)
+            .ok_or_else(|| fail("Measurement rotation is degenerate"))?;
+        let body = source.transformed(&pose);
+        let count = match selection.kind {
+            0 => 1,
+            1 => body.face_count(),
+            2..=5 => body.edge_count(),
+            _ => return Err(fail("Unknown measurement selection")),
+        };
+        if selection.index as usize >= count {
+            return Err(fail("Measurement topology is missing"));
+        }
+        let index = selection.index;
+        let mut found = MeasurementProperties::default();
+        let mut this = Seen {
+            kind: selection.kind,
+            index,
+            point: V3::ZERO,
+            along: Along::Nothing,
+            direction: V3::Z,
+            centre: V3::ZERO,
+            radius: 0.0,
+            body,
+        };
+        let body = &this.body;
+        match selection.kind {
+            0 => {
+                let mass = props::mass(body);
+                found.area = Some(mass.area);
+                found.volume = Some(mass.volume.abs());
+                let bounds = props::bounds(body);
+                if !bounds.is_empty() {
+                    found.size = Some((bounds.hi - bounds.lo).arr());
+                }
+            }
+            1 => {
+                found.area = Some(
+                    props::face_area(body, index)
+                        .ok_or_else(|| fail("The area of this face could not be measured"))?,
+                );
+                found.loop_length = Some(body.face_hes(index).map(|h| body.e_length(h >> 1)).sum());
+                let surface = body.f_surface(index);
+                match surface.kind {
+                    SurfKind::Plane => {
+                        this.along = Along::Plane;
+                        this.direction = surface.f.z;
+                        // A disc: the outer loop is one whole circle.
+                        let rings: Vec<u32> = body
+                            .face_loops(index)
+                            .filter_map(|l| {
+                                let mut hes = body.loop_hes(l);
+                                let (first, more) = (hes.next()?, hes.next());
+                                let e = first >> 1;
+                                (more.is_none()
+                                    && body.e_closed(e)
+                                    && body.e_curve_ref(e).kind == CurveKind::Circle)
+                                    .then_some(e)
+                            })
+                            .collect();
+                        let outer = rings.iter().copied().max_by(|a, b| {
+                            body.e_curve_ref(*a).r.total_cmp(&body.e_curve_ref(*b).r)
+                        });
+                        if let Some(e) = outer {
+                            let circle = body.e_curve_ref(e);
+                            let within = body.face_hes(index).all(|h| {
+                                h >> 1 == e
+                                    || body.e_mid(h >> 1).dist(circle.f.o) <= circle.r + 1.0e-9
+                            });
+                            if within {
+                                found.center = Some(circle.f.o.arr());
+                                found.radius = Some(circle.r);
+                                this.centre = circle.f.o;
+                                this.radius = circle.r;
+                            }
+                        }
+                    }
+                    SurfKind::Cylinder => found.radius = Some(surface.r),
+                    _ => {}
+                }
+            }
+            2 => {
+                found.length = Some(body.e_length(index));
+                let curve = body.e_curve_ref(index);
+                match curve.kind {
+                    CurveKind::Line => {
+                        this.along = Along::Line;
+                        this.direction = curve.deriv(0.0).unit();
+                    }
+                    CurveKind::Circle => {
+                        found.radius = Some(curve.r);
+                        found.center = Some(curve.f.o.arr());
+                        this.centre = curve.f.o;
+                        this.radius = curve.r;
+                        this.along = if body.e_closed(index) {
+                            Along::Circle
+                        } else {
+                            Along::Arc
+                        };
+                        this.direction = curve.f.z;
+                    }
+                    _ => {}
+                }
+            }
+            _ => {
+                let curve = body.e_curve_ref(index);
+                let [t0, t1] = body.e_t[index as usize];
+                this.point = match selection.kind {
+                    3 => curve.point(t0),
+                    4 => curve.point(t1),
+                    _ => {
+                        if curve.kind != CurveKind::Circle {
+                            return Err(fail(
+                                "Select an analytic circular edge to measure its center",
+                            ));
+                        }
+                        curve.f.o
+                    }
+                };
+                found.position = Some(this.point.arr());
+            }
+        }
+        properties.push(found);
+        seen.push(this);
+    }
+    let mut report = MeasurementReport {
+        selections: properties,
+        ..MeasurementReport::default()
+    };
+    if let [a, b] = seen.as_slice() {
+        fn part(seen: &Seen) -> Part<'_> {
+            match seen.kind {
+                0 => Part::body(&seen.body),
+                1 => Part::face(&seen.body, seen.index),
+                2 => Part::edge(&seen.body, seen.index),
+                _ => Part::point(&seen.body, seen.point),
+            }
+        }
+        let (pa, pb) = (part(a), part(b));
+        let mut found = gap(&pa, &pb)
+            .ok_or_else(|| fail("There is nothing to measure between these selections"))?;
+        // Something wholly inside a solid is no distance from it.
+        if found.distance > 1.0e-9 {
+            if pa.holds(found.b) {
+                found = limo_cad_kernel::near::Gap {
+                    distance: 0.0,
+                    a: found.b,
+                    b: found.b,
+                };
+            } else if pb.holds(found.a) {
+                found = limo_cad_kernel::near::Gap {
+                    distance: 0.0,
+                    a: found.a,
+                    b: found.a,
+                };
+            }
+        }
+        report.distance = Some(if found.distance <= 1.0e-9 {
+            0.0
+        } else {
+            found.distance
+        });
+        report.closest_points = Some([found.a.arr(), found.b.arr()]);
+        let dot = a.direction.dot(b.direction).abs().clamp(0.0, 1.0);
+        let straight = |along: Along| matches!(along, Along::Line | Along::Plane);
+        if straight(a.along) && straight(b.along) {
+            // Two lines or two planes by the angle between them, a line and
+            // a plane by the angle the line rises from the plane.
+            let angle = if a.along == b.along {
+                dot.acos()
+            } else {
+                dot.asin()
+            };
+            report.angle_degrees = Some(angle.to_degrees());
+        }
+        let round = |along: Along| matches!(along, Along::Circle | Along::Arc);
+        if round(a.along) && round(b.along) {
+            let delta = b.centre - a.centre;
+            report.center_distance = Some(delta.len());
+            report.center_points = Some([a.centre.arr(), b.centre.arr()]);
+            if a.along == Along::Circle && b.along == Along::Circle && dot > 1.0 - 1.0e-10 {
+                // Two whole circles about parallel axes: across both, on
+                // the far sides.
+                let height = delta.dot(a.direction);
+                let radial = (delta.len2() - height * height).max(0.0).sqrt();
+                report.maximum_distance = Some((radial + a.radius + b.radius).hypot(height));
+                let mut across = delta - a.direction * height;
+                if across.len() < 1.0e-12 {
+                    across = a.direction.cross(if a.direction.x.abs() < 0.9 {
+                        V3::X
+                    } else {
+                        V3::Y
+                    });
+                }
+                let across = across.unit();
+                report.maximum_points = Some([
+                    (a.centre - across * a.radius).arr(),
+                    (b.centre + across * b.radius).arr(),
+                ]);
+            }
+        }
+    }
+    Ok(report)
+}
+
+/// Clearance and shared volume of two placed bodies of the Limo kernel.
+fn limo_exact_interference(
+    limo: &limo_cad_kernel_session::Kernel,
+    a: &PlacedBodyQueryDto,
+    b: &PlacedBodyQueryDto,
+) -> Result<ExactInterferenceResultDto, OcctError> {
+    use limo_cad_kernel::{v3, Xform, V3};
+    let placed = |query: &PlacedBodyQueryDto| {
+        let body = limo
+            .body(query.body_id.0)
+            .ok_or_else(|| OcctError("interference query references a missing body".to_string()))?;
+        let [x, y, z] = query.translation;
+        let pose = Xform::rigid(v3(x, y, z), query.rotation, V3::ZERO).ok_or_else(|| {
+            OcctError("interference query transform is not a finite rigid transform".to_string())
+        })?;
+        Ok::<_, OcctError>(body.transformed(&pose))
+    };
+    let (a, b) = (placed(a)?, placed(b)?);
+    let found = limo_cad_kernel::near::clash(&a, &b).map_err(OcctError)?;
+    Ok(ExactInterferenceResultDto {
+        minimum_clearance_mm: found.clearance,
+        overlap_volume_mm3: found.overlap,
+        closest_point_a: found.a.arr(),
+        closest_point_b: found.b.arr(),
+    })
+}
+
+fn limo_drawing_projection(
+    limo: &limo_cad_kernel_session::Kernel,
+    request: &DrawingProjectionRequest,
+) -> Result<DrawingProjectionDto, OcctError> {
+    use limo_cad_kernel::project::{cut, draw, DrawOptions, View};
+    use limo_cad_kernel::{v3, Body, Xform, V3};
+    let vector = |a: [f64; 3]| v3(a[0], a[1], a[2]);
+    let view = View::new(vector(request.direction), vector(request.up))
+        .ok_or_else(|| OcctError("drawing projection direction and up are parallel".to_string()))?;
+    let mut bodies: Vec<Body> = Vec::new();
+    if request.scope == limo_cad_sketch::DrawingViewScope::Assembly {
+        for pose in request.resolved_occurrences.iter().flatten() {
+            let body = limo.body(pose.body_id.0).ok_or_else(|| {
+                OcctError("drawing occurrence references a missing body".to_string())
+            })?;
+            let placed = Xform::rigid(vector(pose.translation), pose.rotation, V3::ZERO)
+                .ok_or_else(|| {
+                    OcctError(
+                        "drawing occurrence placement is not a finite rigid transform".to_string(),
+                    )
+                })?;
+            bodies.push(body.transformed(&placed));
+        }
+    } else {
+        let mut ids: Vec<u64> = request.body_ids.iter().map(|id| id.0).collect();
+        if ids.is_empty() {
+            ids = limo.body_ids();
+        }
+        let mut seen = std::collections::BTreeSet::new();
+        for id in ids {
+            if seen.insert(id) {
+                bodies.push(
+                    limo.body(id)
+                        .ok_or_else(|| OcctError("selected drawing body is missing".to_string()))?
+                        .clone(),
+                );
+            }
+        }
+    }
+    if bodies.is_empty() {
+        return Err(OcctError(
+            "there are no active bodies to project".to_string(),
+        ));
+    }
+    let deflection = request.deflection.clamp(1.0e-4, 10.0);
+    let polyline = |points: Vec<limo_cad_kernel::V2>| DrawingPolylineDto {
+        points: points.into_iter().map(|p| [p.x, p.y]).collect(),
+    };
+    let mut section = Vec::new();
+    if let Some(plane) = &request.section_plane {
+        let mut kept = Vec::with_capacity(bodies.len());
+        for body in &bodies {
+            let result = cut(
+                body,
+                vector(plane.point),
+                vector(plane.normal),
+                plane.depth,
+                deflection,
+            )
+            .map_err(|error| {
+                OcctError(format!(
+                    "Drawing projection for bodies {:?}, section {:?}: {error}",
+                    request.body_ids, request.section_plane
+                ))
+            })?;
+            section.extend(
+                result
+                    .outlines
+                    .into_iter()
+                    .map(|line| polyline(line.into_iter().map(|p| view.flat(p)).collect())),
+            );
+            kept.extend(result.kept);
+        }
+        bodies = kept;
+    }
+    let shown: Vec<&Body> = bodies.iter().collect();
+    let drawing = draw(
+        &shown,
+        &view,
+        &DrawOptions {
+            hidden: request.include_hidden,
+            smooth_edges: request.include_tangent_edges,
+            deflection,
+        },
+    );
+    let visible: Vec<DrawingPolylineDto> = drawing.visible.into_iter().map(polyline).collect();
+    let hidden: Vec<DrawingPolylineDto> = drawing.hidden.into_iter().map(polyline).collect();
+    let mut bounds = [
+        f64::INFINITY,
+        f64::INFINITY,
+        f64::NEG_INFINITY,
+        f64::NEG_INFINITY,
+    ];
+    for point in visible
+        .iter()
+        .chain(hidden.iter())
+        .chain(section.iter())
+        .flat_map(|line| line.points.iter())
+    {
+        bounds[0] = bounds[0].min(point[0]);
+        bounds[1] = bounds[1].min(point[1]);
+        bounds[2] = bounds[2].max(point[0]);
+        bounds[3] = bounds[3].max(point[1]);
+    }
+    if !bounds.iter().all(|value| value.is_finite()) {
+        bounds = [0.0; 4];
+    }
+    Ok(DrawingProjectionDto {
+        topology_signatures: Default::default(),
+        visible,
+        hidden,
+        anchors: Vec::new(),
+        circles: Vec::new(),
+        section,
+        bounds,
+    })
+}
+
+/// A section through one body, made by the Limo kernel: the outlines of
+/// the material the plane goes through, and on request what is left of the
+/// body on the side that is kept.
+fn limo_section_geometry(
+    limo: &limo_cad_kernel_session::Kernel,
+    request: &crate::section_review::SectionReviewRequest,
+    retain_unintersected: bool,
+) -> Result<crate::section_review::SectionGeometry, OcctError> {
+    use crate::section_review::{SectionGeometry, SectionOutcome};
+    use limo_cad_kernel::project::cut;
+    use limo_cad_kernel::V3;
+    let body = limo
+        .body(request.body_id.0)
+        .ok_or_else(|| OcctError("Invalid body or section plane".to_string()))?;
+    let axes = [V3::X, V3::Y, V3::Z];
+    let axis = request.plane.axis();
+    let origin = axes[axis] * request.offset_mm;
+    // The outline of the material on the plane is the same whichever side
+    // is kept, so it is always taken from the same cut.
+    let result = cut(body, origin, axes[axis], None, request.deflection_mm).map_err(OcctError)?;
+    let right = if axis == 0 { V3::Y } else { V3::X };
+    let up = if axis == 2 { V3::Y } else { V3::Z };
+    let outcome = if !result.outlines.is_empty() {
+        SectionOutcome::MaterialSection
+    } else if result.touches {
+        SectionOutcome::BoundaryContact
+    } else {
+        SectionOutcome::NoIntersection
+    };
+    // A plane that only touches shows where it touches.
+    let lines = if outcome == SectionOutcome::MaterialSection {
+        &result.outlines
+    } else {
+        &result.contact
+    };
+    let section = lines
+        .iter()
+        .map(|line| DrawingPolylineDto {
+            points: line.iter().map(|p| [p.dot(right), p.dot(up)]).collect(),
+        })
+        .collect();
+    let wanted = request.include_cutaway
+        && (outcome == SectionOutcome::MaterialSection || retain_unintersected);
+    // What is cut away lies in front of the plane.
+    let kept = if !wanted {
+        None
+    } else if request.keep_positive {
+        cut(body, origin, -axes[axis], None, request.deflection_mm)
+            .map_err(OcctError)?
+            .kept
+    } else {
+        result.kept
+    };
+    let cutaway =
+        kept.map(|kept| limo_cad_kernel_session::body_dto(request.body_id.0, &kept, &limo.options));
+    Ok(SectionGeometry {
+        outcome,
+        section,
+        cutaway,
+    })
+}
+
+/// Export meshes straight from the Limo kernel's exact bodies.
+fn limo_tessellate_bodies(
+    limo: &limo_cad_kernel_session::Kernel,
+    request: &MeshExportRequest,
+) -> Result<Vec<TriangleMesh>, OcctError> {
+    let available = limo.body_ids();
+    if available.is_empty() {
+        return Err(OcctError(
+            "There are no active bodies to export.".to_string(),
+        ));
+    }
+    let selected: Vec<u64> = if request.body_ids.is_empty() {
+        available
+    } else {
+        let mut ids = request.body_ids.iter().map(|id| id.0).collect::<Vec<_>>();
+        ids.sort_unstable();
+        ids.dedup();
+        for body_id in &ids {
+            if !available.contains(body_id) {
+                return Err(OcctError(format!("Selected body {body_id} is not active.")));
+            }
+        }
+        ids
+    };
+    selected
+        .into_iter()
+        .map(|body_id| {
+            let mesh = limo
+                .tessellate(
+                    body_id,
+                    request.linear_deflection,
+                    request.angular_deflection,
+                )
+                .ok_or_else(|| OcctError(format!("Selected body {body_id} is not active.")))?;
+            Ok(TriangleMesh {
+                body_id: limo_cad_core::BodyId(body_id),
+                name: format!("Body{body_id}"),
+                positions: mesh
+                    .positions
+                    .iter()
+                    .flat_map(|point| [point.x, point.y, point.z])
+                    .collect(),
+                indices: mesh.indices,
+            })
+        })
+        .collect()
 }
 
 fn validate_projection_basis(direction: [f64; 3], up: [f64; 3]) -> Result<(), OcctError> {
@@ -1860,6 +2771,326 @@ fn decode_base64(value: &str) -> Result<Vec<u8>, OcctError> {
 
 // Resolve the entire selector set before entering C++. Dropping one malformed
 // key could otherwise refine a subset of the requested selection.
+/// How near a point of a mark has to be to an edge to be a point of it.
+const MARK_REACH: f64 = 1.0e-4;
+
+/// Whether `done` is what `asked` starts with, as work for the reference
+/// kernel: see [`KernelJobDto::same_work`]. It follows any key with a colon
+/// in it by itself, and reads the mark of any other.
+fn same_prefix(done: &[KernelJobDto], asked: &[KernelJobDto]) -> bool {
+    done.iter()
+        .zip(asked)
+        .all(|(a, b)| a.same_work(b, |key| key.contains(':')))
+}
+
+/// A job as this kernel can follow it, and what to tell the host of the
+/// edges or faces it was given.
+type ByCount<'j> = Result<
+    (
+        std::borrow::Cow<'j, KernelJobDto>,
+        Option<limo_cad_solid::FeatureKeysDto>,
+    ),
+    OcctError,
+>;
+
+/// See [`finish_by_count`] for the jobs that are given edges and
+/// [`faces_by_count`] for those that are given faces. Any other job is
+/// followed as it is.
+fn by_count<'j>(kernel: &ffi::Kernel, job: &'j KernelJobDto) -> ByCount<'j> {
+    match job {
+        KernelJobDto::Fillet(_) | KernelJobDto::Chamfer(_) => finish_by_count(kernel, job),
+        KernelJobDto::Shell(_) | KernelJobDto::ExternalThread(_) => faces_by_count(kernel, job),
+        _ => Ok((std::borrow::Cow::Borrowed(job), None)),
+    }
+}
+
+/// A shell or an external thread as this kernel can follow it, and what to
+/// tell the host of its faces.
+///
+/// This kernel knows a face by its place in the list of its body's faces.
+/// A key the Limo kernel wrote is a name instead, which says nothing here:
+/// the face is then whatever the points of its mark lie on, and the job
+/// goes on under the counts of what was found. That may be more than one
+/// face, where this kernel cuts in two what the other keeps whole.
+fn faces_by_count<'j>(kernel: &ffi::Kernel, job: &'j KernelJobDto) -> ByCount<'j> {
+    use limo_cad_solid::{FaceMarkDto, FeatureKeysDto, Point3Dto};
+    use std::borrow::Cow;
+    let (body, keys, marks): (_, &[String], &[FaceMarkDto]) = match job {
+        KernelJobDto::Shell(j) => (j.target_body_id, &j.face_keys, &j.face_marks),
+        KernelJobDto::ExternalThread(j) => (
+            j.target_body_id,
+            std::slice::from_ref(&j.face_key),
+            j.face_mark.as_slice(),
+        ),
+        _ => return Ok((Cow::Borrowed(job), None)),
+    };
+    let mut counted: Vec<String> = Vec::with_capacity(keys.len());
+    let mut foreign = false;
+    for (at, key) in keys.iter().enumerate() {
+        // Anything with a colon in it is this kernel's own to judge, a
+        // malformed key of its own included.
+        if key.contains(':') {
+            counted.push(key.clone());
+            continue;
+        }
+        foreign = true;
+        let mark = marks
+            .get(at)
+            .filter(|mark| marks.len() == keys.len() && !mark.points.is_empty())
+            .ok_or_else(|| {
+                OcctError(format!(
+                    "Face reference '{key}' was written by the other kernel and carries no mark to find it by; reselect the face on the feature input body"
+                ))
+            })?;
+        let points: Vec<f64> = mark.points.iter().flat_map(|p| [p.x, p.y, p.z]).collect();
+        let through = kernel
+            .faces_through(body.0, &points, MARK_REACH)
+            .map_err(|error| OcctError(error.to_string()))?;
+        let mut rest = through.as_slice();
+        while let Some((&many, tail)) = rest.split_first() {
+            let many = many as usize;
+            if many == 0 || tail.len() < many {
+                return Err(OcctError(
+                    "referenced face no longer exists where it was marked; reselect the face on the feature input body"
+                        .into(),
+                ));
+            }
+            for index in &tail[..many] {
+                let key = format!("face:{index}");
+                if !counted.contains(&key) {
+                    counted.push(key);
+                }
+            }
+            rest = &tail[many..];
+        }
+    }
+    // One cylinder, one face. Where the other kernel had one face and
+    // this one has several, which of them the thread was meant for is
+    // not something to guess.
+    if foreign && matches!(job, KernelJobDto::ExternalThread(_)) && counted.len() != 1 {
+        return Err(OcctError(
+            "the cylinder of this External Thread is more than one face on this kernel; reselect the face on the feature input body"
+                .into(),
+        ));
+    }
+    // Where each of them is now, for the way back. A face that is not
+    // there any more is for the job itself to say.
+    let report = topology_indices(&counted, "face")
+        .ok()
+        .and_then(|indices| kernel.face_marks(body.0, &indices).ok())
+        .filter(|flat| !counted.is_empty() && flat.len() == 15 * counted.len())
+        .map(|flat| FeatureKeysDto {
+            face_keys: counted.clone(),
+            face_marks: flat
+                .chunks(15)
+                .map(|face| FaceMarkDto {
+                    points: face
+                        .chunks(3)
+                        .map(|p| Point3Dto {
+                            x: p[0],
+                            y: p[1],
+                            z: p[2],
+                        })
+                        .collect(),
+                })
+                .collect(),
+            ..FeatureKeysDto::of(job.feature_id())
+        });
+    if !foreign {
+        return Ok((Cow::Borrowed(job), report));
+    }
+    let mut found = job.clone();
+    match &mut found {
+        KernelJobDto::Shell(j) => j.face_keys = counted,
+        KernelJobDto::ExternalThread(j) => {
+            j.face_key = counted.into_iter().next().unwrap_or_default();
+        }
+        _ => unreachable!(),
+    }
+    Ok((Cow::Owned(found), report))
+}
+
+/// A fillet or chamfer as this kernel can follow it, and what to tell the
+/// host of its edges.
+///
+/// This kernel knows an edge by its place in the list of its body's edges.
+/// A key the Limo kernel wrote is a name instead, which says nothing here:
+/// the edge is then whatever passes through the points of its mark, and
+/// the job goes on under the counts of what was found. That may be more
+/// than one edge, where this kernel cuts in two what the other keeps
+/// whole.
+fn finish_by_count<'j>(kernel: &ffi::Kernel, job: &'j KernelJobDto) -> ByCount<'j> {
+    use limo_cad_solid::{is_counted_edge_key, EdgeMarkDto, FeatureKeysDto, Point3Dto};
+    use std::borrow::Cow;
+    let (body, keys, marks) = match job {
+        KernelJobDto::Fillet(j) => (j.target_body_id, &j.edge_keys, &j.edge_marks),
+        KernelJobDto::Chamfer(j) => (j.target_body_id, &j.edge_keys, &j.edge_marks),
+        _ => return Ok((Cow::Borrowed(job), None)),
+    };
+    let mut counted: Vec<String> = Vec::with_capacity(keys.len());
+    let mut foreign = false;
+    for (at, key) in keys.iter().enumerate() {
+        // Anything with a colon in it is this kernel's own to judge, a
+        // malformed key of its own included.
+        if is_counted_edge_key(key) || key.contains(':') {
+            counted.push(key.clone());
+            continue;
+        }
+        foreign = true;
+        let mark = marks
+            .get(at)
+            .filter(|mark| marks.len() == keys.len() && !mark.points.is_empty())
+            .ok_or_else(|| {
+                OcctError(format!(
+                    "Edge reference '{key}' was written by the other kernel and carries no mark to find it by; reselect the edge on the feature input body"
+                ))
+            })?;
+        let points: Vec<f64> = mark.points.iter().flat_map(|p| [p.x, p.y, p.z]).collect();
+        let through = kernel
+            .edges_through(body.0, &points, MARK_REACH)
+            .map_err(|error| OcctError(error.to_string()))?;
+        let mut rest = through.as_slice();
+        while let Some((&many, tail)) = rest.split_first() {
+            let many = many as usize;
+            if many == 0 || tail.len() < many {
+                return Err(OcctError(
+                    "referenced edge no longer exists where it was marked; reselect the edge on the feature input body"
+                        .into(),
+                ));
+            }
+            for index in &tail[..many] {
+                let key = format!("edge:{index}");
+                if !counted.contains(&key) {
+                    counted.push(key);
+                }
+            }
+            rest = &tail[many..];
+        }
+    }
+    // Where each of them is now, for the way back. An edge that is not
+    // there any more is for the job itself to say.
+    let report = topology_indices(&counted, "edge")
+        .ok()
+        .and_then(|indices| kernel.edge_marks(body.0, &indices).ok())
+        .filter(|flat| flat.len() == 15 * counted.len())
+        .map(|flat| FeatureKeysDto {
+            edge_keys: counted.clone(),
+            edge_marks: flat
+                .chunks(15)
+                .map(|edge| EdgeMarkDto {
+                    points: edge
+                        .chunks(3)
+                        .map(|p| Point3Dto {
+                            x: p[0],
+                            y: p[1],
+                            z: p[2],
+                        })
+                        .collect(),
+                })
+                .collect(),
+            ..FeatureKeysDto::of(job.feature_id())
+        });
+    if !foreign {
+        return Ok((Cow::Borrowed(job), report));
+    }
+    let mut found = job.clone();
+    match &mut found {
+        KernelJobDto::Fillet(j) => j.edge_keys = counted,
+        KernelJobDto::Chamfer(j) => j.edge_keys = counted,
+        _ => unreachable!(),
+    }
+    Ok((Cow::Owned(found), report))
+}
+
+/// A project saved before there were marks names the edges of its fillets
+/// and chamfers, and the faces of its shells and external threads, by Open
+/// CASCADE's count and by nothing else. A count means nothing to the Limo
+/// kernel, which refuses it rather than round whatever edge, or open
+/// whatever face, stands at that count in its own list.
+///
+/// Open CASCADE is at hand, though, and it can read its own counts. For a
+/// plan with such a job it replays the history once and says where each of
+/// those edges and faces is; the plan comes back with that written in as
+/// the marks, and the Limo kernel finds them there. It then reports its own
+/// names for them and the host keeps those, so the reference is asked when
+/// such a project is first opened on the Limo kernel, and not again once
+/// the project has been saved from there.
+///
+/// `None` when no job needs it, and when the reference cannot replay the
+/// plan at all. A feature the reference could not reach stays unmarked,
+/// and is refused.
+fn marked_by_the_reference(plan: &RecomputePlanDto) -> Option<RecomputePlanDto> {
+    use limo_cad_solid::{is_counted_edge_key, is_counted_face_key, EdgeMarkDto, FaceMarkDto};
+    fn edges_ask(keys: &[String], marks: &[EdgeMarkDto]) -> bool {
+        keys.iter().enumerate().any(|(at, key)| {
+            is_counted_edge_key(key) && !(marks.len() == keys.len() && !marks[at].points.is_empty())
+        })
+    }
+    fn faces_ask(keys: &[String], marks: &[FaceMarkDto]) -> bool {
+        keys.iter().enumerate().any(|(at, key)| {
+            is_counted_face_key(key) && !(marks.len() == keys.len() && !marks[at].points.is_empty())
+        })
+    }
+    fn asks(job: &KernelJobDto) -> bool {
+        match job {
+            KernelJobDto::Fillet(j) => edges_ask(&j.edge_keys, &j.edge_marks),
+            KernelJobDto::Chamfer(j) => edges_ask(&j.edge_keys, &j.edge_marks),
+            KernelJobDto::Shell(j) => faces_ask(&j.face_keys, &j.face_marks),
+            KernelJobDto::ExternalThread(j) => {
+                faces_ask(std::slice::from_ref(&j.face_key), j.face_mark.as_slice())
+            }
+            _ => false,
+        }
+    }
+    // The reference need not go on past the last job that asks.
+    let last = plan.jobs.iter().rposition(asks)?;
+    let mut so_far = plan.clone();
+    so_far.jobs.truncate(last + 1);
+    let mut reference = OcctKernel::on(false).ok()?;
+    reference.recompute_untimed(&so_far, &[]).ok()?;
+    let found = reference.feature_keys();
+    let mut marked = plan.clone();
+    for job in marked.jobs.iter_mut().filter(|job| asks(job)) {
+        let feature = job.feature_id();
+        let Some(report) = found.iter().find(|report| report.feature_id == feature) else {
+            continue;
+        };
+        // Only what the reference found under the very keys the job has.
+        let edges = |keys: &[String]| {
+            (report.edge_keys == keys && report.edge_marks.len() == keys.len())
+                .then(|| report.edge_marks.clone())
+        };
+        let faces = |keys: &[String]| {
+            (report.face_keys == keys && report.face_marks.len() == keys.len())
+                .then(|| report.face_marks.clone())
+        };
+        match job {
+            KernelJobDto::Fillet(j) => {
+                if let Some(marks) = edges(&j.edge_keys) {
+                    j.edge_marks = marks;
+                }
+            }
+            KernelJobDto::Chamfer(j) => {
+                if let Some(marks) = edges(&j.edge_keys) {
+                    j.edge_marks = marks;
+                }
+            }
+            KernelJobDto::Shell(j) => {
+                if let Some(marks) = faces(&j.face_keys) {
+                    j.face_marks = marks;
+                }
+            }
+            KernelJobDto::ExternalThread(j) => {
+                if let Some(marks) = faces(std::slice::from_ref(&j.face_key)) {
+                    j.face_mark = marks.into_iter().next();
+                }
+            }
+            _ => {}
+        }
+    }
+    Some(marked)
+}
+
 fn topology_indices(keys: &[String], kind: &str) -> Result<Vec<u32>, OcctError> {
     let prefix = format!("{kind}:");
     keys.iter()
@@ -2142,6 +3373,7 @@ mod tests {
                 feature_id: FeatureId(3),
                 target_body_id: BodyId(1),
                 edge_keys: vec![edge.clone(), "edge:broken".into()],
+                edge_marks: Vec::new(),
                 radius: 0.5,
                 tangent_chain: false,
             }),
@@ -2149,6 +3381,7 @@ mod tests {
                 feature_id: FeatureId(3),
                 target_body_id: BodyId(1),
                 edge_keys: vec![edge, "face:0".into()],
+                edge_marks: Vec::new(),
                 distance: 0.5,
                 angle_deg: None,
                 tangent_chain: false,
@@ -2157,6 +3390,7 @@ mod tests {
                 feature_id: FeatureId(3),
                 target_body_id: BodyId(1),
                 face_keys: vec![face, "face:4294967296".into()],
+                face_marks: Vec::new(),
                 thickness: 0.5,
                 inward: true,
             }),
@@ -3811,6 +5045,7 @@ mod tests {
             feature_id: FeatureId(2),
             target_body_id: BodyId(1),
             edge_keys: upper,
+            edge_marks: Vec::new(),
             distance: 0.5,
             angle_deg: None,
             tangent_chain: false,
@@ -3860,6 +5095,7 @@ mod tests {
             feature_id: FeatureId(4),
             target_body_id: BodyId(1),
             edge_keys: vec![rim],
+            edge_marks: Vec::new(),
             distance: 0.5,
             angle_deg: None,
             tangent_chain: false,
@@ -5169,6 +6405,7 @@ mod tests {
                         feature_id: FeatureId(3),
                         target_body_id: BodyId(1),
                         face_key: face_key.clone(),
+                        face_mark: None,
                         cylinder,
                         thread: HoleThreadDto {
                             standard: HoleThreadStandard::IsoMetric,
@@ -5274,6 +6511,7 @@ mod tests {
                         feature_id: FeatureId(3),
                         target_body_id: BodyId(1),
                         face_key,
+                        face_mark: None,
                         cylinder,
                         thread: HoleThreadDto {
                             standard: HoleThreadStandard::IsoMetric,
@@ -5421,6 +6659,7 @@ mod tests {
                         feature_id: FeatureId(3),
                         target_body_id: BodyId(1),
                         face_key: shaft_face.key.clone(),
+                        face_mark: None,
                         cylinder,
                         thread: HoleThreadDto {
                             standard: HoleThreadStandard::IsoMetric,
@@ -5524,6 +6763,7 @@ mod tests {
                 feature_id: FeatureId(3),
                 target_body_id: BodyId(1),
                 edge_keys: vec!["edge:0".to_string(), "edge:1".to_string()],
+                edge_marks: Vec::new(),
                 radius: 1.0,
                 tangent_chain: false,
             }),
@@ -5531,6 +6771,7 @@ mod tests {
                 feature_id: FeatureId(3),
                 target_body_id: BodyId(1),
                 edge_keys: vec!["edge:0".to_string(), "edge:1".to_string()],
+                edge_marks: Vec::new(),
                 distance: 1.0,
                 angle_deg: None,
                 tangent_chain: false,
@@ -5857,6 +7098,7 @@ mod tests {
             feature_id: FeatureId(3),
             target_body_id: BodyId(1),
             edge_keys: vec![inner.clone()],
+            edge_marks: Vec::new(),
             radius: 1.,
             tangent_chain: false,
         }));
@@ -5873,6 +7115,7 @@ mod tests {
             feature_id: FeatureId(4),
             target_body_id: BodyId(1),
             edge_keys: vec![outer.clone()],
+            edge_marks: Vec::new(),
             distance: 0.5,
             angle_deg: None,
             tangent_chain: false,
@@ -6006,6 +7249,7 @@ mod tests {
             feature_id: FeatureId(3),
             target_body_id: BodyId(1),
             edge_keys: vec![key.to_owned()],
+            edge_marks: Vec::new(),
             distance,
             angle_deg,
             tangent_chain: false,
@@ -6126,6 +7370,7 @@ mod tests {
                     feature_id: FeatureId(3),
                     target_body_id: BodyId(1),
                     edge_keys: vec![key.clone()],
+                    edge_marks: Vec::new(),
                     distance,
                     angle_deg: Some(angle),
                     tangent_chain: false,
@@ -6148,6 +7393,7 @@ mod tests {
                     feature_id: FeatureId(3),
                     target_body_id: BodyId(1),
                     edge_keys: vec![key.clone()],
+                    edge_marks: Vec::new(),
                     distance,
                     angle_deg: Some(angle),
                     tangent_chain: false,
@@ -6164,6 +7410,7 @@ mod tests {
                 feature_id: FeatureId(3),
                 target_body_id: BodyId(1),
                 edge_keys: vec![key.clone()],
+                edge_marks: Vec::new(),
                 distance: 1.,
                 angle_deg: Some(angle),
                 tangent_chain: false,
@@ -6203,6 +7450,7 @@ mod tests {
                 feature_id: FeatureId(3),
                 target_body_id: BodyId(1),
                 edge_keys: vec![edge.to_string()],
+                edge_marks: Vec::new(),
                 radius,
                 tangent_chain: false,
             })
@@ -6212,6 +7460,7 @@ mod tests {
                 feature_id: FeatureId(3),
                 target_body_id: BodyId(1),
                 edge_keys: vec![edge.to_string()],
+                edge_marks: Vec::new(),
                 distance,
                 angle_deg: None,
                 tangent_chain: false,

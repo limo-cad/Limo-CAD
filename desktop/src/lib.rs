@@ -16,6 +16,17 @@ mod state;
 use limo_cad_cam::CamSimulationResultDto;
 use native_viewport::ViewportCamStock;
 
+/// Take up the modelling kernel chosen in Settings. Call it once at startup,
+/// before the first document exists, with or without a window; the choice
+/// then holds until the process ends, which is why Settings says a change
+/// waits for the next start. `LIMO_CAD_KERNEL` still decides when it names
+/// a kernel.
+pub fn choose_saved_kernel() {
+    app_preferences::choose_saved_kernel(
+        app_config::native_directory_as_found().and_then(app_preferences::Store::at),
+    );
+}
+
 fn retained_cam_stock(result: &CamSimulationResultDto) -> Option<ViewportCamStock> {
     let mesh = result.stock_mesh.as_ref()?;
     if mesh.positions.is_empty() || !mesh.positions.len().is_multiple_of(3) {

@@ -368,6 +368,141 @@ cargo xtask smoke-wasm
 
 This checks engine bindings, not a completed Bevy browser application.
 
+## The Limo kernel (experimental)
+
+The Limo kernel is Limo CAD's own exact B-rep kernel in plain Rust, kept
+in [a repository of its own](https://github.com/limo-cad/limo-kernel). It is
+opt-in: set `LIMO_CAD_KERNEL=limo` before starting the desktop or the MCP
+server and every recompute runs on it instead of OCCT, and so do the
+services around it: sections, drawings, measurement, mass properties,
+interference, STEP export and import, and deleting or editing a feature in
+the middle of the history. What it does not cover fails with a message that
+says so.
+
+The kernel knows nothing of the application and depends on no other
+crate. `crates/kernel-session` is what runs the application's recompute
+plans on it, a job at a time, and it is the only code that sees both the
+kernel's types and the application's.
+
+The application takes the kernel at one commit, named once: `rev` of
+`limo-cad-kernel` under `[workspace.dependencies]` in the root
+`Cargo.toml`. The desktop is a workspace of its own and reaches the kernel
+through `limo_cad_kernel_session::kernel`, so it names no revision.
+
+In the desktop the same choice is under File > Settings > Modeling kernel,
+where the Limo kernel is marked experimental. The choice is saved with the
+other application preferences (`"kernel": "limo"` in
+`app-preferences.json`) and taken up when the application next starts, with
+or without a window (`limo_cad::choose_saved_kernel` in `desktop/src/main.rs`):
+a document keeps the kernel it was opened on, and the kernels a document
+makes on the side to try a change out have to be of the same kind as its
+own. Settings shows which kernel is running beside the one that is saved.
+`LIMO_CAD_KERNEL` decides whenever it names a kernel, so
+`LIMO_CAD_KERNEL=occt` starts on OCCT whatever is saved; the standalone MCP
+server reads only the variable.
+
+```sh
+cargo test -p limo-cad-kernel-session
+```
+
+The kernel's own tests, its stress run and the browser page that models its
+sample parts live are in its repository.
+
+A change to the kernel is made, tested and pushed in its repository. To see
+what it does here first, keep a checkout of the kernel beside this one and
+give cargo its path for the length of a command:
+
+```sh
+cargo test --release -p limo-cad-kernel-session --config 'paths = ["../limo-kernel"]'
+```
+
+The path is read from the folder cargo is started in, and the same flag
+serves the desktop and the MCP server. Cargo then builds the kernel from
+that folder and leaves the lock files as they are, `--locked` included, so
+there is nothing to undo afterwards. It stands in for the kernel as it is
+locked: a change that gives the kernel a dependency cannot be tried this
+way.
+
+To take a newer kernel for good, put its full commit hash at `rev` in the
+root `Cargo.toml` and have cargo write it into the three lock files, which
+changes that one package in each:
+
+```sh
+cargo update -p limo-cad-kernel
+cargo update -p limo-cad-kernel --manifest-path desktop/Cargo.toml
+cargo update -p limo-cad-kernel --manifest-path mcp-server/Cargo.toml
+```
+
+Until that is done a `--locked` build stops and says the lock file is out
+of date. Then run the suites on both kernels and the lab, as for a change
+to the adapter.
+
+The host's own suites run on either kernel, so a change to the adapter or
+to history can be checked on both:
+
+```sh
+cargo test --release -p limo-cad-native-engine --features native-occt
+LIMO_CAD_KERNEL=limo cargo test --release -p limo-cad-native-engine --features native-occt
+```
+
+Where the two differ on purpose a test says so. OCCT refers to faces and
+edges by their place in a list, so the host deletes a feature only where it
+can prove that what follows still means the same: a finish followed by a
+finish, at the end of the history, next to nothing that shares geometry.
+The Limo kernel refers to them by name, and names survive edits, so on it
+`solid_delete_feature` takes another road (`host/named_deletion.rs`): it
+tries the deletion on a copy of the project, refuses with nothing changed
+if a feature that was sound before no longer is, and otherwise deletes,
+wherever in the history the feature stands. `kernel_names_survive_edits()`
+is the one place that asks which road to take.
+
+A project is not tied to the kernel it was made on. A fillet or chamfer
+keeps its edges by key, in the language of the kernel that wrote them
+(`edge:7` on OCCT, a name on Limo), and beside each key a mark: a few
+points of the edge (`EdgeMarkDto` in `crates/solid`). A shell keeps the
+faces it opens the same way, and an external thread the cylinder it is cut
+on: by key (`face:5`, or a name) and by a mark of a few points well inside
+the face (`FaceMarkDto`). A kernel that meets a key it cannot follow finds
+the edge or face through the points of its mark, and after every replay
+reports what it calls the edges and faces of each of these features and
+where they are now (`OcctKernel::feature_keys`). The host writes that back
+into the features (`SolidDocument::note_feature_keys`), so a project opened
+on the other kernel is in that kernel's own keys from the first replay on,
+and its marks follow the model as it is edited. A key in a kernel's own
+language is followed exactly as before: the mark is not read, and two jobs
+that differ only in their marks are the same work
+(`KernelJobDto::same_work`), so nothing is replayed for a mark's sake.
+`crates/native-engine/tests/cross_kernel.rs` takes a project there and
+back, both ways round; `crates/occt/tests/edge_marks.rs` and
+`face_marks.rs` do the same at the kernels themselves.
+
+A mark for an edge can be read off the edge as it is drawn. A mark for a
+face cannot: a place between the corners of a triangle is on the face only
+where the face is flat. So a face has no mark until a kernel has followed
+its key, which is the replay that makes the feature.
+
+A key in the other kernel's language with no mark beside it is refused,
+never followed: the edge or face at the same count in the other kernel's
+list is as a rule a different one. Every project saved by a release older
+than marks has such keys, so the adapter carries those over when the Limo
+kernel is running: OCCT replays the history once, says where the edges and
+faces it counts are (`marked_by_the_reference` in
+`crates/occt/src/native.rs`), and the Limo kernel finds them there and
+gives them names the host then keeps.
+
+A sketch drawn on a face keeps its own plane, so what is built from it is
+the same on either kernel, and a feature extruded from a face finds that
+face by where it is and what it measures. A project made on OCCT goes to
+the Limo kernel and back with its sketches still tied to their faces. The
+other way has a limit: the tie is the face's id, and OCCT cannot follow an
+id the Limo kernel wrote, so in a project made on the Limo kernel it
+refuses an edit below such a sketch as a broken reference until the sketch
+is put on its face again.
+
+[The kernel's README](https://github.com/limo-cad/limo-kernel#readme) covers its design, how
+names survive edits, what it models, the differential lab against OCCT and
+the diagnostic switches.
+
 ## Where the code lives
 
 Repository maintenance runs through the same Cargo entry point on Windows,
@@ -391,7 +526,9 @@ The demo task reads `GITHUB_SHA` and `VERSION` for its provenance receipt.
 
 - Rust crates own project data, sketches, feature history, references, drawings,
   assemblies, kinematics and recompute planning.
-- Native OCCT supplies exact geometry through a narrow C++ bridge.
+- Native OCCT supplies exact geometry through a narrow C++ bridge. The Limo
+  kernel, from its own repository, is an opt-in alternative behind the same
+  adapter.
 - Bevy owns the native interface and viewport; Winit supplies window integration.
 - The MCP server and Rust script interpreter drive the shared product interface.
 - The browser replacement shares the Bevy UI and uses a native Rust/OCCT service;

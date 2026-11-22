@@ -143,6 +143,7 @@
 #include <chrono>
 #include <array>
 #include <cmath>
+#include <cstdlib>
 #include <optional>
 #include <cstdint>
 #include <cstdio>
@@ -3350,6 +3351,234 @@ rust::Vec<FfiBodyGeneration> Kernel::body_generations() const {
     entry.body_id = body.first;
     entry.generation = found->second;
     result.push_back(entry);
+  }
+  return result;
+}
+
+rust::Vec<double> Kernel::edge_marks(std::uint64_t body_id,
+                                     const rust::Vec<std::uint32_t>& indices) const {
+  auto found = impl_->bodies.find(body_id);
+  if (found == impl_->bodies.end()) {
+    throw std::runtime_error("edge refinement target body is missing");
+  }
+  TopTools_IndexedMapOfShape edge_map;
+  TopExp::MapShapes(found->second, TopAbs_EDGE, edge_map);
+  rust::Vec<double> result;
+  result.reserve(indices.size() * 15);
+  for (const std::uint32_t index : indices) {
+    if (index >= static_cast<std::uint32_t>(edge_map.Extent())) {
+      throw std::runtime_error("referenced edge no longer exists");
+    }
+    const BRepAdaptor_Curve curve(
+        TopoDS::Edge(edge_map.FindKey(static_cast<int>(index) + 1)));
+    const double first = curve.FirstParameter();
+    const double last = curve.LastParameter();
+    for (int step = 0; step < 5; ++step) {
+      const gp_Pnt point = curve.Value(first + (last - first) * (2 * step + 1) / 10.0);
+      result.push_back(point.X());
+      result.push_back(point.Y());
+      result.push_back(point.Z());
+    }
+  }
+  return result;
+}
+
+rust::Vec<std::uint32_t> Kernel::edges_through(std::uint64_t body_id,
+                                               const rust::Vec<double>& points,
+                                               double reach) const {
+  auto found = impl_->bodies.find(body_id);
+  if (found == impl_->bodies.end()) {
+    throw std::runtime_error("edge refinement target body is missing");
+  }
+  TopTools_IndexedMapOfShape edge_map;
+  TopExp::MapShapes(found->second, TopAbs_EDGE, edge_map);
+  // Most edges are nowhere near a point: their boxes say so cheaply.
+  std::vector<Bnd_Box> boxes(static_cast<std::size_t>(edge_map.Extent()));
+  for (int index = 1; index <= edge_map.Extent(); ++index) {
+    BRepBndLib::Add(edge_map(index), boxes[static_cast<std::size_t>(index - 1)]);
+    boxes[static_cast<std::size_t>(index - 1)].Enlarge(reach);
+  }
+  rust::Vec<std::uint32_t> result;
+  for (std::size_t at = 0; at + 2 < points.size(); at += 3) {
+    const gp_Pnt point(points[at], points[at + 1], points[at + 2]);
+    const TopoDS_Vertex vertex = BRepBuilderAPI_MakeVertex(point);
+    std::vector<std::uint32_t> through;
+    for (int index = 1; index <= edge_map.Extent(); ++index) {
+      const TopoDS_Edge edge = TopoDS::Edge(edge_map(index));
+      if (BRep_Tool::Degenerated(edge) ||
+          boxes[static_cast<std::size_t>(index - 1)].IsOut(point)) {
+        continue;
+      }
+      BRepExtrema_DistShapeShape distance(vertex, edge);
+      if (distance.IsDone() && distance.Value() < reach) {
+        through.push_back(static_cast<std::uint32_t>(index - 1));
+      }
+    }
+    result.push_back(static_cast<std::uint32_t>(through.size()));
+    for (const std::uint32_t index : through) result.push_back(index);
+  }
+  return result;
+}
+
+// Up to five points of a face, each as deep inside its rim as a coarse
+// search over the face's parameters finds, and apart from each other.
+// Always five when there are any: a face with room for fewer has the
+// deepest of them again.
+static std::vector<gp_Pnt> points_inside(const TopoDS_Face& face) {
+  double u0, u1, v0, v1;
+  BRepTools::UVBounds(face, u0, u1, v0, v1);
+  if (Precision::IsInfinite(u0) || Precision::IsInfinite(u1) || Precision::IsInfinite(v0) ||
+      Precision::IsInfinite(v1) || !(u1 > u0) || !(v1 > v0)) {
+    return {};
+  }
+  const BRepAdaptor_Surface surface(face, false);
+  // A narrow face can fall between the places a coarse search looks.
+  for (const int n : {12, 48}) {
+    const auto at = [n](int i, int j) { return static_cast<std::size_t>(j * n + i); };
+    const auto parameters = [&](int i, int j) {
+      return gp_Pnt2d(u0 + (u1 - u0) * (i + 0.5) / n, v0 + (v1 - v0) * (j + 0.5) / n);
+    };
+    // How many steps each place is from the nearest that is not inside,
+    // the edge of the search counting as one such.
+    std::vector<int> depth(static_cast<std::size_t>(n * n), 0);
+    const auto deep = [&](int i, int j) {
+      return i < 0 || j < 0 || i >= n || j >= n ? 0 : depth[at(i, j)];
+    };
+    for (int j = 0; j < n; ++j) {
+      for (int i = 0; i < n; ++i) {
+        const bool inside =
+            BRepClass_FaceClassifier(face, parameters(i, j), Precision::PConfusion()).State() ==
+            TopAbs_IN;
+        depth[at(i, j)] = inside ? n : 0;
+      }
+    }
+    for (int j = 0; j < n; ++j) {
+      for (int i = 0; i < n; ++i) {
+        if (depth[at(i, j)] == 0) continue;
+        depth[at(i, j)] = 1 + std::min(std::min(deep(i - 1, j), deep(i, j - 1)),
+                                       std::min(deep(i - 1, j - 1), deep(i + 1, j - 1)));
+      }
+    }
+    for (int j = n - 1; j >= 0; --j) {
+      for (int i = n - 1; i >= 0; --i) {
+        if (depth[at(i, j)] == 0) continue;
+        depth[at(i, j)] = std::min(
+            depth[at(i, j)], 1 + std::min(std::min(deep(i + 1, j), deep(i, j + 1)),
+                                          std::min(deep(i + 1, j + 1), deep(i - 1, j + 1))));
+      }
+    }
+    // Deepest first; among equals, in the order they were looked at.
+    std::vector<std::pair<int, int>> places;
+    for (int j = 0; j < n; ++j) {
+      for (int i = 0; i < n; ++i) {
+        if (depth[at(i, j)] > 0) places.emplace_back(i, j);
+      }
+    }
+    if (places.empty()) continue;
+    std::stable_sort(places.begin(), places.end(),
+                     [&](const std::pair<int, int>& a, const std::pair<int, int>& b) {
+                       return depth[at(a.first, a.second)] > depth[at(b.first, b.second)];
+                     });
+    // Keep clear of the rim where the face allows it.
+    const int deepest = depth[at(places.front().first, places.front().second)];
+    const int shallowest = std::min(deepest, 2);
+    std::vector<std::pair<int, int>> taken;
+    for (int apart = n / 3; taken.size() < 5; apart /= 2) {
+      for (const auto& place : places) {
+        if (taken.size() == 5) break;
+        if (depth[at(place.first, place.second)] < shallowest) break;
+        bool clear = true;
+        for (const auto& other : taken) {
+          if (std::max(std::abs(place.first - other.first),
+                       std::abs(place.second - other.second)) < std::max(apart, 1)) {
+            clear = false;
+            break;
+          }
+        }
+        if (clear) taken.push_back(place);
+      }
+      if (apart <= 1) break;
+    }
+    std::vector<gp_Pnt> points;
+    for (const auto& place : taken) {
+      const gp_Pnt2d uv = parameters(place.first, place.second);
+      points.push_back(surface.Value(uv.X(), uv.Y()));
+    }
+    while (points.size() < 5) points.push_back(points.front());
+    return points;
+  }
+  return {};
+}
+
+double Kernel::weighed(std::uint64_t body_id) const {
+  auto found = impl_->bodies.find(body_id);
+  if (found == impl_->bodies.end()) {
+    throw std::runtime_error("the body to weigh is missing");
+  }
+  GProp_GProps properties;
+  BRepGProp::VolumePropertiesGK(found->second, properties, 1.0e-12, true, true);
+  return std::abs(properties.Mass());
+}
+
+rust::Vec<double> Kernel::face_marks(std::uint64_t body_id,
+                                     const rust::Vec<std::uint32_t>& indices) const {
+  auto found = impl_->bodies.find(body_id);
+  if (found == impl_->bodies.end()) {
+    throw std::runtime_error("face reference target body is missing");
+  }
+  TopTools_IndexedMapOfShape face_map;
+  TopExp::MapShapes(found->second, TopAbs_FACE, face_map);
+  rust::Vec<double> result;
+  result.reserve(indices.size() * 15);
+  for (const std::uint32_t index : indices) {
+    if (index >= static_cast<std::uint32_t>(face_map.Extent())) {
+      throw std::runtime_error("referenced face no longer exists");
+    }
+    const std::vector<gp_Pnt> points =
+        points_inside(TopoDS::Face(face_map.FindKey(static_cast<int>(index) + 1)));
+    // A face with no inside to speak of cannot be marked, and marks go one
+    // for one with faces or not at all.
+    if (points.empty()) return rust::Vec<double>();
+    for (const gp_Pnt& point : points) {
+      result.push_back(point.X());
+      result.push_back(point.Y());
+      result.push_back(point.Z());
+    }
+  }
+  return result;
+}
+
+rust::Vec<std::uint32_t> Kernel::faces_through(std::uint64_t body_id,
+                                               const rust::Vec<double>& points,
+                                               double reach) const {
+  auto found = impl_->bodies.find(body_id);
+  if (found == impl_->bodies.end()) {
+    throw std::runtime_error("face reference target body is missing");
+  }
+  TopTools_IndexedMapOfShape face_map;
+  TopExp::MapShapes(found->second, TopAbs_FACE, face_map);
+  // Most faces are nowhere near a point: their boxes say so cheaply. The
+  // boxes are of the surfaces themselves, not of the triangles a face is
+  // drawn with, which fall short of a curved face by the sag of a chord.
+  std::vector<Bnd_Box> boxes(static_cast<std::size_t>(face_map.Extent()));
+  for (int index = 1; index <= face_map.Extent(); ++index) {
+    BRepBndLib::Add(face_map(index), boxes[static_cast<std::size_t>(index - 1)], false);
+    boxes[static_cast<std::size_t>(index - 1)].Enlarge(reach);
+  }
+  rust::Vec<std::uint32_t> result;
+  for (std::size_t at = 0; at + 2 < points.size(); at += 3) {
+    const gp_Pnt point(points[at], points[at + 1], points[at + 2]);
+    const TopoDS_Vertex vertex = BRepBuilderAPI_MakeVertex(point);
+    std::vector<std::uint32_t> through;
+    for (int index = 1; index <= face_map.Extent(); ++index) {
+      if (boxes[static_cast<std::size_t>(index - 1)].IsOut(point)) continue;
+      BRepExtrema_DistShapeShape distance(vertex, TopoDS::Face(face_map(index)));
+      if (distance.IsDone() && distance.Value() < reach) {
+        through.push_back(static_cast<std::uint32_t>(index - 1));
+      }
+    }
+    result.push_back(static_cast<std::uint32_t>(through.size()));
+    for (const std::uint32_t index : through) result.push_back(index);
   }
   return result;
 }
