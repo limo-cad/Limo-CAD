@@ -148,7 +148,7 @@ fn weighed(kernel: &OcctKernel) -> f64 {
         .unwrap()
 }
 
-fn held(kernel: &limo_cad_kernel::Kernel) -> f64 {
+fn held(kernel: &limo_cad_kernel_session::Kernel) -> f64 {
     limo_cad_kernel::props::mass(kernel.body(1).unwrap()).volume
 }
 
@@ -163,7 +163,7 @@ fn a_face_chosen_on_one_kernel_is_found_on_the_other() {
 fn the_faces_a_shell_opens() {
     let mut reference = OcctKernel::new().unwrap();
     let theirs = reference.recompute(&plan(stepped())).unwrap();
-    let mut limo = limo_cad_kernel::Kernel::new();
+    let mut limo = limo_cad_kernel_session::Kernel::new();
     let ours = limo.recompute(&plan(stepped()));
     assert!(theirs.errors.is_empty() && ours.errors.is_empty());
 
@@ -402,7 +402,7 @@ fn thread(
 fn the_cylinder_of_a_thread() {
     let mut reference = OcctKernel::new().unwrap();
     let theirs = reference.recompute(&plan(pin())).unwrap();
-    let mut limo = limo_cad_kernel::Kernel::new();
+    let mut limo = limo_cad_kernel_session::Kernel::new();
     let ours = limo.recompute(&plan(pin()));
     assert!(theirs.errors.is_empty(), "{:?}", theirs.errors);
     assert!(ours.errors.is_empty(), "{:?}", ours.errors);

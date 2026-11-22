@@ -214,13 +214,9 @@ fn a_thread_cut_into_a_rod() {
 #[test]
 fn a_metric_thread_on_part_of_a_pin() {
     use limo_cad_kernel::thread::{clipped, cutter, iso_external, Run};
-    use limo_cad_solid::{iso_metric_grade6_envelope, ThreadFit};
-    let limits = iso_metric_grade6_envelope(8.0, 1.25, ThreadFit::External).unwrap();
-    let (major, middle, minor) = (
-        limits.modeled_major,
-        limits.modeled_pitch,
-        limits.modeled_minor,
-    );
+    // The class at its largest: 28 thousandths under the basic profile's
+    // 8, 7.188 and 6.466.
+    let (major, middle, minor) = (7.972, 7.160, 6.438);
     let pin = make::cylinder(V3::ZERO, V3::Z, 4.0, 14.0).unwrap();
     for depth in [5.0, 10.0, 14.0] {
         let run = Run {

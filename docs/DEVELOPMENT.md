@@ -378,6 +378,11 @@ interference, STEP export and import, and deleting or editing a feature in
 the middle of the history. What it does not cover fails with a message that
 says so.
 
+The kernel crate knows nothing of the application and depends on no other
+crate. `crates/kernel-session` is what runs the application's recompute
+plans on it, a job at a time, and it is the only code that sees both the
+kernel's types and the application's.
+
 In the desktop the same choice is under File > Settings > Modeling kernel,
 where the Limo kernel is marked experimental. The choice is saved with the
 other application preferences (`"kernel": "limo"` in
@@ -392,6 +397,7 @@ server reads only the variable.
 
 ```sh
 cargo test -p limo-cad-kernel
+cargo test -p limo-cad-kernel-session
 cargo xtask kernel-demo
 ```
 

@@ -6,19 +6,6 @@ description = "Data-oriented analytic B-rep kernel for Limo CAD (pure Rust, no n
 license = "LGPL-2.1-or-later"
 repository.workspace = true
 
-[features]
-default = ["dto"]
-# Adapter between the kernel and the host-neutral solid contract
-# (`RecomputePlanDto` in, `KernelSceneDto` out).
-dto = ["dep:limo-cad-core", "dep:limo-cad-solid"]
-
-[dependencies]
-limo-cad-core = { path = "../core", optional = true }
-limo-cad-solid = { path = "../solid", optional = true }
-
-[dev-dependencies]
-serde_json.workspace = true
-
 # The kernel as a WebAssembly module for the browser demo
 # (`cargo xtask kernel-demo`).
 [[example]]

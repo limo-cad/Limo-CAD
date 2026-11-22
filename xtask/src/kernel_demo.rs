@@ -41,12 +41,7 @@ pub fn run(mut args: impl Iterator<Item = String>) -> Result<()> {
             "--example",
             "web",
         ])
-        .args([
-            "--no-default-features",
-            "--target",
-            "wasm32-unknown-unknown",
-            "--target-dir",
-        ])
+        .args(["--target", "wasm32-unknown-unknown", "--target-dir"])
         .arg(&build)
         .env("CARGO_PROFILE_RELEASE_LTO", "fat")
         .env("CARGO_PROFILE_RELEASE_CODEGEN_UNITS", "1")

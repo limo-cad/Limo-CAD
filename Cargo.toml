@@ -14,6 +14,7 @@ members = [
     "crates/session-publication",
     "crates/solid",
     "crates/kernel",
+    "crates/kernel-session",
     "crates/occt",
     "crates/native-engine",
     "crates/export",

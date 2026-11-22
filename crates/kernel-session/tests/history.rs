@@ -5,10 +5,9 @@
 //! sketch resized, a sketch line inserted) and replay: the feature must land
 //! on the same place as before, or say that its reference is gone. It must
 //! never quietly move to another edge.
-#![cfg(feature = "dto")]
 
 use limo_cad_core::{BodyId, FeatureId};
-use limo_cad_kernel::Kernel;
+use limo_cad_kernel_session::Kernel;
 use limo_cad_solid::{
     ExtrudeOperation, HoleBottomStyle, HoleExtent, HoleStyle, KernelBodyDto, KernelChamferJobDto,
     KernelCurveDto, KernelExtrudeJobDto, KernelFilletJobDto, KernelHoleJobDto, KernelJobDto,

@@ -1,11 +1,11 @@
 //! Features as the application asks for them: one job each, checked
 //! against what the shape must measure.
-#![cfg(feature = "dto")]
 mod common;
 
 use common::*;
 use limo_cad_core::{BodyId, FeatureId};
-use limo_cad_kernel::{Body, Kernel, SurfKind};
+use limo_cad_kernel::{Body, SurfKind};
+use limo_cad_kernel_session::Kernel;
 use limo_cad_solid::{
     ExtrudeOperation, HoleBottomStyle, HoleExtent, HoleStyle, HoleThreadDto, HoleThreadHand,
     HoleThreadRepresentation, HoleThreadSeries, HoleThreadStandard, KernelCurveDto,

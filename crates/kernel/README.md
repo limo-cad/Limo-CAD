@@ -12,8 +12,12 @@ not model yet it refuses by name rather than approximate.
 ## Try it
 
 ```sh
-# The kernel on its own: about a hundred and forty tests, under a minute.
+# The kernel on its own: about a hundred and thirty tests, under a minute.
 cargo test -p limo-cad-kernel
+
+# The application's jobs run on it: features one at a time, and edits
+# earlier in a history.
+cargo test -p limo-cad-kernel-session
 
 # Time the sample parts, then model each at 2000 random sets of dimensions.
 cargo run --release -p limo-cad-kernel --example bench -- --sweep 2000
@@ -36,10 +40,16 @@ The desktop also offers it under File > Settings > Modeling kernel, marked
 experimental; a choice made there is saved and taken up at the next start,
 and the variable decides whenever it names a kernel.
 
-Both hosts go through `OcctKernel` in `crates/occt`, which hands every
-recompute and every geometry service to this crate when it is the kernel
-chosen. Sketching, history, the viewport and scripts are unchanged: they
-only see what the kernel returns.
+Both hosts go through `OcctKernel` in `crates/occt`. When this is the
+kernel chosen, it hands every geometry service to this crate and every
+recompute to `crates/kernel-session`, which turns the application's jobs
+into calls on the kernel and keeps what each one made. Sketching, history,
+the viewport and scripts are unchanged: they only see what the kernel
+returns.
+
+`crates/kernel-session` is the one place where the kernel meets the
+application's types. The kernel itself depends on nothing: not on another
+crate of this repository, and not on any from outside it.
 
 ## How it is built
 
@@ -338,15 +348,15 @@ order it is meant to be taken on. This is the list to work down.
 
 ## Measured
 
-`examples/lab.rs` runs every bundled recipe through the real headless
-server once per kernel and compares the solids: how many bodies, what each
+`crates/kernel-session/examples/lab.rs` runs every bundled recipe through
+the real headless server once per kernel and compares the solids: how many bodies, what each
 holds, its bounds, the number and area of its flat faces. What a body
 holds is asked of the kernel that made it, which weighs it as a solid, and
 the two have to agree on it to a part in a hundred million.
 
 ```sh
 cargo build --release --manifest-path mcp-server/Cargo.toml
-cargo build --release -p limo-cad-kernel --example lab
+cargo build --release -p limo-cad-kernel-session --example lab
 target/release/examples/lab --server mcp-server/target/release/limo-cad-mcp --all
 ```
 
@@ -510,16 +520,17 @@ mesh is a clean skin.
 
 | | Open CASCADE, as linked | Limo |
 |---|---:|---:|
-| Source | 2,217,000 lines of C++ in the 19 toolkits the server links | 25,900 lines of Rust |
+| Source | 2,217,000 lines of C++ in the 19 toolkits the server links | 24,500 lines of Rust |
 | Code shipped | 48.6 MB in 19 dynamic libraries | 1.2 MB in a stripped native binary, with the Rust runtime |
-| In a browser | not built for it here | 844 KB of WebAssembly (287 KB compressed), sample parts and a viewer included |
+| In a browser | not built for it here | 909 KB of WebAssembly (314 KB compressed), sample parts and a viewer included |
 | Faces of the vise screw (two 41-turn threads) | 688 | 398 |
 | Faces of the M8 pin | 42 | 9 |
 
 The count of lines is every `.cxx`, `.hxx`, `.lxx`, `.gxx` and `.pxx` of
 the toolkits `limo-cad-mcp` links against, in the 8.0.1 sources; the 11,600
 lines of C++ and 7,500 of Rust that adapt them to the host are not in it.
-Tests (5,400 lines) and examples are not in the kernel's.
+Nor are the 2,300 lines of `crates/kernel-session` in the kernel's, which
+do the same for this one, or its tests (5,100 lines) and examples.
 
 ## Finding out what went wrong
 
@@ -567,5 +578,4 @@ LIMO_CAD_PREVIEW_PROOF_DIR="$PWD/target/limo-kernel-proof" \
 | `project` | Hidden-line drawings and plane sections |
 | `step` | STEP out and in |
 | `tess`, `delaunay` | Watertight display meshes with analytic normals |
-| `session` | The recompute plan adapter (feature `dto`) |
 | `demo` | Sample parts with their dimension ranges |

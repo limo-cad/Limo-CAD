@@ -2480,7 +2480,7 @@ mod tests {
 
         let scene_of = |body: &Body| {
             let id = limo_cad_core::BodyId(1);
-            let raw = limo_cad_kernel::session::body_dto(1, body, &Default::default());
+            let raw = limo_cad_kernel_session::body_dto(1, body, &Default::default());
             SolidSceneDto {
                 bodies: vec![BodyDto {
                     id,

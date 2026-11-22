@@ -336,7 +336,7 @@ fn staged(
         }
         Ok(reference.weigh(BodyId(1)).unwrap())
     })();
-    let mut limo = limo_cad_kernel::Kernel::new();
+    let mut limo = limo_cad_kernel_session::Kernel::new();
     let ours = (|| {
         let mut jobs = base.clone();
         let mut scene = limo.recompute(&plan(jobs.clone()));
@@ -1411,7 +1411,7 @@ fn blends_end_on_faces_that_lean() {
         // The bar's own corner edges lean with it. A round on one takes a
         // sliver as long as the line through the sliver's middle is, from
         // the plate's top to the bar's end.
-        let mut limo = limo_cad_kernel::Kernel::new();
+        let mut limo = limo_cad_kernel_session::Kernel::new();
         assert!(limo.recompute(&plan(base())).errors.is_empty());
         let whole = limo_cad_kernel::props::mass(limo.body(1).unwrap()).volume;
         let middle = 2.0 * (5.0 / 6.0 - PI / 4.0) / (1.0 - PI / 4.0);

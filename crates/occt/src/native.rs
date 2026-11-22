@@ -338,7 +338,7 @@ pub struct OcctKernel {
     /// Limo CAD's own kernel, when it is the one selected: see
     /// [`limo_kernel_selected`]. It then evaluates every recompute; `inner`
     /// stays empty.
-    limo: Option<Box<limo_cad_kernel::Kernel>>,
+    limo: Option<Box<limo_cad_kernel_session::Kernel>>,
     geometry_owner: u64,
     /// Only a fully successful replay may seed the next append. The jobs
     /// include all resolved geometry inputs, not just feature IDs/revisions.
@@ -638,7 +638,7 @@ impl OcctKernel {
         }
         Ok(Self {
             inner,
-            limo: limo.then(|| Box::new(limo_cad_kernel::Kernel::new())),
+            limo: limo.then(|| Box::new(limo_cad_kernel_session::Kernel::new())),
             geometry_owner,
             successful_jobs: None,
             key_reports: Vec::new(),
@@ -858,7 +858,7 @@ impl OcctKernel {
                     "Delete remap requires two consecutive finishes on one body".into(),
                 ));
             }
-            let mut replay = limo_cad_kernel::Kernel::new();
+            let mut replay = limo_cad_kernel_session::Kernel::new();
             replay.options = limo.options;
             let mut next = jobs[..at].to_vec();
             let failed = |scene: &KernelSceneDto| {
@@ -1487,7 +1487,7 @@ impl OcctKernel {
 /// The Limo kernel's exact bodies as an AP242 STEP file: the selected
 /// bodies as they are, or one placed copy for every occurrence.
 fn limo_export_step(
-    limo: &limo_cad_kernel::Kernel,
+    limo: &limo_cad_kernel_session::Kernel,
     request: &StepExportRequest,
     thread_metadata_json: &str,
 ) -> Result<Vec<u8>, OcctError> {
@@ -1557,7 +1557,7 @@ fn limo_export_step(
 /// Read-only measurements of one or two selections of the Limo kernel's
 /// bodies: what each is, and how they stand to each other.
 fn limo_measure(
-    limo: &limo_cad_kernel::Kernel,
+    limo: &limo_cad_kernel_session::Kernel,
     selections: &[crate::measurement::ResolvedMeasurementSelection],
 ) -> Result<crate::measurement::MeasurementReport, OcctError> {
     use crate::measurement::{MeasurementProperties, MeasurementReport};
@@ -1800,7 +1800,7 @@ fn limo_measure(
 
 /// Clearance and shared volume of two placed bodies of the Limo kernel.
 fn limo_exact_interference(
-    limo: &limo_cad_kernel::Kernel,
+    limo: &limo_cad_kernel_session::Kernel,
     a: &PlacedBodyQueryDto,
     b: &PlacedBodyQueryDto,
 ) -> Result<ExactInterferenceResultDto, OcctError> {
@@ -1826,7 +1826,7 @@ fn limo_exact_interference(
 }
 
 fn limo_drawing_projection(
-    limo: &limo_cad_kernel::Kernel,
+    limo: &limo_cad_kernel_session::Kernel,
     request: &DrawingProjectionRequest,
 ) -> Result<DrawingProjectionDto, OcctError> {
     use limo_cad_kernel::project::{cut, draw, DrawOptions, View};
@@ -1947,7 +1947,7 @@ fn limo_drawing_projection(
 /// the material the plane goes through, and on request what is left of the
 /// body on the side that is kept.
 fn limo_section_geometry(
-    limo: &limo_cad_kernel::Kernel,
+    limo: &limo_cad_kernel_session::Kernel,
     request: &crate::section_review::SectionReviewRequest,
     retain_unintersected: bool,
 ) -> Result<crate::section_review::SectionGeometry, OcctError> {
@@ -1996,8 +1996,8 @@ fn limo_section_geometry(
     } else {
         result.kept
     };
-    let cutaway = kept
-        .map(|kept| limo_cad_kernel::session::body_dto(request.body_id.0, &kept, &limo.options));
+    let cutaway =
+        kept.map(|kept| limo_cad_kernel_session::body_dto(request.body_id.0, &kept, &limo.options));
     Ok(SectionGeometry {
         outcome,
         section,
@@ -2007,7 +2007,7 @@ fn limo_section_geometry(
 
 /// Export meshes straight from the Limo kernel's exact bodies.
 fn limo_tessellate_bodies(
-    limo: &limo_cad_kernel::Kernel,
+    limo: &limo_cad_kernel_session::Kernel,
     request: &MeshExportRequest,
 ) -> Result<Vec<TriangleMesh>, OcctError> {
     let available = limo.body_ids();

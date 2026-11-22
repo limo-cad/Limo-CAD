@@ -35,8 +35,6 @@ pub mod offset;
 pub mod project;
 pub mod props;
 pub mod roots;
-#[cfg(feature = "dto")]
-pub mod session;
 pub mod simplify;
 pub mod ssi;
 pub mod step;
@@ -111,6 +109,4 @@ pub(crate) mod fast {
 pub use boolean::{boolean, Op};
 pub use geom::{Curve, CurveKind, SurfKind, Surface};
 pub use math::{v2, v3, Aabb, Frame, Xform, V2, V3};
-#[cfg(feature = "dto")]
-pub use session::Kernel;
 pub use topo::Body;

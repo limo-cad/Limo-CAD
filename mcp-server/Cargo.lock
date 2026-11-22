@@ -877,8 +877,13 @@ dependencies = [
 [[package]]
 name = "limo-cad-kernel"
 version = "0.3.0"
+
+[[package]]
+name = "limo-cad-kernel-session"
+version = "0.3.0"
 dependencies = [
  "limo-cad-core",
+ "limo-cad-kernel",
  "limo-cad-solid",
 ]
 
@@ -949,6 +954,7 @@ dependencies = [
  "limo-cad-core",
  "limo-cad-export",
  "limo-cad-kernel",
+ "limo-cad-kernel-session",
  "limo-cad-sketch",
  "limo-cad-solid",
  "serde",

@@ -542,7 +542,7 @@ fn lofted_by_both(job: limo_cad_solid::KernelLoftJobDto) -> (f64, f64) {
         errors: vec![],
         jobs: vec![KernelJobDto::Loft(job)],
     };
-    let mut ours = limo_cad_kernel::Kernel::new();
+    let mut ours = limo_cad_kernel_session::Kernel::new();
     let scene = ours.recompute(&plan);
     assert!(scene.errors.is_empty(), "{:?}", scene.errors);
     let ours = mass(ours.body(1).unwrap()).volume;

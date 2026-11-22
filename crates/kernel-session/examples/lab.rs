@@ -16,9 +16,9 @@
 //! show that they made something alike.
 //!
 //! ```sh
-//! cargo run --release -p limo-cad-kernel --example lab -- \
+//! cargo run --release -p limo-cad-kernel-session --example lab -- \
 //!     --server mcp-server/target/release/limo-cad-mcp fillet-basics extrude-basics
-//! cargo run --release -p limo-cad-kernel --example lab -- --server <bin> --all
+//! cargo run --release -p limo-cad-kernel-session --example lab -- --server <bin> --all
 //! ```
 //!
 //! `--plans <dir>` keeps the plan every recipe ends in on each kernel. The

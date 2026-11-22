@@ -77,7 +77,7 @@ fn weighed(reference: &RecomputePlanDto, limo: &RecomputePlanDto, jobs: usize) -
             .collect()
     })();
     let ours = (|| {
-        let mut kernel = limo_cad_kernel::Kernel::new();
+        let mut kernel = limo_cad_kernel_session::Kernel::new();
         let scene = kernel.recompute(&first(limo, jobs));
         if let Some(error) = scene.errors.first() {
             return Err(error.message.clone());

@@ -88,7 +88,7 @@ fn an_edge_chosen_on_one_kernel_is_found_on_the_other() {
     use limo_cad_occt::measurement::ResolvedMeasurementSelection;
     let mut reference = OcctKernel::new().unwrap();
     let theirs = reference.recompute(&plan(vec![block()])).unwrap();
-    let mut limo = limo_cad_kernel::Kernel::new();
+    let mut limo = limo_cad_kernel_session::Kernel::new();
     let ours = limo.recompute(&plan(vec![block()]));
     let (counted, counted_mark) = upright(&theirs, 10.0, 5.0);
     let (named, named_mark) = upright(&ours, 10.0, 5.0);

@@ -1,6 +1,11 @@
 //! The kernel behind Limo CAD's host-neutral solid contract: a recompute
 //! plan goes in, an evaluated scene comes out.
 //!
+//! This crate is the one place where the kernel's types meet the
+//! application's. The kernel (`limo-cad-kernel`) depends on nothing and
+//! knows nothing of jobs, features or scenes; whatever does is here, and
+//! it reaches the kernel only through what the kernel makes public.
+//!
 //! Bodies are immutable values, so the session keeps the state after every
 //! job of the previous plan. A new plan resumes from the longest unchanged
 //! prefix: editing feature `k` replays from `k`, not from the start, and an
@@ -21,17 +26,16 @@ use limo_cad_solid::{
 };
 use limo_cad_solid::{DisplayMeshWarningDto, EdgeMarkDto, FaceMarkDto, FeatureKeysDto};
 
-use crate::blend;
-use crate::boolean::{boolean, Op};
-use crate::geom::{CurveKind, SurfKind};
-use crate::make::{self, Region, Seg};
-use crate::math::*;
-use crate::name::{mix, tag_of, Names, Role};
-use crate::props::planar_props;
-use crate::tess::{edge_polyline, tessellate, Mesh, TessOptions};
-use crate::thread;
-use crate::topo::Body;
-use crate::trim::{classify, EdgeMesh, FaceTrim, PtClass};
+use limo_cad_kernel::boolean::{boolean, Op, NO_OVERLAP};
+use limo_cad_kernel::geom::{CurveKind, SurfKind};
+use limo_cad_kernel::make::{self, Region, Seg};
+use limo_cad_kernel::math::*;
+use limo_cad_kernel::name::{mix, tag_of, Names, Role};
+use limo_cad_kernel::props::{self, planar_props};
+use limo_cad_kernel::tess::{edge_polyline, tessellate, Mesh, TessOptions};
+use limo_cad_kernel::topo::Body;
+use limo_cad_kernel::trim::{classify, edge_closest, EdgeMesh, FaceTrim, PtClass};
+use limo_cad_kernel::{blend, loft, offset, step, thread};
 
 /// A body value with the identity of its geometry.
 #[derive(Clone)]
@@ -404,7 +408,7 @@ impl Kernel {
                         let through = matches!(j.extent, HoleExtent::ThroughAll);
                         // As far as the body goes that way, or the hole.
                         let available = if through {
-                            let bounds = crate::props::bounds(&target);
+                            let bounds = props::bounds(&target);
                             let mut far: f64 = 0.0;
                             for corner in 0..8 {
                                 let p = v3(
@@ -662,10 +666,10 @@ impl Kernel {
                 let mut groove = thread::cutter(&form.external()?, &run)?;
                 groove = thread::clipped(&groove, &run, 0.5 * form.major, true)?;
                 groove.retag(|tag| mix(mix(feature, THREAD), tag));
-                let before = crate::props::volume(&result);
+                let before = props::volume(&result);
                 let result = boolean(&result, &groove, Op::Cut)
                     .map_err(|e| format!("External Thread: {e}"))?;
-                let removed = before - crate::props::volume(&result);
+                let removed = before - props::volume(&result);
                 if !(removed.is_finite() && removed > (1.0e-8 * before.abs()).max(1.0e-8)) {
                     return Err("modeled external thread did not remove material".into());
                 }
@@ -805,19 +809,19 @@ impl Kernel {
                     // hole follows the centerline the outline follows.
                     let mut tool = match exact {
                         Some(tool) => tool,
-                        None if steered => crate::loft::along(
+                        None if steered => loft::along(
                             &outlines,
                             &centerline,
                             if part == 0 { &guide_rail } else { &[] },
                         )?,
-                        None => crate::loft::skin(&outlines, ruled)?,
+                        None => loft::skin(&outlines, ruled)?,
                     };
                     // A side is named after the sketch line under it, the
                     // stretch of the loft it belongs to and, where an arc
                     // had to be cut, which piece of it this is.
                     tool.retag(|tag| match Role::of(tag) {
                         Role::Side { lp, seg } => {
-                            let band = (lp % crate::loft::BANDS) as usize;
+                            let band = (lp % loft::BANDS) as usize;
                             let entity = entities(pick(&j.sections[band]))
                                 .get(seg as usize)
                                 .copied()
@@ -855,17 +859,16 @@ impl Kernel {
                     "referenced Shell face no longer exists",
                 )?;
                 self.report = Some(report);
-                let result =
-                    crate::offset::shell_as(&target, &open, j.thickness, j.inward, feature)
-                        .map_err(|e| format!("Shell: {e}"))?;
+                let result = offset::shell_as(&target, &open, j.thickness, j.inward, feature)
+                    .map_err(|e| format!("Shell: {e}"))?;
                 self.put(j.target_body_id.0, result);
                 Ok(())
             }
             KernelJobDto::ImportStep(j) => {
-                let bytes = crate::step::from_base64(&j.data_base64)?;
+                let bytes = step::from_base64(&j.data_base64)?;
                 let text = String::from_utf8_lossy(&bytes);
                 let mut whole = Body::new();
-                for (nth, mut solid) in crate::step::read(&text)?.into_iter().enumerate() {
+                for (nth, mut solid) in step::read(&text)?.into_iter().enumerate() {
                     solid.retag(|tag| mix(mix(feature, nth as u64), tag));
                     whole.append(&solid);
                 }
@@ -1219,7 +1222,7 @@ fn sweep_tool(
             })
             .collect::<Result<_, _>>()?;
         return each_alone(&|one, lp| {
-            let mut tool = crate::loft::carried(&one.loops[0], &along)?;
+            let mut tool = loft::carried(&one.loops[0], &along)?;
             tool.retag(|tag| match Role::of(tag) {
                 Role::Side { lp: band, seg } => {
                     let from = entity[lp]
@@ -1247,7 +1250,7 @@ fn sweep_tool(
 }
 
 /// A profile carried along a path and steered by a rail beside it: see
-/// [`crate::loft::guided`]. Holes are swept as outlines of their own and
+/// [`loft::guided`]. Holes are swept as outlines of their own and
 /// cut out.
 fn guided_tool(
     profile: &KernelProfileDto,
@@ -1272,7 +1275,7 @@ fn guided_tool(
     let outlines = std::iter::once(profile).chain(profile.holes.iter());
     for (lp, outline) in outlines.enumerate() {
         let names = entities(outline);
-        let mut tool = crate::loft::guided(&segs_of(outline), &path, &rail)?;
+        let mut tool = loft::guided(&segs_of(outline), &path, &rail)?;
         tool.retag(|tag| match Role::of(tag) {
             Role::Side { lp: piece, seg } => {
                 let from = names.get(seg as usize).copied().unwrap_or(u64::from(seg));
@@ -1389,7 +1392,7 @@ fn sweep_square(
                     named(&mut behind, count + 2 * nth as u64 + 1);
                     match boolean(&ahead, &behind, Op::Intersect) {
                         Ok(shared) => Some(shared),
-                        Err(e) if e.contains(crate::boolean::NO_OVERLAP) => None,
+                        Err(e) if e.contains(NO_OVERLAP) => None,
                         Err(e) => return Err(format!("Sweep: {e}")),
                     }
                 };
@@ -1487,7 +1490,7 @@ fn swung_round(
     let inner = half_space(corner, inward, 4.0 * reach + 10.0)?;
     let outer = match boolean(&slab, &inner, Op::Cut) {
         Ok(outer) => outer,
-        Err(e) if e.contains(crate::boolean::NO_OVERLAP) => slab,
+        Err(e) if e.contains(NO_OVERLAP) => slab,
         Err(e) if e.contains("removes the entire body") => return Ok(None),
         Err(e) => return Err(format!("Sweep: {e}")),
     };
@@ -1616,7 +1619,7 @@ fn finish_edges(
         for point in &mark.points {
             let p = p3(point);
             let through: Vec<u32> = (0..body.edge_count() as u32)
-                .filter(|&e| crate::trim::edge_closest(body, e, p).1 < MARK_REACH)
+                .filter(|&e| edge_closest(body, e, p).1 < MARK_REACH)
                 .collect();
             if through.is_empty() {
                 return Err(
