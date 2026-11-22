@@ -1,5 +1,24 @@
 # Dependency review record
 
+## 0.3.1 package scope
+
+The 0.3.0 tag did not publish a release. The 0.3.1 version bump replaces the
+two literal Windows exception paths with their 0.3.1 package names, retaining
+the same advisory, zlib version, binary type, owner and **2026-12-17** deadline.
+It does not change the zlib overlay or the DLL consumer guard. PR #547's
+[package run](https://github.com/limo-cad/Limo-CAD/actions/runs/44661009234)
+verified all five inventories and passed their advisory checks after the
+Windows compiler repair; those packages still carried version 0.3.0.
+
+This is a bounded carry-forward of the backport decision for the renamed
+packages, not a claim that the historical archive or DLL hashes below identify
+0.3.1 binaries. The 0.3.1 PR must build and check its own five packages; the tag
+must additionally pass signing, notarization and publication evidence checks.
+Future versions, different package layouts and changed zlib sources or
+consumers require reassessment. No advisory deadline is extended.
+
+## Retained 0.3.0 evidence
+
 The 0.3.0 package review was refreshed on **2026-11-17 (UTC)** against PR #535
 head `f501220f1451adb86717c905ac058228a69e5cb8`. GitHub built merge commit
 `98eef195f656c95386c9810f9da6be983ef72a48`, whose tree is identical to that head.
@@ -11,7 +30,7 @@ rebuild and scan their own packages; this record does not approve publication.
 
 | Dependency | Evidence and status | Follow-up / owner |
 | --- | --- | --- |
-| zlib 1.3.2#3 (`z.dll`, final 0.3.0 Windows x64 and ARM64 only) | Fresh Grype 0.120.1 scans still match **CVE-2026-85091** at High because the binary version remains 1.3.2. Both reviewed archives contain the checksum-matched vcpkg 1.3.2#3 DLL, and their build logs select the checked overlay. Its six port files match upstream exactly; its source regression passes with the repair and detects the invalid write without it. Independent inspection of all 58 PE images per architecture found only `freetype.dll` and `libpng16.dll` importing zlib, by name and without `gz*` imports. **Reviewed backport match:** the two literal final-release paths below replace the expired rc-only rules. | Owner: @jackControls. Review by **2026-12-17**. Reassess on any zlib source, recipe, consumer or package-layout change. Every new build retains the source regression, DLL consumer guard, inventory verification and advisory scan. |
+| zlib 1.3.2#3 (`z.dll`, current scope: 0.3.1 Windows x64 and ARM64 only) | The retained 0.3.0 Grype 0.120.1 scans match **CVE-2026-85091** at High because the binary version remains 1.3.2. Both reviewed archives contain the checksum-matched vcpkg 1.3.2#3 DLL, and their build logs select the checked overlay. Its six port files match upstream exactly; its source regression passes with the repair and detects the invalid write without it. Independent inspection of all 58 PE images per architecture found only `freetype.dll` and `libpng16.dll` importing zlib, by name and without `gz*` imports. **Reviewed backport match:** the carry-forward above is limited to the two literal 0.3.1 paths below; new packages require their own checks. | Owner: @jackControls. Review by **2026-12-17**. Reassess on any zlib source, recipe, consumer or package-layout change. Every new build retains the source regression, DLL consumer guard, inventory verification and advisory scan. |
 | AppImage `libudev1` 249.11-0ubuntu3.23, identified as systemd | The only AppImage match is **CVE-2026-40228**, Low. [Ubuntu's advisory](https://ubuntu.com/security/CVE-2026-40228) concerns `systemd-journald` forwarding terminal escapes with `ForwardToWall=yes`. The verified archive inventory contains `libudev.so.1`, not journald. This component match does not establish the affected daemon is shipped. No ignore rule is added; the finding remains visible. | Owner: @jackControls. Review by **2026-12-17** and if the AppImage library set changes. Host operating-system services remain outside the archive inventory. |
 | `rustix` 1.1.5 | [RUSTSEC-2026-0486](https://rustsec.org/advisories/RUSTSEC-2026-0486.html) reports unsound extended-attribute buffer handling, fixed in 1.1.6. The five reviewed packages contain 1.1.5; source inspection of their 16 direct consumers found no calls to the affected functions. The release follow-up nevertheless updates **all three affected lockfiles to 1.1.6**; the MCP lock has no rustix entry. Rebuilt-package CI must qualify that change. | Maintainers: retain the patched lock entries and current RustSec checks. No advisory exception is introduced. |
 | `ttf-parser` 0.25.1 | RUSTSEC-2026-0192 remains an unmaintained dependency warning in the compiled text stack, not a demonstrated vulnerability. | Maintainers: evaluate a compatible text-stack replacement and qualify font behavior. |
@@ -40,8 +59,8 @@ The native metadata binds these hashes to `pkg:vcpkg/zlib@1.3.2` with
 `port_version=3`. Grype's binary identity omits that revision, which explains
 its retained version match. The only approved exception locations are:
 
-- `**/Limo-CAD-0.3.0-windows-x64/z.dll`
-- `**/Limo-CAD-0.3.0-windows-arm64/z.dll`
+- `**/Limo-CAD-0.3.1-windows-x64/z.dll`
+- `**/Limo-CAD-0.3.1-windows-arm64/z.dll`
 
 Both require advisory CVE-2026-85091, package `zlib`, version `1.3.2`, type
 `binary`. These rules do not wildcard the product version. The four rc.2/rc.3 rules
