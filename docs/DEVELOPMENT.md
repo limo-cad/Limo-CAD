@@ -370,7 +370,8 @@ This checks engine bindings, not a completed Bevy browser application.
 
 ## The Limo kernel (experimental)
 
-`crates/kernel` is Limo CAD's own exact B-rep kernel in plain Rust. It is
+The Limo kernel is Limo CAD's own exact B-rep kernel in plain Rust, kept
+in [a repository of its own](https://github.com/limo-cad/limo-kernel). It is
 opt-in: set `LIMO_CAD_KERNEL=limo` before starting the desktop or the MCP
 server and every recompute runs on it instead of OCCT, and so do the
 services around it: sections, drawings, measurement, mass properties,
@@ -378,10 +379,15 @@ interference, STEP export and import, and deleting or editing a feature in
 the middle of the history. What it does not cover fails with a message that
 says so.
 
-The kernel crate knows nothing of the application and depends on no other
+The kernel knows nothing of the application and depends on no other
 crate. `crates/kernel-session` is what runs the application's recompute
 plans on it, a job at a time, and it is the only code that sees both the
 kernel's types and the application's.
+
+The application takes the kernel at one commit, named once: `rev` of
+`limo-cad-kernel` under `[workspace.dependencies]` in the root
+`Cargo.toml`. The desktop is a workspace of its own and reaches the kernel
+through `limo_cad_kernel_session::kernel`, so it names no revision.
 
 In the desktop the same choice is under File > Settings > Modeling kernel,
 where the Limo kernel is marked experimental. The choice is saved with the
@@ -396,13 +402,40 @@ own. Settings shows which kernel is running beside the one that is saved.
 server reads only the variable.
 
 ```sh
-cargo test -p limo-cad-kernel
 cargo test -p limo-cad-kernel-session
-cargo xtask kernel-demo
 ```
 
-The second command builds a self-contained browser page that models the
-kernel's sample parts live.
+The kernel's own tests, its stress run and the browser page that models its
+sample parts live are in its repository.
+
+A change to the kernel is made, tested and pushed in its repository. To see
+what it does here first, keep a checkout of the kernel beside this one and
+give cargo its path for the length of a command:
+
+```sh
+cargo test --release -p limo-cad-kernel-session --config 'paths = ["../limo-kernel"]'
+```
+
+The path is read from the folder cargo is started in, and the same flag
+serves the desktop and the MCP server. Cargo then builds the kernel from
+that folder and leaves the lock files as they are, `--locked` included, so
+there is nothing to undo afterwards. It stands in for the kernel as it is
+locked: a change that gives the kernel a dependency cannot be tried this
+way.
+
+To take a newer kernel for good, put its full commit hash at `rev` in the
+root `Cargo.toml` and have cargo write it into the three lock files, which
+changes that one package in each:
+
+```sh
+cargo update -p limo-cad-kernel
+cargo update -p limo-cad-kernel --manifest-path desktop/Cargo.toml
+cargo update -p limo-cad-kernel --manifest-path mcp-server/Cargo.toml
+```
+
+Until that is done a `--locked` build stops and says the lock file is out
+of date. Then run the suites on both kernels and the lab, as for a change
+to the adapter.
 
 The host's own suites run on either kernel, so a change to the adapter or
 to history can be checked on both:
@@ -466,7 +499,7 @@ id the Limo kernel wrote, so in a project made on the Limo kernel it
 refuses an edit below such a sketch as a broken reference until the sketch
 is put on its face again.
 
-[The kernel's README](../crates/kernel/README.md) covers its design, how
+[The kernel's README](https://github.com/limo-cad/limo-kernel#readme) covers its design, how
 names survive edits, what it models, the differential lab against OCCT and
 the diagnostic switches.
 
@@ -494,7 +527,8 @@ The demo task reads `GITHUB_SHA` and `VERSION` for its provenance receipt.
 - Rust crates own project data, sketches, feature history, references, drawings,
   assemblies, kinematics and recompute planning.
 - Native OCCT supplies exact geometry through a narrow C++ bridge. The Limo
-  kernel in `crates/kernel` is an opt-in alternative behind the same adapter.
+  kernel, from its own repository, is an opt-in alternative behind the same
+  adapter.
 - Bevy owns the native interface and viewport; Winit supplies window integration.
 - The MCP server and Rust script interpreter drive the shared product interface.
 - The browser replacement shares the Bevy UI and uses a native Rust/OCCT service;

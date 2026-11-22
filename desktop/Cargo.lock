@@ -3519,7 +3519,6 @@ dependencies = [
  "limo-cad-core",
  "limo-cad-export",
  "limo-cad-interface",
- "limo-cad-kernel",
  "limo-cad-kernel-session",
  "limo-cad-mcp",
  "limo-cad-mcp-mutate",
@@ -3626,7 +3625,8 @@ dependencies = [
 
 [[package]]
 name = "limo-cad-kernel"
-version = "0.3.0"
+version = "0.1.0"
+source = "git+https://github.com/limo-cad/limo-kernel?rev=068cb4415547ae24fe94f3bfe2d9e5160672a64a#068cb4415547ae24fe94f3bfe2d9e5160672a64a"
 
 [[package]]
 name = "limo-cad-kernel-session"

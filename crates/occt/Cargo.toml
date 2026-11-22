@@ -16,7 +16,7 @@ limo-cad-sketch = { path = "../sketch" }
 cxx = { workspace = true, optional = true }
 limo-cad-core = { path = "../core" }
 limo-cad-solid = { path = "../solid" }
-limo-cad-kernel = { path = "../kernel" }
+limo-cad-kernel.workspace = true
 limo-cad-kernel-session = { path = "../kernel-session" }
 limo-cad-export = { path = "../export" }
 serde_json.workspace = true

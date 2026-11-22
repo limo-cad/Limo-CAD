@@ -29,6 +29,11 @@ OrcaSlicer and Bambu Studio profile contributions retain their AGPL-3.0 attribut
 Native Limo CAD builds make use of and are based on facilities provided by
 the Open CASCADE Technology software.
 
+- **Limo kernel** is Limo CAD's own kernel, built in from its own repository
+  under the GNU Lesser General Public License 2.1 or later, as Limo CAD is.
+  The commit built in is the `rev` of `limo-cad-kernel` in the root
+  `Cargo.toml`. Source and license: <https://github.com/limo-cad/limo-kernel>.
+
 ## Application runtime
 
 | Component | Use | License |

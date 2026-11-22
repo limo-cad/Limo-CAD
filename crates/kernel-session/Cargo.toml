@@ -8,7 +8,7 @@ repository.workspace = true
 
 [dependencies]
 limo-cad-core = { path = "../core" }
-limo-cad-kernel = { path = "../kernel" }
+limo-cad-kernel.workspace = true
 limo-cad-solid = { path = "../solid" }
 
 [dev-dependencies]

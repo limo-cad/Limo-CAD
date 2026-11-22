@@ -2475,7 +2475,7 @@ mod tests {
     #[test]
     #[ignore = "requires a GPU; set LIMO_CAD_PREVIEW_PROOF_DIR to retain visual evidence"]
     fn limo_kernel_solids_render_in_the_native_viewport() {
-        use limo_cad_kernel::Body;
+        use limo_cad_kernel_session::kernel::Body;
         use limo_cad_solid::{BodyDto, EdgeDto, FaceDto, MeshDto, SolidSceneDto};
 
         let scene_of = |body: &Body| {
@@ -2529,7 +2529,7 @@ mod tests {
         // The kernel's sample parts: a mounting block, a bracket whose edge
         // break is one fillet over 22 edges, a box rounded all over and a
         // cross-drilled shaft.
-        let parts = limo_cad_kernel::demo::showcase().unwrap();
+        let parts = limo_cad_kernel_session::kernel::demo::showcase().unwrap();
 
         let mut renderer = PreviewRenderer::new().unwrap();
         let cancelled = AtomicBool::new(false);

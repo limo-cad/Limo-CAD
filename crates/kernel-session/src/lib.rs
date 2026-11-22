@@ -37,6 +37,10 @@ use limo_cad_kernel::topo::Body;
 use limo_cad_kernel::trim::{classify, edge_closest, EdgeMesh, FaceTrim, PtClass};
 use limo_cad_kernel::{blend, loft, offset, step, thread};
 
+/// The kernel this session runs on, for whoever handles its bodies: the
+/// same revision, without naming it a second time.
+pub use limo_cad_kernel as kernel;
+
 /// A body value with the identity of its geometry.
 #[derive(Clone)]
 struct Slot {
