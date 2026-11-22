@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "recorded_utc": "2026-11-22T18:15:14Z",
+  "recorded_utc": "2026-11-22T18:24:55Z",
   "source_revision": "bd8a2efa63169fc3f32ca63cb9addce165fcb4ec",
   "desktop_build": {
     "version": "0.3.0",
@@ -48,13 +48,21 @@
       "feature_errors": 0,
       "lesson_steps": 66,
       "lesson_checks": 6
+    },
+    "language_starts": {
+      "window_environment": "LIMO_CAD_KERNEL=limo",
+      "locale_in_effect_matches": true,
+      "selected_in_settings": "Open CASCADE",
+      "interface_size_selected_matches": true,
+      "list_end_reached": true
     }
   },
-  "capture_scope": "A helper process attached to the window activates native controls through cad_interface and asks the window for each capture. The window alone has LIMO_CAD_KERNEL_TIMING, so every logged rebuild is its own. The GIF shows the seven ordered captures at half size; the screenshots are full-size crops of three of them.",
+  "capture_scope": "A helper process attached to the window activates native controls through cad_interface and asks the window for each capture. In the flow the window alone has LIMO_CAD_KERNEL_TIMING, so every logged rebuild is its own. The GIF shows the seven ordered captures at half size; the screenshots are full-size crops of whole-window captures. Each language has a start of its own with LIMO_CAD_KERNEL=limo, captured at the interface sizes of 100% and 175%.",
   "qualification_limits": [
     "Controls are activated through the application's control interface; no pointer or keyboard input and no continuous recording.",
     "A capture can itself ask for a redraw.",
     "One lesson on macOS; the Windows and Linux windows are outside this run.",
+    "The window keeps its opening size of 1360 x 860; the minimum of 1200 x 760 is outside this run.",
     "The lesson's feature summary reports hole extent as unknown on Open CASCADE and as through, 8 mm, on Limo; the rest of the summary is the same."
   ],
   "clips": [
@@ -112,6 +120,120 @@
         952,
         400
       ]
+    },
+    {
+      "file": "modeling-kernel-en-100.png",
+      "bytes": 59362,
+      "sha256": "47793f6661de07bcefb676f508f82343a528e17e3832e8bf6ea6e9381a35fef3",
+      "locale": "en",
+      "interface_size": 1.0,
+      "crop_pixels": [
+        884,
+        1048,
+        952,
+        400
+      ]
+    },
+    {
+      "file": "modeling-kernel-en-175.png",
+      "bytes": 133375,
+      "sha256": "0de4e73a83ef97bb1cb9f84b11a7eb41b45354b67f4223ce33e8620d0148342d",
+      "locale": "en",
+      "interface_size": 1.75,
+      "crop_pixels": [
+        528,
+        740,
+        1664,
+        730
+      ]
+    },
+    {
+      "file": "modeling-kernel-zh-CN-100.png",
+      "bytes": 55933,
+      "sha256": "fdb094888ab3250b623b8296a6739d240e6c8863e9a87e6731ac34fe6d5a1511",
+      "locale": "zh-CN",
+      "interface_size": 1.0,
+      "crop_pixels": [
+        884,
+        1048,
+        952,
+        400
+      ]
+    },
+    {
+      "file": "modeling-kernel-zh-CN-175.png",
+      "bytes": 120600,
+      "sha256": "fea4f273f9f837a635237edd9e282ec8b3e74a83a7f24e2ffda554c2992a5168",
+      "locale": "zh-CN",
+      "interface_size": 1.75,
+      "crop_pixels": [
+        528,
+        740,
+        1664,
+        730
+      ]
+    },
+    {
+      "file": "modeling-kernel-es-100.png",
+      "bytes": 65774,
+      "sha256": "5d36db7a6a5c0dc5510a7d5adc14709a879f83f7ff77f5f2a64796d5eb6548e0",
+      "locale": "es",
+      "interface_size": 1.0,
+      "crop_pixels": [
+        884,
+        1048,
+        952,
+        400
+      ]
+    },
+    {
+      "file": "modeling-kernel-es-175.png",
+      "bytes": 150291,
+      "sha256": "9a0ffa58d756a08e3aec0bc0a6de428c65ca81acf5308ecb270c19df10983da6",
+      "locale": "es",
+      "interface_size": 1.75,
+      "crop_pixels": [
+        528,
+        740,
+        1664,
+        730
+      ]
+    },
+    {
+      "file": "modeling-kernel-de-100.png",
+      "bytes": 65719,
+      "sha256": "88406c60b7bc9b241377b28091961d278d8a26a65502d01afd67ae6c11b5ff22",
+      "locale": "de",
+      "interface_size": 1.0,
+      "crop_pixels": [
+        884,
+        1048,
+        952,
+        400
+      ]
+    },
+    {
+      "file": "modeling-kernel-de-175.png",
+      "bytes": 148950,
+      "sha256": "8834c041cbdd3ad96b8720e082b96c2ef94f2d963800bf1cfdd82d762ab7cc94",
+      "locale": "de",
+      "interface_size": 1.75,
+      "crop_pixels": [
+        528,
+        740,
+        1664,
+        730
+      ]
     }
+  ],
+  "interface_sizes": [
+    1.0,
+    1.75
+  ],
+  "locales": [
+    "en",
+    "zh-CN",
+    "es",
+    "de"
   ]
 }
