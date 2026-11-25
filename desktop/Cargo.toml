@@ -71,7 +71,7 @@ earcutr = "=0.5.0"
 ciborium = "=0.2.2"
 
 [target.'cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))'.dependencies]
-bevy = { version = "=0.20.1", default-features = false, features = [
+bevy = { version = "=0.20.0", default-features = false, features = [
   "bevy_winit",
   "bevy_input_focus",
   "bevy_ui_widgets",
@@ -116,7 +116,7 @@ bevy_gizmos = "=0.20.1"
 bevy_reflect = "=0.20.1"
 # Native renderers share a device across threads. Bevy disables wgpu's default
 # features; std is required for wgpu's documented thread-local error scopes.
-wgpu = { version = "=30.0.2", default-features = false, features = ["std"] }
+wgpu = { version = "=30.0.1", default-features = false, features = ["std"] }
 raw-window-handle = "0.6.2"
 # Bevy 0.20 exposes AccessKit 0.24 nodes and action requests without re-exporting
 # the crate. Keep the same types at that boundary until Bevy upgrades AccessKit.
