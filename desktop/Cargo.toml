@@ -127,7 +127,7 @@ rfd = { version = "0.18.0", default-features = false, features = ["xdg-portal", 
 
 [target.'cfg(target_os = "linux")'.dependencies]
 tokio = { version = "1.53.3", features = ["time", "rt"] }
-ashpd = { version = "=0.14.0", default-features = false, features = ["tokio", "print", "raw_handle", "wayland"] }
+ashpd = { version = "=0.14.3", default-features = false, features = ["tokio", "print", "raw_handle", "wayland"] }
 hidapi = { version = "2.6.7", default-features = false, features = ["linux-static-hidraw"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
